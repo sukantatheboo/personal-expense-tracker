@@ -903,6 +903,19 @@
       .push-account {
         margin-top: 12px;
       }
+      .cloud-sync-panel {
+        max-width: 560px;
+        margin-top: 14px;
+        padding-top: 14px;
+        border-top: 1px solid var(--line);
+      }
+      .cloud-sync-panel h3 {
+        margin: 0;
+        font-size: 14px;
+      }
+      .cloud-sync-panel .backup-status {
+        margin: 10px 0 0;
+      }
       .push-account-label,
       .push-setup-note,
       .push-auth-status {

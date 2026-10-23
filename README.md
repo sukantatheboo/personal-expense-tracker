@@ -30,13 +30,15 @@ Create a production build with `npm run build`. The site is built and deployed t
 
 ## Data and privacy
 
-- Expenses, budgets, recurring schedules, account balances, and preferences are stored in this browser's local storage. Background push separately syncs only the recurring description and timing needed for reminders.
+- Expenses, budgets, recurring schedules, account balances, and preferences are stored in this browser's local storage by default. After signing in, you can explicitly enable **Expense cloud sync** to store those records in your Supabase project and sync them when you enable sync on another device. Supabase applies row-level security so each signed-in user can access only their own cloud data.
+- On first sync, local records are uploaded if no cloud copy exists. If both copies contain data, Spend merges records by ID, with local records taking precedence for matching IDs and local monthly budgets taking precedence for matching months. Simultaneous edits from multiple devices are guarded by a revision check; if a conflict is detected, refresh the app to load and merge the latest copy.
+- Turning off cloud sync pauses uploads but keeps the cloud copy. **Delete cloud copy** removes the synced records from Supabase without deleting local data. Keep using **Download backup** as a separate backup; cloud sync is not an archival backup.
 - The app reuses the existing `spend-*` storage keys, so data already saved for the published site remains available when the app is updated on the same origin.
 - Use **Download backup** in the app to save all app data and preferences as a JSON file outside the browser. Use **Restore backup** to load it later; restoring replaces the current data. Browser storage is still erased when site data is cleared, so keep the backup file somewhere safe and make new backups regularly.
 - The installable app shell can work offline after the first online visit. Currency conversion requires an internet connection.
 - Background push notifications require a configured Supabase project, an account in Spend, notification permission, and an installed Home Screen app on iOS 16.4 or later. Reminders are sent at 9:00 AM in the device timezone. Android Chrome supports installed and browser push where notifications are allowed.
-- Expense history, budgets, and account data stay local. Supabase stores the account email, push subscription, and recurring reminder description/timing needed to send notifications; it does not receive expense amounts, account details, or transaction history.
-- Expense and account data are not uploaded. Currency conversion sends only the currency pair to Frankfurter; no expense amounts or account details are sent.
+- When cloud sync is off, expense history, budgets, and account data stay local. Enabling it uploads expenses and amounts, budgets, recurring schedules, account balances, and account transactions to Supabase. Background push separately stores the account email, push subscription, and reminder details needed to send notifications.
+- Currency conversion sends only the currency pair to Frankfurter; no expense amounts or account details are sent.
 - The React app is still a public client-side website. React organizes the code and safely renders user-entered text, but it does not hide the source code or protect API secrets. Do not put bank credentials, bKash PINs, OTPs, or private API keys in this repository or browser code.
 - Automatic bank or bKash synchronization is not configured. It would require an authorized provider connection and a separate secure backend.
 - Clearing this website's browser data erases locally saved information. CSV export is for spreadsheet use; use the full JSON backup to restore all data.
@@ -46,7 +48,7 @@ Create a production build with `npm run build`. The site is built and deployed t
 Background reminders need a Supabase project; GitHub Pages alone cannot send push notifications while the app is closed.
 
 1. Create a Supabase project. In **Authentication → URL Configuration**, set the site URL and allowed redirect URL to `https://sukantatheboo.github.io/personal-expense-tracker/`. Enable email/password sign-in.
-2. Install the Supabase CLI, sign in, link the project, and apply the database migration:
+2. Install the Supabase CLI, sign in, link the project, and apply the database migrations:
 
    ```sh
    supabase login

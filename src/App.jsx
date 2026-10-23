@@ -28,6 +28,12 @@ import {
   supabase,
   syncBackgroundSchedules,
 } from "./push.js";
+import {
+  CLOUD_SYNC_USER_KEY,
+  deleteCloudData,
+  loadCloudData,
+  saveCloudData,
+} from "./cloud-sync.js";
 
 const CURRENCY_API = "https://api.frankfurter.dev/v2";
 
@@ -105,6 +111,87 @@ function csvCell(value) {
   return `"${text.replaceAll('"', '""')}"`;
 }
 
+function mergeRecords(cloudRecords, localRecords) {
+  const records = new Map(
+    cloudRecords.map((record) => [record.id, record]),
+  );
+  for (const record of localRecords) records.set(record.id, record);
+  return [...records.values()];
+}
+
+function hasMeaningfulLocalData(data) {
+  return (
+    data.expenses.length > 0 ||
+    Object.keys(data.budgets).length > 0 ||
+    data.recurringSchedules.length > 0 ||
+    data.accountData.transactions.length > 0 ||
+    data.accountData.settings.configured ||
+    data.accountData.settings.balances.bkash !== 0 ||
+    data.accountData.settings.balances.bank !== 0
+  );
+}
+
+function hasMeaningfulLocalAccountSettings(data) {
+  return (
+    data.accountData.settings.configured ||
+    data.accountData.settings.balances.bkash !== 0 ||
+    data.accountData.settings.balances.bank !== 0
+  );
+}
+
+function mergeCloudSnapshots(local, cloud, preferLocal) {
+  if (!cloud) return local;
+
+  const cloudExpenses = loadExpenses(cloud.expenses);
+  const cloudBudgets = loadBudgets(cloud.budgets);
+  const cloudSchedules = loadRecurringSchedules(cloud.recurringSchedules);
+  const cloudAccounts = loadAccountData(cloud.accountData);
+  if (!preferLocal) {
+    return {
+      expenses: cloudExpenses,
+      budgets: cloudBudgets,
+      recurringSchedules: cloudSchedules,
+      accountData: cloudAccounts,
+      theme: cloud.theme === "dark" ? "dark" : "light",
+      targetCurrency:
+        typeof cloud.targetCurrency === "string" &&
+        /^[A-Z]{3}$/.test(cloud.targetCurrency)
+          ? cloud.targetCurrency
+          : "USD",
+    };
+  }
+
+  return {
+    expenses: mergeRecords(cloudExpenses, local.expenses),
+    budgets: { ...cloudBudgets, ...local.budgets },
+    recurringSchedules: mergeRecords(
+      cloudSchedules,
+      local.recurringSchedules,
+    ),
+    accountData: {
+      settings: hasMeaningfulLocalAccountSettings(local)
+        ? local.accountData.settings
+        : cloudAccounts.settings,
+      transactions: mergeRecords(
+        cloudAccounts.transactions,
+        local.accountData.transactions,
+      ),
+    },
+    theme: local.theme,
+    targetCurrency: local.targetCurrency,
+  };
+}
+
+function isCloudSyncOptedIn(user) {
+  try {
+    return Boolean(
+      user && localStorage.getItem(CLOUD_SYNC_USER_KEY) === user.id,
+    );
+  } catch {
+    return false;
+  }
+}
+
 export default function App() {
   const [expenses, setExpenses] = useState(loadExpenses);
   const [budgets, setBudgets] = useState(loadBudgets);
@@ -154,11 +241,26 @@ export default function App() {
   const [authStatus, setAuthStatus] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
   const [backgroundPushEnabled, setBackgroundPushEnabled] = useState(false);
+  const [cloudSyncEnabled, setCloudSyncEnabled] = useState(false);
+  const [cloudSyncReady, setCloudSyncReady] = useState(false);
+  const [cloudSyncStatus, setCloudSyncStatus] = useState("");
+  const [cloudSyncRetry, setCloudSyncRetry] = useState(0);
   const [backupStatus, setBackupStatus] = useState("");
   const backupFileInputRef = useRef(null);
   const pendingDueRef = useRef([]);
   const lastRecurringCheckRef = useRef("");
   const pushScheduleSyncRef = useRef(Promise.resolve());
+  const cloudSnapshotRef = useRef(null);
+  const cloudVersionRef = useRef(null);
+  const authUserIdRef = useRef(null);
+  cloudSnapshotRef.current = {
+    expenses,
+    budgets,
+    recurringSchedules,
+    accountData,
+    theme,
+    targetCurrency,
+  };
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -197,19 +299,147 @@ export default function App() {
         setAuthStatus(`Could not restore sign-in: ${error.message}`);
         return;
       }
-      if (active) setPushUser(data.session?.user || null);
+      if (active) {
+        const user = data.session?.user || null;
+        authUserIdRef.current = user?.id ?? null;
+        setPushUser(user);
+        setCloudSyncReady(false);
+        setCloudSyncEnabled(isCloudSyncOptedIn(user));
+      }
     });
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      setPushUser(session?.user || null);
+      const user = session?.user || null;
+      setPushUser(user);
+      if (authUserIdRef.current === user?.id) return;
+      authUserIdRef.current = user?.id ?? null;
       setBackgroundPushEnabled(false);
+      setCloudSyncReady(false);
+      cloudVersionRef.current = null;
+      setCloudSyncEnabled(isCloudSyncOptedIn(user));
       setAuthStatus("");
+      if (!user) {
+        try {
+          localStorage.removeItem(CLOUD_SYNC_USER_KEY);
+        } catch {
+          setCloudSyncStatus("Cloud sync is off, but this browser could not clear its sync preference.");
+        }
+      }
     });
     return () => {
       active = false;
       subscription.unsubscribe();
     };
+  }, []);
+
+  useEffect(() => {
+    if (!supabase || !pushUser || !cloudSyncEnabled) {
+      setCloudSyncReady(false);
+      return undefined;
+    }
+    let active = true;
+
+    async function initializeCloudSync() {
+      setCloudSyncStatus("Preparing your cloud data…");
+      try {
+        let remote = await loadCloudData(pushUser.id);
+        let merged;
+        let savedVersion = null;
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          if (!active) return;
+          const local = cloudSnapshotRef.current;
+          merged = mergeCloudSnapshots(
+            local,
+            remote?.data,
+            hasMeaningfulLocalData(local),
+          );
+          try {
+            savedVersion = await saveCloudData(
+              pushUser.id,
+              merged,
+              remote?.updated_at ?? null,
+            );
+          } catch (error) {
+            if (error.code !== "23505" || remote) throw error;
+          }
+          if (savedVersion) break;
+          remote = await loadCloudData(pushUser.id);
+        }
+        if (!savedVersion || !merged) {
+          throw new Error("Cloud data changed repeatedly; please try again.");
+        }
+        if (!active) return;
+        cloudVersionRef.current = savedVersion;
+        applyCloudSnapshot(merged);
+        setCloudSyncReady(true);
+        setCloudSyncStatus("Cloud sync is on. Your data is saved to Supabase.");
+      } catch (error) {
+        if (active) {
+          setCloudSyncEnabled(false);
+          setCloudSyncReady(false);
+          try {
+            localStorage.removeItem(CLOUD_SYNC_USER_KEY);
+          } catch {
+            setCloudSyncStatus(
+              `Could not start cloud sync: ${error.message}. This browser could not clear its sync preference.`,
+            );
+            return;
+          }
+          setCloudSyncStatus(`Could not start cloud sync: ${error.message}`);
+        }
+      }
+    }
+
+    initializeCloudSync();
+    return () => {
+      active = false;
+    };
+  }, [cloudSyncEnabled, pushUser?.id]);
+
+  useEffect(() => {
+    if (!supabase || !pushUser || !cloudSyncEnabled || !cloudSyncReady)
+      return undefined;
+    const snapshot = cloudSnapshotRef.current;
+    const timeout = window.setTimeout(async () => {
+      try {
+        const savedVersion = await saveCloudData(
+          pushUser.id,
+          snapshot,
+          cloudVersionRef.current,
+        );
+        if (!savedVersion) {
+          cloudVersionRef.current = null;
+          setCloudSyncReady(false);
+          setCloudSyncStatus(
+            "Cloud data changed on another device. Refresh Spend to load the latest copy before editing more.",
+          );
+          return;
+        }
+        cloudVersionRef.current = savedVersion;
+        setCloudSyncStatus("Cloud sync is on. Your data is saved to Supabase.");
+      } catch (error) {
+        setCloudSyncStatus(`Could not sync your data: ${error.message}`);
+      }
+    }, 500);
+    return () => window.clearTimeout(timeout);
+  }, [
+    accountData,
+    budgets,
+    cloudSyncEnabled,
+    cloudSyncReady,
+    expenses,
+    pushUser?.id,
+    recurringSchedules,
+    targetCurrency,
+    theme,
+    cloudSyncRetry,
+  ]);
+
+  useEffect(() => {
+    const retryCloudSync = () => setCloudSyncRetry((retry) => retry + 1);
+    window.addEventListener("online", retryCloudSync);
+    return () => window.removeEventListener("online", retryCloudSync);
   }, []);
 
   useEffect(() => {
@@ -784,6 +1014,66 @@ export default function App() {
       setBackupStatus(`Could not restore backup: ${error.message}`);
     } finally {
       input.value = "";
+    }
+  }
+
+  function applyCloudSnapshot(snapshot) {
+    setExpenses(snapshot.expenses);
+    setBudgets(snapshot.budgets);
+    setRecurringSchedules(snapshot.recurringSchedules);
+    setAccountData(snapshot.accountData);
+    setTheme(snapshot.theme);
+    setTargetCurrency(snapshot.targetCurrency);
+  }
+
+  function enableCloudSync() {
+    if (!pushUser) return;
+    try {
+      localStorage.setItem(CLOUD_SYNC_USER_KEY, pushUser.id);
+      setCloudSyncReady(false);
+      setCloudSyncEnabled(true);
+      setCloudSyncStatus("Connecting to Supabase and preparing your data…");
+    } catch (error) {
+      setCloudSyncStatus(`Could not enable cloud sync: ${error.message}`);
+    }
+  }
+
+  function disableCloudSync() {
+    try {
+      localStorage.removeItem(CLOUD_SYNC_USER_KEY);
+      setCloudSyncEnabled(false);
+      setCloudSyncReady(false);
+      setCloudSyncStatus(
+        "Cloud sync is off. Your existing Supabase copy is kept; local data remains on this device.",
+      );
+    } catch (error) {
+      setCloudSyncStatus(`Could not disable cloud sync: ${error.message}`);
+    }
+  }
+
+  async function removeCloudCopy() {
+    if (!pushUser) return;
+    if (
+      !window.confirm(
+        "Delete your synced expense data from Supabase? Local data on this device will remain.",
+      )
+    )
+      return;
+
+    setAuthBusy(true);
+    try {
+      localStorage.removeItem(CLOUD_SYNC_USER_KEY);
+      setCloudSyncEnabled(false);
+      setCloudSyncReady(false);
+      cloudVersionRef.current = null;
+      await deleteCloudData(pushUser.id);
+      setCloudSyncStatus(
+        "The Supabase copy was deleted. Local data on this device is unchanged.",
+      );
+    } catch (error) {
+      setCloudSyncStatus(`Could not delete the Supabase copy: ${error.message}`);
+    } finally {
+      setAuthBusy(false);
     }
   }
 
@@ -1450,20 +1740,65 @@ export default function App() {
         {pushBackendConfigured ? (
           <>
             <p className="push-setup-note">
-              Background push stores your email, device subscription, and recurring expense descriptions and dates in Supabase. Expense history and amounts stay on this device.
+              Background push stores your email, device subscription, and reminder details in Supabase. Expense history and amounts stay on this device unless you turn on cloud sync below.
             </p>
             {pushUser ? (
-              <div className="push-account">
-                <p className="push-account-label">Signed in as {pushUser.email}</p>
-                <button
-                  className="push-account-action"
-                  type="button"
-                  disabled={authBusy}
-                  onClick={signOutOfPush}
-                >
-                  Sign out
-                </button>
-              </div>
+              <>
+                <div className="push-account">
+                  <p className="push-account-label">Signed in as {pushUser.email}</p>
+                  <button
+                    className="push-account-action"
+                    type="button"
+                    disabled={authBusy}
+                    onClick={signOutOfPush}
+                  >
+                    Sign out
+                  </button>
+                </div>
+                <div className="cloud-sync-panel">
+                  <h3>Expense cloud sync</h3>
+                  <p className="push-setup-note">
+                    {cloudSyncEnabled
+                      ? "Your expenses, amounts, budgets, recurring schedules, account balances, and transactions sync to your Supabase account. A copy also stays on this device."
+                      : "Turn this on to store and sync your expenses, amounts, budgets, recurring schedules, and account data in your Supabase account. This is optional; local storage and backups remain available."}
+                  </p>
+                  <div className="push-auth-actions">
+                    {cloudSyncEnabled ? (
+                      <>
+                        <button
+                          className="push-account-action"
+                          type="button"
+                          disabled={authBusy}
+                          onClick={disableCloudSync}
+                        >
+                          Pause cloud sync
+                        </button>
+                        <button
+                          className="push-account-action"
+                          type="button"
+                          disabled={authBusy}
+                          onClick={removeCloudCopy}
+                        >
+                          Delete cloud copy
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={authBusy}
+                        onClick={enableCloudSync}
+                      >
+                        Enable cloud sync
+                      </button>
+                    )}
+                  </div>
+                  {cloudSyncStatus && (
+                    <p className="backup-status" role="status" aria-live="polite">
+                      {cloudSyncStatus}
+                    </p>
+                  )}
+                </div>
+              </>
             ) : (
               <form className="push-auth-form" onSubmit={handleAuthSubmit}>
                 <div className="push-auth-fields">
