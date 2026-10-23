@@ -1,0 +1,1972 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f7f7f4" />
+    <title>Spend — Expense tracker</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --paper: #f7f7f4;
+        --card: #ffffff;
+        --ink: #20231f;
+        --muted: #777d75;
+        --label: #555b54;
+        --line: #e7e9e4;
+        --field: #ffffff;
+        --soft-green: #f0f4ef;
+        --green: #39785d;
+        --green-dark: #2e644d;
+        --summary-green: #39785d;
+        --danger: #a34438;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+        --paper: #151915;
+        --card: #202620;
+        --ink: #edf0ea;
+        --muted: #a1aaa0;
+        --label: #c0c8bf;
+        --line: #343d35;
+        --field: #191f1a;
+        --soft-green: #29362d;
+        --summary-green: #28553e;
+        --danger: #ed887a;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--paper);
+        color: var(--ink);
+      }
+
+      main {
+        width: min(100% - 32px, 680px);
+        margin: 0 auto;
+        padding: 48px 0 64px;
+      }
+
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 32px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        font-size: 16px;
+        font-weight: 650;
+        letter-spacing: -0.02em;
+      }
+
+      .brand-mark {
+        display: grid;
+        width: 34px;
+        height: 34px;
+        place-items: center;
+        border-radius: 11px;
+        background: var(--green);
+        color: white;
+        font-size: 19px;
+        font-weight: 500;
+      }
+
+      .local-note {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .header-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .theme-toggle {
+        display: inline-flex;
+        min-height: 36px;
+        align-items: center;
+        gap: 7px;
+        padding: 0 10px;
+        border: 1px solid var(--line);
+        background: var(--card);
+        color: var(--ink);
+        font-size: 12px;
+      }
+
+      .theme-toggle:hover {
+        background: var(--field);
+      }
+
+      .summary {
+        padding: 28px 30px 30px;
+        border-radius: 18px;
+        background: var(--summary-green);
+        color: white;
+      }
+
+      .summary-topline {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .eyebrow {
+        margin: 0 0 14px;
+        color: rgba(255, 255, 255, 0.76);
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+      }
+
+      .summary-topline .eyebrow {
+        margin: 0;
+      }
+      .month-picker {
+        width: auto;
+        min-height: 36px;
+        padding: 0 9px;
+        border: 1px solid rgba(255, 255, 255, 0.35);
+        border-radius: 8px;
+        background: #fff;
+        color: #20231f;
+        color-scheme: light;
+        font: inherit;
+        font-size: 12px;
+      }
+      .month-picker::-webkit-calendar-picker-indicator {
+        opacity: 1;
+        cursor: pointer;
+      }
+
+      .total {
+        margin: 0;
+        font-size: clamp(36px, 8vw, 50px);
+        font-weight: 570;
+        letter-spacing: -0.055em;
+        line-height: 1;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .summary-caption {
+        margin: 12px 0 0;
+        color: rgba(255, 255, 255, 0.76);
+        font-size: 13px;
+      }
+
+      .conversion-toggle {
+        display: flex;
+        width: 100%;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 36px;
+        margin-top: 18px;
+        padding: 0 12px;
+        border: 1px solid rgba(255, 255, 255, 0.28);
+        background: rgba(255, 255, 255, 0.1);
+        color: #fff;
+        font-size: 12px;
+        text-align: left;
+      }
+      #conversion-toggle-icon {
+        display: grid;
+        width: 20px;
+        height: 20px;
+        flex: 0 0 20px;
+        place-items: center;
+        line-height: 1;
+      }
+      .conversion-toggle:hover {
+        background: rgba(255, 255, 255, 0.18);
+      }
+      .conversion-details {
+        display: grid;
+        grid-template-columns: minmax(160px, 1fr) minmax(0, 1.4fr);
+        align-items: end;
+        gap: 12px 18px;
+        margin-top: 18px;
+        padding-top: 17px;
+        border-top: 1px solid rgba(255, 255, 255, 0.2);
+      }
+      .conversion-details[hidden] {
+        display: none;
+      }
+      .conversion-picker label {
+        margin-bottom: 7px;
+        color: rgba(255, 255, 255, 0.78);
+      }
+      .conversion-picker select {
+        width: 100%;
+        min-height: 40px;
+        padding: 0 10px;
+        border: 1px solid rgba(255, 255, 255, 0.36);
+        border-radius: 9px;
+        background: #fff;
+        color: #20231f;
+        font: inherit;
+        font-size: 13px;
+      }
+      .converted-total-block {
+        text-align: right;
+      }
+      .converted-total-label {
+        margin: 0 0 5px;
+        color: rgba(255, 255, 255, 0.78);
+        font-size: 12px;
+      }
+      .converted-total {
+        margin: 0;
+        font-size: clamp(23px, 5vw, 30px);
+        font-weight: 570;
+        letter-spacing: -0.04em;
+        font-variant-numeric: tabular-nums;
+      }
+      .conversion-status,
+      .conversion-disclaimer {
+        grid-column: 1 / -1;
+        margin: 0;
+        color: rgba(255, 255, 255, 0.78);
+        font-size: 11px;
+        line-height: 1.5;
+      }
+      .conversion-disclaimer a {
+        color: #fff;
+        text-underline-offset: 2px;
+      }
+      .retry-rate {
+        grid-column: 1 / -1;
+        justify-self: start;
+        min-height: 32px;
+        padding: 0 10px;
+        border: 1px solid rgba(255, 255, 255, 0.34);
+        background: transparent;
+        color: #fff;
+        font-size: 11px;
+      }
+
+      .panel {
+        margin-top: 22px;
+        padding: 24px 26px;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: var(--card);
+      }
+
+      h2 {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 650;
+        letter-spacing: -0.02em;
+      }
+
+      .form-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 15px;
+        margin-top: 20px;
+      }
+
+      .form-grid > div {
+        min-width: 0;
+      }
+      .description-field {
+        grid-column: span 2;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 8px;
+        color: var(--label);
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      input {
+        width: 100%;
+        min-height: 44px;
+        padding: 0 12px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        outline: none;
+        background: var(--field);
+        color: var(--ink);
+        font: inherit;
+        font-size: 14px;
+        transition:
+          border-color 0.15s,
+          box-shadow 0.15s;
+      }
+
+      select {
+        min-height: 44px;
+        padding: 0 10px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: var(--field);
+        color: var(--ink);
+        font: inherit;
+        font-size: 13px;
+      }
+
+      .form-grid select {
+        width: 100%;
+      }
+
+      input:focus {
+        border-color: var(--green);
+        box-shadow: 0 0 0 3px rgba(57, 120, 93, 0.12);
+      }
+
+      .form-actions {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-top: 18px;
+      }
+
+      .currency-hint {
+        flex: 2 1 0;
+      }
+
+      .form-actions button {
+        flex: 1 1 0;
+        min-width: max-content;
+        white-space: nowrap;
+      }
+
+      .budget-form {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        align-items: end;
+        gap: 10px;
+        margin-top: 18px;
+      }
+      .budget-form label {
+        margin-bottom: 8px;
+      }
+      .budget-form input {
+        width: 100%;
+      }
+      .budget-form button {
+        min-width: max-content;
+        white-space: nowrap;
+      }
+      .clear-budget {
+        border: 1px solid var(--line);
+        background: var(--card);
+        color: var(--muted);
+      }
+      .clear-budget:hover {
+        background: var(--field);
+        color: var(--ink);
+      }
+      .budget-meter {
+        margin-top: 18px;
+      }
+      .budget-meter[hidden] {
+        display: none;
+      }
+      .progress-track {
+        height: 8px;
+        overflow: hidden;
+        border-radius: 99px;
+        background: var(--soft-green);
+      }
+      .progress-fill {
+        width: 0;
+        height: 100%;
+        border-radius: inherit;
+        background: var(--green);
+        transition: width 0.2s ease;
+      }
+      .budget-summary {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        margin-top: 9px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .budget-empty {
+        margin: 16px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .budget-empty[hidden] {
+        display: none;
+      }
+
+      .filters {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(170px, 0.55fr);
+        gap: 10px;
+        margin: 4px 0 10px;
+      }
+      .filters input,
+      .filters select {
+        width: 100%;
+        min-height: 40px;
+      }
+      .list-heading {
+        align-items: center;
+      }
+      .list-heading-title {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+      }
+      .export-button {
+        min-height: 36px;
+        padding: 0 11px;
+        border: 1px solid var(--line);
+        background: var(--card);
+        color: var(--green);
+        font-size: 12px;
+        white-space: nowrap;
+      }
+      .export-button:hover {
+        background: var(--soft-green);
+      }
+      .export-button:disabled {
+        opacity: 0.48;
+        cursor: not-allowed;
+      }
+
+      .recurring-list {
+        display: grid;
+        gap: 10px;
+        margin: 16px 0 0;
+        padding: 0;
+        list-style: none;
+      }
+      .recurring-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px;
+        border: 1px solid var(--line);
+        border-radius: 11px;
+      }
+      .recurring-info {
+        min-width: 0;
+        flex: 1;
+      }
+      .recurring-name {
+        overflow: hidden;
+        font-size: 13px;
+        font-weight: 600;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .recurring-meta {
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .recurring-amount {
+        font-size: 13px;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .recurring-action {
+        min-height: 32px;
+        padding: 0 9px;
+        border: 1px solid var(--line);
+        background: var(--card);
+        color: var(--muted);
+        font-size: 11px;
+        white-space: nowrap;
+      }
+      .recurring-action:hover {
+        background: var(--field);
+        color: var(--ink);
+      }
+      .recurring-empty {
+        margin: 15px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .recurring-empty[hidden] {
+        display: none;
+      }
+
+      .currency-hint {
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      button {
+        min-height: 42px;
+        padding: 0 16px;
+        border: 0;
+        border-radius: 9px;
+        background: var(--green);
+        color: white;
+        cursor: pointer;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 620;
+        transition:
+          background 0.15s,
+          transform 0.15s;
+      }
+
+      button:hover {
+        background: var(--green-dark);
+      }
+      button:active {
+        transform: translateY(1px);
+      }
+      button:focus-visible,
+      .remove:focus-visible {
+        outline: 3px solid rgba(57, 120, 93, 0.28);
+        outline-offset: 2px;
+      }
+
+      .list-panel {
+        padding: 24px 0 0;
+      }
+
+      .list-heading {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 0 2px 12px;
+      }
+
+      .count {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      #expense-list {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .expense-row {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 15px 2px;
+        border-top: 1px solid var(--line);
+      }
+
+      .expense-row.editing-amount {
+        flex-wrap: wrap;
+      }
+      .expense-row.editing-amount .expense-end {
+        flex: 1 1 calc(100% - 52px);
+        margin-left: 52px;
+        justify-content: flex-start;
+      }
+
+      .expense-icon {
+        display: grid;
+        flex: 0 0 38px;
+        width: 38px;
+        height: 38px;
+        place-items: center;
+        border-radius: 12px;
+        background: var(--soft-green);
+        color: var(--green);
+        font-size: 15px;
+      }
+
+      .expense-info {
+        min-width: 0;
+        flex: 1;
+      }
+      .expense-name {
+        overflow: hidden;
+        font-size: 14px;
+        font-weight: 570;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .expense-date {
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .expense-end {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .expense-amount {
+        font-size: 14px;
+        font-weight: 620;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+      .expense-amounts {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 3px;
+      }
+      .converted-row {
+        color: var(--muted);
+        font-size: 11px;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+      .missing-amount {
+        color: var(--muted);
+        font-size: 12px;
+        white-space: nowrap;
+      }
+
+      .add-amount-button {
+        min-height: 34px;
+        padding: 0 10px;
+        border: 1px solid var(--line);
+        background: var(--card);
+        color: var(--green);
+        font-size: 12px;
+        white-space: nowrap;
+      }
+      .add-amount-button:hover {
+        background: var(--soft-green);
+      }
+
+      .inline-amount-form {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .inline-amount-input {
+        width: 104px;
+        min-height: 36px;
+        padding: 0 9px;
+        font-size: 13px;
+      }
+      .inline-save {
+        min-height: 36px;
+        padding: 0 10px;
+        font-size: 12px;
+      }
+      .inline-cancel {
+        min-height: 34px;
+        padding: 0 4px;
+        background: transparent;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .inline-cancel:hover {
+        background: transparent;
+        color: var(--ink);
+      }
+
+      .remove {
+        padding: 4px;
+        border: 0;
+        background: transparent;
+        color: #92978f;
+        cursor: pointer;
+        font-size: 18px;
+        line-height: 1;
+      }
+      .remove:hover {
+        background: transparent;
+        color: var(--danger);
+      }
+
+      .empty-state {
+        padding: 28px 12px 24px;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 13px;
+        text-align: center;
+      }
+
+      @media (max-width: 720px) {
+        .form-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .description-field {
+          grid-column: 1 / -1;
+        }
+      }
+
+      @media (max-width: 520px) {
+        main {
+          padding-top: 28px;
+        }
+        .local-note {
+          max-width: 130px;
+          text-align: right;
+        }
+        .header-actions {
+          gap: 8px;
+        }
+        .theme-toggle {
+          gap: 0;
+          padding: 0 9px;
+        }
+        .theme-label {
+          display: none;
+        }
+        .summary {
+          padding: 24px;
+        }
+        .summary-topline {
+          align-items: flex-start;
+        }
+        .month-picker {
+          max-width: 150px;
+        }
+        .conversion-details {
+          grid-template-columns: 1fr;
+          align-items: start;
+        }
+        .converted-total-block {
+          text-align: left;
+        }
+        .panel {
+          padding: 21px 19px;
+        }
+        .form-grid {
+          grid-template-columns: 1fr;
+          gap: 13px;
+        }
+        .description-field {
+          grid-column: auto;
+        }
+        .form-actions {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+        .currency-hint {
+          flex: 0 1 auto;
+        }
+        .form-actions button {
+          width: 100%;
+          flex: 1 0 auto;
+        }
+        .budget-form {
+          grid-template-columns: 1fr 1fr;
+        }
+        .budget-field {
+          grid-column: 1 / -1;
+        }
+        .budget-form button {
+          width: 100%;
+        }
+        .filters {
+          grid-template-columns: 1fr;
+        }
+        .list-heading {
+          align-items: flex-start;
+        }
+        .list-heading-title {
+          align-items: flex-start;
+          flex-direction: column;
+          gap: 4px;
+        }
+        .recurring-row {
+          flex-wrap: wrap;
+        }
+        .recurring-amount {
+          margin-left: auto;
+        }
+        .list-panel {
+          padding: 24px 0 0;
+        }
+        .expense-row {
+          gap: 10px;
+        }
+        .expense-end {
+          gap: 7px;
+        }
+        .expense-row.editing-amount .expense-end {
+          flex-basis: calc(100% - 48px);
+          margin-left: 48px;
+        }
+        .inline-amount-form {
+          gap: 5px;
+        }
+        .inline-amount-input {
+          width: 88px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">↗</span><span>Spend</span>
+        </div>
+        <div class="header-actions">
+          <div class="local-note">Your expenses stay on this device</div>
+          <button
+            class="theme-toggle"
+            id="theme-toggle"
+            type="button"
+            aria-label="Switch to dark mode"
+            aria-pressed="false"
+            title="Switch to dark mode"
+          >
+            <span id="theme-icon" aria-hidden="true">☾</span>
+            <span class="theme-label" id="theme-label">Dark</span>
+          </button>
+        </div>
+      </header>
+
+      <section class="summary" aria-labelledby="summary-title">
+        <div class="summary-topline">
+          <p class="eyebrow" id="summary-title">Month total · BDT</p>
+          <label class="sr-only" for="selected-month">Choose month</label>
+          <input class="month-picker" id="selected-month" type="month" />
+        </div>
+        <p class="total" id="total" aria-live="polite">BDT 0.00</p>
+        <p class="summary-caption" id="summary-caption">
+          Across all expenses this month
+        </p>
+        <button
+          class="conversion-toggle"
+          id="conversion-toggle"
+          type="button"
+          aria-expanded="false"
+          aria-controls="conversion-details"
+        >
+          <span id="conversion-toggle-label">Show conversion</span>
+          <span id="conversion-toggle-icon" aria-hidden="true">⌄</span>
+        </button>
+        <div class="conversion-details" id="conversion-details" hidden>
+          <div class="conversion-picker">
+            <label for="conversion-currency">Convert BDT to</label>
+            <select id="conversion-currency">
+              <option value="USD">USD — US Dollar</option>
+              <option value="EUR">EUR — Euro</option>
+              <option value="GBP">GBP — British Pound</option>
+              <option value="INR">INR — Indian Rupee</option>
+              <option value="AED">AED — UAE Dirham</option>
+              <option value="SAR">SAR — Saudi Riyal</option>
+              <option value="CAD">CAD — Canadian Dollar</option>
+              <option value="AUD">AUD — Australian Dollar</option>
+              <option value="JPY">JPY — Japanese Yen</option>
+              <option value="SGD">SGD — Singapore Dollar</option>
+              <option value="MYR">MYR — Malaysian Ringgit</option>
+              <option value="PKR">PKR — Pakistani Rupee</option>
+              <option value="CNY">CNY — Chinese Yuan</option>
+              <option value="THB">THB — Thai Baht</option>
+            </select>
+          </div>
+          <div class="converted-total-block" id="converted-total-block" hidden>
+            <p class="converted-total-label" id="converted-total-label">
+              Estimated total
+            </p>
+            <p class="converted-total" id="converted-total" aria-live="polite">
+              —
+            </p>
+          </div>
+          <p
+            class="conversion-status"
+            id="conversion-status"
+            role="status"
+            aria-live="polite"
+          >
+            Choose a currency to see an estimate.
+          </p>
+          <p class="conversion-disclaimer">
+            Indicative daily mid-market rate. Your bank or card provider may use
+            a different rate. Source:
+            <a
+              href="https://frankfurter.dev/"
+              target="_blank"
+              rel="noopener noreferrer"
+              >Frankfurter</a
+            >.
+          </p>
+          <button class="retry-rate" id="retry-rate" type="button" hidden>
+            Try again
+          </button>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="form-title">
+        <h2 id="form-title">Add an expense</h2>
+        <form id="expense-form">
+          <div class="form-grid">
+            <div class="description-field">
+              <label for="description">What was it for?</label>
+              <input
+                id="description"
+                name="description"
+                type="text"
+                placeholder="e.g. Lunch"
+                maxlength="80"
+                required
+                autocomplete="off"
+              />
+            </div>
+            <div>
+              <label for="amount">Amount (BDT)</label>
+              <input
+                id="amount"
+                name="amount"
+                type="number"
+                placeholder="0.00"
+                min="0.01"
+                step="0.01"
+                inputmode="decimal"
+              />
+            </div>
+            <div>
+              <label for="expense-category">Category</label>
+              <select id="expense-category" name="category"></select>
+            </div>
+            <div>
+              <label for="expense-date">Date</label>
+              <input id="expense-date" name="date" type="date" required />
+            </div>
+            <div>
+              <label for="expense-repeat">Repeat</label>
+              <select id="expense-repeat" name="repeat">
+                <option value="none">Does not repeat</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-actions">
+            <span class="currency-hint" id="expense-hint"
+              >Enter amounts in BDT. You can add a missing amount later from
+              Recent expenses.</span
+            >
+            <button type="submit">Add expense</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel" aria-labelledby="budget-title">
+        <h2 id="budget-title">Monthly budget</h2>
+        <p class="currency-hint" id="budget-month-label">
+          Set a spending limit for this month.
+        </p>
+        <form class="budget-form" id="budget-form">
+          <div class="budget-field">
+            <label for="monthly-budget">Budget (BDT)</label>
+            <input
+              id="monthly-budget"
+              type="number"
+              min="0.01"
+              step="0.01"
+              inputmode="decimal"
+              placeholder="e.g. 20000"
+              required
+            />
+          </div>
+          <button type="submit">Save budget</button>
+          <button class="clear-budget" id="clear-budget" type="button" hidden>
+            Clear
+          </button>
+        </form>
+        <div class="budget-meter" id="budget-meter" hidden>
+          <div
+            class="progress-track"
+            role="progressbar"
+            id="budget-progressbar"
+            aria-label="Monthly budget used"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="0"
+          >
+            <div class="progress-fill" id="budget-progress"></div>
+          </div>
+          <div class="budget-summary">
+            <span id="budget-spent"></span>
+            <span id="budget-remaining"></span>
+          </div>
+        </div>
+        <p class="budget-empty" id="budget-empty">
+          Add a budget to track your monthly spending.
+        </p>
+      </section>
+
+      <section class="panel" aria-labelledby="recurring-title">
+        <h2 id="recurring-title">Recurring expenses</h2>
+        <p class="currency-hint">
+          Weekly or monthly entries are added when they come due and you open
+          the app.
+        </p>
+        <ul class="recurring-list" id="recurring-list"></ul>
+        <p class="recurring-empty" id="recurring-empty">
+          Choose Weekly or Monthly in the expense form to add a recurring
+          expense.
+        </p>
+      </section>
+
+      <section class="list-panel" aria-labelledby="list-title">
+        <div class="list-heading">
+          <div class="list-heading-title">
+            <h2 id="list-title">Expenses</h2>
+            <span class="count" id="count">0 expenses</span>
+          </div>
+          <button
+            class="export-button"
+            id="export-csv"
+            type="button"
+            disabled
+            title="Export the selected month and current filters as a CSV file"
+          >
+            Export CSV
+          </button>
+        </div>
+        <div class="filters">
+          <input
+            id="search-expenses"
+            type="search"
+            placeholder="Search expenses"
+            aria-label="Search expenses"
+          />
+          <select id="filter-category" aria-label="Filter by category"></select>
+        </div>
+        <ul id="expense-list" aria-live="polite"></ul>
+        <div class="empty-state" id="empty-state">
+          Your expenses will show up here.
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const STORAGE_KEY = "spend-expenses-v1";
+      const form = document.querySelector("#expense-form");
+      const descriptionInput = document.querySelector("#description");
+      const amountInput = document.querySelector("#amount");
+      const categoryInput = document.querySelector("#expense-category");
+      const expenseDateInput = document.querySelector("#expense-date");
+      const recurrenceInput = document.querySelector("#expense-repeat");
+      const expenseHint = document.querySelector("#expense-hint");
+      const selectedMonthInput = document.querySelector("#selected-month");
+      const summaryCaption = document.querySelector("#summary-caption");
+      const list = document.querySelector("#expense-list");
+      const totalElement = document.querySelector("#total");
+      const countElement = document.querySelector("#count");
+      const emptyState = document.querySelector("#empty-state");
+      const searchInput = document.querySelector("#search-expenses");
+      const categoryFilter = document.querySelector("#filter-category");
+      const exportButton = document.querySelector("#export-csv");
+      const budgetForm = document.querySelector("#budget-form");
+      const budgetInput = document.querySelector("#monthly-budget");
+      const budgetMonthLabel = document.querySelector("#budget-month-label");
+      const budgetMeter = document.querySelector("#budget-meter");
+      const budgetProgressbar = document.querySelector("#budget-progressbar");
+      const budgetProgress = document.querySelector("#budget-progress");
+      const budgetSpent = document.querySelector("#budget-spent");
+      const budgetRemaining = document.querySelector("#budget-remaining");
+      const budgetEmpty = document.querySelector("#budget-empty");
+      const clearBudgetButton = document.querySelector("#clear-budget");
+      const recurringList = document.querySelector("#recurring-list");
+      const recurringEmpty = document.querySelector("#recurring-empty");
+      const themeToggle = document.querySelector("#theme-toggle");
+      const themeIcon = document.querySelector("#theme-icon");
+      const themeLabel = document.querySelector("#theme-label");
+      const conversionToggle = document.querySelector("#conversion-toggle");
+      const conversionToggleLabel = document.querySelector(
+        "#conversion-toggle-label",
+      );
+      const conversionToggleIcon = document.querySelector(
+        "#conversion-toggle-icon",
+      );
+      const conversionDetails = document.querySelector("#conversion-details");
+      const conversionCurrencySelect = document.querySelector(
+        "#conversion-currency",
+      );
+      const conversionStatus = document.querySelector("#conversion-status");
+      const convertedTotalBlock = document.querySelector(
+        "#converted-total-block",
+      );
+      const convertedTotalLabel = document.querySelector(
+        "#converted-total-label",
+      );
+      const convertedTotalElement = document.querySelector("#converted-total");
+      const retryRateButton = document.querySelector("#retry-rate");
+      const THEME_KEY = "spend-theme-v1";
+      const TARGET_CURRENCY_KEY = "spend-target-currency-v1";
+      const BUDGETS_KEY = "spend-monthly-budgets-v1";
+      const RECURRING_KEY = "spend-recurring-expenses-v1";
+      const PRIMARY_CURRENCY = "BDT";
+      const CURRENCY_API = "https://api.frankfurter.dev/v2";
+      const CATEGORIES = [
+        "Food",
+        "Transport",
+        "Bills",
+        "Shopping",
+        "Health",
+        "Entertainment",
+        "Education",
+        "Other",
+      ];
+
+      let expenses = loadExpenses();
+      let budgets = loadBudgets();
+      let recurringSchedules = loadRecurringSchedules();
+      let theme = loadTheme();
+      let editingExpenseId = null;
+      let targetCurrency = loadTargetCurrency();
+      let conversionOpen = false;
+      let currencyListLoaded = false;
+      let currencyListPromise = null;
+      let conversionRate = null;
+      let conversionRateDate = null;
+      let rateRequestId = 0;
+      let selectedMonth = currentMonth();
+
+      selectedMonthInput.value = selectedMonth;
+      expenseDateInput.value = localDate();
+      populateCategorySelects();
+      categoryInput.value = "Other";
+      processRecurringExpenses();
+
+      function loadTheme() {
+        try {
+          return localStorage.getItem(THEME_KEY) === "dark" ? "dark" : "light";
+        } catch {
+          return "light";
+        }
+      }
+
+      function loadTargetCurrency() {
+        try {
+          const saved = localStorage.getItem(TARGET_CURRENCY_KEY);
+          return saved && /^[A-Z]{3}$/.test(saved) ? saved : "USD";
+        } catch {
+          return "USD";
+        }
+      }
+
+      function saveTargetCurrency() {
+        try {
+          localStorage.setItem(TARGET_CURRENCY_KEY, targetCurrency);
+        } catch {
+          // The selection still applies for this visit if browser storage is unavailable.
+        }
+      }
+
+      function applyTheme() {
+        const isDark = theme === "dark";
+        document.documentElement.dataset.theme = theme;
+        themeToggle.setAttribute("aria-pressed", String(isDark));
+        const nextMode = isDark ? "light" : "dark";
+        const label = `Switch to ${nextMode} mode`;
+        themeToggle.setAttribute("aria-label", label);
+        themeToggle.title = label;
+        themeIcon.textContent = isDark ? "☀" : "☾";
+        themeLabel.textContent = isDark ? "Light" : "Dark";
+      }
+
+      function loadExpenses() {
+        try {
+          const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+          return Array.isArray(saved)
+            ? saved.filter(isValidExpense).map((expense) => ({
+                ...expense,
+                category: CATEGORIES.includes(expense.category)
+                  ? expense.category
+                  : "Other",
+              }))
+            : [];
+        } catch {
+          return [];
+        }
+      }
+
+      function loadBudgets() {
+        try {
+          const saved = JSON.parse(localStorage.getItem(BUDGETS_KEY) || "{}");
+          if (!saved || typeof saved !== "object" || Array.isArray(saved))
+            return {};
+          return Object.fromEntries(
+            Object.entries(saved).filter(
+              ([month, amount]) =>
+                /^\d{4}-\d{2}$/.test(month) &&
+                Number.isFinite(Number(amount)) &&
+                Number(amount) > 0,
+            ),
+          );
+        } catch {
+          return {};
+        }
+      }
+
+      function loadRecurringSchedules() {
+        try {
+          const saved = JSON.parse(localStorage.getItem(RECURRING_KEY) || "[]");
+          return Array.isArray(saved)
+            ? saved
+                .filter(
+                  (schedule) =>
+                    schedule &&
+                    typeof schedule.id === "string" &&
+                    typeof schedule.description === "string" &&
+                    Number.isFinite(Number(schedule.amount)) &&
+                    Number(schedule.amount) > 0 &&
+                    CATEGORIES.includes(schedule.category) &&
+                    ["weekly", "monthly"].includes(schedule.interval) &&
+                    isValidDateString(schedule.nextDate) &&
+                    typeof schedule.active === "boolean",
+                )
+                .map((schedule) => ({
+                  ...schedule,
+                  dayOfMonth:
+                    Number.isInteger(schedule.dayOfMonth) &&
+                    schedule.dayOfMonth >= 1 &&
+                    schedule.dayOfMonth <= 31
+                      ? schedule.dayOfMonth
+                      : Number(schedule.nextDate.slice(-2)),
+                }))
+            : [];
+        } catch {
+          return [];
+        }
+      }
+
+      function saveBudgets() {
+        localStorage.setItem(BUDGETS_KEY, JSON.stringify(budgets));
+      }
+
+      function saveRecurringSchedules() {
+        localStorage.setItem(RECURRING_KEY, JSON.stringify(recurringSchedules));
+      }
+
+      function localDate(date = new Date()) {
+        return [
+          date.getFullYear(),
+          String(date.getMonth() + 1).padStart(2, "0"),
+          String(date.getDate()).padStart(2, "0"),
+        ].join("-");
+      }
+
+      function isValidDateString(value) {
+        if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value))
+          return false;
+        const date = new Date(`${value}T00:00:00`);
+        return !Number.isNaN(date.getTime()) && localDate(date) === value;
+      }
+
+      function currentMonth() {
+        return localDate().slice(0, 7);
+      }
+
+      function populateCategorySelects() {
+        categoryInput.replaceChildren();
+        for (const category of CATEGORIES) {
+          const option = document.createElement("option");
+          option.value = category;
+          option.textContent = category;
+          categoryInput.append(option);
+        }
+
+        categoryFilter.replaceChildren();
+        const allOption = document.createElement("option");
+        allOption.value = "";
+        allOption.textContent = "All categories";
+        categoryFilter.append(allOption);
+        for (const category of CATEGORIES) {
+          const option = document.createElement("option");
+          option.value = category;
+          option.textContent = category;
+          categoryFilter.append(option);
+        }
+      }
+
+      function nextOccurrenceDate(dateValue, interval, dayOfMonth) {
+        const [year, month, day] = dateValue.split("-").map(Number);
+        if (interval === "weekly") {
+          const date = new Date(year, month - 1, day);
+          date.setDate(date.getDate() + 7);
+          return localDate(date);
+        }
+
+        const nextMonth = new Date(year, month, 1);
+        const lastDay = new Date(
+          nextMonth.getFullYear(),
+          nextMonth.getMonth() + 1,
+          0,
+        ).getDate();
+        return localDate(
+          new Date(
+            nextMonth.getFullYear(),
+            nextMonth.getMonth(),
+            Math.min(dayOfMonth || day, lastDay),
+          ),
+        );
+      }
+
+      function processRecurringExpenses() {
+        const today = localDate();
+        let expensesChanged = false;
+        let schedulesChanged = false;
+
+        for (const schedule of recurringSchedules) {
+          if (!schedule.active) continue;
+          let generated = 0;
+          while (schedule.nextDate <= today && generated < 240) {
+            const alreadyCreated = expenses.some(
+              (expense) =>
+                expense.recurringId === schedule.id &&
+                expense.date === schedule.nextDate,
+            );
+            if (!alreadyCreated) {
+              expenses.push({
+                id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+                description: schedule.description,
+                amount: Number(schedule.amount),
+                category: schedule.category,
+                date: schedule.nextDate,
+                recurringId: schedule.id,
+              });
+              expensesChanged = true;
+            }
+            schedule.nextDate = nextOccurrenceDate(
+              schedule.nextDate,
+              schedule.interval,
+              schedule.dayOfMonth,
+            );
+            generated += 1;
+            schedulesChanged = true;
+          }
+        }
+
+        if (expensesChanged) saveExpenses();
+        if (schedulesChanged) saveRecurringSchedules();
+      }
+
+      function isValidExpense(item) {
+        if (
+          !item ||
+          typeof item.id !== "string" ||
+          typeof item.description !== "string" ||
+          !isValidDateString(item.date)
+        )
+          return false;
+        if (item.amount === null) return true;
+        return Number.isFinite(Number(item.amount)) && Number(item.amount) > 0;
+      }
+
+      function saveExpenses() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(expenses));
+      }
+
+      function formatCurrency(value, currency = PRIMARY_CURRENCY) {
+        const amount = Number(value);
+        try {
+          return new Intl.NumberFormat(undefined, {
+            style: "currency",
+            currency,
+            currencyDisplay: "code",
+          }).format(amount);
+        } catch {
+          return `${currency} ${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        }
+      }
+
+      function formatDate(value) {
+        const [year, month, day] = value.split("-").map(Number);
+        const date = new Date(year, month - 1, day);
+        return Number.isNaN(date.getTime())
+          ? value
+          : date.toLocaleDateString(undefined, {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            });
+      }
+
+      function populateCurrencyOptions(currencies) {
+        const current = currencies.some(
+          (currency) => currency.iso_code === targetCurrency,
+        )
+          ? targetCurrency
+          : currencies.some((currency) => currency.iso_code === "USD")
+            ? "USD"
+            : currencies[0]?.iso_code;
+        conversionCurrencySelect.replaceChildren();
+
+        for (const currency of currencies) {
+          const option = document.createElement("option");
+          option.value = currency.iso_code;
+          option.textContent = `${currency.iso_code} — ${currency.name}`;
+          conversionCurrencySelect.append(option);
+        }
+
+        if (current) {
+          targetCurrency = current;
+          conversionCurrencySelect.value = current;
+          saveTargetCurrency();
+        }
+      }
+
+      async function loadCurrencies() {
+        if (currencyListLoaded) {
+          await refreshExchangeRate();
+          return;
+        }
+        if (currencyListPromise) return currencyListPromise;
+
+        conversionStatus.textContent = "Loading available currencies…";
+        currencyListPromise = (async () => {
+          try {
+            const response = await fetch(`${CURRENCY_API}/currencies`);
+            if (!response.ok) throw new Error("Currency list request failed");
+            const data = await response.json();
+            const currencies = Array.isArray(data)
+              ? data
+                  .filter(
+                    (item) =>
+                      item &&
+                      /^[A-Z]{3}$/.test(item.iso_code) &&
+                      item.iso_code !== PRIMARY_CURRENCY &&
+                      typeof item.name === "string",
+                  )
+                  .sort((a, b) => a.name.localeCompare(b.name))
+              : [];
+            if (!currencies.length) throw new Error("Currency list was empty");
+
+            populateCurrencyOptions(currencies);
+            currencyListLoaded = true;
+            if (conversionOpen) await refreshExchangeRate();
+          } catch {
+            currencyListPromise = null;
+            conversionCurrencySelect.disabled = false;
+            if (conversionOpen) await refreshExchangeRate();
+          }
+        })();
+        return currencyListPromise;
+      }
+
+      async function refreshExchangeRate() {
+        const requestId = ++rateRequestId;
+        targetCurrency = conversionCurrencySelect.value || targetCurrency;
+        saveTargetCurrency();
+        conversionRate = null;
+        conversionRateDate = null;
+        convertedTotalBlock.hidden = true;
+        retryRateButton.hidden = true;
+        conversionStatus.textContent = `Getting the latest available ${targetCurrency} rate…`;
+        render();
+
+        try {
+          const response = await fetch(
+            `${CURRENCY_API}/rate/${PRIMARY_CURRENCY.toLowerCase()}/${targetCurrency.toLowerCase()}`,
+          );
+          if (!response.ok) throw new Error("Exchange rate request failed");
+          const data = await response.json();
+          const rate = Number(data.rate);
+          if (requestId !== rateRequestId) return;
+          if (
+            data.base !== PRIMARY_CURRENCY ||
+            data.quote !== targetCurrency ||
+            !Number.isFinite(rate) ||
+            rate <= 0 ||
+            typeof data.date !== "string"
+          ) {
+            throw new Error("Exchange rate response was invalid");
+          }
+
+          conversionRate = rate;
+          conversionRateDate = data.date;
+          const rateText = new Intl.NumberFormat(undefined, {
+            maximumSignificantDigits: 6,
+          }).format(rate);
+          conversionStatus.textContent = `Rate: 1 BDT = ${rateText} ${targetCurrency}. Rate date: ${conversionRateDate}.`;
+          retryRateButton.hidden = true;
+          render();
+        } catch {
+          if (requestId !== rateRequestId) return;
+          conversionRate = null;
+          conversionRateDate = null;
+          conversionStatus.textContent = `Could not load a ${targetCurrency} rate. Check your connection, then try again.`;
+          retryRateButton.hidden = false;
+          render();
+        }
+      }
+
+      function formatMonth(monthValue) {
+        const [year, month] = monthValue.split("-").map(Number);
+        return new Date(year, month - 1, 1).toLocaleDateString(undefined, {
+          month: "long",
+          year: "numeric",
+        });
+      }
+
+      function getMonthExpenses() {
+        return expenses.filter(
+          (expense) => expense.date.slice(0, 7) === selectedMonth,
+        );
+      }
+
+      function getFilteredExpenses() {
+        const query = searchInput.value.trim().toLocaleLowerCase();
+        const category = categoryFilter.value;
+        return getMonthExpenses()
+          .filter((expense) => !category || expense.category === category)
+          .filter(
+            (expense) =>
+              !query ||
+              `${expense.description} ${expense.category}`
+                .toLocaleLowerCase()
+                .includes(query),
+          )
+          .sort(
+            (a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id),
+          );
+      }
+
+      function renderBudget(monthTotal) {
+        const budget = Number(budgets[selectedMonth] || 0);
+        budgetMonthLabel.textContent = `For ${formatMonth(selectedMonth)}. All expenses in this month count toward the budget.`;
+        if (document.activeElement !== budgetInput)
+          budgetInput.value = budget > 0 ? String(budget) : "";
+        clearBudgetButton.hidden = budget <= 0;
+        budgetMeter.hidden = budget <= 0;
+        budgetEmpty.hidden = budget > 0;
+
+        if (budget <= 0) return;
+        const percentage = (monthTotal / budget) * 100;
+        const progress = Math.min(100, Math.max(0, percentage));
+        budgetProgress.style.width = `${progress}%`;
+        budgetProgress.style.background =
+          percentage > 100 ? "var(--danger)" : "var(--green)";
+        budgetProgressbar.setAttribute(
+          "aria-valuenow",
+          String(Math.round(progress)),
+        );
+        budgetProgressbar.setAttribute(
+          "aria-valuetext",
+          `${Math.round(percentage)} percent of budget used`,
+        );
+        budgetSpent.textContent = `${formatCurrency(monthTotal)} spent`;
+        budgetRemaining.textContent =
+          monthTotal <= budget
+            ? `${formatCurrency(budget - monthTotal)} left`
+            : `${formatCurrency(monthTotal - budget)} over budget`;
+      }
+
+      function renderRecurringSchedules() {
+        recurringList.replaceChildren();
+        recurringEmpty.hidden = recurringSchedules.length > 0;
+
+        for (const schedule of recurringSchedules) {
+          const row = document.createElement("li");
+          row.className = "recurring-row";
+
+          const info = document.createElement("div");
+          info.className = "recurring-info";
+          const name = document.createElement("div");
+          name.className = "recurring-name";
+          name.textContent = schedule.description;
+          const meta = document.createElement("div");
+          meta.className = "recurring-meta";
+          const cadence = schedule.interval === "weekly" ? "Weekly" : "Monthly";
+          meta.textContent = `${schedule.active ? cadence : `Paused · ${cadence}`} · ${schedule.category} · Next ${formatDate(schedule.nextDate)}`;
+          info.append(name, meta);
+
+          const amount = document.createElement("span");
+          amount.className = "recurring-amount";
+          amount.textContent = formatCurrency(schedule.amount);
+
+          const toggle = document.createElement("button");
+          toggle.className = "recurring-action";
+          toggle.type = "button";
+          toggle.textContent = schedule.active ? "Pause" : "Resume";
+          toggle.setAttribute(
+            "aria-label",
+            `${schedule.active ? "Pause" : "Resume"} ${schedule.description}`,
+          );
+          toggle.addEventListener("click", () => {
+            schedule.active = !schedule.active;
+            if (schedule.active) {
+              let skipped = 0;
+              while (schedule.nextDate <= localDate() && skipped < 240) {
+                schedule.nextDate = nextOccurrenceDate(
+                  schedule.nextDate,
+                  schedule.interval,
+                  schedule.dayOfMonth,
+                );
+                skipped += 1;
+              }
+            }
+            saveRecurringSchedules();
+            processRecurringExpenses();
+            render();
+          });
+
+          const remove = document.createElement("button");
+          remove.className = "recurring-action";
+          remove.type = "button";
+          remove.textContent = "Remove";
+          remove.addEventListener("click", () => {
+            if (
+              !window.confirm(
+                `Remove the schedule for “${schedule.description}”? Existing expenses will stay in your list.`,
+              )
+            )
+              return;
+            recurringSchedules = recurringSchedules.filter(
+              (item) => item.id !== schedule.id,
+            );
+            saveRecurringSchedules();
+            render();
+          });
+
+          row.append(info, amount, toggle, remove);
+          recurringList.append(row);
+        }
+      }
+
+      function render() {
+        selectedMonth = selectedMonthInput.value || currentMonth();
+        const monthExpenses = getMonthExpenses();
+        const monthlyTotal = monthExpenses.reduce(
+          (sum, expense) =>
+            sum + (expense.amount === null ? 0 : Number(expense.amount)),
+          0,
+        );
+        const visibleExpenses = getFilteredExpenses();
+        totalElement.textContent = formatCurrency(
+          monthlyTotal,
+          PRIMARY_CURRENCY,
+        );
+        summaryCaption.textContent = `Across all expenses in ${formatMonth(selectedMonth)}`;
+        const showConvertedTotal = conversionOpen && conversionRate !== null;
+        convertedTotalBlock.hidden = !showConvertedTotal;
+        if (showConvertedTotal) {
+          convertedTotalLabel.textContent = `Estimated total in ${targetCurrency}`;
+          convertedTotalElement.textContent = formatCurrency(
+            monthlyTotal * conversionRate,
+            targetCurrency,
+          );
+        }
+        renderBudget(monthlyTotal);
+        countElement.textContent =
+          visibleExpenses.length === monthExpenses.length
+            ? `${visibleExpenses.length} ${visibleExpenses.length === 1 ? "expense" : "expenses"}`
+            : `${visibleExpenses.length} of ${monthExpenses.length} shown`;
+        exportButton.disabled = visibleExpenses.length === 0;
+        emptyState.hidden = visibleExpenses.length > 0;
+        emptyState.textContent =
+          monthExpenses.length === 0
+            ? `No expenses recorded in ${formatMonth(selectedMonth)}.`
+            : "No expenses match your search and category filter.";
+        list.replaceChildren();
+
+        for (const expense of visibleExpenses) {
+          const row = document.createElement("li");
+          row.className = "expense-row";
+          if (expense.amount === null && editingExpenseId === expense.id)
+            row.classList.add("editing-amount");
+
+          const icon = document.createElement("span");
+          icon.className = "expense-icon";
+          icon.setAttribute("aria-hidden", "true");
+          icon.textContent = "↗";
+
+          const info = document.createElement("div");
+          info.className = "expense-info";
+          const name = document.createElement("div");
+          name.className = "expense-name";
+          name.textContent = expense.description;
+          const date = document.createElement("div");
+          date.className = "expense-date";
+          date.textContent = `${expense.category} · ${formatDate(expense.date)}${expense.recurringId ? " · Recurring" : ""}`;
+          info.append(name, date);
+
+          const end = document.createElement("div");
+          end.className = "expense-end";
+          if (expense.amount === null) {
+            if (editingExpenseId === expense.id) {
+              const amountForm = document.createElement("form");
+              amountForm.className = "inline-amount-form";
+              amountForm.setAttribute(
+                "aria-label",
+                `Add amount for ${expense.description}`,
+              );
+
+              const amountInput = document.createElement("input");
+              amountInput.className = "inline-amount-input";
+              amountInput.type = "number";
+              amountInput.min = "0.01";
+              amountInput.step = "0.01";
+              amountInput.inputMode = "decimal";
+              amountInput.placeholder = "0.00";
+              amountInput.required = true;
+              amountInput.setAttribute("aria-label", "Amount");
+
+              const saveAmount = document.createElement("button");
+              saveAmount.className = "inline-save";
+              saveAmount.type = "submit";
+              saveAmount.textContent = "Save";
+
+              const cancel = document.createElement("button");
+              cancel.className = "inline-cancel";
+              cancel.type = "button";
+              cancel.textContent = "Cancel";
+              cancel.addEventListener("click", () => {
+                editingExpenseId = null;
+                render();
+              });
+
+              amountForm.append(amountInput, saveAmount, cancel);
+              amountForm.addEventListener("submit", (event) => {
+                event.preventDefault();
+                const value = Number(amountInput.value);
+                if (!Number.isFinite(value) || value <= 0) {
+                  amountInput.focus();
+                  return;
+                }
+                expense.amount = Math.round(value * 100) / 100;
+                editingExpenseId = null;
+                saveExpenses();
+                render();
+              });
+              end.append(amountForm);
+            } else {
+              const missing = document.createElement("span");
+              missing.className = "missing-amount";
+              missing.textContent = "No amount";
+
+              const addAmount = document.createElement("button");
+              addAmount.className = "add-amount-button";
+              addAmount.type = "button";
+              addAmount.textContent = "Add amount";
+              addAmount.setAttribute(
+                "aria-label",
+                `Add amount for ${expense.description}`,
+              );
+              addAmount.addEventListener("click", () => {
+                editingExpenseId = expense.id;
+                render();
+                list.querySelector(".inline-amount-input")?.focus();
+              });
+              end.append(missing, addAmount);
+            }
+          } else {
+            const amountStack = document.createElement("div");
+            amountStack.className = "expense-amounts";
+            const amount = document.createElement("span");
+            amount.className = "expense-amount";
+            amount.textContent = formatCurrency(
+              expense.amount,
+              PRIMARY_CURRENCY,
+            );
+            amountStack.append(amount);
+            if (conversionOpen && conversionRate !== null) {
+              const converted = document.createElement("span");
+              converted.className = "converted-row";
+              converted.textContent = `≈ ${formatCurrency(Number(expense.amount) * conversionRate, targetCurrency)}`;
+              amountStack.append(converted);
+            }
+            end.append(amountStack);
+          }
+          const remove = document.createElement("button");
+          remove.className = "remove";
+          remove.type = "button";
+          remove.setAttribute("aria-label", `Remove ${expense.description}`);
+          remove.title = "Remove expense";
+          remove.textContent = "×";
+          remove.addEventListener("click", () => {
+            expenses = expenses.filter((item) => item.id !== expense.id);
+            saveExpenses();
+            render();
+          });
+          end.append(remove);
+          row.append(icon, info, end);
+          list.append(row);
+        }
+        renderRecurringSchedules();
+      }
+
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const description = descriptionInput.value.trim();
+        const rawAmount = amountInput.value.trim();
+        const amount = rawAmount === "" ? null : Number(rawAmount);
+        const date = expenseDateInput.value;
+        const category = categoryInput.value;
+        const interval = recurrenceInput.value;
+        if (
+          !description ||
+          !isValidDateString(date) ||
+          (amount !== null && (!Number.isFinite(amount) || amount <= 0)) ||
+          (interval !== "none" && amount === null)
+        )
+          return;
+
+        if (interval === "none") {
+          expenses.push({
+            id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            description,
+            amount: amount === null ? null : Math.round(amount * 100) / 100,
+            category,
+            date,
+          });
+          saveExpenses();
+        } else {
+          recurringSchedules.push({
+            id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            description,
+            amount: Math.round(amount * 100) / 100,
+            category,
+            interval,
+            dayOfMonth: Number(date.slice(-2)),
+            nextDate: date,
+            active: true,
+          });
+          saveRecurringSchedules();
+          processRecurringExpenses();
+        }
+
+        selectedMonthInput.value = date.slice(0, 7);
+        selectedMonth = selectedMonthInput.value;
+        render();
+        form.reset();
+        categoryInput.value = "Other";
+        expenseDateInput.value = localDate();
+        recurrenceInput.value = "none";
+        amountInput.required = false;
+        expenseHint.textContent =
+          "Enter amounts in BDT. You can add a missing amount later from Recent expenses.";
+        descriptionInput.focus();
+      });
+
+      recurrenceInput.addEventListener("change", () => {
+        const repeats = recurrenceInput.value !== "none";
+        amountInput.required = repeats;
+        expenseHint.textContent = repeats
+          ? "Recurring expenses need an amount and are added when due."
+          : "Enter amounts in BDT. You can add a missing amount later from Recent expenses.";
+      });
+
+      selectedMonthInput.addEventListener("change", render);
+      searchInput.addEventListener("input", render);
+      categoryFilter.addEventListener("change", render);
+
+      budgetForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const amount = Number(budgetInput.value);
+        if (!Number.isFinite(amount) || amount <= 0) {
+          budgetInput.focus();
+          return;
+        }
+        budgets[selectedMonth] = Math.round(amount * 100) / 100;
+        saveBudgets();
+        render();
+      });
+
+      clearBudgetButton.addEventListener("click", () => {
+        delete budgets[selectedMonth];
+        saveBudgets();
+        budgetInput.value = "";
+        render();
+      });
+
+      exportButton.addEventListener("click", () => {
+        const rows = getFilteredExpenses();
+        if (!rows.length) return;
+        const csvCell = (value) => {
+          let text = String(value ?? "");
+          if (/^[\t\r ]*[=+@-]/.test(text)) text = `'${text}`;
+          return `"${text.replaceAll('"', '""')}"`;
+        };
+        const data = [
+          ["Date", "Description", "Category", "Amount (BDT)", "Type"],
+          ...rows.map((expense) => [
+            expense.date,
+            expense.description,
+            expense.category,
+            expense.amount === null ? "" : expense.amount,
+            expense.recurringId ? "Recurring" : "One-time",
+          ]),
+        ];
+        const csv = `\uFEFF${data.map((row) => row.map(csvCell).join(",")).join("\r\n")}`;
+        const url = URL.createObjectURL(
+          new Blob([csv], { type: "text/csv;charset=utf-8" }),
+        );
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `spend-${selectedMonth}.csv`;
+        document.body.append(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      });
+
+      themeToggle.addEventListener("click", () => {
+        theme = theme === "dark" ? "light" : "dark";
+        applyTheme();
+        try {
+          localStorage.setItem(THEME_KEY, theme);
+        } catch {
+          // The mode still changes for this visit if browser storage is unavailable.
+        }
+      });
+
+      conversionToggle.addEventListener("click", () => {
+        conversionOpen = !conversionOpen;
+        conversionDetails.hidden = !conversionOpen;
+        conversionToggle.setAttribute("aria-expanded", String(conversionOpen));
+        conversionToggleLabel.textContent = conversionOpen
+          ? "Hide conversion"
+          : "Show conversion";
+        conversionToggleIcon.textContent = conversionOpen ? "⌃" : "⌄";
+        if (conversionOpen) {
+          if (currencyListLoaded) refreshExchangeRate();
+          else loadCurrencies();
+        } else {
+          rateRequestId += 1;
+          render();
+        }
+      });
+
+      conversionCurrencySelect.addEventListener("change", () => {
+        targetCurrency = conversionCurrencySelect.value;
+        saveTargetCurrency();
+        refreshExchangeRate();
+      });
+
+      retryRateButton.addEventListener("click", () => {
+        if (currencyListLoaded) refreshExchangeRate();
+        else loadCurrencies();
+      });
+
+      applyTheme();
+      render();
+    </script>
+  </body>
+</html>
