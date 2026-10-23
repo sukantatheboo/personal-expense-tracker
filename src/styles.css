@@ -115,6 +115,150 @@
         background: var(--field);
       }
 
+      .header-user {
+        max-width: 180px;
+        overflow: hidden;
+        color: var(--ink);
+        font-size: 12px;
+        font-weight: 600;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .header-account-action {
+        min-height: 36px;
+        padding: 0 10px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: var(--card);
+        color: var(--ink);
+        font-size: 12px;
+        white-space: nowrap;
+      }
+
+      .header-account-action:hover {
+        background: var(--field);
+      }
+
+      .header-account-action:disabled {
+        cursor: wait;
+        opacity: 0.6;
+      }
+
+      .auth-modal-backdrop {
+        position: fixed;
+        z-index: 20;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        display: grid;
+        place-items: center;
+        overflow-y: auto;
+        padding: 12px;
+        background: rgb(0 0 0 / 58%);
+      }
+
+      .auth-modal {
+        width: calc(100% - 24px);
+        max-width: 440px;
+        max-height: calc(100vh - 24px);
+        overflow-y: auto;
+        margin: 0;
+        padding: 18px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--card);
+        color: var(--ink);
+        box-shadow: 0 24px 80px rgb(0 0 0 / 30%);
+      }
+
+      @supports (height: 100dvh) {
+        .auth-modal {
+          max-height: calc(100dvh - 24px);
+        }
+      }
+
+      .auth-modal-heading {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .auth-modal-heading h2 {
+        margin: 0;
+        font-size: 18px;
+      }
+
+      .auth-modal-heading p,
+      .auth-modal-status {
+        margin: 5px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      .auth-modal-close {
+        display: grid;
+        width: 32px;
+        height: 32px;
+        min-height: 0;
+        flex: 0 0 auto;
+        place-items: center;
+        padding: 0;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: var(--card);
+        color: var(--ink);
+        font-size: 22px;
+        line-height: 1;
+      }
+
+      .auth-modal-close:hover {
+        background: var(--field);
+      }
+
+      .auth-modal-form {
+        max-width: none;
+        margin-top: 14px;
+      }
+
+      .auth-modal-fields {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .auth-modal-fields label {
+        margin-bottom: 4px;
+        font-size: 11px;
+      }
+
+      .auth-modal-fields input {
+        min-height: 38px;
+        padding: 0 10px;
+        font-size: 13px;
+      }
+
+      .auth-modal-form .push-auth-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .auth-modal-form .push-auth-actions button {
+        width: 100%;
+        min-width: 0;
+        min-height: 36px;
+        padding-right: 11px;
+        padding-left: 11px;
+        font-size: 12px;
+      }
+
+      .auth-modal-status {
+        margin-top: 12px;
+      }
+
       .summary {
         container: monthly-total / inline-size;
         padding: clamp(24px, 4vw, 40px);
@@ -804,10 +948,11 @@
         list-style: none;
       }
       .recurring-row {
-        display: flex;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto auto;
         align-items: center;
-        gap: 12px;
-        padding: 12px;
+        gap: 8px 10px;
+        padding: 10px;
         border: 1px solid var(--line);
         border-radius: 11px;
       }
@@ -826,15 +971,21 @@
         margin-top: 4px;
         color: var(--muted);
         font-size: 11px;
+        line-height: 1.3;
+        overflow-wrap: anywhere;
       }
       .recurring-amount {
         font-size: 13px;
         font-weight: 600;
         white-space: nowrap;
       }
+      .recurring-actions {
+        display: flex;
+        gap: 6px;
+      }
       .recurring-action {
         min-height: 32px;
-        padding: 0 9px;
+        padding: 0 8px;
         border: 1px solid var(--line);
         background: var(--card);
         color: var(--muted);
@@ -1274,8 +1425,43 @@
           text-align: right;
         }
         .header-actions {
-          gap: 8px;
+          gap: 6px;
         }
+        .header-actions.is-authenticated .local-note {
+          display: none;
+        }
+        .header-user {
+          max-width: 90px;
+          font-size: 11px;
+        }
+        .header-account-action {
+          min-height: 34px;
+          padding: 0 7px;
+          font-size: 11px;
+        }
+        .auth-modal-backdrop {
+          padding: 8px;
+        }
+        .auth-modal {
+          width: calc(100% - 16px);
+          max-height: calc(100vh - 16px);
+          padding: 16px;
+        }
+        @supports (height: 100dvh) {
+          .auth-modal {
+            max-height: calc(100dvh - 16px);
+          }
+        }
+        .auth-modal-fields {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .auth-modal-form .push-auth-actions {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .auth-modal-form .push-auth-actions button {
+          width: 100%;
+        }
+
         .theme-toggle {
           gap: 0;
           padding: 0 9px;
@@ -1385,10 +1571,24 @@
           gap: 4px;
         }
         .recurring-row {
-          flex-wrap: wrap;
+          grid-template-columns: minmax(0, 1fr) auto;
+          gap: 7px 8px;
+          padding: 9px;
+        }
+        .recurring-info {
+          grid-column: 1 / -1;
         }
         .recurring-amount {
-          margin-left: auto;
+          grid-column: 1;
+        }
+        .recurring-actions {
+          grid-column: 2;
+          justify-content: flex-end;
+        }
+        .recurring-action {
+          min-height: 34px;
+          padding: 0 7px;
+          font-size: 10px;
         }
         .list-panel {
           padding: 24px 0 0;
@@ -1447,6 +1647,9 @@
           max-width: 96px;
           font-size: 11px;
         }
+        .header-user {
+          max-width: 64px;
+        }
         .summary {
           padding: 20px;
         }
@@ -1455,6 +1658,20 @@
         }
         .list-heading {
           flex-wrap: wrap;
+        }
+      }
+
+      @media (max-width: 360px) {
+        .recurring-row {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .recurring-info,
+        .recurring-amount,
+        .recurring-actions {
+          grid-column: 1;
+        }
+        .recurring-actions {
+          justify-content: flex-start;
         }
       }
 

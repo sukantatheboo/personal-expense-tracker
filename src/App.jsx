@@ -58,6 +58,13 @@ function accountName(accountId) {
   return accountId === "bkash" ? "bKash" : "Bank";
 }
 
+function userDisplayName(user) {
+  const metadata = user?.user_metadata ?? {};
+  const name = metadata.full_name || metadata.name || metadata.username;
+  if (typeof name === "string" && name.trim()) return name.trim();
+  return user?.email?.split("@")[0] || "Account";
+}
+
 function shiftMonth(monthValue, offset) {
   const [year, month] = (monthValue || currentMonth()).split("-").map(Number);
   const shifted = new Date(year, month - 1 + offset, 1);
@@ -240,12 +247,15 @@ export default function App() {
   const [authPassword, setAuthPassword] = useState("");
   const [authStatus, setAuthStatus] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
   const [backgroundPushEnabled, setBackgroundPushEnabled] = useState(false);
   const [cloudSyncEnabled, setCloudSyncEnabled] = useState(false);
   const [cloudSyncReady, setCloudSyncReady] = useState(false);
   const [cloudSyncStatus, setCloudSyncStatus] = useState("");
   const [cloudSyncRetry, setCloudSyncRetry] = useState(0);
   const [backupStatus, setBackupStatus] = useState("");
+  const authModalRef = useRef(null);
+  const authTriggerRef = useRef(null);
   const backupFileInputRef = useRef(null);
   const pendingDueRef = useRef([]);
   const lastRecurringCheckRef = useRef("");
@@ -441,6 +451,38 @@ export default function App() {
     window.addEventListener("online", retryCloudSync);
     return () => window.removeEventListener("online", retryCloudSync);
   }, []);
+
+  useEffect(() => {
+    if (!authModalOpen) return undefined;
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape" && !authBusy) setAuthModalOpen(false);
+    };
+    const previousFocus = document.activeElement;
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      window.removeEventListener("keydown", closeOnEscape);
+      if (pushUser) return;
+      if (authTriggerRef.current?.isConnected) authTriggerRef.current.focus();
+      else if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  }, [authBusy, authModalOpen, pushUser]);
+
+  function trapAuthModalFocus(event) {
+    if (event.key !== "Tab") return;
+    const focusable = authModalRef.current?.querySelectorAll(
+      'button:not([disabled]), input:not([disabled])',
+    );
+    if (!focusable?.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
 
   useEffect(() => {
     if (!supabase || !pushUser || !backgroundPushEnabled) return undefined;
@@ -1108,6 +1150,7 @@ export default function App() {
             ? "Account created. You can now enable background reminders."
             : "Signed in. Your recurring reminder schedule is syncing.",
         );
+        setAuthModalOpen(false);
       }
       setAuthPassword("");
     } catch (error) {
@@ -1177,6 +1220,7 @@ export default function App() {
     }
     if (!pushUser) {
       setNotificationStatus("Sign in first to enable background reminders.");
+      setAuthModalOpen(true);
       return;
     }
     const isIos =
@@ -1274,8 +1318,12 @@ export default function App() {
           <span className="brand-mark" aria-hidden="true">↗</span>
           <span>Spend</span>
         </div>
-        <div className="header-actions">
-          <div className="local-note">Your expense data stays on this device</div>
+        <div className={`header-actions${pushUser ? " is-authenticated" : ""}`}>
+          <div className="local-note">
+            {cloudSyncEnabled
+              ? "Expense cloud sync is on"
+              : "Your expense data stays on this device"}
+          </div>
           <button
             className="theme-toggle"
             type="button"
@@ -1287,8 +1335,125 @@ export default function App() {
             <span aria-hidden="true">{theme === "dark" ? "☀" : "☾"}</span>
             <span className="theme-label">{theme === "dark" ? "Light" : "Dark"}</span>
           </button>
+          {pushBackendConfigured &&
+            (pushUser ? (
+              <>
+                <span className="header-user" title={pushUser.email}>
+                  {userDisplayName(pushUser)}
+                </span>
+                <button
+                  className="header-account-action"
+                  type="button"
+                  disabled={authBusy}
+                  onClick={signOutOfPush}
+                >
+                  Sign out
+                </button>
+              </>
+            ) : (
+              <button
+                className="header-account-action"
+                type="button"
+                ref={authTriggerRef}
+                onClick={() => {
+                  setAuthStatus("");
+                  setAuthModalOpen(true);
+                }}
+              >
+                Sign in
+              </button>
+            ))}
         </div>
       </header>
+      {authModalOpen && !pushUser && (
+        <div
+          className="auth-modal-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !authBusy)
+              setAuthModalOpen(false);
+          }}
+        >
+          <section
+            className="auth-modal"
+            ref={authModalRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="auth-modal-title"
+            onKeyDown={trapAuthModalFocus}
+          >
+            <div className="auth-modal-heading">
+              <div>
+                <h2 id="auth-modal-title">
+                  {authMode === "sign-up" ? "Create your Spend account" : "Sign in to Spend"}
+                </h2>
+                <p>Use your account for reminders and optional cloud sync.</p>
+              </div>
+              <button
+                className="auth-modal-close"
+                type="button"
+                aria-label="Close sign-in dialog"
+                disabled={authBusy}
+                onClick={() => setAuthModalOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+            <form className="push-auth-form auth-modal-form" onSubmit={handleAuthSubmit}>
+              <div className="push-auth-fields auth-modal-fields">
+                <div>
+                  <label htmlFor="push-email">Email</label>
+                  <input
+                    id="push-email"
+                    type="email"
+                    autoComplete="email"
+                    autoFocus
+                    required
+                    value={authEmail}
+                    onChange={(event) => setAuthEmail(event.target.value)}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="push-password">Password</label>
+                  <input
+                    id="push-password"
+                    type="password"
+                    autoComplete={authMode === "sign-up" ? "new-password" : "current-password"}
+                    minLength="6"
+                    required
+                    value={authPassword}
+                    onChange={(event) => setAuthPassword(event.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="push-auth-actions">
+                <button type="submit" disabled={authBusy}>
+                  {authBusy
+                    ? "Please wait…"
+                    : authMode === "sign-up"
+                      ? "Create account"
+                      : "Sign in"}
+                </button>
+                <button
+                  className="push-account-action"
+                  type="button"
+                  disabled={authBusy}
+                  onClick={() => {
+                    setAuthMode((mode) => mode === "sign-up" ? "sign-in" : "sign-up");
+                    setAuthStatus("");
+                  }}
+                >
+                  {authMode === "sign-up" ? "I already have an account" : "Create an account"}
+                </button>
+              </div>
+            </form>
+            {authStatus && (
+              <p className="auth-modal-status" role="status" aria-live="polite">
+                {authStatus}
+              </p>
+            )}
+          </section>
+        </div>
+      )}
 
       <section className="summary" aria-labelledby="summary-title">
         <div className="summary-topline">
@@ -1740,22 +1905,10 @@ export default function App() {
         {pushBackendConfigured ? (
           <>
             <p className="push-setup-note">
-              Background push stores your email, device subscription, and reminder details in Supabase. Expense history and amounts stay on this device unless you turn on cloud sync below.
+              Background push stores your device subscription and reminder details in Supabase. Expense history and amounts stay on this device unless you enable cloud sync.
             </p>
             {pushUser ? (
-              <>
-                <div className="push-account">
-                  <p className="push-account-label">Signed in as {pushUser.email}</p>
-                  <button
-                    className="push-account-action"
-                    type="button"
-                    disabled={authBusy}
-                    onClick={signOutOfPush}
-                  >
-                    Sign out
-                  </button>
-                </div>
-                <div className="cloud-sync-panel">
+              <div className="cloud-sync-panel">
                   <h3>Expense cloud sync</h3>
                   <p className="push-setup-note">
                     {cloudSyncEnabled
@@ -1797,55 +1950,11 @@ export default function App() {
                       {cloudSyncStatus}
                     </p>
                   )}
-                </div>
-              </>
+              </div>
             ) : (
-              <form className="push-auth-form" onSubmit={handleAuthSubmit}>
-                <div className="push-auth-fields">
-                  <div>
-                    <label htmlFor="push-email">Email</label>
-                    <input
-                      id="push-email"
-                      type="email"
-                      autoComplete="email"
-                      required
-                      value={authEmail}
-                      onChange={(event) => setAuthEmail(event.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="push-password">Password</label>
-                    <input
-                      id="push-password"
-                      type="password"
-                      autoComplete={authMode === "sign-up" ? "new-password" : "current-password"}
-                      minLength="6"
-                      required
-                      value={authPassword}
-                      onChange={(event) => setAuthPassword(event.target.value)}
-                    />
-                  </div>
-                </div>
-                <div className="push-auth-actions">
-                  <button type="submit" disabled={authBusy}>
-                    {authBusy
-                      ? "Please wait…"
-                      : authMode === "sign-up"
-                        ? "Create account"
-                        : "Sign in"}
-                  </button>
-                  <button
-                    className="push-account-action"
-                    type="button"
-                    onClick={() => {
-                      setAuthMode((mode) => mode === "sign-up" ? "sign-in" : "sign-up");
-                      setAuthStatus("");
-                    }}
-                  >
-                    {authMode === "sign-up" ? "I already have an account" : "Create an account"}
-                  </button>
-                </div>
-              </form>
+              <p className="push-setup-note">
+                Sign in from the top of the page to use cloud sync or background reminders.
+              </p>
             )}
           </>
         ) : (
@@ -1853,7 +1962,7 @@ export default function App() {
             Background push is not configured yet. Existing notifications work while the app is open.
           </p>
         )}
-        {authStatus && (
+        {pushUser && authStatus && (
           <p className="notification-status push-auth-status" role="status" aria-live="polite">
             {authStatus}
           </p>
@@ -1897,32 +2006,34 @@ export default function App() {
                     </div>
                   </div>
                   <span className="recurring-amount">{formatCurrency(schedule.amount)}</span>
-                  <button
-                    className="recurring-action"
-                    type="button"
-                    aria-label={`${schedule.active ? "Pause" : "Resume"} ${schedule.description}`}
-                    onClick={() => {
-                      setRecurringSchedules((current) => current.map((item) => {
-                        if (item.id !== schedule.id) return item;
-                        if (item.active) return { ...item, active: false };
-                        let nextDate = item.nextDate;
-                        let skipped = 0;
-                        while (nextDate <= localDate() && skipped < 240) {
-                          nextDate = nextOccurrenceDate(nextDate, item.interval, item.dayOfMonth);
-                          skipped += 1;
-                        }
-                        return { ...item, active: true, nextDate };
-                      }));
-                    }}
-                  >{schedule.active ? "Pause" : "Resume"}</button>
-                  <button
-                    className="recurring-action"
-                    type="button"
-                    onClick={() => {
-                      if (!window.confirm(`Remove the schedule for “${schedule.description}”? Existing expenses will stay in your list.`)) return;
-                      setRecurringSchedules((current) => current.filter((item) => item.id !== schedule.id));
-                    }}
-                  >Remove</button>
+                  <div className="recurring-actions">
+                    <button
+                      className="recurring-action"
+                      type="button"
+                      aria-label={`${schedule.active ? "Pause" : "Resume"} ${schedule.description}`}
+                      onClick={() => {
+                        setRecurringSchedules((current) => current.map((item) => {
+                          if (item.id !== schedule.id) return item;
+                          if (item.active) return { ...item, active: false };
+                          let nextDate = item.nextDate;
+                          let skipped = 0;
+                          while (nextDate <= localDate() && skipped < 240) {
+                            nextDate = nextOccurrenceDate(nextDate, item.interval, item.dayOfMonth);
+                            skipped += 1;
+                          }
+                          return { ...item, active: true, nextDate };
+                        }));
+                      }}
+                    >{schedule.active ? "Pause" : "Resume"}</button>
+                    <button
+                      className="recurring-action"
+                      type="button"
+                      onClick={() => {
+                        if (!window.confirm(`Remove the schedule for “${schedule.description}”? Existing expenses will stay in your list.`)) return;
+                        setRecurringSchedules((current) => current.filter((item) => item.id !== schedule.id));
+                      }}
+                    >Remove</button>
+                  </div>
                 </li>
               );
             })}
