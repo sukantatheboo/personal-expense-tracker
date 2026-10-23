@@ -951,7 +951,7 @@ export default function App() {
           </form>
         </details>
 
-        <details className="account-details">
+        <details className="account-details account-transaction-details">
           <summary>Record income, adjustment, or transfer</summary>
           <form onSubmit={handleAccountTransactionSubmit}>
             <div className="account-form-grid">
