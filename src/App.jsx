@@ -715,10 +715,14 @@ export default function App() {
 
       <section className="summary" aria-labelledby="summary-title">
         <div className="summary-topline">
-          <p className="eyebrow" id="summary-title">Month total · BDT</p>
+          <p className="eyebrow" id="summary-title"><span className="summary-label-prefix">Month total · </span>BDT</p>
           <div className="month-navigation" aria-label="Monthly total navigation">
             <button className="month-step" type="button" aria-label="Previous month" title="Previous month" onClick={() => addMonth(-1)}>‹</button>
             <label className="month-select">
+              <span className="month-display" aria-hidden="true">
+                <span>{formatMonth(selectedMonth)}</span>
+                <span className="month-calendar-icon" />
+              </span>
               <input
                 className="month-picker"
                 type="month"
