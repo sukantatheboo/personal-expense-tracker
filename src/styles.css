@@ -407,23 +407,10 @@
       .account-details[open] summary::after {
         content: "−";
       }
-      .account-transaction-details[open] {
-        padding: 0 16px 16px;
-        border: 1px solid var(--line);
-        border-radius: 14px;
-        background: var(--card);
-      }
-      .account-transaction-details[open] summary {
-        margin-bottom: 16px;
-        border-bottom: 1px solid var(--line);
-      }
-      .account-transaction-details[open] .account-form-grid {
-        margin-top: 0;
-      }
       .account-form-grid {
         display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 16px;
+        gap: 15px;
         margin-top: 16px;
       }
       .account-form-grid > div {
@@ -435,7 +422,6 @@
       .account-form-grid input,
       .account-form-grid select {
         width: 100%;
-        min-width: 0;
       }
       .account-form-actions {
         display: flex;
@@ -1020,17 +1006,10 @@
         .form-grid {
           grid-template-columns: repeat(2, minmax(0, 1fr));
         }
-        .description-field {
-          grid-column: 1 / -1;
-        }
-      }
-
-      @media (max-width: 1000px) {
         .account-form-grid {
           grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 14px;
         }
-        .account-note-field {
+        .description-field {
           grid-column: 1 / -1;
         }
       }
@@ -1090,6 +1069,13 @@
         .form-grid {
           grid-template-columns: 1fr;
           gap: 13px;
+        }
+        .account-form-grid {
+          grid-template-columns: 1fr;
+          gap: 13px;
+        }
+        .account-note-field {
+          grid-column: auto;
         }
         .account-cards {
           gap: 9px;
@@ -1159,19 +1145,6 @@
         }
         .inline-amount-input {
           width: 88px;
-        }
-      }
-
-      @media (max-width: 560px) {
-        .account-form-grid {
-          grid-template-columns: minmax(0, 1fr);
-          gap: 13px;
-        }
-        .account-note-field {
-          grid-column: auto;
-        }
-        .account-transaction-details[open] {
-          padding: 0 12px 12px;
         }
       }
 
