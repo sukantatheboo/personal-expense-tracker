@@ -33,6 +33,16 @@
         box-sizing: border-box;
       }
 
+      button,
+      input,
+      select,
+      textarea {
+        -webkit-appearance: none;
+        appearance: none;
+        font: inherit;
+        letter-spacing: inherit;
+      }
+
       .sr-only {
         position: absolute;
         width: 1px;
@@ -59,90 +69,137 @@
       }
 
       header {
-        display: flex;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto auto auto;
         align-items: center;
-        justify-content: space-between;
-        gap: 16px;
-        margin-bottom: 32px;
+        gap: 12px;
+        margin-bottom: 28px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid var(--line);
       }
 
       .brand {
         display: flex;
         align-items: center;
-        gap: 11px;
-        font-size: 16px;
+        gap: 9px;
+        flex: 0 0 auto;
+        font-size: 17px;
         font-weight: 650;
         letter-spacing: -0.02em;
       }
 
       .brand-mark {
         display: grid;
-        width: 34px;
-        height: 34px;
+        width: 32px;
+        height: 32px;
         place-items: center;
-        border-radius: 11px;
+        border-radius: 9px;
         background: var(--green);
         color: white;
-        font-size: 19px;
+        font-size: 17px;
         font-weight: 500;
       }
 
       .local-note {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
         color: var(--muted);
         font-size: 12px;
+        white-space: nowrap;
+      }
+
+      .sync-status-dot {
+        width: 7px;
+        height: 7px;
+        flex: 0 0 7px;
+        border-radius: 50%;
+        background: var(--muted);
+      }
+
+      .local-note.is-sync-enabled .sync-status-dot {
+        background: #4c9667;
       }
 
       .header-actions {
         display: flex;
         align-items: center;
+        justify-content: flex-end;
         gap: 12px;
         min-width: 0;
+        grid-column: 4;
       }
 
       .theme-toggle {
-        display: inline-flex;
+        display: grid;
+        width: 36px;
         min-height: 36px;
-        align-items: center;
-        gap: 7px;
-        padding: 0 10px;
-        border: 1px solid var(--line);
-        background: var(--card);
-        color: var(--ink);
-        font-size: 12px;
+        place-items: center;
+        flex: 0 0 auto;
+        padding: 0;
+        border: 0;
+        border-radius: 9px;
+        background: transparent;
+        color: var(--muted);
+        font-size: 15px;
       }
 
       .theme-toggle:hover {
         background: var(--field);
+        color: var(--ink);
+      }
+
+      .theme-label {
+        display: none;
       }
 
       .header-user {
-        max-width: 180px;
+        max-width: 160px;
+        min-width: 0;
         overflow: hidden;
         color: var(--ink);
-        font-size: 12px;
+        font-size: 13px;
         font-weight: 600;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
 
+      .header-account {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 10px;
+        padding-left: 12px;
+        border-left: 1px solid var(--line);
+      }
+
       .header-account-action {
-        min-height: 36px;
-        padding: 0 10px;
-        border: 1px solid var(--line);
-        border-radius: 9px;
-        background: var(--card);
-        color: var(--ink);
+        min-height: 40px;
+        padding: 0 4px;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--muted);
         font-size: 12px;
+        font-weight: 550;
         white-space: nowrap;
       }
 
       .header-account-action:hover {
-        background: var(--field);
+        color: var(--ink);
+        text-decoration: underline;
+        text-underline-offset: 3px;
       }
 
       .header-account-action:disabled {
         cursor: wait;
         opacity: 0.6;
+      }
+
+      .theme-toggle:focus-visible,
+      .header-account-action:focus-visible {
+        outline: 3px solid var(--green);
+        outline-offset: 3px;
       }
 
       .auth-modal-backdrop {
@@ -232,12 +289,6 @@
       .auth-modal-fields label {
         margin-bottom: 4px;
         font-size: 11px;
-      }
-
-      .auth-modal-fields input {
-        min-height: 38px;
-        padding: 0 10px;
-        font-size: 13px;
       }
 
       .auth-modal-form .push-auth-actions {
@@ -460,14 +511,10 @@
       }
       .conversion-picker select {
         width: 100%;
-        min-height: 40px;
-        padding: 0 10px;
         border: 1px solid rgba(255, 255, 255, 0.36);
         border-radius: 9px;
-        background: #fff;
+        background-color: #fff;
         color: #20231f;
-        font: inherit;
-        font-size: 13px;
       }
       .converted-total-block {
         text-align: right;
@@ -637,24 +684,6 @@
         grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 16px;
       }
-      .account-transaction-grid input,
-      .account-transaction-grid select {
-        min-height: 48px;
-        font-size: 16px;
-      }
-      .account-transaction-grid select {
-        padding-right: 32px;
-        -webkit-appearance: none;
-        appearance: none;
-        background-image:
-          linear-gradient(45deg, transparent 50%, currentColor 50%),
-          linear-gradient(135deg, currentColor 50%, transparent 50%);
-        background-position:
-          calc(100% - 15px) 50%,
-          calc(100% - 10px) 50%;
-        background-repeat: no-repeat;
-        background-size: 5px 5px;
-      }
       .account-form-actions {
         display: flex;
         align-items: center;
@@ -744,41 +773,30 @@
         font-weight: 600;
       }
 
-      input {
+      input:not([type="file"]),
+      select,
+      textarea {
         width: 100%;
         min-width: 0;
         max-width: 100%;
-        min-height: 44px;
+        min-height: 48px;
         padding: 0 12px;
         border: 1px solid var(--line);
         border-radius: 9px;
         outline: none;
-        background: var(--field);
+        background-color: var(--field);
         color: var(--ink);
         font: inherit;
-        font-size: 14px;
+        font-size: 16px;
+        line-height: 1.25;
+        box-shadow: none;
         transition:
           border-color 0.15s,
           box-shadow 0.15s;
       }
 
       select {
-        min-width: 0;
-        max-width: 100%;
-        min-height: 44px;
-        padding: 0 10px;
-        border: 1px solid var(--line);
-        border-radius: 9px;
-        background: var(--field);
-        color: var(--ink);
-        font: inherit;
-        font-size: 13px;
-      }
-
-      .form-grid select {
-        width: 100%;
-        padding-right: 32px;
-        appearance: none;
+        padding-right: 36px;
         background-image:
           linear-gradient(45deg, transparent 50%, currentColor 50%),
           linear-gradient(135deg, currentColor 50%, transparent 50%);
@@ -789,23 +807,53 @@
         background-size: 5px 5px;
       }
 
-      #expense-form input[type="number"] {
+      input:not([type="file"])::placeholder,
+      textarea::placeholder {
+        color: var(--muted);
+        opacity: 1;
+      }
+
+      input[type="number"] {
         appearance: textfield;
         -moz-appearance: textfield;
       }
 
-      #expense-form input[type="number"]::-webkit-inner-spin-button,
-      #expense-form input[type="number"]::-webkit-outer-spin-button {
+      input[type="number"]::-webkit-inner-spin-button,
+      input[type="number"]::-webkit-outer-spin-button {
         margin: 0;
         -webkit-appearance: none;
       }
 
-      #expense-form input[type="date"]::-webkit-calendar-picker-indicator {
-        cursor: pointer;
-        opacity: 1;
+      input[type="date"] {
+        padding-right: 40px;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23777d75' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='4' y='5' width='16' height='16' rx='2'/%3E%3Cpath d='M8 3v4m8-4v4M4 10h16'/%3E%3C/svg%3E");
+        background-position: right 12px center;
+        background-repeat: no-repeat;
+        background-size: 16px 16px;
       }
 
-      input:focus {
+      :root[data-theme="dark"] input[type="date"] {
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a1aaa0' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='4' y='5' width='16' height='16' rx='2'/%3E%3Cpath d='M8 3v4m8-4v4M4 10h16'/%3E%3C/svg%3E");
+      }
+
+      input[type="date"]::-webkit-calendar-picker-indicator {
+        width: 24px;
+        height: 24px;
+        margin: 0;
+        cursor: pointer;
+        opacity: 0;
+      }
+
+      input:-webkit-autofill,
+      input:-webkit-autofill:focus {
+        -webkit-text-fill-color: var(--ink);
+        -webkit-box-shadow: 0 0 0 1000px var(--field) inset;
+        transition: background-color 99999s ease-out 0s;
+      }
+
+      input:not(.month-picker):focus,
+      select:focus,
+      textarea:focus {
         border-color: var(--green);
         box-shadow: 0 0 0 3px rgba(57, 120, 93, 0.12);
       }
@@ -913,7 +961,6 @@
       .filters input,
       .filters select {
         width: 100%;
-        min-height: 40px;
       }
       .list-heading {
         align-items: center;
@@ -1038,9 +1085,6 @@
       .push-auth-fields > div {
         min-width: 0;
       }
-      .push-auth-fields input {
-        min-height: 40px;
-      }
       .push-auth-actions,
       .push-account {
         display: flex;
@@ -1128,6 +1172,7 @@
         font: inherit;
         font-size: 13px;
         font-weight: 620;
+        line-height: 1.2;
         transition:
           background 0.15s,
           transform 0.15s;
@@ -1310,9 +1355,6 @@
       }
       .inline-amount-input {
         width: 104px;
-        min-height: 36px;
-        padding: 0 9px;
-        font-size: 13px;
       }
       .inline-save {
         min-height: 36px;
@@ -1417,26 +1459,49 @@
           padding-bottom: calc(40px + env(safe-area-inset-bottom));
         }
         header {
-          gap: 10px;
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) auto;
+          grid-template-areas:
+            "brand theme"
+            "sync account";
+          align-items: center;
+          column-gap: 8px;
+          row-gap: 6px;
           margin-bottom: 24px;
+          padding-bottom: 12px;
+        }
+        .brand {
+          grid-area: brand;
         }
         .local-note {
-          max-width: 130px;
-          text-align: right;
+          grid-area: sync;
+          max-width: 100%;
+          overflow: hidden;
+          text-align: left;
+          text-overflow: ellipsis;
+        }
+        .theme-toggle {
+          grid-area: theme;
+          width: 44px;
+          min-height: 44px;
         }
         .header-actions {
-          gap: 6px;
+          grid-area: account;
+          justify-self: end;
+          gap: 8px;
         }
-        .header-actions.is-authenticated .local-note {
-          display: none;
+        .header-account {
+          gap: 8px;
+          padding-left: 0;
+          border-left: 0;
         }
         .header-user {
-          max-width: 90px;
-          font-size: 11px;
+          max-width: clamp(52px, 24vw, 112px);
+          font-size: 12px;
         }
         .header-account-action {
-          min-height: 34px;
-          padding: 0 7px;
+          min-height: 44px;
+          padding: 0 6px;
           font-size: 11px;
         }
         .auth-modal-backdrop {
@@ -1462,13 +1527,6 @@
           width: 100%;
         }
 
-        .theme-toggle {
-          gap: 0;
-          padding: 0 9px;
-        }
-        .theme-label {
-          display: none;
-        }
         .summary {
           padding: 24px;
         }
@@ -1648,7 +1706,7 @@
           font-size: 11px;
         }
         .header-user {
-          max-width: 64px;
+          max-width: 56px;
         }
         .summary {
           padding: 20px;
@@ -1658,6 +1716,33 @@
         }
         .list-heading {
           flex-wrap: wrap;
+        }
+      }
+
+      @media (max-width: 340px) {
+        header {
+          grid-template-columns: minmax(0, 1fr) auto;
+        }
+        .header-actions {
+          width: auto;
+        }
+        .header-account-action {
+          padding: 0 6px;
+          font-size: 11px;
+        }
+      }
+
+      @media (max-width: 280px) {
+        .header-user {
+          max-width: 52px;
+          font-size: 11px;
+        }
+        .header-account {
+          gap: 6px;
+        }
+        .theme-toggle {
+          width: 44px;
+          min-height: 44px;
         }
       }
 

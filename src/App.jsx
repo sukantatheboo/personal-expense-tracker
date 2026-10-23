@@ -1318,26 +1318,34 @@ export default function App() {
           <span className="brand-mark" aria-hidden="true">↗</span>
           <span>Spend</span>
         </div>
-        <div className={`header-actions${pushUser ? " is-authenticated" : ""}`}>
-          <div className="local-note">
-            {cloudSyncEnabled
+        <div
+          className={`local-note${cloudSyncEnabled ? " is-sync-enabled" : " is-local-only"}`}
+          role="status"
+          aria-live="polite"
+          aria-label={
+            cloudSyncEnabled
               ? "Expense cloud sync is on"
-              : "Your expense data stays on this device"}
-          </div>
-          <button
-            className="theme-toggle"
-            type="button"
-            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-            aria-pressed={theme === "dark"}
-            title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-            onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")}
-          >
-            <span aria-hidden="true">{theme === "dark" ? "☀" : "☾"}</span>
-            <span className="theme-label">{theme === "dark" ? "Light" : "Dark"}</span>
-          </button>
+              : "Expense data stays on this device"
+          }
+        >
+          <span className="sync-status-dot" aria-hidden="true" />
+          <span>{cloudSyncEnabled ? "Cloud sync on" : "Local only"}</span>
+        </div>
+        <button
+          className="theme-toggle"
+          type="button"
+          aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+          aria-pressed={theme === "dark"}
+          title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+          onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")}
+        >
+          <span aria-hidden="true">{theme === "dark" ? "☀" : "☾"}</span>
+          <span className="theme-label">{theme === "dark" ? "Light" : "Dark"}</span>
+        </button>
+        <div className={`header-actions${pushUser ? " is-authenticated" : ""}`}>
           {pushBackendConfigured &&
             (pushUser ? (
-              <>
+              <div className="header-account">
                 <span className="header-user" title={pushUser.email}>
                   {userDisplayName(pushUser)}
                 </span>
@@ -1349,7 +1357,7 @@ export default function App() {
                 >
                   Sign out
                 </button>
-              </>
+              </div>
             ) : (
               <button
                 className="header-account-action"
