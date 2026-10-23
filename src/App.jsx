@@ -140,6 +140,8 @@ export default function App() {
       : "unsupported",
   );
   const [notificationStatus, setNotificationStatus] = useState("");
+  const [backupStatus, setBackupStatus] = useState("");
+  const backupFileInputRef = useRef(null);
   const pendingDueRef = useRef([]);
   const lastRecurringCheckRef = useRef("");
 
@@ -623,6 +625,79 @@ export default function App() {
     link.click();
     link.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function downloadBackup() {
+    const backup = {
+      format: "spend-backup",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      data: {
+        expenses,
+        budgets,
+        recurringSchedules,
+        accountData,
+        theme,
+        targetCurrency,
+      },
+    };
+    const url = URL.createObjectURL(
+      new Blob([JSON.stringify(backup, null, 2)], {
+        type: "application/json;charset=utf-8",
+      }),
+    );
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `spend-backup-${localDate()}.json`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setBackupStatus("Backup downloaded. Keep it somewhere safe.");
+  }
+
+  async function restoreBackup(event) {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    if (!file) return;
+    try {
+      const backup = JSON.parse(await file.text());
+      const data = backup?.data;
+      if (
+        backup?.format !== "spend-backup" ||
+        backup?.version !== 1 ||
+        !Array.isArray(data?.expenses) ||
+        !data.budgets ||
+        typeof data.budgets !== "object" ||
+        Array.isArray(data.budgets) ||
+        !Array.isArray(data?.recurringSchedules) ||
+        !data.accountData ||
+        typeof data.accountData !== "object" ||
+        !data.accountData.settings ||
+        !data.accountData.settings.balances ||
+        !Array.isArray(data.accountData.transactions) ||
+        !["light", "dark"].includes(data.theme) ||
+        typeof data.targetCurrency !== "string" ||
+        !/^[A-Z]{3}$/.test(data.targetCurrency)
+      ) {
+        throw new Error("This file is not a valid Spend backup.");
+      }
+      if (!window.confirm("Restoring this backup will replace all current app data. Continue?")) {
+        setBackupStatus("Restore canceled.");
+        return;
+      }
+      setExpenses(loadExpenses(data.expenses));
+      setBudgets(loadBudgets(data.budgets));
+      setRecurringSchedules(loadRecurringSchedules(data.recurringSchedules));
+      setAccountData(loadAccountData(data.accountData));
+      setTheme(data.theme);
+      setTargetCurrency(data.targetCurrency);
+      setBackupStatus("Backup restored.");
+    } catch (error) {
+      setBackupStatus(`Could not restore backup: ${error.message}`);
+    } finally {
+      input.value = "";
+    }
   }
 
   async function toggleNotifications() {
@@ -1323,6 +1398,32 @@ export default function App() {
               : "No expenses match your search and category filter."}
           </div>
         )}
+      </section>
+
+      <section className="panel backup-panel" aria-labelledby="backup-title">
+        <h2 id="backup-title">Data backup</h2>
+        <p className="currency-hint">
+          Keep a copy outside this browser so you can restore it after clearing site data.
+        </p>
+        <div className="backup-actions">
+          <button type="button" onClick={downloadBackup}>Download backup</button>
+          <button
+            className="backup-restore"
+            type="button"
+            onClick={() => backupFileInputRef.current?.click()}
+          >
+            Restore backup
+          </button>
+          <input
+            ref={backupFileInputRef}
+            className="sr-only"
+            type="file"
+            accept=".json,application/json"
+            aria-label="Choose a Spend backup file"
+            onChange={restoreBackup}
+          />
+        </div>
+        <p className="backup-status" role="status" aria-live="polite">{backupStatus}</p>
       </section>
     </main>
   );

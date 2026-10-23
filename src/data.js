@@ -80,8 +80,7 @@ export function writeStorage(key, value) {
   }
 }
 
-export function loadExpenses() {
-  const saved = readStorage(STORAGE_KEYS.expenses, []);
+export function loadExpenses(saved = readStorage(STORAGE_KEYS.expenses, [])) {
   return Array.isArray(saved)
     ? saved
         .filter(
@@ -101,8 +100,7 @@ export function loadExpenses() {
     : [];
 }
 
-export function loadBudgets() {
-  const saved = readStorage(STORAGE_KEYS.budgets, {});
+export function loadBudgets(saved = readStorage(STORAGE_KEYS.budgets, {})) {
   if (!saved || typeof saved !== "object" || Array.isArray(saved)) return {};
   return Object.fromEntries(
     Object.entries(saved).filter(
@@ -132,8 +130,9 @@ function isValidRecurringSchedule(schedule) {
   );
 }
 
-export function loadRecurringSchedules() {
-  const saved = readStorage(STORAGE_KEYS.recurring, []);
+export function loadRecurringSchedules(
+  saved = readStorage(STORAGE_KEYS.recurring, []),
+) {
   return Array.isArray(saved)
     ? saved.filter(isValidRecurringSchedule).map((schedule) => ({
         ...schedule,
@@ -183,8 +182,7 @@ function isValidAccountTransaction(item) {
   return false;
 }
 
-export function loadAccountData() {
-  const saved = readStorage(STORAGE_KEYS.accounts, null);
+export function loadAccountData(saved = readStorage(STORAGE_KEYS.accounts, null)) {
   if (!saved || typeof saved !== "object") return emptyAccountData();
   const settings = saved.settings || {};
   const balances = settings.balances || {};

@@ -930,6 +930,50 @@
         padding: 24px 0 0;
       }
 
+      .backup-panel {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        column-gap: 24px;
+        row-gap: 4px;
+        margin-top: 18px;
+        padding: 18px 22px;
+      }
+      .backup-panel .currency-hint {
+        margin: 0;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+      .backup-actions {
+        display: flex;
+        flex-wrap: wrap;
+        grid-column: 2;
+        grid-row: 1 / span 2;
+        gap: 8px;
+      }
+      .backup-actions button {
+        min-height: 38px;
+        padding: 0 12px;
+        white-space: nowrap;
+      }
+      .backup-restore {
+        border: 1px solid var(--line);
+        background: var(--card);
+        color: var(--ink);
+      }
+      .backup-restore:hover {
+        background: var(--soft-green);
+      }
+      .backup-status {
+        grid-column: 1 / -1;
+        margin: 2px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .backup-status:empty {
+        display: none;
+      }
+
       .list-heading {
         display: flex;
         align-items: baseline;
@@ -1199,6 +1243,27 @@
         .panel {
           padding: 21px 19px;
         }
+        .backup-panel {
+          grid-template-columns: minmax(0, 1fr);
+          gap: 6px;
+          padding: 16px;
+        }
+        .backup-actions {
+          grid-column: 1;
+          grid-row: auto;
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 8px;
+          margin-top: 4px;
+        }
+        .backup-actions button {
+          min-width: 0;
+          padding: 0 8px;
+          font-size: 12px;
+        }
+        .backup-status {
+          margin-top: 0;
+        }
         .form-grid {
           grid-template-columns: 1fr;
           gap: 13px;
@@ -1302,7 +1367,10 @@
         }
       }
 
-      @media (max-width: 380px) {
+      @media (max-width: 300px) {
+        .backup-actions {
+          grid-template-columns: minmax(0, 1fr);
+        }
         .local-note {
           max-width: 96px;
           font-size: 11px;
