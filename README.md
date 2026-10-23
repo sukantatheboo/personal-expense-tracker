@@ -8,7 +8,7 @@
 - View monthly totals and browse expenses by month.
 - Search expenses and filter by category.
 - Set a monthly budget and see how much you have spent, how much remains, or how far you are over.
-- Schedule weekly or monthly recurring expenses. Due entries are added when you open the app.
+- Schedule weekly or monthly recurring expenses. Due entries are added when the app is open, with an in-app reminder and an optional system notification. Allow notifications in your browser to enable system alerts; the app must remain open. Notifications while it is closed require a push-notification backend.
 - Export the selected month and current filters as a CSV file.
 - Switch between light and dark themes.
 - Optionally estimate totals in another currency using the daily rate from [Frankfurter](https://frankfurter.dev/).

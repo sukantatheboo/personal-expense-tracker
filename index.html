@@ -557,6 +557,44 @@
       .recurring-empty[hidden] {
         display: none;
       }
+      .recurring-reminder {
+        margin: 15px 0 0;
+        padding: 12px 14px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: var(--soft-green);
+        color: var(--ink);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+      .recurring-reminder[hidden] {
+        display: none;
+      }
+      .notification-controls {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 12px;
+      }
+      .notification-button {
+        min-height: 34px;
+        padding: 0 10px;
+        border: 1px solid var(--line);
+        background: var(--card);
+        color: var(--green);
+        font-size: 12px;
+      }
+      .notification-button:hover {
+        background: var(--field);
+        color: var(--ink);
+      }
+      .notification-status {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.5;
+      }
 
       .currency-hint {
         color: var(--muted);
@@ -1099,6 +1137,28 @@
           Weekly or monthly entries are added when they come due and you open
           the app.
         </p>
+        <p
+          class="recurring-reminder"
+          id="recurring-reminder"
+          role="status"
+          aria-live="polite"
+          hidden
+        ></p>
+        <div class="notification-controls">
+          <button
+            class="notification-button"
+            id="notification-button"
+            type="button"
+          >
+            Enable system notifications
+          </button>
+          <p
+            class="notification-status"
+            id="notification-status"
+            role="status"
+            aria-live="polite"
+          ></p>
+        </div>
         <ul class="recurring-list" id="recurring-list"></ul>
         <p class="recurring-empty" id="recurring-empty">
           Choose Weekly or Monthly in the expense form to add a recurring
@@ -1168,6 +1228,9 @@
       const clearBudgetButton = document.querySelector("#clear-budget");
       const recurringList = document.querySelector("#recurring-list");
       const recurringEmpty = document.querySelector("#recurring-empty");
+      const recurringReminder = document.querySelector("#recurring-reminder");
+      const notificationButton = document.querySelector("#notification-button");
+      const notificationStatus = document.querySelector("#notification-status");
       const themeToggle = document.querySelector("#theme-toggle");
       const themeIcon = document.querySelector("#theme-icon");
       const themeLabel = document.querySelector("#theme-label");
@@ -1222,12 +1285,22 @@
       let conversionRateDate = null;
       let rateRequestId = 0;
       let selectedMonth = currentMonth();
+      let pendingDueNotifications = [];
+      let lastRecurringCheckDate = localDate();
 
       selectedMonthInput.value = selectedMonth;
       expenseDateInput.value = localDate();
       populateCategorySelects();
       categoryInput.value = "Other";
+      updateNotificationControls();
       processRecurringExpenses();
+      window.setInterval(() => {
+        const today = localDate();
+        if (today === lastRecurringCheckDate) return;
+        lastRecurringCheckDate = today;
+        processRecurringExpenses();
+        render();
+      }, 60_000);
 
       function loadTheme() {
         try {
@@ -1408,6 +1481,7 @@
         const today = localDate();
         let expensesChanged = false;
         let schedulesChanged = false;
+        const dueExpenses = [];
 
         for (const schedule of recurringSchedules) {
           if (!schedule.active) continue;
@@ -1427,6 +1501,10 @@
                 date: schedule.nextDate,
                 recurringId: schedule.id,
               });
+              dueExpenses.push({
+                description: schedule.description,
+                date: schedule.nextDate,
+              });
               expensesChanged = true;
             }
             schedule.nextDate = nextOccurrenceDate(
@@ -1441,7 +1519,112 @@
 
         if (expensesChanged) saveExpenses();
         if (schedulesChanged) saveRecurringSchedules();
+
+        if (dueExpenses.length > 0) {
+          pendingDueNotifications.push(...dueExpenses);
+          sendDueNotifications(dueExpenses);
+        }
+
+        recurringReminder.hidden = dueExpenses.length === 0;
+        if (dueExpenses.length === 1) {
+          const dueExpense = dueExpenses[0];
+          recurringReminder.textContent =
+            dueExpense.date === today
+              ? `${dueExpense.description} is due today (${formatDate(today)}) and was added to your expenses.`
+              : `${dueExpense.description} was overdue (due ${formatDate(dueExpense.date)}) and was added to your expenses.`;
+        } else if (dueExpenses.length > 1) {
+          const details = dueExpenses
+            .map(
+              (expense) =>
+                `${expense.description} (${formatDate(expense.date)})`,
+            )
+            .join(", ");
+          recurringReminder.textContent = `Recurring expenses due today or earlier were added to your expenses: ${details}.`;
+        }
       }
+
+      function updateNotificationControls() {
+        if (!("Notification" in window)) {
+          notificationButton.disabled = true;
+          notificationStatus.textContent =
+            "System notifications are not supported by this browser.";
+          return;
+        }
+
+        if (Notification.permission === "granted") {
+          notificationButton.disabled = false;
+          notificationButton.textContent = "Send test notification";
+          notificationStatus.textContent =
+            "System notifications are enabled. They appear while this app is open.";
+        } else if (Notification.permission === "denied") {
+          notificationButton.disabled = true;
+          notificationButton.textContent = "Notifications blocked";
+          notificationStatus.textContent =
+            "Allow notifications for this site in your browser settings, then reload the app.";
+        } else {
+          notificationButton.disabled = false;
+          notificationButton.textContent = "Enable system notifications";
+          notificationStatus.textContent =
+            "Allow notifications to get reminders while this app is open.";
+        }
+      }
+
+      function sendDueNotifications(dueExpenses) {
+        if (!("Notification" in window) || Notification.permission !== "granted")
+          return;
+
+        const details = dueExpenses
+          .map(
+            (expense) =>
+              `${expense.description} (${formatDate(expense.date)})`,
+          )
+          .join(", ");
+        try {
+          new Notification(
+            dueExpenses.length === 1
+              ? "Recurring expense due"
+              : "Recurring expenses due",
+            { body: details },
+          );
+          pendingDueNotifications = pendingDueNotifications.filter(
+            (pendingExpense) => !dueExpenses.includes(pendingExpense),
+          );
+        } catch (error) {
+          notificationStatus.textContent = `Could not show a system notification: ${error.message}`;
+        }
+      }
+
+      notificationButton.addEventListener("click", async () => {
+        if (!("Notification" in window)) {
+          updateNotificationControls();
+          return;
+        }
+
+        if (Notification.permission === "default") {
+          try {
+            await Notification.requestPermission();
+          } catch (error) {
+            notificationStatus.textContent = `Could not request notification permission: ${error.message}`;
+            return;
+          }
+        }
+
+        updateNotificationControls();
+        if (Notification.permission !== "granted") return;
+
+        if (pendingDueNotifications.length > 0) {
+          const dueExpenses = [...pendingDueNotifications];
+          sendDueNotifications(dueExpenses);
+        } else {
+          try {
+            new Notification("Spend notifications enabled", {
+              body: "System notifications are working.",
+            });
+          } catch (error) {
+            notificationStatus.textContent = `Could not show a system notification: ${error.message}`;
+          }
+        }
+      });
 
       function isValidExpense(item) {
         if (
