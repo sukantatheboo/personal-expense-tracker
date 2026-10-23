@@ -1,5 +1,7 @@
 <p align="center">
-  <img src="./public/favicon.svg" width="80" alt="Spend logo" />
+  <a href="https://sukantatheboo.github.io/personal-expense-tracker/">
+    <img src="./public/favicon.svg" width="80" alt="Spend logo" />
+  </a>
 </p>
 
 # Spend — Personal Expense Tracker
