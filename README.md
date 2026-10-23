@@ -1,4 +1,4 @@
-# Personal Expense Tracker
+# Personal Expense Tracker(Build with AI)
 
 **Spend** is a lightweight, browser-based expense tracker. Record everyday spending in Bangladeshi taka (BDT), review monthly totals, and keep an eye on a budget—all from a single page.
 
