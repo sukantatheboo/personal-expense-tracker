@@ -343,6 +343,32 @@
 
       .form-grid select {
         width: 100%;
+        padding-right: 32px;
+        appearance: none;
+        background-image:
+          linear-gradient(45deg, transparent 50%, currentColor 50%),
+          linear-gradient(135deg, currentColor 50%, transparent 50%);
+        background-position:
+          calc(100% - 15px) 50%,
+          calc(100% - 10px) 50%;
+        background-repeat: no-repeat;
+        background-size: 5px 5px;
+      }
+
+      #expense-form input[type="number"] {
+        appearance: textfield;
+        -moz-appearance: textfield;
+      }
+
+      #expense-form input[type="number"]::-webkit-inner-spin-button,
+      #expense-form input[type="number"]::-webkit-outer-spin-button {
+        margin: 0;
+        -webkit-appearance: none;
+      }
+
+      #expense-form input[type="date"]::-webkit-calendar-picker-indicator {
+        cursor: pointer;
+        opacity: 1;
       }
 
       input:focus {
