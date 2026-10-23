@@ -954,7 +954,7 @@ export default function App() {
         <details className="account-details account-transaction-details">
           <summary>Record income, adjustment, or transfer</summary>
           <form onSubmit={handleAccountTransactionSubmit}>
-            <div className="account-form-grid">
+            <div className="account-form-grid account-transaction-grid">
               <div>
                 <label htmlFor="transaction-type">Activity</label>
                 <select

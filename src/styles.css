@@ -413,6 +413,9 @@
         border-radius: 14px;
         background: var(--card);
       }
+      .account-transaction-details {
+        container: transaction-form / inline-size;
+      }
       .account-transaction-details[open] summary {
         margin-bottom: 16px;
         border-bottom: 1px solid var(--line);
@@ -436,6 +439,28 @@
       .account-form-grid select {
         width: 100%;
         min-width: 0;
+      }
+      .account-form-grid.account-transaction-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+      }
+      .account-transaction-grid input,
+      .account-transaction-grid select {
+        min-height: 48px;
+        font-size: 16px;
+      }
+      .account-transaction-grid select {
+        padding-right: 32px;
+        -webkit-appearance: none;
+        appearance: none;
+        background-image:
+          linear-gradient(45deg, transparent 50%, currentColor 50%),
+          linear-gradient(135deg, currentColor 50%, transparent 50%);
+        background-position:
+          calc(100% - 15px) 50%,
+          calc(100% - 10px) 50%;
+        background-repeat: no-repeat;
+        background-size: 5px 5px;
       }
       .account-form-actions {
         display: flex;
@@ -1027,6 +1052,12 @@
       }
 
       @media (max-width: 800px) {
+        .account-form-grid.account-transaction-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 800px) {
         .form-grid {
           grid-template-columns: repeat(2, minmax(0, 1fr));
         }
@@ -1172,6 +1203,21 @@
         }
         .account-transaction-details[open] {
           padding: 0 12px 12px;
+        }
+      }
+
+      @container transaction-form (max-width: 720px) {
+        .account-form-grid.account-transaction-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @container transaction-form (max-width: 460px) {
+        .account-form-grid.account-transaction-grid {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .account-transaction-grid .account-note-field {
+          grid-column: auto;
         }
       }
 
