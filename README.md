@@ -19,8 +19,6 @@ Track everyday spending, budgets, and recurring expenses in one simple browser a
 
 ## 🚀 Getting started
 
-No installation or build step is needed. Open `index.html` in a modern browser.
-
 For system notifications, allow notifications in your browser when supported. The app must be open when an expense becomes due; notifications while it is closed require a push-notification backend.
 
 ## 🔐 Data & privacy
