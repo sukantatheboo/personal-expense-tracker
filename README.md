@@ -1,29 +1,35 @@
 <p align="center">
-  <img src="./favicon.svg" width="80" alt="Spend logo" />
+  <img src="./public/favicon.svg" width="80" alt="Spend logo" />
 </p>
 
-# 💸 Spend — Personal Expense Tracker
+# Spend — Personal Expense Tracker
 
-Track everyday spending, budgets, and recurring expenses in one simple browser app.
+A React app for tracking everyday spending, monthly budgets, recurring expenses, and bKash/Bank balances.
 
-## ✨ Features
+## Features
 
-- 🧾 Add expenses with a description, amount, category, and date. Add an expense without an amount and fill it in later.
-- 📅 Review monthly totals and browse expenses by month.
-- 🔎 Search expenses and filter by category.
-- 🎯 Set a monthly budget and track spending against it.
-- 🔁 Schedule weekly or monthly expenses. When the app is open, due expenses are added automatically, with an in-app reminder and optional system notification.
-- 📤 Export expenses for the selected month and filters as a CSV file.
-- 🌗 Switch between light and dark themes.
-- 💱 View an estimated total in another currency using rates from [Frankfurter](https://frankfurter.dev/).
+- Add and search expenses, assign categories and payment accounts, and fill in missing amounts later.
+- Review monthly totals and export the selected month and filters as CSV.
+- Set monthly budgets and track spending against them.
+- Track bKash and bank balances from starting amounts, linked expenses, income, transfers, and adjustments.
+- Schedule weekly or monthly expenses. Due entries are added when the app is open; browser notifications are optional.
+- Convert monthly totals to another currency using estimated rates from [Frankfurter](https://frankfurter.dev/).
+- Switch between light and dark themes.
 
-## 🚀 Getting started
+## Run locally
 
-For system notifications, allow notifications in your browser when supported. The app must be open when an expense becomes due; notifications while it is closed require a push-notification backend.
+```sh
+npm ci
+npm run dev
+```
 
-## 🔐 Data & privacy
+Create a production build with `npm run build`. The site is built and deployed to GitHub Pages by the workflow in `.github/workflows/deploy.yml` whenever `main` is updated.
 
-- 💾 Expenses, budgets, recurring schedules, and preferences are stored in your browser's local storage.
-- 🔒 Your expense data is not synced to a server or sent to the currency-rate service.
-- 🧹 Clearing your browser's site data may delete information saved by the app.
-- 🌐 Currency conversion needs an internet connection and requests exchange-rate data from Frankfurter. Rates are estimates and may differ from those used by your bank or card provider.
+## Data and privacy
+
+- Expenses, budgets, recurring schedules, account balances, and preferences stay in this browser's local storage.
+- The app reuses the existing `spend-*` storage keys, so data already saved for the published site remains available when the app is updated on the same origin.
+- Expense and account data are not uploaded. Currency conversion sends only the currency pair to Frankfurter; no expense amounts or account details are sent.
+- The React app is still a public client-side website. React organizes the code and safely renders user-entered text, but it does not hide the source code or protect API secrets. Do not put bank credentials, bKash PINs, OTPs, or private API keys in this repository or browser code.
+- Automatic bank or bKash synchronization is not configured. It would require an authorized provider connection and a separate secure backend.
+- Clearing this website's browser data may erase locally saved information. Export CSV backups periodically.
