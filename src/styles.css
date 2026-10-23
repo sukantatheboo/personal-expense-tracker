@@ -873,6 +873,61 @@
         flex-wrap: wrap;
         margin-top: 12px;
       }
+      .push-auth-form {
+        display: grid;
+        gap: 10px;
+        max-width: 560px;
+        margin-top: 14px;
+      }
+      .push-auth-fields {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+      .push-auth-fields > div {
+        min-width: 0;
+      }
+      .push-auth-fields input {
+        min-height: 40px;
+      }
+      .push-auth-actions,
+      .push-account {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .push-auth-actions button {
+        min-height: 36px;
+      }
+      .push-account {
+        margin-top: 12px;
+      }
+      .push-account-label,
+      .push-setup-note,
+      .push-auth-status {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+      .push-account-action {
+        min-height: 34px;
+        padding: 0 10px;
+        border: 1px solid var(--line);
+        background: var(--card);
+        color: var(--ink);
+        font-size: 12px;
+      }
+      .push-account-action:hover {
+        background: var(--field);
+      }
+      .push-setup-note {
+        margin-top: 12px;
+      }
+      .push-auth-status {
+        margin-top: 10px;
+      }
       .notification-button {
         min-height: 34px;
         padding: 0 10px;
@@ -1270,6 +1325,10 @@
         }
         .account-cards {
           gap: 9px;
+        }
+        .push-auth-fields {
+          grid-template-columns: minmax(0, 1fr);
+          gap: 10px;
         }
         .account-card {
           gap: 8px;

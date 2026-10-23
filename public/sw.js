@@ -42,6 +42,38 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+self.addEventListener("push", (event) => {
+  let payload = {};
+  try {
+    payload = event.data?.json() || {};
+  } catch {
+    payload = { body: event.data?.text() || "" };
+  }
+  const title =
+    typeof payload.title === "string" ? payload.title : "Spend reminder";
+  const options = {
+    body: typeof payload.body === "string" ? payload.body : "A recurring expense is due.",
+    icon: new URL("./icons/icon-192.png", self.registration.scope).href,
+    badge: new URL("./icons/icon-180.png", self.registration.scope).href,
+    data: { url: payload.url || self.registration.scope },
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = new URL(
+    event.notification.data?.url || self.registration.scope,
+    self.registration.scope,
+  );
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      const existing = clients.find((client) => new URL(client.url).origin === target.origin);
+      return existing ? existing.focus() : self.clients.openWindow(target.href);
+    }),
+  );
+});
+
 self.addEventListener("fetch", (event) => {
   const request = event.request;
   const url = new URL(request.url);

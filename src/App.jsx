@@ -21,6 +21,13 @@ import {
   roundMoney,
   writeStorage,
 } from "./data.js";
+import {
+  disableBackgroundPush,
+  enableBackgroundPush,
+  pushBackendConfigured,
+  supabase,
+  syncBackgroundSchedules,
+} from "./push.js";
 
 const CURRENCY_API = "https://api.frankfurter.dev/v2";
 
@@ -140,10 +147,18 @@ export default function App() {
       : "unsupported",
   );
   const [notificationStatus, setNotificationStatus] = useState("");
+  const [pushUser, setPushUser] = useState(null);
+  const [authMode, setAuthMode] = useState("sign-in");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authStatus, setAuthStatus] = useState("");
+  const [authBusy, setAuthBusy] = useState(false);
+  const [backgroundPushEnabled, setBackgroundPushEnabled] = useState(false);
   const [backupStatus, setBackupStatus] = useState("");
   const backupFileInputRef = useRef(null);
   const pendingDueRef = useRef([]);
   const lastRecurringCheckRef = useRef("");
+  const pushScheduleSyncRef = useRef(Promise.resolve());
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -173,6 +188,71 @@ export default function App() {
       // The currency selection still applies until this page is closed.
     }
   }, [targetCurrency]);
+
+  useEffect(() => {
+    if (!supabase) return undefined;
+    let active = true;
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (error) {
+        setAuthStatus(`Could not restore sign-in: ${error.message}`);
+        return;
+      }
+      if (active) setPushUser(data.session?.user || null);
+    });
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setPushUser(session?.user || null);
+      setBackgroundPushEnabled(false);
+      setAuthStatus("");
+    });
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!supabase || !pushUser || !backgroundPushEnabled) return undefined;
+    let active = true;
+    async function syncSchedules() {
+      if (!active) return;
+      try {
+        await syncBackgroundSchedules(pushUser.id, recurringSchedules);
+        if (active) setAuthStatus("");
+      } catch (error) {
+        if (active)
+          setAuthStatus(`Could not sync reminder schedules: ${error.message}`);
+      }
+    }
+    pushScheduleSyncRef.current = pushScheduleSyncRef.current.then(
+      syncSchedules,
+      syncSchedules,
+    );
+    return () => {
+      active = false;
+    };
+  }, [backgroundPushEnabled, pushUser, recurringSchedules]);
+
+  useEffect(() => {
+    if (!pushUser || !("serviceWorker" in navigator)) return undefined;
+    let active = true;
+    navigator.serviceWorker
+      .getRegistration()
+      .then((registration) =>
+        registration ? registration.pushManager.getSubscription() : null,
+      )
+      .then((subscription) => {
+        if (active) setBackgroundPushEnabled(Boolean(subscription));
+      })
+      .catch((error) => {
+        if (active)
+          setNotificationStatus(`Could not check push subscription: ${error.message}`);
+      });
+    return () => {
+      active = false;
+    };
+  }, [pushUser]);
 
   useEffect(() => {
     const { settings } = accountData;
@@ -267,19 +347,26 @@ export default function App() {
     const details = dueExpenses
       .map((expense) => `${expense.description} (${formatDate(expense.date)})`)
       .join(", ");
-    try {
-      new window.Notification(
-        dueExpenses.length === 1
-          ? "Recurring expense due"
-          : "Recurring expenses due",
-        { body: details },
-      );
+    const title =
+      dueExpenses.length === 1
+        ? "Recurring expense due"
+        : "Recurring expenses due";
+    const options = { body: details };
+    const displayNotification =
+      "serviceWorker" in navigator
+        ? navigator.serviceWorker.getRegistration().then((registration) =>
+            registration
+              ? registration.showNotification(title, options)
+              : new window.Notification(title, options),
+          )
+        : Promise.resolve(new window.Notification(title, options));
+    displayNotification.then(() => {
       pendingDueRef.current = pendingDueRef.current.filter(
         (pending) => !dueExpenses.includes(pending),
       );
-    } catch (error) {
+    }).catch((error) => {
       setNotificationStatus(`Could not show a system notification: ${error.message}`);
-    }
+    });
   }
 
   const processDueSchedules = useRef(null);
@@ -700,10 +787,135 @@ export default function App() {
     }
   }
 
+  async function handleAuthSubmit(event) {
+    event.preventDefault();
+    if (!supabase) return;
+    setAuthBusy(true);
+    setAuthStatus("");
+    try {
+      const result =
+        authMode === "sign-up"
+          ? await supabase.auth.signUp({
+              email: authEmail.trim(),
+              password: authPassword,
+              options: {
+                emailRedirectTo: new URL(
+                  import.meta.env.BASE_URL,
+                  window.location.origin,
+                ).href,
+              },
+            })
+          : await supabase.auth.signInWithPassword({
+              email: authEmail.trim(),
+              password: authPassword,
+            });
+      if (result.error) throw result.error;
+      if (authMode === "sign-up" && !result.data.session) {
+        setAuthStatus("Check your email to confirm your account, then sign in.");
+      } else {
+        setAuthStatus(
+          authMode === "sign-up"
+            ? "Account created. You can now enable background reminders."
+            : "Signed in. Your recurring reminder schedule is syncing.",
+        );
+      }
+      setAuthPassword("");
+    } catch (error) {
+      setAuthStatus(`Could not ${authMode === "sign-up" ? "create account" : "sign in"}: ${error.message}`);
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
+  async function signOutOfPush() {
+    if (!supabase || !pushUser) return;
+    setAuthBusy(true);
+    try {
+      await disableBackgroundPush(pushUser.id);
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      setBackgroundPushEnabled(false);
+      setNotificationStatus("Signed out. Background reminders are disabled on this device.");
+    } catch (error) {
+      setAuthStatus(`Could not sign out: ${error.message}`);
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
   async function toggleNotifications() {
+    if (!pushBackendConfigured) {
+      if (!("Notification" in window)) {
+        setNotificationPermission("unsupported");
+        setNotificationStatus("System notifications are not supported by this browser.");
+        return;
+      }
+      let permission = window.Notification.permission;
+      if (permission === "default") {
+        try {
+          permission = await window.Notification.requestPermission();
+        } catch (error) {
+          setNotificationStatus(`Could not request notification permission: ${error.message}`);
+          return;
+        }
+      }
+      setNotificationPermission(permission);
+      if (permission !== "granted") {
+        setNotificationStatus(
+          permission === "denied"
+            ? "Allow notifications for this site in your browser settings."
+            : "Notification permission was not granted.",
+        );
+        return;
+      }
+      try {
+        if ("serviceWorker" in navigator) {
+          const registration = await navigator.serviceWorker.ready;
+          await registration.showNotification("Spend notifications enabled", {
+            body: "Notifications can appear while this app is open. Background push needs backend setup.",
+          });
+        } else {
+          new window.Notification("Spend notifications enabled", {
+            body: "Notifications can appear while this app is open.",
+          });
+        }
+        setNotificationStatus("Notifications are allowed. Background reminders need backend setup.");
+      } catch (error) {
+        setNotificationStatus(`Could not show a system notification: ${error.message}`);
+      }
+      return;
+    }
+    if (!pushUser) {
+      setNotificationStatus("Sign in first to enable background reminders.");
+      return;
+    }
+    const isIos =
+      /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    const installed =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      window.navigator.standalone === true;
+    if (isIos && !installed) {
+      setNotificationStatus("On iPhone or iPad, add Spend to your Home Screen and open it there before enabling notifications.");
+      return;
+    }
     if (!("Notification" in window)) {
       setNotificationPermission("unsupported");
       setNotificationStatus("System notifications are not supported by this browser.");
+      return;
+    }
+    if (!("PushManager" in window) || !("serviceWorker" in navigator)) {
+      setNotificationStatus("Background push is not supported by this browser.");
+      return;
+    }
+    if (backgroundPushEnabled) {
+      try {
+        await disableBackgroundPush(pushUser.id);
+        setBackgroundPushEnabled(false);
+        setNotificationStatus("Background reminders are disabled on this device.");
+      } catch (error) {
+        setNotificationStatus(`Could not disable background reminders: ${error.message}`);
+      }
       return;
     }
     let permission = window.Notification.permission;
@@ -720,28 +932,28 @@ export default function App() {
       setNotificationStatus("Allow notifications for this site in your browser settings, then reload the app.");
       return;
     }
-    if (pendingDueRef.current.length) {
-      const pending = [...pendingDueRef.current];
-      sendSystemNotification(pending);
-    } else {
+    try {
+      const { registration } = await enableBackgroundPush(pushUser.id);
+      setBackgroundPushEnabled(true);
+      setNotificationStatus("Background reminders are enabled. You’ll get a push when a recurring expense is due.");
       try {
-        new window.Notification("Spend notifications enabled", {
-          body: "System notifications are working.",
+        await registration.showNotification("Spend notifications enabled", {
+          body: "Background reminders are working on this device.",
         });
       } catch (error) {
-        setNotificationStatus(`Could not show a system notification: ${error.message}`);
+        setNotificationStatus(`Background reminders are enabled, but the test notification could not be shown: ${error.message}`);
       }
+    } catch (error) {
+      setNotificationStatus(`Could not enable background reminders: ${error.message}`);
     }
   }
 
   useEffect(() => {
     if (notificationPermission === "unsupported") {
       setNotificationStatus("System notifications are not supported by this browser.");
-    } else if (notificationPermission === "granted") {
-      setNotificationStatus("System notifications are enabled. They appear while this app is open.");
     } else if (notificationPermission === "denied") {
       setNotificationStatus("Allow notifications for this site in your browser settings, then reload the app.");
-    } else {
+    } else if (notificationPermission === "default") {
       setNotificationStatus("Allow notifications to get reminders while this app is open.");
     }
   }, [notificationPermission]);
@@ -773,7 +985,7 @@ export default function App() {
           <span>Spend</span>
         </div>
         <div className="header-actions">
-          <div className="local-note">Your data stays on this device</div>
+          <div className="local-note">Your expense data stays on this device</div>
           <button
             className="theme-toggle"
             type="button"
@@ -1231,22 +1443,108 @@ export default function App() {
 
       <section className="panel" aria-labelledby="recurring-title">
         <h2 id="recurring-title">Recurring expenses</h2>
-        <p className="currency-hint">Weekly or monthly entries are added when they come due and you open the app.</p>
+        <p className="currency-hint">Weekly or monthly entries are added when they come due and you open the app. Sign in and enable background reminders to get system notifications while Spend is closed.</p>
         {recurringReminder && (
           <p className="recurring-reminder" role="status" aria-live="polite">{recurringReminder}</p>
+        )}
+        {pushBackendConfigured ? (
+          <>
+            <p className="push-setup-note">
+              Background push stores your email, device subscription, and recurring expense descriptions and dates in Supabase. Expense history and amounts stay on this device.
+            </p>
+            {pushUser ? (
+              <div className="push-account">
+                <p className="push-account-label">Signed in as {pushUser.email}</p>
+                <button
+                  className="push-account-action"
+                  type="button"
+                  disabled={authBusy}
+                  onClick={signOutOfPush}
+                >
+                  Sign out
+                </button>
+              </div>
+            ) : (
+              <form className="push-auth-form" onSubmit={handleAuthSubmit}>
+                <div className="push-auth-fields">
+                  <div>
+                    <label htmlFor="push-email">Email</label>
+                    <input
+                      id="push-email"
+                      type="email"
+                      autoComplete="email"
+                      required
+                      value={authEmail}
+                      onChange={(event) => setAuthEmail(event.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="push-password">Password</label>
+                    <input
+                      id="push-password"
+                      type="password"
+                      autoComplete={authMode === "sign-up" ? "new-password" : "current-password"}
+                      minLength="6"
+                      required
+                      value={authPassword}
+                      onChange={(event) => setAuthPassword(event.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="push-auth-actions">
+                  <button type="submit" disabled={authBusy}>
+                    {authBusy
+                      ? "Please wait…"
+                      : authMode === "sign-up"
+                        ? "Create account"
+                        : "Sign in"}
+                  </button>
+                  <button
+                    className="push-account-action"
+                    type="button"
+                    onClick={() => {
+                      setAuthMode((mode) => mode === "sign-up" ? "sign-in" : "sign-up");
+                      setAuthStatus("");
+                    }}
+                  >
+                    {authMode === "sign-up" ? "I already have an account" : "Create an account"}
+                  </button>
+                </div>
+              </form>
+            )}
+          </>
+        ) : (
+          <p className="push-setup-note">
+            Background push is not configured yet. Existing notifications work while the app is open.
+          </p>
+        )}
+        {authStatus && (
+          <p className="notification-status push-auth-status" role="status" aria-live="polite">
+            {authStatus}
+          </p>
         )}
         <div className="notification-controls">
           <button
             className="notification-button"
             type="button"
-            disabled={notificationPermission === "denied" || notificationPermission === "unsupported"}
+            disabled={
+              !backgroundPushEnabled &&
+              (notificationPermission === "denied" ||
+                notificationPermission === "unsupported")
+            }
             onClick={toggleNotifications}
           >
-            {notificationPermission === "granted"
-              ? "Send test notification"
+            {backgroundPushEnabled
+              ? "Disable background reminders"
               : notificationPermission === "denied"
                 ? "Notifications blocked"
-                : "Enable system notifications"}
+                : notificationPermission === "unsupported"
+                  ? "Notifications unavailable"
+                  : pushBackendConfigured
+                    ? "Enable background reminders"
+                    : notificationPermission === "granted"
+                      ? "Send test notification"
+                      : "Enable system notifications"}
           </button>
           <p className="notification-status" role="status" aria-live="polite">{notificationStatus}</p>
         </div>
