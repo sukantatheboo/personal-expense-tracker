@@ -383,6 +383,9 @@
         font-size: 12px;
         line-height: 1.5;
       }
+      section[aria-labelledby="accounts-title"] {
+        container: account-balances / inline-size;
+      }
       .account-cards {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -390,10 +393,10 @@
         margin-top: 15px;
       }
       .account-card {
-        display: flex;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
         align-items: center;
-        justify-content: space-between;
-        gap: 12px;
+        gap: 8px;
         min-width: 0;
         padding: 13px 15px;
         border: 1px solid var(--line);
@@ -410,12 +413,13 @@
         font-weight: 600;
       }
       .account-balance {
+        min-width: 0;
         margin: 0;
-        font-size: clamp(17px, 2.5vw, 22px);
+        font-size: clamp(14px, 2.5vw, 20px);
         font-weight: 620;
         letter-spacing: -0.04em;
         font-variant-numeric: tabular-nums;
-        overflow-wrap: anywhere;
+        white-space: nowrap;
       }
       .account-meta {
         margin: 4px 0 0;
@@ -1099,6 +1103,38 @@
       @media (max-width: 800px) {
         .account-form-grid.account-transaction-grid {
           grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @container account-balances (max-width: 520px) {
+        .account-cards {
+          gap: 8px;
+        }
+        .account-card {
+          grid-template-columns: minmax(0, 1fr);
+          align-content: start;
+          gap: 7px;
+          padding: 10px;
+        }
+        .account-balance {
+          font-size: clamp(14px, 4cqi, 18px);
+        }
+        .account-meta {
+          margin-top: 3px;
+          font-size: 10px;
+        }
+      }
+
+      @container account-balances (max-width: 240px) {
+        .account-cards {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .account-card {
+          grid-template-columns: minmax(0, 1fr) auto;
+          align-items: center;
+        }
+        .account-balance {
+          font-size: clamp(14px, 5cqi, 18px);
         }
       }
 
