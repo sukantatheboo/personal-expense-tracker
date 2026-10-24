@@ -39,7 +39,9 @@ const CURRENCY_API = "https://api.frankfurter.dev/v2";
 
 function loadTheme() {
   try {
-    return localStorage.getItem(STORAGE_KEYS.theme) === "dark" ? "dark" : "light";
+    return localStorage.getItem(STORAGE_KEYS.theme) === "dark"
+      ? "dark"
+      : "light";
   } catch {
     return "light";
   }
@@ -119,9 +121,7 @@ function csvCell(value) {
 }
 
 function mergeRecords(cloudRecords, localRecords) {
-  const records = new Map(
-    cloudRecords.map((record) => [record.id, record]),
-  );
+  const records = new Map(cloudRecords.map((record) => [record.id, record]));
   for (const record of localRecords) records.set(record.id, record);
   return [...records.values()];
 }
@@ -171,10 +171,7 @@ function mergeCloudSnapshots(local, cloud, preferLocal) {
   return {
     expenses: mergeRecords(cloudExpenses, local.expenses),
     budgets: { ...cloudBudgets, ...local.budgets },
-    recurringSchedules: mergeRecords(
-      cloudSchedules,
-      local.recurringSchedules,
-    ),
+    recurringSchedules: mergeRecords(cloudSchedules, local.recurringSchedules),
     accountData: {
       settings: hasMeaningfulLocalAccountSettings(local)
         ? local.accountData.settings
@@ -333,7 +330,9 @@ export default function App() {
         try {
           localStorage.removeItem(CLOUD_SYNC_USER_KEY);
         } catch {
-          setCloudSyncStatus("Cloud sync is off, but this browser could not clear its sync preference.");
+          setCloudSyncStatus(
+            "Cloud sync is off, but this browser could not clear its sync preference.",
+          );
         }
       }
     });
@@ -470,7 +469,7 @@ export default function App() {
   function trapAuthModalFocus(event) {
     if (event.key !== "Tab") return;
     const focusable = authModalRef.current?.querySelectorAll(
-      'button:not([disabled]), input:not([disabled])',
+      "button:not([disabled]), input:not([disabled])",
     );
     if (!focusable?.length) return;
     const first = focusable[0];
@@ -519,7 +518,9 @@ export default function App() {
       })
       .catch((error) => {
         if (active)
-          setNotificationStatus(`Could not check push subscription: ${error.message}`);
+          setNotificationStatus(
+            `Could not check push subscription: ${error.message}`,
+          );
       });
     return () => {
       active = false;
@@ -541,7 +542,8 @@ export default function App() {
   }, [budgets, selectedMonth]);
 
   const monthExpenses = useMemo(
-    () => expenses.filter((expense) => expense.date.slice(0, 7) === selectedMonth),
+    () =>
+      expenses.filter((expense) => expense.date.slice(0, 7) === selectedMonth),
     [expenses, selectedMonth],
   );
   const monthlyTotal = useMemo(
@@ -556,7 +558,9 @@ export default function App() {
   const visibleExpenses = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase();
     return monthExpenses
-      .filter((expense) => !categoryFilter || expense.category === categoryFilter)
+      .filter(
+        (expense) => !categoryFilter || expense.category === categoryFilter,
+      )
       .filter(
         (expense) =>
           !normalizedQuery ||
@@ -564,9 +568,7 @@ export default function App() {
             .toLocaleLowerCase()
             .includes(normalizedQuery),
       )
-      .sort(
-        (a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id),
-      );
+      .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
   }, [monthExpenses, categoryFilter, query]);
   const accountBalances = useMemo(
     () => ({
@@ -593,7 +595,8 @@ export default function App() {
   }, [expenses, accountData]);
 
   const monthBudget = Number(budgets[selectedMonth] || 0);
-  const budgetPercentage = monthBudget > 0 ? (monthlyTotal / monthBudget) * 100 : 0;
+  const budgetPercentage =
+    monthBudget > 0 ? (monthlyTotal / monthBudget) * 100 : 0;
   const budgetProgress = Math.min(100, Math.max(0, budgetPercentage));
   const conversionReady = conversionOpen && conversionRate !== null;
 
@@ -610,11 +613,15 @@ export default function App() {
           : `${dueExpenses[0].description} was overdue and was added to your expenses.`
         : `Recurring expenses due today or earlier were added: ${details}.`,
     );
-    if (notificationPermission === "granted") sendSystemNotification(dueExpenses);
+    if (notificationPermission === "granted")
+      sendSystemNotification(dueExpenses);
   }
 
   function sendSystemNotification(dueExpenses) {
-    if (!("Notification" in window) || window.Notification.permission !== "granted")
+    if (
+      !("Notification" in window) ||
+      window.Notification.permission !== "granted"
+    )
       return;
     const details = dueExpenses
       .map((expense) => `${expense.description} (${formatDate(expense.date)})`)
@@ -626,19 +633,25 @@ export default function App() {
     const options = { body: details };
     const displayNotification =
       "serviceWorker" in navigator
-        ? navigator.serviceWorker.getRegistration().then((registration) =>
-            registration
-              ? registration.showNotification(title, options)
-              : new window.Notification(title, options),
-          )
+        ? navigator.serviceWorker
+            .getRegistration()
+            .then((registration) =>
+              registration
+                ? registration.showNotification(title, options)
+                : new window.Notification(title, options),
+            )
         : Promise.resolve(new window.Notification(title, options));
-    displayNotification.then(() => {
-      pendingDueRef.current = pendingDueRef.current.filter(
-        (pending) => !dueExpenses.includes(pending),
-      );
-    }).catch((error) => {
-      setNotificationStatus(`Could not show a system notification: ${error.message}`);
-    });
+    displayNotification
+      .then(() => {
+        pendingDueRef.current = pendingDueRef.current.filter(
+          (pending) => !dueExpenses.includes(pending),
+        );
+      })
+      .catch((error) => {
+        setNotificationStatus(
+          `Could not show a system notification: ${error.message}`,
+        );
+      });
   }
 
   const processDueSchedules = useRef(null);
@@ -669,7 +682,10 @@ export default function App() {
             account: isAccountId(schedule.account) ? schedule.account : "",
             recurringId: schedule.id,
           });
-          dueExpenses.push({ description: schedule.description, date: nextDate });
+          dueExpenses.push({
+            description: schedule.description,
+            date: nextDate,
+          });
           expensesChanged = true;
         }
         nextDate = nextOccurrenceDate(
@@ -703,7 +719,9 @@ export default function App() {
     const controller = new AbortController();
     let cancelled = false;
     async function fetchRate() {
-      setConversionStatus(`Getting the latest available ${targetCurrency} rate…`);
+      setConversionStatus(
+        `Getting the latest available ${targetCurrency} rate…`,
+      );
       setConversionFailed(false);
       setConversionRate(null);
       try {
@@ -724,7 +742,11 @@ export default function App() {
               .sort((a, b) => a.name.localeCompare(b.name));
             if (cleanCurrencies.length && !cancelled) {
               setCurrencyOptions(cleanCurrencies);
-              if (!cleanCurrencies.some((item) => item.iso_code === targetCurrency))
+              if (
+                !cleanCurrencies.some(
+                  (item) => item.iso_code === targetCurrency,
+                )
+              )
                 setTargetCurrency(
                   cleanCurrencies.some((item) => item.iso_code === "USD")
                     ? "USD"
@@ -879,7 +901,11 @@ export default function App() {
   function handleAccountTransactionSubmit(event) {
     event.preventDefault();
     const amount = Number(transactionForm.amount);
-    if (!Number.isFinite(amount) || amount <= 0 || !isValidDateString(transactionForm.date))
+    if (
+      !Number.isFinite(amount) ||
+      amount <= 0 ||
+      !isValidDateString(transactionForm.date)
+    )
       return;
     const transaction = {
       id: makeId(),
@@ -934,7 +960,9 @@ export default function App() {
 
   function removeAccountActivity(activity) {
     if (activity.type === "expense") {
-      setExpenses((current) => current.filter((item) => item.id !== activity.id));
+      setExpenses((current) =>
+        current.filter((item) => item.id !== activity.id),
+      );
     } else {
       setAccountData((current) => ({
         ...current,
@@ -949,7 +977,10 @@ export default function App() {
     event.preventDefault();
     const amount = Number(budgetAmount);
     if (!Number.isFinite(amount) || amount <= 0) return;
-    setBudgets((current) => ({ ...current, [selectedMonth]: roundMoney(amount) }));
+    setBudgets((current) => ({
+      ...current,
+      [selectedMonth]: roundMoney(amount),
+    }));
   }
 
   function clearBudget() {
@@ -963,20 +994,31 @@ export default function App() {
   function exportExpenses() {
     if (!visibleExpenses.length) return;
     const data = [
-      ["Date", "Description", "Category", "Amount (BDT)", "Payment account", "Type"],
+      [
+        "Date",
+        "Description",
+        "Category",
+        "Amount (BDT)",
+        "Payment account",
+        "Type",
+      ],
       ...visibleExpenses.map((expense) => [
         expense.date,
         expense.description,
         expense.category,
         expense.amount === null ? "" : expense.amount,
-        isAccountId(expense.account) ? accountName(expense.account) : "Cash / Other",
+        isAccountId(expense.account)
+          ? accountName(expense.account)
+          : "Cash / Other",
         expense.recurringId ? "Recurring" : "One-time",
       ]),
     ];
     const csv = `\uFEFF${data
       .map((row) => row.map(csvCell).join(","))
       .join("\r\n")}`;
-    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const url = URL.createObjectURL(
+      new Blob([csv], { type: "text/csv;charset=utf-8" }),
+    );
     const link = document.createElement("a");
     link.href = url;
     link.download = `spend-${selectedMonth}.csv`;
@@ -1041,7 +1083,11 @@ export default function App() {
       ) {
         throw new Error("This file is not a valid Spend backup.");
       }
-      if (!window.confirm("Restoring this backup will replace all current app data. Continue?")) {
+      if (
+        !window.confirm(
+          "Restoring this backup will replace all current app data. Continue?",
+        )
+      ) {
         setBackupStatus("Restore canceled.");
         return;
       }
@@ -1113,7 +1159,9 @@ export default function App() {
         "The Supabase copy was deleted. Local data on this device is unchanged.",
       );
     } catch (error) {
-      setCloudSyncStatus(`Could not delete the Supabase copy: ${error.message}`);
+      setCloudSyncStatus(
+        `Could not delete the Supabase copy: ${error.message}`,
+      );
     } finally {
       setAuthBusy(false);
     }
@@ -1143,7 +1191,9 @@ export default function App() {
             });
       if (result.error) throw result.error;
       if (authMode === "sign-up" && !result.data.session) {
-        setAuthStatus("Check your email to confirm your account, then sign in.");
+        setAuthStatus(
+          "Check your email to confirm your account, then sign in.",
+        );
       } else {
         setAuthStatus(
           authMode === "sign-up"
@@ -1154,7 +1204,9 @@ export default function App() {
       }
       setAuthPassword("");
     } catch (error) {
-      setAuthStatus(`Could not ${authMode === "sign-up" ? "create account" : "sign in"}: ${error.message}`);
+      setAuthStatus(
+        `Could not ${authMode === "sign-up" ? "create account" : "sign in"}: ${error.message}`,
+      );
     } finally {
       setAuthBusy(false);
     }
@@ -1168,7 +1220,9 @@ export default function App() {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
       setBackgroundPushEnabled(false);
-      setNotificationStatus("Signed out. Background reminders are disabled on this device.");
+      setNotificationStatus(
+        "Signed out. Background reminders are disabled on this device.",
+      );
     } catch (error) {
       setAuthStatus(`Could not sign out: ${error.message}`);
     } finally {
@@ -1180,7 +1234,9 @@ export default function App() {
     if (!pushBackendConfigured) {
       if (!("Notification" in window)) {
         setNotificationPermission("unsupported");
-        setNotificationStatus("System notifications are not supported by this browser.");
+        setNotificationStatus(
+          "System notifications are not supported by this browser.",
+        );
         return;
       }
       let permission = window.Notification.permission;
@@ -1188,7 +1244,9 @@ export default function App() {
         try {
           permission = await window.Notification.requestPermission();
         } catch (error) {
-          setNotificationStatus(`Could not request notification permission: ${error.message}`);
+          setNotificationStatus(
+            `Could not request notification permission: ${error.message}`,
+          );
           return;
         }
       }
@@ -1212,9 +1270,13 @@ export default function App() {
             body: "Notifications can appear while this app is open.",
           });
         }
-        setNotificationStatus("Notifications are allowed. Background reminders need backend setup.");
+        setNotificationStatus(
+          "Notifications are allowed. Background reminders need backend setup.",
+        );
       } catch (error) {
-        setNotificationStatus(`Could not show a system notification: ${error.message}`);
+        setNotificationStatus(
+          `Could not show a system notification: ${error.message}`,
+        );
       }
       return;
     }
@@ -1230,25 +1292,35 @@ export default function App() {
       window.matchMedia("(display-mode: standalone)").matches ||
       window.navigator.standalone === true;
     if (isIos && !installed) {
-      setNotificationStatus("On iPhone or iPad, add Spend to your Home Screen and open it there before enabling notifications.");
+      setNotificationStatus(
+        "On iPhone or iPad, add Spend to your Home Screen and open it there before enabling notifications.",
+      );
       return;
     }
     if (!("Notification" in window)) {
       setNotificationPermission("unsupported");
-      setNotificationStatus("System notifications are not supported by this browser.");
+      setNotificationStatus(
+        "System notifications are not supported by this browser.",
+      );
       return;
     }
     if (!("PushManager" in window) || !("serviceWorker" in navigator)) {
-      setNotificationStatus("Background push is not supported by this browser.");
+      setNotificationStatus(
+        "Background push is not supported by this browser.",
+      );
       return;
     }
     if (backgroundPushEnabled) {
       try {
         await disableBackgroundPush(pushUser.id);
         setBackgroundPushEnabled(false);
-        setNotificationStatus("Background reminders are disabled on this device.");
+        setNotificationStatus(
+          "Background reminders are disabled on this device.",
+        );
       } catch (error) {
-        setNotificationStatus(`Could not disable background reminders: ${error.message}`);
+        setNotificationStatus(
+          `Could not disable background reminders: ${error.message}`,
+        );
       }
       return;
     }
@@ -1257,38 +1329,54 @@ export default function App() {
       try {
         permission = await window.Notification.requestPermission();
       } catch (error) {
-        setNotificationStatus(`Could not request notification permission: ${error.message}`);
+        setNotificationStatus(
+          `Could not request notification permission: ${error.message}`,
+        );
         return;
       }
     }
     setNotificationPermission(permission);
     if (permission === "denied") {
-      setNotificationStatus("Allow notifications for this site in your browser settings, then reload the app.");
+      setNotificationStatus(
+        "Allow notifications for this site in your browser settings, then reload the app.",
+      );
       return;
     }
     try {
       const { registration } = await enableBackgroundPush(pushUser.id);
       setBackgroundPushEnabled(true);
-      setNotificationStatus("Background reminders are enabled. You’ll get a push when a recurring expense is due.");
+      setNotificationStatus(
+        "Background reminders are enabled. You’ll get a push when a recurring expense is due.",
+      );
       try {
         await registration.showNotification("Spend notifications enabled", {
           body: "Background reminders are working on this device.",
         });
       } catch (error) {
-        setNotificationStatus(`Background reminders are enabled, but the test notification could not be shown: ${error.message}`);
+        setNotificationStatus(
+          `Background reminders are enabled, but the test notification could not be shown: ${error.message}`,
+        );
       }
     } catch (error) {
-      setNotificationStatus(`Could not enable background reminders: ${error.message}`);
+      setNotificationStatus(
+        `Could not enable background reminders: ${error.message}`,
+      );
     }
   }
 
   useEffect(() => {
     if (notificationPermission === "unsupported") {
-      setNotificationStatus("System notifications are not supported by this browser.");
+      setNotificationStatus(
+        "System notifications are not supported by this browser.",
+      );
     } else if (notificationPermission === "denied") {
-      setNotificationStatus("Allow notifications for this site in your browser settings, then reload the app.");
+      setNotificationStatus(
+        "Allow notifications for this site in your browser settings, then reload the app.",
+      );
     } else if (notificationPermission === "default") {
-      setNotificationStatus("Allow notifications to get reminders while this app is open.");
+      setNotificationStatus(
+        "Allow notifications to get reminders while this app is open.",
+      );
     }
   }, [notificationPermission]);
 
@@ -1315,7 +1403,9 @@ export default function App() {
     <main>
       <header>
         <div className="brand">
-          <span className="brand-mark" aria-hidden="true">↗</span>
+          <span className="brand-mark" aria-hidden="true">
+            ↗
+          </span>
           <span>Spend</span>
         </div>
         <div
@@ -1337,10 +1427,14 @@ export default function App() {
           aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
           aria-pressed={theme === "dark"}
           title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-          onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")}
+          onClick={() =>
+            setTheme((current) => (current === "dark" ? "light" : "dark"))
+          }
         >
           <span aria-hidden="true">{theme === "dark" ? "☀" : "☾"}</span>
-          <span className="theme-label">{theme === "dark" ? "Light" : "Dark"}</span>
+          <span className="theme-label">
+            {theme === "dark" ? "Light" : "Dark"}
+          </span>
         </button>
         <div className={`header-actions${pushUser ? " is-authenticated" : ""}`}>
           {pushBackendConfigured &&
@@ -1392,7 +1486,9 @@ export default function App() {
             <div className="auth-modal-heading">
               <div>
                 <h2 id="auth-modal-title">
-                  {authMode === "sign-up" ? "Create your Spend account" : "Sign in to Spend"}
+                  {authMode === "sign-up"
+                    ? "Create your Spend account"
+                    : "Sign in to Spend"}
                 </h2>
                 <p>Use your account for reminders and optional cloud sync.</p>
               </div>
@@ -1406,7 +1502,10 @@ export default function App() {
                 ×
               </button>
             </div>
-            <form className="push-auth-form auth-modal-form" onSubmit={handleAuthSubmit}>
+            <form
+              className="push-auth-form auth-modal-form"
+              onSubmit={handleAuthSubmit}
+            >
               <div className="push-auth-fields auth-modal-fields">
                 <div>
                   <label htmlFor="push-email">Email</label>
@@ -1425,7 +1524,11 @@ export default function App() {
                   <input
                     id="push-password"
                     type="password"
-                    autoComplete={authMode === "sign-up" ? "new-password" : "current-password"}
+                    autoComplete={
+                      authMode === "sign-up"
+                        ? "new-password"
+                        : "current-password"
+                    }
                     minLength="6"
                     required
                     value={authPassword}
@@ -1446,11 +1549,15 @@ export default function App() {
                   type="button"
                   disabled={authBusy}
                   onClick={() => {
-                    setAuthMode((mode) => mode === "sign-up" ? "sign-in" : "sign-up");
+                    setAuthMode((mode) =>
+                      mode === "sign-up" ? "sign-in" : "sign-up",
+                    );
                     setAuthStatus("");
                   }}
                 >
-                  {authMode === "sign-up" ? "I already have an account" : "Create an account"}
+                  {authMode === "sign-up"
+                    ? "I already have an account"
+                    : "Create an account"}
                 </button>
               </div>
             </form>
@@ -1465,9 +1572,22 @@ export default function App() {
 
       <section className="summary" aria-labelledby="summary-title">
         <div className="summary-topline">
-          <p className="eyebrow" id="summary-title"><span className="summary-label-prefix">Month total · </span>BDT</p>
-          <div className="month-navigation" aria-label="Monthly total navigation">
-            <button className="month-step" type="button" aria-label="Previous month" title="Previous month" onClick={() => addMonth(-1)}>‹</button>
+          <p className="eyebrow" id="summary-title">
+            <span className="summary-label-prefix">Month total · </span>BDT
+          </p>
+          <div
+            className="month-navigation"
+            aria-label="Monthly total navigation"
+          >
+            <button
+              className="month-step"
+              type="button"
+              aria-label="Previous month"
+              title="Previous month"
+              onClick={() => addMonth(-1)}
+            >
+              ‹
+            </button>
             <label className="month-select">
               <span className="month-display" aria-hidden="true">
                 <span>{formatMonth(selectedMonth)}</span>
@@ -1479,14 +1599,28 @@ export default function App() {
                 aria-label="Choose month"
                 title="Choose month"
                 value={selectedMonth}
-                onChange={(event) => setSelectedMonth(event.target.value || currentMonth())}
+                onChange={(event) =>
+                  setSelectedMonth(event.target.value || currentMonth())
+                }
               />
             </label>
-            <button className="month-step" type="button" aria-label="Next month" title="Next month" onClick={() => addMonth(1)}>›</button>
+            <button
+              className="month-step"
+              type="button"
+              aria-label="Next month"
+              title="Next month"
+              onClick={() => addMonth(1)}
+            >
+              ›
+            </button>
           </div>
         </div>
-        <p className="total" aria-live="polite">{formatCurrency(monthlyTotal)}</p>
-        <p className="summary-caption">Across all expenses in {formatMonth(selectedMonth)}</p>
+        <p className="total" aria-live="polite">
+          {formatCurrency(monthlyTotal)}
+        </p>
+        <p className="summary-caption">
+          Across all expenses in {formatMonth(selectedMonth)}
+        </p>
         <button
           className="conversion-toggle"
           type="button"
@@ -1494,7 +1628,9 @@ export default function App() {
           onClick={toggleConversion}
         >
           <span>{conversionOpen ? "Hide conversion" : "Show conversion"}</span>
-        <span id="conversion-toggle-icon" aria-hidden="true">{conversionOpen ? "⌃" : "⌄"}</span>
+          <span id="conversion-toggle-icon" aria-hidden="true">
+            {conversionOpen ? "⌃" : "⌄"}
+          </span>
         </button>
         {conversionOpen && (
           <div className="conversion-details">
@@ -1514,9 +1650,14 @@ export default function App() {
             </div>
             {conversionReady && (
               <div className="converted-total-block">
-                <p className="converted-total-label">Estimated total in {targetCurrency}</p>
+                <p className="converted-total-label">
+                  Estimated total in {targetCurrency}
+                </p>
                 <p className="converted-total" aria-live="polite">
-                  {formatCurrency(monthlyTotal * conversionRate, targetCurrency)}
+                  {formatCurrency(
+                    monthlyTotal * conversionRate,
+                    targetCurrency,
+                  )}
                 </p>
               </div>
             )}
@@ -1524,10 +1665,25 @@ export default function App() {
               {conversionStatus}
             </p>
             <p className="conversion-disclaimer">
-              Indicative daily mid-market rate. Your bank or card provider may use a different rate. Source: <a href="https://frankfurter.dev/" target="_blank" rel="noopener noreferrer">Frankfurter</a>.
+              Indicative daily mid-market rate. Your bank or card provider may
+              use a different rate. Source:{" "}
+              <a
+                href="https://frankfurter.dev/"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Frankfurter
+              </a>
+              .
             </p>
             {conversionFailed && (
-              <button className="retry-rate" type="button" onClick={retryConversion}>Try again</button>
+              <button
+                className="retry-rate"
+                type="button"
+                onClick={retryConversion}
+              >
+                Try again
+              </button>
             )}
           </div>
         )}
@@ -1551,7 +1707,12 @@ export default function App() {
                 required
                 autoComplete="off"
                 value={expenseForm.description}
-                onChange={(event) => setExpenseForm({ ...expenseForm, description: event.target.value })}
+                onChange={(event) =>
+                  setExpenseForm({
+                    ...expenseForm,
+                    description: event.target.value,
+                  })
+                }
               />
             </div>
             <div>
@@ -1565,7 +1726,9 @@ export default function App() {
                 inputMode="decimal"
                 required={expenseForm.interval !== "none"}
                 value={expenseForm.amount}
-                onChange={(event) => setExpenseForm({ ...expenseForm, amount: event.target.value })}
+                onChange={(event) =>
+                  setExpenseForm({ ...expenseForm, amount: event.target.value })
+                }
               />
             </div>
             <div>
@@ -1573,9 +1736,16 @@ export default function App() {
               <select
                 id="expense-category"
                 value={expenseForm.category}
-                onChange={(event) => setExpenseForm({ ...expenseForm, category: event.target.value })}
+                onChange={(event) =>
+                  setExpenseForm({
+                    ...expenseForm,
+                    category: event.target.value,
+                  })
+                }
               >
-                {CATEGORIES.map((category) => <option key={category}>{category}</option>)}
+                {CATEGORIES.map((category) => (
+                  <option key={category}>{category}</option>
+                ))}
               </select>
             </div>
             <div>
@@ -1585,7 +1755,9 @@ export default function App() {
                 type="date"
                 required
                 value={expenseForm.date}
-                onChange={(event) => setExpenseForm({ ...expenseForm, date: event.target.value })}
+                onChange={(event) =>
+                  setExpenseForm({ ...expenseForm, date: event.target.value })
+                }
               />
             </div>
             <div>
@@ -1593,7 +1765,12 @@ export default function App() {
               <select
                 id="expense-repeat"
                 value={expenseForm.interval}
-                onChange={(event) => setExpenseForm({ ...expenseForm, interval: event.target.value })}
+                onChange={(event) =>
+                  setExpenseForm({
+                    ...expenseForm,
+                    interval: event.target.value,
+                  })
+                }
               >
                 <option value="none">Does not repeat</option>
                 <option value="weekly">Weekly</option>
@@ -1605,7 +1782,12 @@ export default function App() {
               <select
                 id="expense-account"
                 value={expenseForm.account}
-                onChange={(event) => setExpenseForm({ ...expenseForm, account: event.target.value })}
+                onChange={(event) =>
+                  setExpenseForm({
+                    ...expenseForm,
+                    account: event.target.value,
+                  })
+                }
               >
                 <option value="">Cash / Other (not tracked)</option>
                 <option value="bkash">bKash</option>
@@ -1621,7 +1803,11 @@ export default function App() {
             </span>
             <button type="submit">Add expense</button>
           </div>
-          {expenseMessage && <p className="form-message" role="alert">{expenseMessage}</p>}
+          {expenseMessage && (
+            <p className="form-message" role="alert">
+              {expenseMessage}
+            </p>
+          )}
         </form>
       </section>
 
@@ -1629,7 +1815,9 @@ export default function App() {
         <div className="account-panel-header">
           <div>
             <h2 id="accounts-title">Account balances</h2>
-            <p className="account-intro">Updated as you log expenses and account activity.</p>
+            <p className="account-intro">
+              Updated as you log expenses and account activity.
+            </p>
           </div>
         </div>
         <div className="account-cards">
@@ -1668,7 +1856,12 @@ export default function App() {
                   placeholder="0.00"
                   required
                   value={startingBalances.bkash}
-                  onChange={(event) => setStartingBalances({ ...startingBalances, bkash: event.target.value })}
+                  onChange={(event) =>
+                    setStartingBalances({
+                      ...startingBalances,
+                      bkash: event.target.value,
+                    })
+                  }
                 />
               </div>
               <div>
@@ -1682,7 +1875,12 @@ export default function App() {
                   placeholder="0.00"
                   required
                   value={startingBalances.bank}
-                  onChange={(event) => setStartingBalances({ ...startingBalances, bank: event.target.value })}
+                  onChange={(event) =>
+                    setStartingBalances({
+                      ...startingBalances,
+                      bank: event.target.value,
+                    })
+                  }
                 />
               </div>
               <div>
@@ -1692,7 +1890,12 @@ export default function App() {
                   type="date"
                   required
                   value={startingBalances.date}
-                  onChange={(event) => setStartingBalances({ ...startingBalances, date: event.target.value })}
+                  onChange={(event) =>
+                    setStartingBalances({
+                      ...startingBalances,
+                      date: event.target.value,
+                    })
+                  }
                 />
               </div>
             </div>
@@ -1700,7 +1903,8 @@ export default function App() {
               <button type="submit">Save starting balances</button>
             </div>
             <p className="account-form-note">
-              Earlier expenses stay in history and won’t change these starting balances.
+              Earlier expenses stay in history and won’t change these starting
+              balances.
             </p>
           </form>
         </details>
@@ -1714,7 +1918,12 @@ export default function App() {
                 <select
                   id="transaction-type"
                   value={transactionForm.type}
-                  onChange={(event) => setTransactionForm({ ...transactionForm, type: event.target.value })}
+                  onChange={(event) =>
+                    setTransactionForm({
+                      ...transactionForm,
+                      type: event.target.value,
+                    })
+                  }
                 >
                   <option value="income">Income</option>
                   <option value="adjustment">Balance adjustment</option>
@@ -1732,7 +1941,12 @@ export default function App() {
                   placeholder="0.00"
                   required
                   value={transactionForm.amount}
-                  onChange={(event) => setTransactionForm({ ...transactionForm, amount: event.target.value })}
+                  onChange={(event) =>
+                    setTransactionForm({
+                      ...transactionForm,
+                      amount: event.target.value,
+                    })
+                  }
                 />
               </div>
               <div>
@@ -1742,7 +1956,12 @@ export default function App() {
                   type="date"
                   required
                   value={transactionForm.date}
-                  onChange={(event) => setTransactionForm({ ...transactionForm, date: event.target.value })}
+                  onChange={(event) =>
+                    setTransactionForm({
+                      ...transactionForm,
+                      date: event.target.value,
+                    })
+                  }
                 />
               </div>
               <div className="account-note-field">
@@ -1754,7 +1973,12 @@ export default function App() {
                   placeholder="e.g. Salary, cash deposit"
                   autoComplete="off"
                   value={transactionForm.note}
-                  onChange={(event) => setTransactionForm({ ...transactionForm, note: event.target.value })}
+                  onChange={(event) =>
+                    setTransactionForm({
+                      ...transactionForm,
+                      note: event.target.value,
+                    })
+                  }
                 />
               </div>
               {transactionForm.type !== "transfer" && (
@@ -1763,7 +1987,12 @@ export default function App() {
                   <select
                     id="transaction-account"
                     value={transactionForm.account}
-                    onChange={(event) => setTransactionForm({ ...transactionForm, account: event.target.value })}
+                    onChange={(event) =>
+                      setTransactionForm({
+                        ...transactionForm,
+                        account: event.target.value,
+                      })
+                    }
                   >
                     <option value="bkash">bKash</option>
                     <option value="bank">Bank</option>
@@ -1776,7 +2005,12 @@ export default function App() {
                   <select
                     id="adjustment-direction"
                     value={transactionForm.direction}
-                    onChange={(event) => setTransactionForm({ ...transactionForm, direction: event.target.value })}
+                    onChange={(event) =>
+                      setTransactionForm({
+                        ...transactionForm,
+                        direction: event.target.value,
+                      })
+                    }
                   >
                     <option value="increase">Increase balance</option>
                     <option value="decrease">Decrease balance</option>
@@ -1790,7 +2024,9 @@ export default function App() {
                     <select
                       id="transfer-from"
                       value={transactionForm.fromAccount}
-                      onChange={(event) => changeTransferAccount("fromAccount", event.target.value)}
+                      onChange={(event) =>
+                        changeTransferAccount("fromAccount", event.target.value)
+                      }
                     >
                       <option value="bkash">bKash</option>
                       <option value="bank">Bank</option>
@@ -1801,7 +2037,9 @@ export default function App() {
                     <select
                       id="transfer-to"
                       value={transactionForm.toAccount}
-                      onChange={(event) => changeTransferAccount("toAccount", event.target.value)}
+                      onChange={(event) =>
+                        changeTransferAccount("toAccount", event.target.value)
+                      }
                     >
                       <option value="bank">Bank</option>
                       <option value="bkash">bKash</option>
@@ -1826,12 +2064,17 @@ export default function App() {
                   <li className="account-activity-row" key={activity.id}>
                     <div className="account-activity-info">
                       <div className="account-activity-title">
-                        {activity.description ? `${label} · ${activity.description}` : label}
+                        {activity.description
+                          ? `${label} · ${activity.description}`
+                          : label}
                       </div>
-                      <div className="account-activity-date">{formatDate(activity.date)}</div>
+                      <div className="account-activity-date">
+                        {formatDate(activity.date)}
+                      </div>
                     </div>
                     <span className="account-activity-amount">
-                      {accountActivityPrefix(activity)}{formatCurrency(activity.amount)}
+                      {accountActivityPrefix(activity)}
+                      {formatCurrency(activity.amount)}
                     </span>
                     <button
                       className="remove"
@@ -1839,20 +2082,27 @@ export default function App() {
                       title="Remove account activity"
                       aria-label={`Remove ${label}${activity.description ? ` ${activity.description}` : ""}`}
                       onClick={() => removeAccountActivity(activity)}
-                    >×</button>
+                    >
+                      ×
+                    </button>
                   </li>
                 );
               })}
             </ul>
           ) : (
-            <p className="account-activity-empty">Your recent expenses and account activity will appear here.</p>
+            <p className="account-activity-empty">
+              Your recent expenses and account activity will appear here.
+            </p>
           )}
         </details>
       </section>
 
       <section className="panel" aria-labelledby="budget-title">
         <h2 id="budget-title">Monthly budget</h2>
-        <p className="currency-hint">For {formatMonth(selectedMonth)}. All expenses in this month count toward the budget.</p>
+        <p className="currency-hint">
+          For {formatMonth(selectedMonth)}. All expenses in this month count
+          toward the budget.
+        </p>
         <form className="budget-form" onSubmit={saveBudget}>
           <div className="budget-field">
             <label htmlFor="monthly-budget">Budget (BDT)</label>
@@ -1869,7 +2119,15 @@ export default function App() {
             />
           </div>
           <button type="submit">Save budget</button>
-          {monthBudget > 0 && <button className="clear-budget" type="button" onClick={clearBudget}>Clear</button>}
+          {monthBudget > 0 && (
+            <button
+              className="clear-budget"
+              type="button"
+              onClick={clearBudget}
+            >
+              Clear
+            </button>
+          )}
         </form>
         {monthBudget > 0 ? (
           <div className="budget-meter">
@@ -1886,7 +2144,8 @@ export default function App() {
                 className="progress-fill"
                 style={{
                   width: `${budgetProgress}%`,
-                  background: budgetPercentage > 100 ? "var(--danger)" : "var(--green)",
+                  background:
+                    budgetPercentage > 100 ? "var(--danger)" : "var(--green)",
                 }}
               />
             </div>
@@ -1900,78 +2159,94 @@ export default function App() {
             </div>
           </div>
         ) : (
-          <p className="budget-empty">Add a budget to track your monthly spending.</p>
+          <p className="budget-empty">
+            Add a budget to track your monthly spending.
+          </p>
         )}
       </section>
 
-      <section className="panel" aria-labelledby="recurring-title">
+      <section
+        className="panel recurring-panel"
+        aria-labelledby="recurring-title"
+      >
         <h2 id="recurring-title">Recurring expenses</h2>
-        <p className="currency-hint">Weekly or monthly entries are added when they come due and you open the app. Sign in and enable background reminders to get system notifications while Spend is closed.</p>
+        <p className="currency-hint">
+          Weekly/monthly expenses are added when due. Sign in for reminders
+          while closed.
+        </p>
         {recurringReminder && (
-          <p className="recurring-reminder" role="status" aria-live="polite">{recurringReminder}</p>
+          <p className="recurring-reminder" role="status" aria-live="polite">
+            {recurringReminder}
+          </p>
         )}
         {pushBackendConfigured ? (
           <>
             <p className="push-setup-note">
-              Background push stores your device subscription and reminder details in Supabase. Expense history and amounts stay on this device unless you enable cloud sync.
+              Reminder settings use Supabase. Expenses stay local unless sync
+              is on.
             </p>
             {pushUser ? (
               <div className="cloud-sync-panel">
-                  <h3>Expense cloud sync</h3>
-                  <p className="push-setup-note">
-                    {cloudSyncEnabled
-                      ? "Your expenses, amounts, budgets, recurring schedules, account balances, and transactions sync to your Supabase account. A copy also stays on this device."
-                      : "Turn this on to store and sync your expenses, amounts, budgets, recurring schedules, and account data in your Supabase account. This is optional; local storage and backups remain available."}
-                  </p>
-                  <div className="push-auth-actions">
-                    {cloudSyncEnabled ? (
-                      <>
-                        <button
-                          className="push-account-action"
-                          type="button"
-                          disabled={authBusy}
-                          onClick={disableCloudSync}
-                        >
-                          Pause cloud sync
-                        </button>
-                        <button
-                          className="push-account-action"
-                          type="button"
-                          disabled={authBusy}
-                          onClick={removeCloudCopy}
-                        >
-                          Delete cloud copy
-                        </button>
-                      </>
-                    ) : (
+                <h3>Expense cloud sync</h3>
+                <p className="push-setup-note">
+                  {cloudSyncEnabled
+                    ? "Expenses, budgets, schedules, accounts and transactions sync to Supabase. A copy stays on this device."
+                    : "Optionally sync expenses and account data to Supabase. Local storage and backups remain available."}
+                </p>
+                <div className="push-auth-actions">
+                  {cloudSyncEnabled ? (
+                    <>
                       <button
+                        className="push-account-action"
                         type="button"
                         disabled={authBusy}
-                        onClick={enableCloudSync}
+                        onClick={disableCloudSync}
                       >
-                        Enable cloud sync
+                        Pause cloud sync
                       </button>
-                    )}
-                  </div>
-                  {cloudSyncStatus && (
-                    <p className="backup-status" role="status" aria-live="polite">
-                      {cloudSyncStatus}
-                    </p>
+                      <button
+                        className="push-account-action"
+                        type="button"
+                        disabled={authBusy}
+                        onClick={removeCloudCopy}
+                      >
+                        Delete cloud copy
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={authBusy}
+                      onClick={enableCloudSync}
+                    >
+                      Enable cloud sync
+                    </button>
                   )}
+                </div>
+                {cloudSyncStatus && (
+                  <p className="backup-status" role="status" aria-live="polite">
+                    {cloudSyncStatus}
+                  </p>
+                )}
               </div>
             ) : (
               <p className="push-setup-note">
-                Sign in from the top of the page to use cloud sync or background reminders.
+                Sign in for cloud sync and background reminders.
               </p>
             )}
           </>
         ) : (
           <p className="push-setup-note">
-            Background push is not configured yet. Existing notifications work while the app is open.
+            Background reminders are not configured. Notifications work while
+            Spend is open.
           </p>
         )}
         {pushUser && authStatus && (
-          <p className="notification-status push-auth-status" role="status" aria-live="polite">
+          <p
+            className="notification-status push-auth-status"
+            role="status"
+            aria-live="polite"
+          >
             {authStatus}
           </p>
         )}
@@ -1998,56 +2273,84 @@ export default function App() {
                       ? "Send test notification"
                       : "Enable system notifications"}
           </button>
-          <p className="notification-status" role="status" aria-live="polite">{notificationStatus}</p>
+          <p className="notification-status" role="status" aria-live="polite">
+            {notificationStatus}
+          </p>
         </div>
         {recurringSchedules.length ? (
           <ul className="recurring-list">
             {recurringSchedules.map((schedule) => {
-              const cadence = schedule.interval === "weekly" ? "Weekly" : "Monthly";
-              const paymentAccount = isAccountId(schedule.account) ? ` · ${accountName(schedule.account)}` : "";
+              const cadence =
+                schedule.interval === "weekly" ? "Weekly" : "Monthly";
+              const paymentAccount = isAccountId(schedule.account)
+                ? ` · ${accountName(schedule.account)}`
+                : "";
               return (
                 <li className="recurring-row" key={schedule.id}>
                   <div className="recurring-info">
                     <div className="recurring-name">{schedule.description}</div>
                     <div className="recurring-meta">
-                      {schedule.active ? cadence : `Paused · ${cadence}`} · {schedule.category}{paymentAccount} · Next {formatDate(schedule.nextDate)}
+                      {schedule.active ? cadence : `Paused · ${cadence}`} ·{" "}
+                      {schedule.category}
+                      {paymentAccount} · Next {formatDate(schedule.nextDate)}
                     </div>
                   </div>
-                  <span className="recurring-amount">{formatCurrency(schedule.amount)}</span>
+                  <span className="recurring-amount">
+                    {formatCurrency(schedule.amount)}
+                  </span>
                   <div className="recurring-actions">
                     <button
                       className="recurring-action"
                       type="button"
                       aria-label={`${schedule.active ? "Pause" : "Resume"} ${schedule.description}`}
                       onClick={() => {
-                        setRecurringSchedules((current) => current.map((item) => {
-                          if (item.id !== schedule.id) return item;
-                          if (item.active) return { ...item, active: false };
-                          let nextDate = item.nextDate;
-                          let skipped = 0;
-                          while (nextDate <= localDate() && skipped < 240) {
-                            nextDate = nextOccurrenceDate(nextDate, item.interval, item.dayOfMonth);
-                            skipped += 1;
-                          }
-                          return { ...item, active: true, nextDate };
-                        }));
+                        setRecurringSchedules((current) =>
+                          current.map((item) => {
+                            if (item.id !== schedule.id) return item;
+                            if (item.active) return { ...item, active: false };
+                            let nextDate = item.nextDate;
+                            let skipped = 0;
+                            while (nextDate <= localDate() && skipped < 240) {
+                              nextDate = nextOccurrenceDate(
+                                nextDate,
+                                item.interval,
+                                item.dayOfMonth,
+                              );
+                              skipped += 1;
+                            }
+                            return { ...item, active: true, nextDate };
+                          }),
+                        );
                       }}
-                    >{schedule.active ? "Pause" : "Resume"}</button>
+                    >
+                      {schedule.active ? "Pause" : "Resume"}
+                    </button>
                     <button
                       className="recurring-action"
                       type="button"
                       onClick={() => {
-                        if (!window.confirm(`Remove the schedule for “${schedule.description}”? Existing expenses will stay in your list.`)) return;
-                        setRecurringSchedules((current) => current.filter((item) => item.id !== schedule.id));
+                        if (
+                          !window.confirm(
+                            `Remove the schedule for “${schedule.description}”? Existing expenses will stay in your list.`,
+                          )
+                        )
+                          return;
+                        setRecurringSchedules((current) =>
+                          current.filter((item) => item.id !== schedule.id),
+                        );
                       }}
-                    >Remove</button>
+                    >
+                      Remove
+                    </button>
                   </div>
                 </li>
               );
             })}
           </ul>
         ) : (
-          <p className="recurring-empty">Choose Weekly or Monthly in the expense form to add a recurring expense.</p>
+          <p className="recurring-empty">
+            Set a weekly or monthly schedule when adding an expense.
+          </p>
         )}
       </section>
 
@@ -2063,7 +2366,9 @@ export default function App() {
             disabled={!visibleExpenses.length}
             title="Export the selected month and current filters as a CSV file"
             onClick={exportExpenses}
-          >Export CSV</button>
+          >
+            Export CSV
+          </button>
         </div>
         <div className="filters">
           <input
@@ -2073,28 +2378,47 @@ export default function App() {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
-          <select aria-label="Filter by category" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
+          <select
+            aria-label="Filter by category"
+            value={categoryFilter}
+            onChange={(event) => setCategoryFilter(event.target.value)}
+          >
             <option value="">All categories</option>
-            {CATEGORIES.map((category) => <option key={category}>{category}</option>)}
+            {CATEGORIES.map((category) => (
+              <option key={category}>{category}</option>
+            ))}
           </select>
         </div>
         {visibleExpenses.length ? (
           <ul id="expense-list" aria-live="polite">
             {visibleExpenses.map((expense) => (
-              <li className={`expense-row${expense.amount === null && editingExpenseId === expense.id ? " editing-amount" : ""}`} key={expense.id}>
-                <span className="expense-icon" aria-hidden="true">↗</span>
+              <li
+                className={`expense-row${expense.amount === null && editingExpenseId === expense.id ? " editing-amount" : ""}`}
+                key={expense.id}
+              >
+                <span className="expense-icon" aria-hidden="true">
+                  ↗
+                </span>
                 <div className="expense-info">
                   <div className="expense-name">{expense.description}</div>
                   <div className="expense-date">
                     {expense.category} · {formatDate(expense.date)}
-                    {isAccountId(expense.account) ? ` · ${accountName(expense.account)}` : ""}
+                    {isAccountId(expense.account)
+                      ? ` · ${accountName(expense.account)}`
+                      : ""}
                     {expense.recurringId ? " · Recurring" : ""}
                   </div>
                 </div>
                 <div className="expense-end">
                   {expense.amount === null ? (
                     editingExpenseId === expense.id ? (
-                      <form className="inline-amount-form" aria-label={`Add amount for ${expense.description}`} onSubmit={(event) => saveMissingExpenseAmount(event, expense)}>
+                      <form
+                        className="inline-amount-form"
+                        aria-label={`Add amount for ${expense.description}`}
+                        onSubmit={(event) =>
+                          saveMissingExpenseAmount(event, expense)
+                        }
+                      >
                         <input
                           className="inline-amount-input"
                           type="number"
@@ -2106,10 +2430,23 @@ export default function App() {
                           required
                           autoFocus
                           value={editingAmount}
-                          onChange={(event) => setEditingAmount(event.target.value)}
+                          onChange={(event) =>
+                            setEditingAmount(event.target.value)
+                          }
                         />
-                        <button className="inline-save" type="submit">Save</button>
-                        <button className="inline-cancel" type="button" onClick={() => { setEditingExpenseId(null); setEditingAmount(""); }}>Cancel</button>
+                        <button className="inline-save" type="submit">
+                          Save
+                        </button>
+                        <button
+                          className="inline-cancel"
+                          type="button"
+                          onClick={() => {
+                            setEditingExpenseId(null);
+                            setEditingAmount("");
+                          }}
+                        >
+                          Cancel
+                        </button>
                       </form>
                     ) : (
                       <>
@@ -2118,16 +2455,27 @@ export default function App() {
                           className="add-amount-button"
                           type="button"
                           aria-label={`Add amount for ${expense.description}`}
-                          onClick={() => { setEditingExpenseId(expense.id); setEditingAmount(""); }}
-                        >Add amount</button>
+                          onClick={() => {
+                            setEditingExpenseId(expense.id);
+                            setEditingAmount("");
+                          }}
+                        >
+                          Add amount
+                        </button>
                       </>
                     )
                   ) : (
                     <div className="expense-amounts">
-                      <span className="expense-amount">{formatCurrency(expense.amount)}</span>
+                      <span className="expense-amount">
+                        {formatCurrency(expense.amount)}
+                      </span>
                       {conversionReady && (
                         <span className="converted-row">
-                          ≈ {formatCurrency(Number(expense.amount) * conversionRate, targetCurrency)}
+                          ≈{" "}
+                          {formatCurrency(
+                            Number(expense.amount) * conversionRate,
+                            targetCurrency,
+                          )}
                         </span>
                       )}
                     </div>
@@ -2137,8 +2485,14 @@ export default function App() {
                     type="button"
                     aria-label={`Remove ${expense.description}`}
                     title="Remove expense"
-                    onClick={() => setExpenses((current) => current.filter((item) => item.id !== expense.id))}
-                  >×</button>
+                    onClick={() =>
+                      setExpenses((current) =>
+                        current.filter((item) => item.id !== expense.id),
+                      )
+                    }
+                  >
+                    ×
+                  </button>
                 </div>
               </li>
             ))}
@@ -2152,31 +2506,6 @@ export default function App() {
         )}
       </section>
 
-      <section className="panel backup-panel" aria-labelledby="backup-title">
-        <h2 id="backup-title">Data backup</h2>
-        <p className="currency-hint">
-          Keep a copy outside this browser so you can restore it after clearing site data.
-        </p>
-        <div className="backup-actions">
-          <button type="button" onClick={downloadBackup}>Download backup</button>
-          <button
-            className="backup-restore"
-            type="button"
-            onClick={() => backupFileInputRef.current?.click()}
-          >
-            Restore backup
-          </button>
-          <input
-            ref={backupFileInputRef}
-            className="sr-only"
-            type="file"
-            accept=".json,application/json"
-            aria-label="Choose a Spend backup file"
-            onChange={restoreBackup}
-          />
-        </div>
-        <p className="backup-status" role="status" aria-live="polite">{backupStatus}</p>
-      </section>
     </main>
   );
 }

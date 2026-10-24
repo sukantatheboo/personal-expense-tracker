@@ -22,11 +22,17 @@ function dateInTimeZone(date: Date, timezone: string) {
     month: "2-digit",
     day: "2-digit",
   }).formatToParts(date);
-  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+  const values = Object.fromEntries(
+    parts.map(({ type, value }) => [type, value]),
+  );
   return `${values.year}-${values.month}-${values.day}`;
 }
 
-function nextOccurrence(dateValue: string, interval: string, dayOfMonth: number) {
+function nextOccurrence(
+  dateValue: string,
+  interval: string,
+  dayOfMonth: number,
+) {
   const [year, month, day] = dateValue.split("-").map(Number);
   if (interval === "weekly") {
     const date = new Date(Date.UTC(year, month - 1, day + 7));
@@ -78,11 +84,18 @@ function localNineAm(dateValue: string, timezone: string) {
 }
 
 Deno.serve(async (request) => {
-  if (request.method !== "POST") return response(405, { error: "Method not allowed." });
+  if (request.method !== "POST")
+    return response(405, { error: "Method not allowed." });
   if (!cronSecret || request.headers.get("x-cron-secret") !== cronSecret) {
     return response(401, { error: "Unauthorized." });
   }
-  if (!supabaseUrl || !serviceRoleKey || !vapidPublicKey || !vapidPrivateKey || !vapidSubject) {
+  if (
+    !supabaseUrl ||
+    !serviceRoleKey ||
+    !vapidPublicKey ||
+    !vapidPrivateKey ||
+    !vapidSubject
+  ) {
     console.error("Push reminder secrets are not configured.");
     return response(500, { error: "Push reminders are not configured." });
   }
@@ -124,7 +137,11 @@ Deno.serve(async (request) => {
       attempts += 1;
     }
     if (nextDate <= today) {
-      nextDate = nextOccurrence(today, reminder.interval, reminder.day_of_month);
+      nextDate = nextOccurrence(
+        today,
+        reminder.interval,
+        reminder.day_of_month,
+      );
     }
 
     const nextNotifyAt = localNineAm(nextDate, reminder.timezone);
@@ -165,7 +182,10 @@ Deno.serve(async (request) => {
         .eq("device_id", reminder.device_id)
         .eq("schedule_id", reminder.schedule_id);
       if (deleteError) {
-        console.error("Could not remove reminder without a push device:", deleteError.message);
+        console.error(
+          "Could not remove reminder without a push device:",
+          deleteError.message,
+        );
       }
       continue;
     }
@@ -186,7 +206,9 @@ Deno.serve(async (request) => {
         break;
       }
       if (
-        !["fcm.googleapis.com", "web.push.apple.com"].includes(endpoint.hostname) ||
+        !["fcm.googleapis.com", "web.push.apple.com"].includes(
+          endpoint.hostname,
+        ) ||
         endpoint.protocol !== "https:" ||
         device.subscription?.endpoint !== device.endpoint
       ) {
@@ -221,7 +243,10 @@ Deno.serve(async (request) => {
         .eq("user_id", reminder.user_id)
         .eq("device_id", reminder.device_id);
       if (deviceDeleteError) {
-        console.error("Could not remove expired push device:", deviceDeleteError.message);
+        console.error(
+          "Could not remove expired push device:",
+          deviceDeleteError.message,
+        );
       }
       const { error: reminderDeleteError } = await supabase
         .from("push_reminders")
@@ -229,7 +254,10 @@ Deno.serve(async (request) => {
         .eq("user_id", reminder.user_id)
         .eq("device_id", reminder.device_id);
       if (reminderDeleteError) {
-        console.error("Could not remove reminders for expired device:", reminderDeleteError.message);
+        console.error(
+          "Could not remove reminders for expired device:",
+          reminderDeleteError.message,
+        );
       }
       continue;
     }

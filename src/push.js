@@ -25,7 +25,9 @@ function getDeviceId() {
 
 function vapidKeyBytes(value) {
   const padding = "=".repeat((4 - (value.length % 4)) % 4);
-  const decoded = atob((value + padding).replaceAll("-", "+").replaceAll("_", "/"));
+  const decoded = atob(
+    (value + padding).replaceAll("-", "+").replaceAll("_", "/"),
+  );
   return Uint8Array.from(decoded, (character) => character.charCodeAt(0));
 }
 
@@ -39,7 +41,9 @@ export async function enableBackgroundPush(userId) {
 
   const registration = await navigator.serviceWorker.getRegistration();
   if (!registration?.active) {
-    throw new Error("The installed Spend app needs to finish loading before push can be enabled.");
+    throw new Error(
+      "The installed Spend app needs to finish loading before push can be enabled.",
+    );
   }
   const subscription =
     (await registration.pushManager.getSubscription()) ||
@@ -48,7 +52,11 @@ export async function enableBackgroundPush(userId) {
       applicationServerKey: vapidKeyBytes(vapidPublicKey),
     }));
   const serialized = subscription.toJSON();
-  if (!serialized.endpoint || !serialized.keys?.p256dh || !serialized.keys?.auth) {
+  if (
+    !serialized.endpoint ||
+    !serialized.keys?.p256dh ||
+    !serialized.keys?.auth
+  ) {
     throw new Error("The browser returned an invalid push subscription.");
   }
 
@@ -83,7 +91,9 @@ export async function disableBackgroundPush(userId) {
   if (deviceError) throw deviceError;
   const subscription = await registration?.pushManager.getSubscription();
   if (subscription && !(await subscription.unsubscribe())) {
-    throw new Error("The browser could not unsubscribe from push notifications.");
+    throw new Error(
+      "The browser could not unsubscribe from push notifications.",
+    );
   }
 }
 
