@@ -1383,6 +1383,12 @@ export default function App() {
   }
 
   useEffect(() => {
+    if (notificationPermission === "granted" && pendingDueRef.current.length) {
+      sendSystemNotification([...pendingDueRef.current]);
+    }
+  }, [notificationPermission]);
+
+  useEffect(() => {
     if (notificationPermission === "unsupported") {
       setNotificationStatus(
         "System notifications are not supported by this browser.",

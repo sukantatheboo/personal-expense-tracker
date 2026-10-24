@@ -155,12 +155,14 @@ Deno.serve(async (request) => {
       .from("push_reminders")
       .update({
         next_notify_at: lockUntil,
+        claim_until: lockUntil,
         pending_notification: true,
       })
       .eq("user_id", reminder.user_id)
       .eq("device_id", reminder.device_id)
       .eq("schedule_id", reminder.schedule_id)
       .eq("next_notify_at", reminder.next_notify_at)
+      .lte("next_notify_at", now.toISOString())
       .select("schedule_id");
 
     if (claimError) {
@@ -267,11 +269,13 @@ Deno.serve(async (request) => {
       continue;
     }
 
+    const retryUntil = new Date(Date.now() + 5 * 60_000).toISOString();
     const update = deliveryFailed
-      ? { next_notify_at: new Date(Date.now() + 5 * 60_000).toISOString() }
+      ? { next_notify_at: retryUntil, claim_until: retryUntil }
       : {
           next_date: nextDate,
           next_notify_at: nextNotifyAt,
+          claim_until: null,
           pending_notification: false,
         };
     const { error: finishError } = await supabase
@@ -280,7 +284,8 @@ Deno.serve(async (request) => {
       .eq("user_id", reminder.user_id)
       .eq("device_id", reminder.device_id)
       .eq("schedule_id", reminder.schedule_id)
-      .eq("next_notify_at", lockUntil);
+      .eq("next_notify_at", lockUntil)
+      .eq("claim_until", lockUntil);
     if (finishError) {
       console.error("Could not finish reminder delivery:", finishError.message);
     }
