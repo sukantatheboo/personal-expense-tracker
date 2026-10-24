@@ -6,6 +6,7 @@
   --muted: #777d75;
   --label: #555b54;
   --line: #e7e9e4;
+  --header-divider: #505750;
   --field: #ffffff;
   --soft-green: #f0f4ef;
   --green: #39785d;
@@ -23,6 +24,7 @@
   --muted: #a1aaa0;
   --label: #c0c8bf;
   --line: #343d35;
+  --header-divider: #505750;
   --field: #191f1a;
   --soft-green: #29362d;
   --summary-green: #28553e;
@@ -78,6 +80,11 @@ header {
   border-bottom: 1px solid var(--line);
 }
 
+.header-topline,
+.header-bottomline {
+  display: contents;
+}
+
 .brand {
   display: flex;
   align-items: center;
@@ -86,6 +93,8 @@ header {
   font-size: 17px;
   font-weight: 650;
   letter-spacing: -0.02em;
+  grid-column: 1;
+  grid-row: 1;
 }
 
 .brand-mark {
@@ -107,6 +116,8 @@ header {
   color: var(--muted);
   font-size: 12px;
   white-space: nowrap;
+  grid-column: 2;
+  grid-row: 1;
 }
 
 .sync-status-dot {
@@ -128,6 +139,7 @@ header {
   gap: 12px;
   min-width: 0;
   grid-column: 4;
+  grid-row: 1;
 }
 
 .theme-toggle {
@@ -164,6 +176,19 @@ header {
   white-space: nowrap;
 }
 
+.header-avatar {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--soft-green);
+  color: var(--green);
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .header-account {
   display: flex;
   min-width: 0;
@@ -171,6 +196,11 @@ header {
   gap: 10px;
   padding-left: 12px;
   border-left: 1px solid var(--line);
+}
+
+.theme-toggle {
+  grid-column: 3;
+  grid-row: 1;
 }
 
 .header-account-action {
@@ -1464,6 +1494,92 @@ button:focus-visible,
 }
 
 @media (max-width: 800px) {
+  header {
+    display: block;
+    margin-bottom: 24px;
+    padding-bottom: 0;
+    border-bottom: 0;
+  }
+  .header-topline,
+  .header-bottomline {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .header-bottomline {
+    min-height: 54px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--header-divider);
+  }
+  .brand {
+    gap: 10px;
+    font-size: 24px;
+  }
+  .brand-mark {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    font-size: 21px;
+  }
+  .local-note {
+    flex: 0 1 auto;
+    grid-column: auto;
+    grid-row: auto;
+    max-width: 100%;
+    overflow: hidden;
+    text-align: left;
+    text-overflow: ellipsis;
+    font-size: 12px;
+  }
+  .theme-toggle {
+    width: 44px;
+    min-height: 44px;
+    grid-column: auto;
+    grid-row: auto;
+    border-radius: 50%;
+    background: var(--soft-green);
+  }
+  .header-avatar {
+    width: 32px;
+    height: 32px;
+    flex-basis: 32px;
+  }
+  .header-actions {
+    flex: 0 1 auto;
+    justify-content: flex-end;
+    gap: 8px;
+    grid-column: auto;
+    grid-row: auto;
+  }
+  .header-account {
+    justify-content: flex-end;
+    gap: 8px;
+    padding-left: 0;
+    border-left: 0;
+  }
+  .header-user {
+    max-width: clamp(48px, 22vw, 120px);
+    font-size: 12px;
+  }
+  .header-account-action {
+    min-height: 36px;
+    padding: 0 10px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    color: var(--ink);
+    font-size: 11px;
+  }
+  .header-account-action:hover {
+    background: var(--soft-green);
+    text-decoration: none;
+  }
+  .header-account-action:disabled {
+    border-color: var(--line);
+    color: var(--muted);
+    background: transparent;
+  }
   .recurring-panel {
     padding: 18px;
   }
@@ -1525,52 +1641,6 @@ button:focus-visible,
     width: min(100% - 24px, 1120px);
     padding-top: 24px;
     padding-bottom: calc(40px + env(safe-area-inset-bottom));
-  }
-  header {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas:
-      "brand theme"
-      "sync account";
-    align-items: center;
-    column-gap: 8px;
-    row-gap: 6px;
-    margin-bottom: 24px;
-    padding-bottom: 12px;
-  }
-  .brand {
-    grid-area: brand;
-  }
-  .local-note {
-    grid-area: sync;
-    max-width: 100%;
-    overflow: hidden;
-    text-align: left;
-    text-overflow: ellipsis;
-  }
-  .theme-toggle {
-    grid-area: theme;
-    width: 44px;
-    min-height: 44px;
-  }
-  .header-actions {
-    grid-area: account;
-    justify-self: end;
-    gap: 8px;
-  }
-  .header-account {
-    gap: 8px;
-    padding-left: 0;
-    border-left: 0;
-  }
-  .header-user {
-    max-width: clamp(52px, 24vw, 112px);
-    font-size: 12px;
-  }
-  .header-account-action {
-    min-height: 44px;
-    padding: 0 6px;
-    font-size: 11px;
   }
   .auth-modal-backdrop {
     padding: 8px;

@@ -1435,69 +1435,78 @@ export default function App() {
   return (
     <main>
       <header>
-        <div className="brand">
-          <span className="brand-mark" aria-hidden="true">
-            ↗
-          </span>
-          <span>Spend</span>
+        <div className="header-topline">
+          <div className="brand">
+            <span className="brand-mark" aria-hidden="true">
+              ↗
+            </span>
+            <span>Spend</span>
+          </div>
+          <button
+            className="theme-toggle"
+            type="button"
+            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+            aria-pressed={theme === "dark"}
+            title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+            onClick={() =>
+              setTheme((current) => (current === "dark" ? "light" : "dark"))
+            }
+          >
+            <span aria-hidden="true">{theme === "dark" ? "☀" : "☾"}</span>
+            <span className="theme-label">
+              {theme === "dark" ? "Light" : "Dark"}
+            </span>
+          </button>
         </div>
-        <div
-          className={`local-note${cloudSyncEnabled ? " is-sync-enabled" : " is-local-only"}`}
-          role="status"
-          aria-live="polite"
-          aria-label={
-            cloudSyncEnabled
-              ? "Expense cloud sync is on"
-              : "Expense data stays on this device"
-          }
-        >
-          <span className="sync-status-dot" aria-hidden="true" />
-          <span>{cloudSyncEnabled ? "Cloud sync on" : "Local only"}</span>
-        </div>
-        <button
-          className="theme-toggle"
-          type="button"
-          aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-          aria-pressed={theme === "dark"}
-          title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-          onClick={() =>
-            setTheme((current) => (current === "dark" ? "light" : "dark"))
-          }
-        >
-          <span aria-hidden="true">{theme === "dark" ? "☀" : "☾"}</span>
-          <span className="theme-label">
-            {theme === "dark" ? "Light" : "Dark"}
-          </span>
-        </button>
-        <div className={`header-actions${pushUser ? " is-authenticated" : ""}`}>
-          {pushBackendConfigured &&
-            (pushUser ? (
-              <div className="header-account">
-                <span className="header-user" title={pushUser.email}>
-                  {userDisplayName(pushUser)}
-                </span>
+        <div className="header-bottomline">
+          <div
+            className={`local-note${cloudSyncEnabled ? " is-sync-enabled" : " is-local-only"}`}
+            role="status"
+            aria-live="polite"
+            aria-label={
+              cloudSyncEnabled
+                ? "Expense cloud sync is on"
+                : "Expense data stays on this device"
+            }
+          >
+            <span className="sync-status-dot" aria-hidden="true" />
+            <span>{cloudSyncEnabled ? "Cloud sync on" : "Local only"}</span>
+          </div>
+          <div
+            className={`header-actions${pushUser ? " is-authenticated" : ""}`}
+          >
+            {pushBackendConfigured &&
+              (pushUser ? (
+                <div className="header-account">
+                  <span className="header-avatar" aria-hidden="true">
+                    {pushUser.email?.trim().slice(0, 1).toUpperCase() || "A"}
+                  </span>
+                  <span className="header-user" title={pushUser.email}>
+                    {userDisplayName(pushUser)}
+                  </span>
+                  <button
+                    className="header-account-action"
+                    type="button"
+                    disabled={authBusy}
+                    onClick={signOutOfPush}
+                  >
+                    Sign out
+                  </button>
+                </div>
+              ) : (
                 <button
                   className="header-account-action"
                   type="button"
-                  disabled={authBusy}
-                  onClick={signOutOfPush}
+                  ref={authTriggerRef}
+                  onClick={() => {
+                    setAuthStatus("");
+                    setAuthModalOpen(true);
+                  }}
                 >
-                  Sign out
+                  Sign in
                 </button>
-              </div>
-            ) : (
-              <button
-                className="header-account-action"
-                type="button"
-                ref={authTriggerRef}
-                onClick={() => {
-                  setAuthStatus("");
-                  setAuthModalOpen(true);
-                }}
-              >
-                Sign in
-              </button>
-            ))}
+              ))}
+          </div>
         </div>
       </header>
       {authModalOpen && !pushUser && (
