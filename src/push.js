@@ -97,11 +97,15 @@ export async function disableBackgroundPush(userId) {
   }
 }
 
-export async function syncBackgroundSchedules(userId, schedules) {
+export async function syncBackgroundSchedules(userId, schedules, reminderTime) {
   if (!supabase) throw new Error("Background push has not been configured.");
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(reminderTime)) {
+    throw new Error("Choose a valid reminder time.");
+  }
 
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const deviceId = getDeviceId();
+  const [hours, minutes] = reminderTime.split(":").map(Number);
   const reminders = schedules.map((schedule) => {
     const [year, month, day] = schedule.nextDate.split("-").map(Number);
     return {
@@ -112,8 +116,15 @@ export async function syncBackgroundSchedules(userId, schedules) {
       interval: schedule.interval,
       day_of_month: schedule.dayOfMonth,
       next_date: schedule.nextDate,
-      next_notify_at: new Date(year, month - 1, day, 9).toISOString(),
+      next_notify_at: new Date(
+        year,
+        month - 1,
+        day,
+        hours,
+        minutes,
+      ).toISOString(),
       timezone,
+      reminder_time: reminderTime,
       active: schedule.active,
     };
   });

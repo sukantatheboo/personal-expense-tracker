@@ -50,9 +50,10 @@ function nextOccurrence(
   ].join("-");
 }
 
-function localNineAm(dateValue: string, timezone: string) {
+function localTime(dateValue: string, timeValue: string, timezone: string) {
   const [year, month, day] = dateValue.split("-").map(Number);
-  const target = Date.UTC(year, month - 1, day, 9);
+  const [hour, minute] = timeValue.split(":").map(Number);
+  const target = Date.UTC(year, month - 1, day, hour, minute);
   let candidate = target;
   const formatter = new Intl.DateTimeFormat("en-GB", {
     timeZone: timezone,
@@ -144,7 +145,11 @@ Deno.serve(async (request) => {
       );
     }
 
-    const nextNotifyAt = localNineAm(nextDate, reminder.timezone);
+    const nextNotifyAt = localTime(
+      nextDate,
+      reminder.reminder_time,
+      reminder.timezone,
+    );
     const lockUntil = new Date(now.getTime() + 5 * 60_000).toISOString();
     const { data: claimed, error: claimError } = await supabase
       .from("push_reminders")

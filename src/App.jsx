@@ -56,6 +56,19 @@ function loadCurrency() {
   }
 }
 
+function isValidReminderTime(value) {
+  return typeof value === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+}
+
+function loadReminderTime() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEYS.reminderTime);
+    return isValidReminderTime(saved) ? saved : "09:00";
+  } catch {
+    return "09:00";
+  }
+}
+
 function accountName(accountId) {
   return accountId === "bkash" ? "bKash" : "Bank";
 }
@@ -205,6 +218,7 @@ export default function App() {
   const [accountData, setAccountData] = useState(loadAccountData);
   const [theme, setTheme] = useState(loadTheme);
   const [targetCurrency, setTargetCurrency] = useState(loadCurrency);
+  const [reminderTime, setReminderTime] = useState(loadReminderTime);
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [expenseForm, setExpenseForm] = useState(makeExpenseForm);
   const [expenseMessage, setExpenseMessage] = useState("");
@@ -489,7 +503,11 @@ export default function App() {
     async function syncSchedules() {
       if (!active) return;
       try {
-        await syncBackgroundSchedules(pushUser.id, recurringSchedules);
+        await syncBackgroundSchedules(
+          pushUser.id,
+          recurringSchedules,
+          reminderTime,
+        );
         if (active) setAuthStatus("");
       } catch (error) {
         if (active)
@@ -503,7 +521,7 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, [backgroundPushEnabled, pushUser, recurringSchedules]);
+  }, [backgroundPushEnabled, pushUser, recurringSchedules, reminderTime]);
 
   useEffect(() => {
     if (!pushUser || !("serviceWorker" in navigator)) return undefined;
@@ -1382,6 +1400,21 @@ export default function App() {
 
   function toggleConversion() {
     setConversionOpen((open) => !open);
+  }
+
+  function updateReminderTime(value) {
+    if (!isValidReminderTime(value)) {
+      setNotificationStatus("Choose a valid reminder time.");
+      return;
+    }
+    setReminderTime(value);
+    try {
+      localStorage.setItem(STORAGE_KEYS.reminderTime, value);
+    } catch (error) {
+      setNotificationStatus(
+        `Could not save the reminder time on this device: ${error.message}`,
+      );
+    }
   }
 
   function retryConversion() {
@@ -2277,6 +2310,21 @@ export default function App() {
             {notificationStatus}
           </p>
         </div>
+        {pushBackendConfigured && pushUser && (
+          <div className="reminder-time-setting">
+            <label htmlFor="reminder-time">Reminder time</label>
+            <input
+              id="reminder-time"
+              type="time"
+              value={reminderTime}
+              aria-describedby="reminder-time-help"
+              onChange={(event) => updateReminderTime(event.target.value)}
+            />
+            <p className="notification-status" id="reminder-time-help">
+              All background reminders on this device use local time.
+            </p>
+          </div>
+        )}
         {recurringSchedules.length ? (
           <ul className="recurring-list">
             {recurringSchedules.map((schedule) => {
