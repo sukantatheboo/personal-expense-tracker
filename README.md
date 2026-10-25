@@ -38,6 +38,7 @@ Create a production build with `npm run build`. The site is built and deployed t
 - The **Refresh** control in Account balances reloads saved local account data and starting-balance values. When cloud sync is active, it also fetches the latest cloud snapshot and updates the local sync revision; it does not add transactions or perform automatic bank/bKash synchronization.
 - The monthly summary includes a compact category breakdown for the top spending categories with proportional bars. Expenses without an amount are excluded from totals and category percentages.
 - Cloud sync runs automatically while signed in and keeps a local copy on the device. Cloud sync is not an archival backup.
+- The header shows the signed-in email and the latest successful sync time so it is clear which account owns the current data.
 - The app reuses the existing `spend-*` storage keys, so data already saved for the published site remains available when the app is updated on the same origin.
 - Browser storage is erased when site data is cleared. CSV export is available for spreadsheet use.
 - The installable app shell can work offline after the first online visit. Currency conversion requires an internet connection.

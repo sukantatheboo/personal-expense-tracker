@@ -153,6 +153,16 @@ function userDisplayName(user) {
   return user?.email?.split("@")[0] || "Account";
 }
 
+function formatLastSynced(value) {
+  if (!value) return "";
+  const elapsed = Math.max(0, Date.now() - value);
+  if (elapsed < 60000) return "Synced just now";
+  const minutes = Math.floor(elapsed / 60000);
+  if (minutes < 60) return `Synced ${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  return `Synced ${hours}h ago`;
+}
+
 function shiftMonth(monthValue, offset) {
   const [year, month] = (monthValue || currentMonth()).split("-").map(Number);
   const shifted = new Date(year, month - 1 + offset, 1);
@@ -384,6 +394,7 @@ export default function App() {
   const [cloudSyncEnabled, setCloudSyncEnabled] = useState(false);
   const [cloudSyncReady, setCloudSyncReady] = useState(false);
   const [cloudSyncStatus, setCloudSyncStatus] = useState("");
+  const [lastSyncedAt, setLastSyncedAt] = useState(null);
   const [undoAction, setUndoAction] = useState(null);
   const [cloudSyncRetry, setCloudSyncRetry] = useState(0);
   const [accountRefreshBusy, setAccountRefreshBusy] = useState(false);
@@ -518,6 +529,7 @@ export default function App() {
         authUserIdRef.current = user?.id ?? null;
         setPushUser(user);
         setCloudSyncReady(false);
+        setLastSyncedAt(null);
         setCloudSyncEnabled(Boolean(user));
       }
     });
@@ -535,6 +547,7 @@ export default function App() {
       authUserIdRef.current = user?.id ?? null;
       setBackgroundPushEnabled(false);
       setCloudSyncReady(false);
+      setLastSyncedAt(null);
       cloudVersionRef.current = null;
       setCloudSyncEnabled(Boolean(user));
       setAuthStatus("");
@@ -598,6 +611,7 @@ export default function App() {
         adoptLocalDataForUser(pushUser.id);
         applyCloudSnapshot(merged);
         setCloudSyncReady(true);
+        setLastSyncedAt(Date.now());
         setCloudSyncStatus("Cloud sync is on. Your data is saved to Supabase.");
       } catch (error) {
         if (active) {
@@ -642,6 +656,7 @@ export default function App() {
           return;
         }
         cloudVersionRef.current = savedVersion;
+        setLastSyncedAt(Date.now());
         setCloudSyncStatus("Cloud sync is on. Your data is saved to Supabase.");
       } catch (error) {
         setCloudSyncStatus(`Could not sync your data: ${error.message}`);
@@ -1415,6 +1430,7 @@ export default function App() {
             applyCloudSnapshot(refreshed);
             setAccountData(refreshed.accountData);
             cloudVersionRef.current = remote.updated_at ?? cloudVersionRef.current;
+            setLastSyncedAt(Date.now());
             setCloudSyncStatus("Cloud data refreshed from Supabase.");
           }
 
@@ -1441,6 +1457,7 @@ export default function App() {
           loadRecurringSchedules(remote.data.recurringSchedules ?? []),
         );
         cloudVersionRef.current = remote.updated_at ?? cloudVersionRef.current;
+        setLastSyncedAt(Date.now());
         setCloudSyncStatus("Cloud data refreshed from Supabase.");
         setRecurringRefreshStatus(
           "Recurring expenses refreshed from Supabase.",
@@ -1760,6 +1777,11 @@ export default function App() {
                     ? "Cloud sync on"
                     : "Syncing…"}
             </span>
+            {pushUser && cloudSyncReady && lastSyncedAt && (
+              <span className="sync-last-saved">
+                {formatLastSynced(lastSyncedAt)}
+              </span>
+            )}
           </div>
           <div
             className={`header-actions${pushUser ? " is-authenticated" : ""}`}
@@ -1771,7 +1793,8 @@ export default function App() {
                     {pushUser.email?.trim().slice(0, 1).toUpperCase() || "A"}
                   </span>
                   <span className="header-user" title={pushUser.email}>
-                    {userDisplayName(pushUser)}
+                    <span>{userDisplayName(pushUser)}</span>
+                    <small>{pushUser.email}</small>
                   </span>
                   <button
                     className="header-account-action"
@@ -1821,7 +1844,7 @@ export default function App() {
                     ? "Create your Spend account"
                     : "Sign in to Spend"}
                 </h2>
-                <p>Use your account for reminders and optional cloud sync.</p>
+                <p>Use your account for reminders and automatic cloud sync.</p>
               </div>
               <button
                 className="auth-modal-close"

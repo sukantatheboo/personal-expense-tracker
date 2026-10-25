@@ -132,6 +132,11 @@ header {
   background: #4c9667;
 }
 
+.sync-last-saved {
+  color: var(--muted);
+  font-size: 11px;
+}
+
 .summary-insights {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -300,6 +305,8 @@ header {
 }
 
 .header-user {
+  display: grid;
+  gap: 1px;
   max-width: 160px;
   min-width: 0;
   overflow: hidden;
@@ -308,6 +315,14 @@ header {
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.header-user small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 450;
+  text-overflow: ellipsis;
 }
 
 .header-avatar {
