@@ -2039,6 +2039,7 @@ button:focus-visible,
   .theme-toggle {
     order: 3;
     width: 44px;
+    height: 44px;
     min-height: 44px;
     flex-basis: 44px;
     border-radius: 50%;
@@ -2125,6 +2126,20 @@ button:focus-visible,
     border-radius: 999px;
     color: var(--ink);
     font-size: 11px;
+  }
+  .header-actions > .header-account-action {
+    display: grid;
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
+    flex: 0 0 44px;
+    place-items: center;
+    padding: 0;
+    border-radius: 50%;
+    font-size: 10px;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    white-space: nowrap;
   }
   .header-account-action:hover {
     background: var(--soft-green);
@@ -2437,8 +2452,16 @@ button:focus-visible,
   }
   .theme-toggle {
     width: 40px;
+    height: 40px;
     min-height: 40px;
     flex-basis: 40px;
+  }
+  .header-actions > .header-account-action {
+    width: 40px;
+    height: 40px;
+    min-height: 40px;
+    flex-basis: 40px;
+    font-size: 9px;
   }
   .header-account-mobile summary,
   .header-account-mobile .header-avatar {
@@ -2493,7 +2516,16 @@ button:focus-visible,
   }
   .theme-toggle {
     width: 44px;
+    height: 44px;
     min-height: 44px;
+    flex-basis: 44px;
+  }
+  .header-actions > .header-account-action {
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
+    flex-basis: 44px;
+    font-size: 10px;
   }
 }
 
