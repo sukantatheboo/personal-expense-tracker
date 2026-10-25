@@ -2419,42 +2419,61 @@ button:focus-visible,
   .summary-topline {
     align-items: center;
     flex-direction: row;
-    gap: 12px;
+    flex-wrap: nowrap;
+    gap: 8px;
   }
   .summary-topline .eyebrow {
+    display: flex;
     flex: 1 1 auto;
     min-width: 0;
-    font-size: clamp(11px, 2.5cqi, 14px);
-    letter-spacing: 0.08em;
+    align-items: center;
+    gap: 4px;
+    overflow: hidden;
+    font-size: clamp(10px, 2.4cqi, 13px);
+    letter-spacing: 0.07em;
     white-space: nowrap;
   }
+  .summary-label-prefix {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   .summary-currency {
-    margin-left: 4px;
+    flex: 0 0 auto;
+    margin-left: 0;
     padding: 4px 7px;
   }
   .month-navigation {
-    flex: 0 1 auto;
+    flex: 0 0 auto;
+    min-width: 0;
     margin-left: auto;
-    min-height: 46px;
+    min-height: 40px;
   }
   .month-step {
-    width: 44px;
-    min-width: 44px;
-    min-height: 44px;
-    font-size: 24px;
+    width: 34px;
+    min-width: 34px;
+    min-height: 40px;
+    font-size: 21px;
   }
   .month-select {
-    min-height: 46px;
-    padding: 0 8px;
+    min-height: 40px;
+    padding: 0 6px;
     justify-content: center;
     border-color: rgba(255, 255, 255, 0.38);
     border-radius: 0;
-    flex: 0 0 auto;
+    flex: 0 1 auto;
   }
   .month-display {
-    width: 132px;
-    min-height: 44px;
-    font-size: 13px;
+    width: 84px;
+    min-height: 40px;
+    gap: 6px;
+    font-size: 12px;
+  }
+  .month-display-full {
+    display: none;
+  }
+  .month-display-compact {
+    display: block;
   }
   .month-picker {
     width: 100%;
@@ -2525,7 +2544,7 @@ button:focus-visible,
     padding: 0 3px;
   }
   .month-display {
-    width: 102px;
+    width: 84px;
     font-size: 12px;
   }
   .summary-total-line {
