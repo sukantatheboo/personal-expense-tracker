@@ -342,8 +342,8 @@ header {
 
 .summary {
   container: monthly-total / inline-size;
-  padding: clamp(24px, 4vw, 40px);
-  border-radius: 18px;
+  padding: clamp(28px, 5vw, 48px);
+  border-radius: 32px;
   background: var(--summary-green);
   color: white;
 }
@@ -367,24 +367,37 @@ header {
 .summary-topline .eyebrow {
   margin: 0;
 }
+.summary-currency {
+  display: inline-block;
+  margin-left: 5px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  letter-spacing: 0.04em;
+}
 .month-navigation {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 0;
   flex: 0 0 auto;
+  min-height: 58px;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  border-radius: 999px;
+  overflow: hidden;
 }
 .month-step {
   display: grid;
-  width: 38px;
-  min-width: 38px;
-  min-height: 38px;
+  width: 56px;
+  min-width: 56px;
+  min-height: 56px;
   place-items: center;
   padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.1);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: #fff;
-  font-size: 20px;
+  font-size: 28px;
   font-weight: 500;
   line-height: 1;
 }
@@ -395,13 +408,15 @@ header {
   position: relative;
   display: flex;
   width: max-content;
-  min-height: 38px;
+  min-height: 56px;
   align-items: center;
   margin: 0;
-  padding: 0 12px;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.1);
+  padding: 0 16px;
+  border: 0;
+  border-right: 1px solid rgba(255, 255, 255, 0.25);
+  border-left: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 0;
+  background: transparent;
   color: #fff;
   cursor: pointer;
   font-size: 13px;
@@ -410,8 +425,8 @@ header {
 }
 .month-display {
   display: flex;
-  width: 152px;
-  min-height: 38px;
+  width: 166px;
+  min-height: 56px;
   align-items: center;
   justify-content: space-between;
   gap: 4px;
@@ -492,8 +507,15 @@ header {
   font-variant-numeric: tabular-nums;
 }
 
+.summary-total-line {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 32px;
+}
+
 .summary-caption {
-  margin: 12px 0 0;
+  margin: 0;
   color: rgba(255, 255, 255, 0.76);
   font-size: 13px;
 }
@@ -503,13 +525,15 @@ header {
   width: 100%;
   align-items: center;
   justify-content: space-between;
-  min-height: 36px;
-  margin-top: 18px;
-  padding: 0 12px;
+  min-height: 62px;
+  margin-top: 34px;
+  padding: 0 28px;
   border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
   background: rgba(255, 255, 255, 0.1);
   color: #fff;
-  font-size: 12px;
+  font-size: 16px;
+  font-weight: 600;
   text-align: left;
 }
 #conversion-toggle-icon {
@@ -1902,42 +1926,49 @@ button:focus-visible,
 }
 
 @container monthly-total (max-width: 560px) {
+  .summary {
+    padding: 28px;
+    border-radius: 32px;
+  }
   .summary-topline {
     align-items: center;
     flex-direction: row;
-    gap: 8px;
+    gap: 12px;
   }
   .summary-topline .eyebrow {
     flex: 1 1 auto;
     min-width: 0;
-    font-size: clamp(8px, 2.5cqi, 11px);
-    letter-spacing: 0.055em;
+    font-size: clamp(11px, 2.5cqi, 14px);
+    letter-spacing: 0.08em;
     white-space: nowrap;
+  }
+  .summary-currency {
+    margin-left: 4px;
+    padding: 4px 7px;
   }
   .month-navigation {
     flex: 0 1 auto;
-    gap: 4px;
     margin-left: auto;
+    min-height: 48px;
   }
   .month-step {
-    width: 32px;
-    min-width: 32px;
-    min-height: 32px;
-    border-radius: 8px;
-    font-size: 17px;
+    width: 46px;
+    min-width: 46px;
+    min-height: 46px;
+    font-size: 24px;
   }
   .month-select {
-    min-width: 0;
-    min-height: 32px;
-    padding: 0 6px;
+    min-height: 46px;
+    padding: 0 10px;
     justify-content: center;
-    border-radius: 8px;
+    border-color: rgba(255, 255, 255, 0.38);
+    border-radius: 0;
     flex: 0 0 auto;
   }
   .month-display {
-    width: 112px;
-    min-height: 32px;
-    font-size: 11px;
+    width: 128px;
+    min-height: 46px;
+    font-size: 14px;
   }
   .month-picker {
     width: 100%;
@@ -1946,8 +1977,35 @@ button:focus-visible,
     padding: 0;
   }
   .total {
-    font-size: clamp(32px, 9vw, 46px);
+    font-size: clamp(32px, 8cqi, 48px);
     overflow-wrap: anywhere;
+  }
+  .summary-total-line {
+    gap: 8px;
+    margin-top: 26px;
+  }
+  .summary-caption {
+    min-width: 0;
+    margin: 0;
+    font-size: clamp(12px, 2.8cqi, 16px);
+    white-space: nowrap;
+  }
+  .summary-caption-month {
+    display: none;
+  }
+  .conversion-toggle {
+    min-height: 56px;
+    margin-top: 28px;
+    padding: 0 24px;
+    border-style: dashed;
+    font-size: 16px;
+    font-weight: 600;
+  }
+  #conversion-toggle-icon {
+    width: 24px;
+    height: 24px;
+    flex-basis: 24px;
+    font-size: 24px;
   }
 }
 
@@ -1964,30 +2022,28 @@ button:focus-visible,
     padding: 0 3px;
   }
   .month-display {
-    width: 86px;
-    font-size: 10px;
+    width: 102px;
+    font-size: 12px;
+  }
+  .summary-total-line {
+    display: block;
+  }
+  .summary-caption {
+    margin-top: 8px;
   }
 }
 
 @container monthly-total (max-width: 300px) {
   .summary-topline {
-    gap: 4px;
+    gap: 10px;
   }
   .summary-topline .eyebrow {
     flex: 0 0 auto;
     font-size: 10px;
     letter-spacing: 0.05em;
   }
-  .summary-label-prefix {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
+  .summary-currency {
+    padding: 3px 5px;
   }
   .month-navigation {
     gap: 2px;

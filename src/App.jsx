@@ -1621,7 +1621,8 @@ export default function App() {
       <section className="summary" aria-labelledby="summary-title">
         <div className="summary-topline">
           <p className="eyebrow" id="summary-title">
-            <span className="summary-label-prefix">Month total · </span>BDT
+            <span className="summary-label-prefix">Month total</span>
+            <span className="summary-currency">BDT</span>
           </p>
           <div
             className="month-navigation"
@@ -1663,12 +1664,18 @@ export default function App() {
             </button>
           </div>
         </div>
-        <p className="total" aria-live="polite">
-          {formatCurrency(monthlyTotal)}
-        </p>
-        <p className="summary-caption">
-          Across all expenses in {formatMonth(selectedMonth)}
-        </p>
+        <div className="summary-total-line">
+          <p className="total" aria-live="polite">
+            {formatCurrency(monthlyTotal)}
+          </p>
+          <p className="summary-caption">
+            Across all expenses
+            <span className="summary-caption-month">
+              {" "}
+              in {formatMonth(selectedMonth)}
+            </span>
+          </p>
+        </div>
         <button
           className="conversion-toggle"
           type="button"
