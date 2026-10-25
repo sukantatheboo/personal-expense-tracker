@@ -14,6 +14,7 @@ A React app for tracking everyday spending, monthly budgets, recurring expenses,
 - Review monthly totals and export the selected month and filters as CSV.
 - Set monthly budgets and track spending against them.
 - Track bKash and bank balances from starting amounts, linked expenses, income, transfers, and adjustments.
+- Refresh account balances from local storage at any time; signed-in users with cloud sync enabled can also load the latest Supabase snapshot.
 - Schedule weekly or monthly expenses. Due entries are added when the app is open; optional background push reminders can notify you when it is closed.
 - Convert monthly totals to another currency using estimated rates from [Frankfurter](https://frankfurter.dev/).
 - Switch between light and dark themes.
@@ -32,6 +33,7 @@ Create a production build with `npm run build`. The site is built and deployed t
 
 - Expenses, budgets, recurring schedules, account balances, and preferences are stored in this browser's local storage by default. After signing in, you can explicitly enable **Expense cloud sync** to store those records in your Supabase project and sync them when you enable sync on another device. Supabase applies row-level security so each signed-in user can access only their own cloud data.
 - On first sync, local records are uploaded if no cloud copy exists. If both copies contain data, Spend merges records by ID, with local records taking precedence for matching IDs and local monthly budgets taking precedence for matching months. Simultaneous edits from multiple devices are guarded by a revision check; if a conflict is detected, refresh the app to load and merge the latest copy.
+- The **Refresh** control in Account balances reloads saved local account data and starting-balance values. When cloud sync is active, it also fetches the latest cloud snapshot and updates the local sync revision; it does not add transactions or perform automatic bank/bKash synchronization.
 - Turning off cloud sync pauses uploads but keeps the cloud copy. **Delete cloud copy** removes the synced records from Supabase without deleting local data. Cloud sync is not an archival backup.
 - The app reuses the existing `spend-*` storage keys, so data already saved for the published site remains available when the app is updated on the same origin.
 - Browser storage is erased when site data is cleared. CSV export is available for spreadsheet use.

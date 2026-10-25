@@ -205,20 +205,26 @@ header {
 
 .header-account-action {
   min-height: 40px;
-  padding: 0 4px;
-  border: 0;
-  border-radius: 6px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 999px;
   background: transparent;
   color: var(--muted);
   font-size: 12px;
   font-weight: 550;
   white-space: nowrap;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    color 0.15s,
+    transform 0.15s;
 }
 
 .header-account-action:hover {
+  border-color: var(--line);
+  background: var(--soft-green);
   color: var(--ink);
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  text-decoration: none;
 }
 
 .header-account-action:disabled {
@@ -528,7 +534,7 @@ header {
   min-height: 62px;
   margin-top: 34px;
   padding: 0 28px;
-  border: 1px solid rgba(255, 255, 255, 0.28);
+  border: 1px dashed rgba(255, 255, 255, 0.5);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.1);
   color: #fff;
@@ -623,10 +629,80 @@ header {
   gap: 12px;
 }
 .account-intro {
-  margin: 5px 0 0;
+  margin: 7px 0 0;
   color: var(--muted);
   font-size: 12px;
   line-height: 1.5;
+}
+.account-refresh-button {
+  display: inline-flex;
+  min-height: 36px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  padding: 0 12px 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+.account-refresh-button:hover {
+  background: var(--soft-green);
+  border-color: var(--accent);
+  box-shadow: 0 4px 12px rgba(20, 83, 45, 0.1);
+}
+.account-refresh-button:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent) 28%, transparent);
+  outline-offset: 2px;
+}
+.account-refresh-button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+.account-refresh-button.is-busy .account-icon {
+  animation: account-refresh-spin 0.9s linear infinite;
+}
+.account-refresh-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+@keyframes account-refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.account-refresh-label {
+  line-height: 1;
+}
+.account-icon {
+  display: block;
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+.account-icon-bkash {
+  object-fit: contain;
+  color: transparent;
+  fill: none;
+  stroke: none;
 }
 section[aria-labelledby="accounts-title"] {
   container: account-balances / inline-size;
@@ -635,7 +711,8 @@ section[aria-labelledby="accounts-title"] {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
-  margin-top: 15px;
+  margin-top: 16px;
+  margin-bottom: 14px;
 }
 .account-card {
   display: grid;
@@ -643,37 +720,51 @@ section[aria-labelledby="accounts-title"] {
   align-items: center;
   gap: 8px;
   min-width: 0;
-  padding: 13px 15px;
+  min-height: 104px;
+  padding: 16px 18px;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 16px;
   background: var(--field);
 }
 .account-card-copy {
   min-width: 0;
 }
 .account-card-heading {
+  display: flex;
+  align-items: center;
+  gap: 9px;
   margin: 0;
   color: var(--muted);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 650;
+}
+.account-card-heading .account-icon {
+  width: 21px;
+  height: 21px;
+  flex: 0 0 21px;
+}
+.account-card-heading .account-icon-bkash {
+  width: 30px;
+  height: 30px;
+  flex-basis: 30px;
 }
 .account-balance {
   min-width: 0;
   margin: 0;
-  font-size: clamp(14px, 2.5vw, 20px);
-  font-weight: 620;
+  font-size: clamp(16px, 2.5vw, 22px);
+  font-weight: 650;
   letter-spacing: -0.04em;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 .account-meta {
-  margin: 4px 0 0;
+  margin: 5px 0 0;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.35;
 }
 .account-details {
-  margin-top: 10px;
+  margin-top: 0;
   border-top: 1px solid var(--line);
 }
 .account-details summary {
@@ -681,7 +772,8 @@ section[aria-labelledby="accounts-title"] {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 13px 2px;
+  min-height: 52px;
+  padding: 12px 2px;
   color: var(--ink);
   cursor: pointer;
   font-size: 13px;
@@ -690,6 +782,17 @@ section[aria-labelledby="accounts-title"] {
 }
 .account-details summary::-webkit-details-marker {
   display: none;
+}
+.account-summary-label {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+.account-summary-label .account-icon {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
 }
 .account-details summary::after {
   content: "+";
@@ -1486,21 +1589,40 @@ button:focus-visible,
 }
 
 @container account-balances (max-width: 520px) {
+  .account-refresh-button {
+    width: 36px;
+    min-height: 36px;
+    justify-content: center;
+    padding: 0;
+  }
+  .account-refresh-label {
+    display: none;
+  }
   .account-cards {
-    gap: 8px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
   }
   .account-card {
-    grid-template-columns: minmax(0, 1fr);
-    align-content: start;
-    gap: 7px;
-    padding: 10px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    min-height: 88px;
+    padding: 16px 18px;
+  }
+  .account-card-heading {
+    font-size: 16px;
+  }
+  .account-card-icon {
+    width: 20px;
+    height: 20px;
+    flex-basis: 20px;
   }
   .account-balance {
-    font-size: clamp(14px, 4cqi, 18px);
+    font-size: clamp(17px, 5cqi, 22px);
   }
   .account-meta {
-    margin-top: 3px;
-    font-size: 10px;
+    margin-top: 5px;
+    font-size: 12px;
   }
 }
 
@@ -1998,6 +2120,7 @@ button:focus-visible,
     margin-top: 28px;
     padding: 0 24px;
     border-style: dashed;
+    border-color: rgba(255, 255, 255, 0.5);
     font-size: 16px;
     font-weight: 600;
   }

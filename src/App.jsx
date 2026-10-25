@@ -28,6 +28,7 @@ import {
   supabase,
   syncBackgroundSchedules,
 } from "./push.js";
+
 import {
   CLOUD_SYNC_USER_KEY,
   deleteCloudData,
@@ -36,6 +37,68 @@ import {
 } from "./cloud-sync.js";
 
 const CURRENCY_API = "https://api.frankfurter.dev/v2";
+
+function AccountIcon({ name }) {
+  const paths = {
+    bkash: (
+      <>
+        <path d="M3 4.5 13.5 6 9.8 10.4 17 14 9.2 12.4 5.6 18 6.4 11.3 3 8.5l5.2.8Z" />
+        <path d="m13.5 6 2.2 1.1-4.6 3.3" />
+      </>
+    ),
+    bank: (
+      <>
+        <path d="m3 8 9-5 9 5" />
+        <path d="M5 9v8M9 9v8M15 9v8M19 9v8M3 19h18M2 8h20" />
+      </>
+    ),
+    wallet: (
+      <>
+        <path d="M4 6.5h14a2 2 0 0 1 2 2v9H4a2 2 0 0 1-2-2V6.5a2 2 0 0 1 2-2h12" />
+        <path d="M16 12h4M17 12a1 1 0 1 0 0 2" />
+      </>
+    ),
+    transfer: (
+      <>
+        <path d="M3 8h15M14 4l4 4-4 4M21 16H6M10 12l-4 4 4 4" />
+      </>
+    ),
+    history: (
+      <>
+        <path d="M4 8V3l-3 3 3 3" />
+        <path d="M4 6a9 9 0 1 1-1 9" />
+        <path d="M12 8v5l3 2" />
+      </>
+    ),
+    refresh: (
+      <>
+        <path d="M20 11a8 8 0 0 0-13.7-5.7L4 7.5" />
+        <path d="M4 3.5v4h4" />
+        <path d="M4 13a8 8 0 0 0 13.7 5.7L20 16.5" />
+        <path d="M20 20.5v-4h-4" />
+      </>
+    ),
+  };
+  return (
+    name === "bkash" ? (
+      <img
+        className="account-icon account-icon-bkash"
+        src={`${import.meta.env.BASE_URL}icons/bkash.svg`}
+        alt=""
+        aria-hidden="true"
+      />
+    ) : (
+    <svg
+      className={`account-icon account-icon-${name}`}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+    >
+      {paths[name]}
+    </svg>
+    )
+  );
+}
 
 function loadTheme() {
   try {
@@ -264,6 +327,8 @@ export default function App() {
   const [cloudSyncReady, setCloudSyncReady] = useState(false);
   const [cloudSyncStatus, setCloudSyncStatus] = useState("");
   const [cloudSyncRetry, setCloudSyncRetry] = useState(0);
+  const [accountRefreshBusy, setAccountRefreshBusy] = useState(false);
+  const [accountRefreshStatus, setAccountRefreshStatus] = useState("");
   const [backupStatus, setBackupStatus] = useState("");
   const authModalRef = useRef(null);
   const authTriggerRef = useRef(null);
@@ -1157,6 +1222,41 @@ export default function App() {
     }
   }
 
+  async function refreshAccounts() {
+      if (accountRefreshBusy) return;
+      setAccountRefreshBusy(true);
+      setAccountRefreshStatus("Refreshing account balances…");
+      try {
+        const localAccountData = loadAccountData();
+        setAccountData(localAccountData);
+        setStartingBalances({
+          bkash: String(localAccountData.settings.balances.bkash),
+          bank: String(localAccountData.settings.balances.bank),
+          date: localAccountData.settings.startDate,
+        });
+
+        if (pushUser && cloudSyncEnabled && cloudSyncReady) {
+          const remote = await loadCloudData(pushUser.id);
+          if (remote?.data) {
+            const refreshed = mergeCloudSnapshots(
+              cloudSnapshotRef.current,
+              remote.data,
+              false,
+            );
+            applyCloudSnapshot(refreshed);
+            setAccountData(refreshed.accountData);
+            cloudVersionRef.current = remote.updated_at ?? cloudVersionRef.current;
+            setCloudSyncStatus("Cloud data refreshed from Supabase.");
+          }
+        }
+        setAccountRefreshStatus("Account balances updated.");
+      } catch (error) {
+        setAccountRefreshStatus(`Could not refresh accounts: ${error.message}`);
+      } finally {
+        setAccountRefreshBusy(false);
+      }
+  }
+
   async function removeCloudCopy() {
     if (!pushUser) return;
     if (
@@ -1874,6 +1974,22 @@ export default function App() {
               Updated as you log expenses and account activity.
             </p>
           </div>
+          <button
+            className={`account-refresh-button${accountRefreshBusy ? " is-busy" : ""}`}
+            type="button"
+            aria-label="Refresh account balances"
+            title="Refresh account balances"
+            onClick={refreshAccounts}
+            disabled={accountRefreshBusy}
+          >
+            <AccountIcon name="refresh" />
+            <span className="account-refresh-label">Refresh</span>
+          </button>
+          {accountRefreshStatus && (
+            <span className="account-refresh-status" role="status">
+              {accountRefreshStatus}
+            </span>
+          )}
         </div>
         <div className="account-cards">
           {[
@@ -1882,7 +1998,10 @@ export default function App() {
           ].map(([id, label]) => (
             <article className="account-card" key={id}>
               <div className="account-card-copy">
-                <h3 className="account-card-heading">{label}</h3>
+                <h3 className="account-card-heading">
+                  <AccountIcon name={id} />
+                  {label}
+                </h3>
                 <p className="account-meta">
                   {accountData.settings.configured
                     ? `Since ${formatDate(accountData.settings.startDate)}`
@@ -1897,7 +2016,12 @@ export default function App() {
         </div>
 
         <details className="account-details">
-          <summary>Set starting balances</summary>
+          <summary>
+            <span className="account-summary-label">
+              <AccountIcon name="wallet" />
+            Set starting balances
+            </span>
+          </summary>
           <form onSubmit={handleOpeningBalancesSubmit}>
             <div className="account-form-grid">
               <div>
@@ -1965,7 +2089,12 @@ export default function App() {
         </details>
 
         <details className="account-details account-transaction-details">
-          <summary>Record income, adjustment, or transfer</summary>
+          <summary>
+            <span className="account-summary-label">
+              <AccountIcon name="transfer" />
+            Record income, adjustment, or transfer
+            </span>
+          </summary>
           <form onSubmit={handleAccountTransactionSubmit}>
             <div className="account-form-grid account-transaction-grid">
               <div>
@@ -2110,7 +2239,12 @@ export default function App() {
         </details>
 
         <details className="account-details">
-          <summary>Recent account activity</summary>
+          <summary>
+            <span className="account-summary-label">
+              <AccountIcon name="history" />
+            Recent account activity
+            </span>
+          </summary>
           {accountActivity.length ? (
             <ul className="account-activity-list">
               {accountActivity.map((activity) => {
