@@ -2971,26 +2971,46 @@ button:focus-visible,
   }
   .recurring-settings {
     display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: 11px;
-    padding: 12px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    gap: 14px 12px;
+    padding: 16px;
   }
-  .recurring-settings-controls {
-    width: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+  .recurring-reminder-leading {
+    grid-column: 1;
+    grid-row: 1;
     gap: 10px;
   }
+  .recurring-reminder-icon {
+    width: 40px;
+    height: 40px;
+    flex-basis: 40px;
+    border-radius: 12px;
+  }
+  .recurring-reminder-icon svg {
+    width: 19px;
+    height: 19px;
+  }
+  .recurring-reminder-copy strong {
+    font-size: 15px;
+  }
+  .recurring-settings-controls {
+    display: contents;
+  }
   .recurring-settings-controls .reminder-time-setting {
-    flex: 1 1 auto;
+    grid-column: 1;
+    grid-row: 2;
     margin: 0;
   }
   .recurring-settings-controls .reminder-time-setting input {
-    width: 100%;
+    width: min(100%, 180px);
+    min-height: 42px;
+    padding-inline: 12px;
+    border-radius: 12px;
   }
   .recurring-settings-controls .notification-controls {
-    flex: 0 0 auto;
+    grid-column: 2;
+    grid-row: 1;
     margin: 0;
   }
 }
