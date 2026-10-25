@@ -32,7 +32,6 @@ import {
 
 import {
   CLOUD_SYNC_USER_KEY,
-  deleteCloudData,
   loadCloudData,
   saveCloudData,
 } from "./cloud-sync.js";
@@ -385,7 +384,6 @@ export default function App() {
   const [cloudSyncEnabled, setCloudSyncEnabled] = useState(false);
   const [cloudSyncReady, setCloudSyncReady] = useState(false);
   const [cloudSyncStatus, setCloudSyncStatus] = useState("");
-  const [cloudSyncConflict, setCloudSyncConflict] = useState(false);
   const [undoAction, setUndoAction] = useState(null);
   const [cloudSyncRetry, setCloudSyncRetry] = useState(0);
   const [accountRefreshBusy, setAccountRefreshBusy] = useState(false);
@@ -521,7 +519,6 @@ export default function App() {
         setPushUser(user);
         setCloudSyncReady(false);
         setCloudSyncEnabled(Boolean(user));
-        setCloudSyncConflict(false);
       }
     });
     const {
@@ -540,7 +537,6 @@ export default function App() {
       setCloudSyncReady(false);
       cloudVersionRef.current = null;
       setCloudSyncEnabled(Boolean(user));
-      setCloudSyncConflict(false);
       setAuthStatus("");
       if (!user) {
         try {
@@ -571,7 +567,6 @@ export default function App() {
         let remote = await loadCloudData(pushUser.id);
         let merged;
         let savedVersion = null;
-        let firstSyncConfirmed = false;
         for (let attempt = 0; attempt < 3; attempt += 1) {
           if (!active) return;
           const local = cloudSnapshotRef.current;
@@ -583,22 +578,6 @@ export default function App() {
               ? hasMeaningfulLocalData(local)
               : false,
           );
-          if (
-            !remote &&
-            !firstSyncConfirmed &&
-            hasMeaningfulLocalData(local) &&
-            !window.confirm(
-              "Your local expenses and account data will be synced to this account. Continue?",
-            )
-          ) {
-            setCloudSyncEnabled(false);
-            setCloudSyncReady(false);
-            setCloudSyncStatus(
-              "Cloud sync paused. Your local data remains on this device.",
-            );
-            return;
-          }
-          firstSyncConfirmed = true;
           try {
             savedVersion = await saveCloudData(
               pushUser.id,
@@ -619,13 +598,11 @@ export default function App() {
         adoptLocalDataForUser(pushUser.id);
         applyCloudSnapshot(merged);
         setCloudSyncReady(true);
-        setCloudSyncConflict(false);
         setCloudSyncStatus("Cloud sync is on. Your data is saved to Supabase.");
       } catch (error) {
         if (active) {
           setCloudSyncEnabled(false);
           setCloudSyncReady(false);
-          setCloudSyncConflict(false);
           try {
             localStorage.removeItem(CLOUD_SYNC_USER_KEY);
           } catch {
@@ -659,16 +636,14 @@ export default function App() {
         if (!savedVersion) {
           cloudVersionRef.current = null;
           setCloudSyncReady(false);
-          setCloudSyncConflict(true);
           setCloudSyncStatus(
-            "Newer cloud data was found on another device. Refresh to load it before editing more.",
+            "Newer cloud data was found on another device. Reload Spend to load it before editing more.",
           );
           return;
         }
         cloudVersionRef.current = savedVersion;
         setCloudSyncStatus("Cloud sync is on. Your data is saved to Supabase.");
       } catch (error) {
-        setCloudSyncConflict(false);
         setCloudSyncStatus(`Could not sync your data: ${error.message}`);
       }
     }, 500);
@@ -1416,26 +1391,6 @@ export default function App() {
     setTargetCurrency(snapshot.targetCurrency);
   }
 
-  function disableCloudSync() {
-    try {
-      localStorage.removeItem(CLOUD_SYNC_USER_KEY);
-      setCloudSyncEnabled(false);
-      setCloudSyncReady(false);
-      setCloudSyncStatus(
-        "Cloud sync is off. Your existing Supabase copy is kept; local data remains on this device.",
-      );
-    } catch (error) {
-      setCloudSyncStatus(`Could not disable cloud sync: ${error.message}`);
-    }
-
-    function retryCloudSync() {
-      setCloudSyncConflict(false);
-      setCloudSyncReady(false);
-      setCloudSyncEnabled(true);
-      setCloudSyncRetry((retry) => retry + 1);
-    }
-  }
-
   async function refreshAccounts() {
       if (accountRefreshBusy) return;
       setAccountRefreshBusy(true);
@@ -1502,34 +1457,6 @@ export default function App() {
       );
     } finally {
       setRecurringRefreshBusy(false);
-    }
-  }
-
-  async function removeCloudCopy() {
-    if (!pushUser) return;
-    if (
-      !window.confirm(
-        "Delete your synced expense data from Supabase? Local data on this device will remain.",
-      )
-    )
-      return;
-
-    setAuthBusy(true);
-    try {
-      localStorage.removeItem(CLOUD_SYNC_USER_KEY);
-      setCloudSyncEnabled(false);
-      setCloudSyncReady(false);
-      cloudVersionRef.current = null;
-      await deleteCloudData(pushUser.id);
-      setCloudSyncStatus(
-        "The Supabase copy was deleted. Local data on this device is unchanged.",
-      );
-    } catch (error) {
-      setCloudSyncStatus(
-        `Could not delete the Supabase copy: ${error.message}`,
-      );
-    } finally {
-      setAuthBusy(false);
     }
   }
 
@@ -2726,37 +2653,10 @@ export default function App() {
                   to Supabase automatically while you are signed in. A copy
                   stays on this device.
                 </p>
-                <div className="push-auth-actions">
-                  <button
-                    className="push-account-action"
-                    type="button"
-                    disabled={authBusy}
-                    onClick={disableCloudSync}
-                  >
-                    Pause cloud sync
-                  </button>
-                  <button
-                    className="push-account-action"
-                    type="button"
-                    disabled={authBusy}
-                    onClick={removeCloudCopy}
-                  >
-                    Delete cloud copy
-                  </button>
-                </div>
                 {cloudSyncStatus && (
                   <p className="backup-status" role="status" aria-live="polite">
                     {cloudSyncStatus}
                   </p>
-                )}
-                {cloudSyncConflict && (
-                  <button
-                    className="push-account-action"
-                    type="button"
-                    onClick={retryCloudSync}
-                  >
-                    Refresh cloud data
-                  </button>
                 )}
               </div>
             ) : (
