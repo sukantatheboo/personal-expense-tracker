@@ -120,6 +120,10 @@ header {
   grid-row: 1;
 }
 
+.local-note-mobile {
+  display: none;
+}
+
 .sync-status-dot {
   width: 7px;
   height: 7px;
@@ -347,6 +351,10 @@ header {
   border-left: 1px solid var(--line);
 }
 
+.header-account-mobile {
+  display: none;
+}
+
 .theme-toggle {
   grid-column: 3;
   grid-row: 1;
@@ -382,7 +390,8 @@ header {
 }
 
 .theme-toggle:focus-visible,
-.header-account-action:focus-visible {
+.header-account-action:focus-visible,
+.header-account-mobile summary:focus-visible {
   outline: 3px solid var(--green);
   outline-offset: 3px;
 }
@@ -1979,26 +1988,28 @@ button:focus-visible,
 
 @media (max-width: 800px) {
   header {
-    display: block;
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
     margin-bottom: 24px;
     padding-bottom: 0;
     border-bottom: 0;
   }
   .header-topline,
   .header-bottomline {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
+    display: contents;
   }
   .header-bottomline {
-    min-height: 54px;
-    margin-top: 12px;
-    padding-top: 12px;
-    border-top: 1px solid var(--header-divider);
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
   }
   .brand {
-    gap: 10px;
+    order: 1;
+    gap: 8px;
     font-size: 24px;
   }
   .brand-mark {
@@ -2008,20 +2019,28 @@ button:focus-visible,
     font-size: 21px;
   }
   .local-note {
+    order: 2;
     flex: 0 1 auto;
-    grid-column: auto;
-    grid-row: auto;
-    max-width: 100%;
+    min-width: 0;
+    max-width: max-content;
+    margin-left: auto;
     overflow: hidden;
-    text-align: left;
-    text-overflow: ellipsis;
     font-size: 12px;
   }
+  .local-note-long {
+    display: none;
+  }
+  .local-note-mobile {
+    display: inline;
+  }
+  .sync-last-saved {
+    display: none;
+  }
   .theme-toggle {
+    order: 3;
     width: 44px;
     min-height: 44px;
-    grid-column: auto;
-    grid-row: auto;
+    flex-basis: 44px;
     border-radius: 50%;
     background: var(--soft-green);
   }
@@ -2031,11 +2050,63 @@ button:focus-visible,
     flex-basis: 32px;
   }
   .header-actions {
-    flex: 0 1 auto;
+    order: 4;
+    flex: 0 0 auto;
     justify-content: flex-end;
     gap: 8px;
-    grid-column: auto;
-    grid-row: auto;
+  }
+  .header-account-full {
+    display: none;
+  }
+  .header-account-mobile {
+    position: relative;
+    display: block;
+  }
+  .header-account-mobile summary {
+    display: grid;
+    width: 36px;
+    min-height: 36px;
+    place-items: center;
+    border-radius: 50%;
+    list-style: none;
+    cursor: pointer;
+  }
+  .header-account-mobile summary::-webkit-details-marker {
+    display: none;
+  }
+  .header-account-mobile summary::marker {
+    content: "";
+  }
+  .header-account-mobile .header-avatar {
+    width: 36px;
+    height: 36px;
+    flex-basis: 36px;
+  }
+  .header-account-popover {
+    position: absolute;
+    z-index: 30;
+    top: calc(100% + 8px);
+    right: 0;
+    display: grid;
+    width: min(240px, calc(100vw - 32px));
+    gap: 8px;
+    padding: 14px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--card);
+    box-shadow: 0 12px 28px rgb(0 0 0 / 18%);
+  }
+  .header-account-popover .header-user {
+    width: 100%;
+    max-width: none;
+  }
+  .header-account-popover .header-account-action {
+    justify-self: start;
+    min-height: 34px;
+    margin-top: 4px;
+    padding: 0;
+    border: 0;
+    color: var(--danger);
   }
   .header-account {
     justify-content: flex-end;
@@ -2345,6 +2416,35 @@ button:focus-visible,
   }
   .account-transaction-grid .account-note-field {
     grid-column: auto;
+  }
+}
+
+@media (max-width: 360px) {
+  .local-note {
+    gap: 0;
+  }
+  .local-note-mobile {
+    display: none;
+  }
+  .brand {
+    gap: 7px;
+    font-size: 22px;
+  }
+  .brand-mark {
+    width: 36px;
+    height: 36px;
+    border-radius: 11px;
+  }
+  .theme-toggle {
+    width: 40px;
+    min-height: 40px;
+    flex-basis: 40px;
+  }
+  .header-account-mobile summary,
+  .header-account-mobile .header-avatar {
+    width: 32px;
+    height: 32px;
+    flex-basis: 32px;
   }
 }
 

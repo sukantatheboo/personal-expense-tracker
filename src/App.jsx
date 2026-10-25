@@ -1822,7 +1822,7 @@ export default function App() {
             }
           >
             <span className="sync-status-dot" aria-hidden="true" />
-            <span>
+            <span className="local-note-long">
               {!pushUser
                 ? "Local only"
                 : !cloudSyncEnabled
@@ -1830,6 +1830,15 @@ export default function App() {
                   : cloudSyncReady
                     ? "Cloud sync on"
                     : "Syncing…"}
+            </span>
+            <span className="local-note-mobile">
+              {!pushUser
+                ? "Local"
+                : !cloudSyncEnabled
+                  ? "Paused"
+                  : cloudSyncReady
+                    ? "Synced"
+                    : "Syncing"}
             </span>
             {pushUser && cloudSyncReady && lastSyncedAt && (
               <span className="sync-last-saved">
@@ -1842,23 +1851,46 @@ export default function App() {
           >
             {pushBackendConfigured &&
               (pushUser ? (
-                <div className="header-account">
-                  <span className="header-avatar" aria-hidden="true">
-                    {pushUser.email?.trim().slice(0, 1).toUpperCase() || "A"}
-                  </span>
-                  <span className="header-user" title={pushUser.email}>
-                    <span>{userDisplayName(pushUser)}</span>
-                    <small>{pushUser.email}</small>
-                  </span>
-                  <button
-                    className="header-account-action"
-                    type="button"
-                    disabled={authBusy}
-                    onClick={signOutOfPush}
-                  >
-                    Sign out
-                  </button>
-                </div>
+                <>
+                  <div className="header-account header-account-full">
+                    <span className="header-avatar" aria-hidden="true">
+                      {pushUser.email?.trim().slice(0, 1).toUpperCase() || "A"}
+                    </span>
+                    <span className="header-user" title={pushUser.email}>
+                      <span>{userDisplayName(pushUser)}</span>
+                      <small>{pushUser.email}</small>
+                    </span>
+                    <button
+                      className="header-account-action"
+                      type="button"
+                      disabled={authBusy}
+                      onClick={signOutOfPush}
+                    >
+                      Sign out
+                    </button>
+                  </div>
+                  <details className="header-account-mobile">
+                    <summary aria-label={`Account menu for ${userDisplayName(pushUser)}`}>
+                      <span className="header-avatar" aria-hidden="true">
+                        {pushUser.email?.trim().slice(0, 1).toUpperCase() || "A"}
+                      </span>
+                    </summary>
+                    <div className="header-account-popover">
+                      <span className="header-user" title={pushUser.email}>
+                        <span>{userDisplayName(pushUser)}</span>
+                        <small>{pushUser.email}</small>
+                      </span>
+                      <button
+                        className="header-account-action"
+                        type="button"
+                        disabled={authBusy}
+                        onClick={signOutOfPush}
+                      >
+                        Sign out
+                      </button>
+                    </div>
+                  </details>
+                </>
               ) : (
                 <button
                   className="header-account-action"
