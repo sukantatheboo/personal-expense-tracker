@@ -4,11 +4,12 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
 export const vapidPublicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY?.trim();
 
+export const supabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 export const pushBackendConfigured = Boolean(
-  supabaseUrl && supabaseAnonKey && vapidPublicKey,
+  supabaseConfigured && vapidPublicKey,
 );
 
-export const supabase = pushBackendConfigured
+export const supabase = supabaseConfigured
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
 

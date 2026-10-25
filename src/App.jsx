@@ -1,10 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   FaArrowsRotate,
+  FaBolt,
+  FaBookOpen,
   FaBuildingColumns,
+  FaCalendarDays,
+  FaCar,
+  FaCartShopping,
   FaClockRotateLeft,
+  FaEllipsis,
+  FaHeartPulse,
+  FaHouse,
+  FaMusic,
+  FaPenToSquare,
   FaRepeat,
   FaRightLeft,
+  FaTag,
+  FaUtensils,
   FaWallet,
 } from "react-icons/fa6";
 import {
@@ -35,6 +47,7 @@ import {
   enableBackgroundPush,
   pushBackendConfigured,
   supabase,
+  supabaseConfigured,
   syncBackgroundSchedules,
 } from "./push.js";
 
@@ -47,6 +60,30 @@ import {
 const CURRENCY_API = "https://api.frankfurter.dev/v2";
 const LOCAL_DATA_OWNER_KEY = "spend-local-data-owner-v1";
 const LOCAL_USER_SNAPSHOTS_KEY = "spend-local-user-snapshots-v1";
+
+const CATEGORY_ICONS = {
+  Food: FaUtensils,
+  Transport: FaCar,
+  Bills: FaBolt,
+  Home: FaHouse,
+  Shopping: FaCartShopping,
+  Health: FaHeartPulse,
+  Entertainment: FaMusic,
+  Education: FaBookOpen,
+  Savings: FaWallet,
+  Other: FaTag,
+};
+
+function CategoryIcon({ category }) {
+  const Icon = CATEGORY_ICONS[category] ?? FaEllipsis;
+  return (
+    <Icon
+      className="category-icon-glyph"
+      aria-hidden="true"
+      focusable="false"
+    />
+  );
+}
 
 const ACCOUNT_ICONS = {
   bank: FaBuildingColumns,
@@ -208,7 +245,8 @@ function hasMeaningfulLocalData(data) {
     data.accountData.transactions.length > 0 ||
     data.accountData.settings.configured ||
     data.accountData.settings.balances.bkash !== 0 ||
-    data.accountData.settings.balances.bank !== 0
+    data.accountData.settings.balances.bank !== 0 ||
+    (isValidReminderTime(data.reminderTime) && data.reminderTime !== "09:00")
   );
 }
 
@@ -239,6 +277,11 @@ function mergeCloudSnapshots(local, cloud, preferLocal) {
         /^[A-Z]{3}$/.test(cloud.targetCurrency)
           ? cloud.targetCurrency
           : "USD",
+      reminderTime: isValidReminderTime(cloud.reminderTime)
+        ? cloud.reminderTime
+        : isValidReminderTime(local.reminderTime)
+          ? local.reminderTime
+          : "09:00",
     };
   }
 
@@ -257,6 +300,14 @@ function mergeCloudSnapshots(local, cloud, preferLocal) {
     },
     theme: local.theme,
     targetCurrency: local.targetCurrency,
+    reminderTime:
+      isValidReminderTime(local.reminderTime) && local.reminderTime !== "09:00"
+      ? local.reminderTime
+      : isValidReminderTime(cloud.reminderTime)
+        ? cloud.reminderTime
+        : isValidReminderTime(local.reminderTime)
+          ? local.reminderTime
+          : "09:00",
   };
 }
 
@@ -328,6 +379,9 @@ function loadLocalUserSnapshot(userId) {
       /^[A-Z]{3}$/.test(snapshot.targetCurrency)
         ? snapshot.targetCurrency
         : "USD",
+    reminderTime: isValidReminderTime(snapshot.reminderTime)
+      ? snapshot.reminderTime
+      : "09:00",
   };
 }
 
@@ -364,6 +418,7 @@ export default function App() {
     };
   });
   const [budgetAmount, setBudgetAmount] = useState("");
+  const [budgetEditingMonth, setBudgetEditingMonth] = useState(null);
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [editingExpenseId, setEditingExpenseId] = useState(null);
@@ -411,17 +466,30 @@ export default function App() {
   const pushScheduleSyncRef = useRef(Promise.resolve());
   const cloudSnapshotRef = useRef(null);
   const cloudVersionRef = useRef(null);
+  const cloudSaveQueueRef = useRef(Promise.resolve());
   const undoTimerRef = useRef(null);
   const authUserIdRef = useRef(null);
   const localDataOwnerRef = useRef(loadLocalDataOwner());
-  cloudSnapshotRef.current = {
-    expenses,
-    budgets,
-    recurringSchedules,
-    accountData,
-    theme,
-    targetCurrency,
-  };
+  cloudSnapshotRef.current = useMemo(
+    () => ({
+      expenses,
+      budgets,
+      recurringSchedules,
+      accountData,
+      theme,
+      targetCurrency,
+      reminderTime,
+    }),
+    [
+      expenses,
+      budgets,
+      recurringSchedules,
+      accountData,
+      theme,
+      targetCurrency,
+      reminderTime,
+    ],
+  );
 
   function resetDataForNewUser() {
     const empty = emptyAccountData();
@@ -429,6 +497,9 @@ export default function App() {
     setBudgets({});
     setRecurringSchedules([]);
     setAccountData(empty);
+    setTheme("light");
+    setTargetCurrency("USD");
+    setReminderTime("09:00");
     setStartingBalances({
       bkash: "0",
       bank: "0",
@@ -480,6 +551,65 @@ export default function App() {
     }
   }
 
+  function queueCloudSnapshotSave(userId) {
+    const saveTask = cloudSaveQueueRef.current
+      .catch(() => {})
+      .then(async () => {
+        if (
+          authUserIdRef.current !== userId ||
+          localDataOwnerRef.current !== userId
+        ) {
+          return;
+        }
+
+        let snapshot = cloudSnapshotRef.current;
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          let savedVersion = null;
+          try {
+            savedVersion = await saveCloudData(
+              userId,
+              snapshot,
+              cloudVersionRef.current,
+            );
+          } catch (error) {
+            if (error.code !== "23505") throw error;
+          }
+
+          if (savedVersion) {
+            if (
+              authUserIdRef.current === userId &&
+              localDataOwnerRef.current === userId
+            ) {
+              cloudVersionRef.current = savedVersion;
+              setLastSyncedAt(Date.now());
+              setCloudSyncStatus(
+                "Cloud sync is on. Your data is saved to Supabase.",
+              );
+            }
+            return;
+          }
+
+          const remote = await loadCloudData(userId);
+          if (
+            authUserIdRef.current !== userId ||
+            localDataOwnerRef.current !== userId
+          ) {
+            return;
+          }
+          snapshot = cloudSnapshotRef.current;
+          if (remote?.data) {
+            snapshot = mergeCloudSnapshots(snapshot, remote.data, true);
+            applyCloudSnapshot(snapshot);
+          }
+          cloudVersionRef.current = remote?.updated_at ?? null;
+        }
+
+        throw new Error("Cloud data changed repeatedly; please try again.");
+      });
+    cloudSaveQueueRef.current = saveTask;
+    return saveTask;
+  }
+
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     try {
@@ -512,6 +642,7 @@ export default function App() {
     accountData,
     theme,
     targetCurrency,
+    reminderTime,
     pushUser?.id,
   ]);
   useEffect(() => {
@@ -521,6 +652,13 @@ export default function App() {
       // The currency selection still applies until this page is closed.
     }
   }, [targetCurrency]);
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.reminderTime, reminderTime);
+    } catch {
+      // Keep the selected reminder time for this visit.
+    }
+  }, [reminderTime]);
 
   useEffect(() => {
     if (!supabase) return undefined;
@@ -629,7 +767,20 @@ export default function App() {
           } catch (error) {
             if (error.code !== "23505" || remote) throw error;
           }
-          if (savedVersion) break;
+          if (savedVersion) {
+            if (cloudSnapshotRef.current === local) break;
+            remote = { data: merged, updated_at: savedVersion };
+            if (attempt < 2) {
+              savedVersion = null;
+              continue;
+            }
+            merged = mergeCloudSnapshots(
+              cloudSnapshotRef.current,
+              merged,
+              true,
+            );
+            break;
+          }
           remote = await loadCloudData(pushUser.id);
         }
         if (!savedVersion || !merged) {
@@ -668,27 +819,13 @@ export default function App() {
   useEffect(() => {
     if (!supabase || !pushUser || !cloudSyncEnabled || !cloudSyncReady)
       return undefined;
-    const snapshot = cloudSnapshotRef.current;
     const timeout = window.setTimeout(async () => {
       try {
-        const savedVersion = await saveCloudData(
-          pushUser.id,
-          snapshot,
-          cloudVersionRef.current,
-        );
-        if (!savedVersion) {
-          cloudVersionRef.current = null;
-          setCloudSyncReady(false);
-          setCloudSyncStatus(
-            "Newer cloud data was found on another device. Reload Spend to load it before editing more.",
-          );
-          return;
-        }
-        cloudVersionRef.current = savedVersion;
-        setLastSyncedAt(Date.now());
-        setCloudSyncStatus("Cloud sync is on. Your data is saved to Supabase.");
+        await queueCloudSnapshotSave(pushUser.id);
       } catch (error) {
-        setCloudSyncStatus(`Could not sync your data: ${error.message}`);
+        if (authUserIdRef.current === pushUser.id) {
+          setCloudSyncStatus(`Could not sync your data: ${error.message}`);
+        }
       }
     }, 500);
     return () => window.clearTimeout(timeout);
@@ -702,6 +839,7 @@ export default function App() {
     recurringSchedules,
     targetCurrency,
     theme,
+    reminderTime,
     cloudSyncRetry,
   ]);
 
@@ -859,6 +997,32 @@ export default function App() {
         .sort((a, b) => a.nextDate.localeCompare(b.nextDate))[0] || null,
     [recurringSchedules],
   );
+  const activeRecurringCount = useMemo(
+    () => recurringSchedules.filter((schedule) => schedule.active).length,
+    [recurringSchedules],
+  );
+  const monthlyRecurringTotal = useMemo(
+    () =>
+      recurringSchedules
+        .filter((schedule) => schedule.active)
+        .reduce(
+          (total, schedule) =>
+            total +
+            Number(schedule.amount) *
+              (schedule.interval === "weekly" ? 52 / 12 : 1),
+          0,
+        ),
+    [recurringSchedules],
+  );
+  const orderedRecurringSchedules = useMemo(
+    () =>
+      [...recurringSchedules].sort(
+        (a, b) =>
+          Number(b.active) - Number(a.active) ||
+          a.nextDate.localeCompare(b.nextDate),
+      ),
+    [recurringSchedules],
+  );
   const visibleExpenses = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase();
     return monthExpenses
@@ -899,6 +1063,8 @@ export default function App() {
   }, [expenses, accountData]);
 
   const monthBudget = Number(budgets[selectedMonth] || 0);
+  const budgetEditorOpen =
+    monthBudget <= 0 || budgetEditingMonth === selectedMonth;
   const budgetPercentage =
     monthBudget > 0 ? (monthlyTotal / monthBudget) * 100 : 0;
   const budgetProgress = Math.min(100, Math.max(0, budgetPercentage));
@@ -1285,6 +1451,7 @@ export default function App() {
       ...current,
       [selectedMonth]: roundMoney(amount),
     }));
+    setBudgetEditingMonth(null);
   }
 
   function clearBudget() {
@@ -1361,6 +1528,7 @@ export default function App() {
         accountData,
         theme,
         targetCurrency,
+        reminderTime,
       },
     };
     const url = URL.createObjectURL(
@@ -1400,7 +1568,9 @@ export default function App() {
         !Array.isArray(data.accountData.transactions) ||
         !["light", "dark"].includes(data.theme) ||
         typeof data.targetCurrency !== "string" ||
-        !/^[A-Z]{3}$/.test(data.targetCurrency)
+        !/^[A-Z]{3}$/.test(data.targetCurrency) ||
+        (data.reminderTime !== undefined &&
+          !isValidReminderTime(data.reminderTime))
       ) {
         throw new Error("This file is not a valid Spend backup.");
       }
@@ -1418,6 +1588,14 @@ export default function App() {
       setAccountData(loadAccountData(data.accountData));
       setTheme(data.theme);
       setTargetCurrency(data.targetCurrency);
+      if (isValidReminderTime(data.reminderTime)) {
+        setReminderTime(data.reminderTime);
+        try {
+          localStorage.setItem(STORAGE_KEYS.reminderTime, data.reminderTime);
+        } catch {
+          // Keep the restored reminder time for this visit.
+        }
+      }
       setBackupStatus("Backup restored.");
     } catch (error) {
       setBackupStatus(`Could not restore backup: ${error.message}`);
@@ -1433,13 +1611,31 @@ export default function App() {
     setAccountData(snapshot.accountData);
     setTheme(snapshot.theme);
     setTargetCurrency(snapshot.targetCurrency);
+    setReminderTime(
+      isValidReminderTime(snapshot.reminderTime) ? snapshot.reminderTime : "09:00",
+    );
   }
 
   async function refreshAccounts() {
-      if (accountRefreshBusy) return;
-      setAccountRefreshBusy(true);
-      setAccountRefreshStatus("Refreshing account balances…");
-      try {
+    if (accountRefreshBusy) return;
+    setAccountRefreshBusy(true);
+    setAccountRefreshStatus("Refreshing account balances…");
+    try {
+      if (pushUser && cloudSyncEnabled && cloudSyncReady) {
+        await queueCloudSnapshotSave(pushUser.id);
+        const remote = await loadCloudData(pushUser.id);
+        if (remote?.data) {
+          const refreshed = mergeCloudSnapshots(
+            cloudSnapshotRef.current,
+            remote.data,
+            false,
+          );
+          applyCloudSnapshot(refreshed);
+          cloudVersionRef.current = remote.updated_at ?? cloudVersionRef.current;
+          setLastSyncedAt(Date.now());
+          setCloudSyncStatus("Cloud data refreshed from Supabase.");
+        }
+      } else {
         const localAccountData = loadAccountData();
         setAccountData(localAccountData);
         setStartingBalances({
@@ -1447,29 +1643,13 @@ export default function App() {
           bank: String(localAccountData.settings.balances.bank),
           date: localAccountData.settings.startDate,
         });
-
-        if (pushUser && cloudSyncEnabled && cloudSyncReady) {
-          const remote = await loadCloudData(pushUser.id);
-          if (remote?.data) {
-            const refreshed = mergeCloudSnapshots(
-              cloudSnapshotRef.current,
-              remote.data,
-              false,
-            );
-            applyCloudSnapshot(refreshed);
-            setAccountData(refreshed.accountData);
-            cloudVersionRef.current = remote.updated_at ?? cloudVersionRef.current;
-            setLastSyncedAt(Date.now());
-            setCloudSyncStatus("Cloud data refreshed from Supabase.");
-          }
-
-        }
-        setAccountRefreshStatus("Account balances updated.");
-      } catch (error) {
-        setAccountRefreshStatus(`Could not refresh accounts: ${error.message}`);
-      } finally {
-        setAccountRefreshBusy(false);
       }
+      setAccountRefreshStatus("Account balances updated.");
+    } catch (error) {
+      setAccountRefreshStatus(`Could not refresh accounts: ${error.message}`);
+    } finally {
+      setAccountRefreshBusy(false);
+    }
   }
 
   async function refreshRecurringSchedules() {
@@ -1478,6 +1658,7 @@ export default function App() {
     setRecurringRefreshStatus("Refreshing recurring expenses…");
     try {
       if (pushUser && cloudSyncEnabled && cloudSyncReady) {
+        await queueCloudSnapshotSave(pushUser.id);
         const remote = await loadCloudData(pushUser.id);
         if (!remote?.data) {
           throw new Error("No cloud data was returned.");
@@ -1488,14 +1669,10 @@ export default function App() {
         cloudVersionRef.current = remote.updated_at ?? cloudVersionRef.current;
         setLastSyncedAt(Date.now());
         setCloudSyncStatus("Cloud data refreshed from Supabase.");
-        setRecurringRefreshStatus(
-          "Recurring expenses refreshed from Supabase.",
-        );
+        setRecurringRefreshStatus("Schedules refreshed.");
       } else {
         setRecurringSchedules(loadRecurringSchedules());
-        setRecurringRefreshStatus(
-          "Recurring expenses refreshed on this device.",
-        );
+        setRecurringRefreshStatus("Schedules refreshed on this device.");
       }
     } catch (error) {
       setRecurringRefreshStatus(
@@ -1592,6 +1769,9 @@ export default function App() {
     if (!supabase || !pushUser) return;
     setAuthBusy(true);
     try {
+      if (cloudSyncEnabled && cloudSyncReady) {
+        await queueCloudSnapshotSave(pushUser.id);
+      }
       await disableBackgroundPush(pushUser.id);
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
@@ -1861,7 +2041,7 @@ export default function App() {
           <div
             className={`header-actions${pushUser ? " is-authenticated" : ""}`}
           >
-            {pushBackendConfigured &&
+            {supabaseConfigured &&
               (pushUser ? (
                 <>
                   <div className="header-account header-account-full">
@@ -1951,7 +2131,7 @@ export default function App() {
                     ? "We’ll email you a secure password reset link."
                     : authMode === "update-password"
                       ? "Choose a new password for your Spend account."
-                      : "Use your account for reminders and automatic cloud sync."}
+                      : "Use your account for automatic cloud sync. Background reminders are optional."}
                 </p>
               </div>
               <button
@@ -2702,15 +2882,108 @@ export default function App() {
         </details>
       </section>
 
-      <section className="panel" aria-labelledby="budget-title">
-        <h2 id="budget-title">Monthly budget</h2>
-        <p className="currency-hint">
-          For {formatMonth(selectedMonth)}. All expenses in this month count
-          toward the budget.
-        </p>
-        <form className="budget-form" onSubmit={saveBudget}>
+      <section
+        className="panel budget-panel"
+        aria-labelledby="budget-title"
+      >
+        <div className="budget-heading">
+          <div>
+            <h2 id="budget-title">Monthly budget</h2>
+            <span className="budget-month">
+              <FaCalendarDays aria-hidden="true" focusable="false" />
+              {formatMonth(selectedMonth)}
+            </span>
+          </div>
+          {monthBudget > 0 && (
+            <button
+              className="budget-edit-toggle"
+              type="button"
+              aria-controls="budget-editor"
+              aria-expanded={budgetEditorOpen}
+              aria-label={budgetEditorOpen ? "Done editing budget" : "Edit budget"}
+              onClick={() =>
+                setBudgetEditingMonth(
+                  budgetEditorOpen ? null : selectedMonth,
+                )
+              }
+            >
+              <FaPenToSquare aria-hidden="true" focusable="false" />
+              <span className="budget-edit-label-full">
+                {budgetEditorOpen ? "Done" : "Edit budget"}
+              </span>
+              <span className="budget-edit-label-compact">
+                {budgetEditorOpen ? "Done" : "Edit"}
+              </span>
+            </button>
+          )}
+        </div>
+
+        {monthBudget > 0 ? (
+          <div className="budget-overview">
+            <div className="budget-values">
+              <div className="budget-spent-block">
+                <span className="budget-caption">Spent this month</span>
+                <strong className="budget-spent-value">
+                  {formatCurrency(monthlyTotal)}
+                </strong>
+              </div>
+              <div className="budget-limit-block">
+                <span className="budget-caption">Monthly limit</span>
+                <strong className="budget-limit-value">
+                  {formatCurrency(monthBudget)}
+                </strong>
+              </div>
+              <span
+                className={`budget-percent${budgetPercentage > 100 ? " is-over" : ""}`}
+              >
+                {Math.round(budgetPercentage)}% used
+              </span>
+            </div>
+
+            <div
+              className={`budget-progress-track${budgetPercentage > 100 ? " is-over" : ""}`}
+              role="progressbar"
+              aria-label="Monthly budget used"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow={Math.round(budgetProgress)}
+              aria-valuetext={`${Math.round(budgetPercentage)} percent of budget used`}
+            >
+              <div
+                className="budget-progress-fill"
+                style={{ width: `${budgetProgress}%` }}
+              />
+            </div>
+
+            <div className="budget-footer">
+              <strong
+                className={`budget-balance${budgetPercentage > 100 ? " is-over" : ""}`}
+              >
+                {monthlyTotal <= monthBudget
+                  ? `${formatCurrency(monthBudget - monthlyTotal)} left`
+                  : `${formatCurrency(monthlyTotal - monthBudget)} over budget`}
+              </strong>
+              <span className="budget-status">
+                {budgetPercentage > 100
+                  ? "Spending is above your limit"
+                  : "You’re within your limit"}
+              </span>
+            </div>
+          </div>
+        ) : (
+          <p className="budget-empty">
+            Set a monthly limit to keep spending on track.
+          </p>
+        )}
+
+        <form
+          className={`budget-form${monthBudget > 0 ? " has-budget" : " is-new"}`}
+          id="budget-editor"
+          hidden={!budgetEditorOpen}
+          onSubmit={saveBudget}
+        >
           <div className="budget-field">
-            <label htmlFor="monthly-budget">Budget (BDT)</label>
+            <label htmlFor="monthly-budget">Monthly limit (BDT)</label>
             <input
               id="monthly-budget"
               type="number"
@@ -2723,192 +2996,125 @@ export default function App() {
               onChange={(event) => setBudgetAmount(event.target.value)}
             />
           </div>
-          <button type="submit">Save budget</button>
-          {monthBudget > 0 && (
-            <button
-              className="clear-budget"
-              type="button"
-              onClick={clearBudget}
-            >
-              Clear
-            </button>
-          )}
-        </form>
-        {monthBudget > 0 ? (
-          <div className="budget-meter">
-            <div
-              className="progress-track"
-              role="progressbar"
-              aria-label="Monthly budget used"
-              aria-valuemin="0"
-              aria-valuemax="100"
-              aria-valuenow={Math.round(budgetProgress)}
-              aria-valuetext={`${Math.round(budgetPercentage)} percent of budget used`}
-            >
-              <div
-                className="progress-fill"
-                style={{
-                  width: `${budgetProgress}%`,
-                  background:
-                    budgetPercentage > 100 ? "var(--danger)" : "var(--green)",
-                }}
-              />
-            </div>
-            <div className="budget-summary">
-              <span>{formatCurrency(monthlyTotal)} spent</span>
-              <span>
-                {monthlyTotal <= monthBudget
-                  ? `${formatCurrency(monthBudget - monthlyTotal)} left`
-                  : `${formatCurrency(monthlyTotal - monthBudget)} over budget`}
-              </span>
-            </div>
+          <div className="budget-form-actions">
+            <button type="submit">Save budget</button>
+            {monthBudget > 0 && (
+              <>
+                <button
+                  className="clear-budget"
+                  type="button"
+                  onClick={clearBudget}
+                >
+                  Clear
+                </button>
+                <button
+                  className="budget-cancel"
+                  type="button"
+                  onClick={() => setBudgetEditingMonth(null)}
+                >
+                  Cancel
+                </button>
+              </>
+            )}
           </div>
-        ) : (
-          <p className="budget-empty">
-            Add a budget to track your monthly spending.
-          </p>
-        )}
+        </form>
       </section>
 
       <section
         className="panel recurring-panel"
         aria-labelledby="recurring-title"
       >
-        <h2 id="recurring-title" className="recurring-title">
-          Recurring expenses
-          <button
-            className={`recurring-refresh-button${recurringRefreshBusy ? " is-busy" : ""}`}
-            type="button"
-            aria-label="Refresh recurring expenses"
-            title="Refresh recurring expenses"
-            onClick={refreshRecurringSchedules}
-            disabled={recurringRefreshBusy}
-          >
-            <AccountIcon name="repeat" />
-          </button>
-        </h2>
+        <div className="recurring-heading">
+          <h2 id="recurring-title" className="recurring-title">
+            Recurring expenses
+          </h2>
+          <div className="recurring-heading-actions">
+            <a
+              className="recurring-add-button"
+              href="#expense-repeat"
+              aria-label="Add a recurring expense"
+            >
+              <span aria-hidden="true">＋</span>
+              <span className="recurring-add-label">Add recurring</span>
+            </a>
+            <button
+              className={
+                "recurring-refresh-button" +
+                (recurringRefreshBusy ? " is-busy" : "")
+              }
+              type="button"
+              aria-label="Refresh recurring expenses"
+              title="Refresh recurring expenses"
+              onClick={refreshRecurringSchedules}
+              disabled={recurringRefreshBusy}
+            >
+              <AccountIcon name="repeat" />
+            </button>
+          </div>
+        </div>
         {recurringRefreshStatus && (
           <span className="recurring-refresh-status" role="status">
             {recurringRefreshStatus}
           </span>
         )}
-        <div className="recurring-callout">
-          <div className="recurring-callout-copy">
-            <span className="recurring-callout-icon" aria-hidden="true">i</span>
-            <p className="currency-hint">
-              Weekly/monthly expenses are added when due. Sign in for reminders
-              while closed.
-            </p>
+
+        <div className="recurring-overview">
+          <div
+            className="recurring-overview-item recurring-overview-count"
+            role="group"
+            aria-label={activeRecurringCount + " active schedules"}
+          >
+            <strong className="recurring-overview-count-value">
+              {activeRecurringCount}
+            </strong>
+            <span>active</span>
           </div>
-        {recurringReminder && (
-          <p className="recurring-reminder" role="status" aria-live="polite">
-            {recurringReminder}
-          </p>
-        )}
-        {pushBackendConfigured ? (
-          <>
-            <p className="push-setup-note">
-              Reminder settings use Supabase. Expenses sync automatically when
-              you are signed in.
-            </p>
-            {pushUser ? (
-              <div className="cloud-sync-panel">
-                <h3>Expense cloud sync</h3>
-                <p className="push-setup-note">
-                  Expenses, budgets, schedules, accounts and transactions sync
-                  to Supabase automatically while you are signed in. A copy
-                  stays on this device.
-                </p>
-                {cloudSyncStatus && (
-                  <p className="backup-status" role="status" aria-live="polite">
-                    {cloudSyncStatus}
-                  </p>
-                )}
-              </div>
+          <div className="recurring-overview-item recurring-overview-total">
+            <strong>{formatCurrency(monthlyRecurringTotal)}</strong>
+            <span>monthly est.</span>
+          </div>
+          <div className="recurring-overview-item recurring-overview-next">
+            <span className="recurring-overview-label">Next due</span>
+            {nextRecurring ? (
+              <>
+                <strong>{nextRecurring.description}</strong>
+                <span className="recurring-overview-date">
+                  {formatDate(nextRecurring.nextDate)}
+                </span>
+              </>
             ) : (
-              <p className="push-setup-note">
-                Sign in for automatic cloud sync and background reminders.
-              </p>
+              <strong className="recurring-overview-empty">
+                No upcoming expenses
+              </strong>
             )}
-          </>
-        ) : (
-          <p className="push-setup-note">
-            Background reminders are not configured. Notifications work while
-            Spend is open.
-          </p>
-        )}
-        {pushUser && authStatus && (
-          <p
-            className="notification-status push-auth-status"
-            role="status"
-            aria-live="polite"
-          >
-            {authStatus}
-          </p>
-        )}
-          <div className="notification-controls">
-          <button
-            className="notification-button"
-            type="button"
-            disabled={
-              !backgroundPushEnabled &&
-              (notificationPermission === "denied" ||
-                notificationPermission === "unsupported")
-            }
-            onClick={toggleNotifications}
-          >
-            {backgroundPushEnabled
-              ? "Disable background reminders"
-              : notificationPermission === "denied"
-                ? "Notifications blocked"
-                : notificationPermission === "unsupported"
-                  ? "Notifications unavailable"
-                  : pushBackendConfigured
-                    ? "Enable background reminders"
-                    : notificationPermission === "granted"
-                      ? "Send test notification"
-                      : "Enable system notifications"}
-          </button>
-          <p className="notification-status" role="status" aria-live="polite">
-            {notificationStatus}
-          </p>
           </div>
         </div>
-        {pushBackendConfigured && pushUser && (
-          <div className="reminder-time-setting">
-            <label htmlFor="reminder-time">Reminder time</label>
-            <input
-              id="reminder-time"
-              type="time"
-              value={reminderTime}
-              aria-describedby="reminder-time-help"
-              onChange={(event) => updateReminderTime(event.target.value)}
-            />
-            <p className="notification-status" id="reminder-time-help">
-              All background reminders on this device use local time.
-            </p>
-          </div>
-        )}
+
         {recurringSchedules.length ? (
           <>
-            <h3 className="recurring-list-title">Active recurring expenses</h3>
+            <h3 className="recurring-list-title">Your schedules</h3>
             <ul className="recurring-list">
-            {recurringSchedules.map((schedule) => {
+            {orderedRecurringSchedules.map((schedule) => {
               const cadence =
                 schedule.interval === "weekly" ? "Weekly" : "Monthly";
               return (
                 <li className="recurring-row" key={schedule.id}>
                   <div className="recurring-info">
-                    <div className="recurring-name">{schedule.description}</div>
-                    <div className="recurring-tags">
-                      <span>{schedule.active ? cadence : "Paused"}</span>
-                      <span>{schedule.category}</span>
-                      {isAccountId(schedule.account) && (
-                        <span>{accountName(schedule.account)}</span>
-                      )}
-                    </div>
-                    <div className="recurring-meta">
-                      Next: {formatDate(schedule.nextDate)}
+                    <span className="recurring-category-icon" aria-hidden="true">
+                      <CategoryIcon category={schedule.category} />
+                    </span>
+                    <div className="recurring-text">
+                      <div className="recurring-name">{schedule.description}</div>
+                      <div className="recurring-tags">
+                        <span>{schedule.active ? cadence : "Paused"}</span>
+                        <span>{schedule.category}</span>
+                        {isAccountId(schedule.account) && (
+                          <span>{accountName(schedule.account)}</span>
+                        )}
+                      </div>
+                      <div className="recurring-meta">
+                        Next: {formatDate(schedule.nextDate)}
+                      </div>
                     </div>
                   </div>
                   <span className="recurring-amount">
@@ -2972,9 +3178,112 @@ export default function App() {
           </>
         ) : (
           <p className="recurring-empty">
-            Set a weekly or monthly schedule when adding an expense.
+            No recurring expenses yet. Add one from the expense form above.
           </p>
         )}
+        <div className="recurring-settings">
+          <div className="recurring-reminder-leading">
+            <span className="recurring-reminder-icon" aria-hidden="true">
+              <FaClockRotateLeft focusable="false" />
+            </span>
+            <div className="recurring-reminder-copy">
+              <strong>Payment reminders</strong>
+              <span>
+                {backgroundPushEnabled
+                  ? "On"
+                  : pushBackendConfigured && !pushUser
+                    ? "Sign in required"
+                    : notificationPermission === "denied"
+                      ? "Blocked"
+                      : notificationPermission === "unsupported"
+                        ? "Unavailable"
+                        : notificationPermission === "granted"
+                          ? "Allowed"
+                          : "Off"}
+              </span>
+            </div>
+          </div>
+          <div className="recurring-settings-controls">
+            {pushBackendConfigured && pushUser && (
+              <div className="reminder-time-setting">
+                <label className="sr-only" htmlFor="reminder-time">
+                  Reminder time
+                </label>
+                <input
+                  id="reminder-time"
+                  type="time"
+                  value={reminderTime}
+                  onChange={(event) => updateReminderTime(event.target.value)}
+                />
+              </div>
+            )}
+            <div className="notification-controls">
+              <label
+                className="notification-toggle-label"
+                title={
+                  notificationPermission === "denied"
+                    ? "Notifications are blocked in browser settings"
+                    : notificationPermission === "unsupported"
+                      ? "Notifications are unavailable in this browser"
+                      : undefined
+                }
+              >
+                <span className="sr-only">Background payment reminders</span>
+                <input
+                  className="notification-toggle"
+                  type="checkbox"
+                  role="switch"
+                  checked={backgroundPushEnabled}
+                  disabled={
+                    !backgroundPushEnabled &&
+                    (notificationPermission === "denied" ||
+                      notificationPermission === "unsupported")
+                  }
+                  aria-label={
+                    backgroundPushEnabled
+                      ? "Disable background reminders"
+                      : notificationPermission === "denied"
+                        ? "Notifications blocked"
+                        : notificationPermission === "unsupported"
+                          ? "Notifications unavailable"
+                          : pushBackendConfigured
+                            ? "Enable background reminders"
+                            : notificationPermission === "granted"
+                              ? "Send a test notification"
+                              : "Enable system notifications"
+                  }
+                  onChange={toggleNotifications}
+                />
+              </label>
+            </div>
+          </div>
+        </div>
+        {notificationStatus && (
+          <p
+            className="recurring-notification-status"
+            role="status"
+            aria-live="polite"
+          >
+            {notificationStatus}
+          </p>
+        )}
+        {recurringReminder && (
+          <p className="recurring-reminder" role="status" aria-live="polite">
+            {recurringReminder}
+          </p>
+        )}
+        {cloudSyncStatus &&
+          (cloudSyncStatus.startsWith("Could not") ||
+            cloudSyncStatus.startsWith("Newer cloud") ||
+            cloudSyncStatus.includes("could not clear")) && (
+            <p
+              className="recurring-sync-warning"
+              role="status"
+              aria-live="polite"
+            >
+              {cloudSyncStatus}
+            </p>
+          )}
       </section>
 
       <section className="list-panel" aria-labelledby="list-title">
@@ -3020,7 +3329,7 @@ export default function App() {
                 key={expense.id}
               >
                 <span className="expense-icon" aria-hidden="true">
-                  ↗
+                  <CategoryIcon category={expense.category} />
                 </span>
                 <div className="expense-info">
                   <div className="expense-name">{expense.description}</div>

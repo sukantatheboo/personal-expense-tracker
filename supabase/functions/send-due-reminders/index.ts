@@ -111,6 +111,7 @@ Deno.serve(async (request) => {
     .select("*")
     .eq("active", true)
     .lte("next_notify_at", now.toISOString())
+    .order("next_notify_at", { ascending: true })
     .limit(100);
 
   if (queryError) {
