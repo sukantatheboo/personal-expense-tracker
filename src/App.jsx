@@ -306,6 +306,29 @@ function saveLocalDataOwner(userId) {
   }
 }
 
+function clearLocalDataOwner() {
+  try {
+    localStorage.removeItem(LOCAL_DATA_OWNER_KEY);
+  } catch {
+    // The in-memory owner is still cleared for this visit.
+  }
+}
+
+function clearSharedFinancialData() {
+  for (const key of [
+    STORAGE_KEYS.expenses,
+    STORAGE_KEYS.budgets,
+    STORAGE_KEYS.recurring,
+    STORAGE_KEYS.accounts,
+  ]) {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      // The app state is still cleared for this visit.
+    }
+  }
+}
+
 function readLocalUserSnapshots() {
   try {
     const saved = JSON.parse(
@@ -478,6 +501,15 @@ export default function App() {
     }
   }
 
+  function selectLocalDataForUser(userId) {
+    const hasSavedSnapshot = Boolean(loadLocalUserSnapshot(userId));
+    if (localDataOwnerRef.current || hasSavedSnapshot) {
+      switchLocalUser(userId);
+    } else {
+      adoptLocalDataForUser(userId);
+    }
+  }
+
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     try {
@@ -501,7 +533,7 @@ export default function App() {
   }, [accountData]);
   useEffect(() => {
     const owner = localDataOwnerRef.current;
-    if (!owner) return;
+    if (!owner || owner !== pushUser?.id) return;
     saveLocalUserSnapshot(owner, cloudSnapshotRef.current);
   }, [
     expenses,
@@ -510,6 +542,7 @@ export default function App() {
     accountData,
     theme,
     targetCurrency,
+    pushUser?.id,
   ]);
   useEffect(() => {
     try {
@@ -530,9 +563,7 @@ export default function App() {
       if (active) {
         const user = data.session?.user || null;
         if (user && localDataOwnerRef.current !== user.id) {
-          switchLocalUser(user.id);
-        } else if (user && !localDataOwnerRef.current) {
-          adoptLocalDataForUser(user.id);
+          selectLocalDataForUser(user.id);
         }
         authUserIdRef.current = user?.id ?? null;
         setPushUser(user);
@@ -549,17 +580,28 @@ export default function App() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
       const user = session?.user || null;
+      const previousUserId = authUserIdRef.current || localDataOwnerRef.current;
       setPushUser(user);
       if (event === "PASSWORD_RECOVERY") {
         setAuthMode("update-password");
         setAuthStatus("");
         setAuthModalOpen(true);
       }
-      if (authUserIdRef.current === user?.id) return;
+      if (
+        authUserIdRef.current === user?.id &&
+        (user || !localDataOwnerRef.current)
+      ) {
+        return;
+      }
       if (user && localDataOwnerRef.current !== user.id) {
-        switchLocalUser(user.id);
-      } else if (user && !localDataOwnerRef.current) {
-        adoptLocalDataForUser(user.id);
+        selectLocalDataForUser(user.id);
+      }
+      if (!user && previousUserId) {
+        saveLocalUserSnapshot(previousUserId, cloudSnapshotRef.current);
+        clearSharedFinancialData();
+        localDataOwnerRef.current = null;
+        clearLocalDataOwner();
+        resetDataForNewUser();
       }
       authUserIdRef.current = user?.id ?? null;
       setBackgroundPushEnabled(false);
