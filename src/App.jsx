@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  FaArrowsRotate,
+  FaBuildingColumns,
+  FaClockRotateLeft,
+  FaRepeat,
+  FaRightLeft,
+  FaWallet,
+} from "react-icons/fa6";
+import {
   CATEGORIES,
   CURRENCIES,
   emptyAccountData,
@@ -40,76 +48,38 @@ const CURRENCY_API = "https://api.frankfurter.dev/v2";
 const LOCAL_DATA_OWNER_KEY = "spend-local-data-owner-v1";
 const LOCAL_USER_SNAPSHOTS_KEY = "spend-local-user-snapshots-v1";
 
+const ACCOUNT_ICONS = {
+  bank: FaBuildingColumns,
+  wallet: FaWallet,
+  transfer: FaRightLeft,
+  history: FaClockRotateLeft,
+  repeat: FaRepeat,
+  refresh: FaArrowsRotate,
+};
+
 function AccountIcon({ name }) {
-  const paths = {
-    bkash: (
-      <>
-        <path d="M3 4.5 13.5 6 9.8 10.4 17 14 9.2 12.4 5.6 18 6.4 11.3 3 8.5l5.2.8Z" />
-        <path d="m13.5 6 2.2 1.1-4.6 3.3" />
-      </>
-    ),
-    bank: (
-      <>
-        <path d="m3 8 9-5 9 5" />
-        <path d="M5 9v8M9 9v8M15 9v8M19 9v8M3 19h18M2 8h20" />
-      </>
-    ),
-    wallet: (
-      <>
-        <path d="M4 6.5h14a2 2 0 0 1 2 2v9H4a2 2 0 0 1-2-2V6.5a2 2 0 0 1 2-2h12" />
-        <path d="M16 12h4M17 12a1 1 0 1 0 0 2" />
-      </>
-    ),
-    transfer: (
-      <>
-        <path d="M3 8h15M14 4l4 4-4 4M21 16H6M10 12l-4 4 4 4" />
-      </>
-    ),
-    history: (
-      <>
-        <path d="M4 8V3l-3 3 3 3" />
-        <path d="M4 6a9 9 0 1 1-1 9" />
-        <path d="M12 8v5l3 2" />
-      </>
-    ),
-    repeat: (
-      <>
-        <path d="M17 2l4 4-4 4" />
-        <path d="M3 11V9a3 3 0 0 1 3-3h15" />
-        <path d="m7 22-4-4 4-4" />
-        <path d="M21 13v2a3 3 0 0 1-3 3H3" />
-      </>
-    ),
-    refresh: (
-      <>
-        <path d="M20 11a8 8 0 0 0-13.7-5.7L4 7.5" />
-        <path d="M4 3.5v4h4" />
-        <path d="M4 13a8 8 0 0 0 13.7 5.7L20 16.5" />
-        <path d="M20 20.5v-4h-4" />
-      </>
-    ),
-  };
-  return (
-    name === "bkash" ? (
+  if (name === "bkash") {
+    return (
       <img
         className="account-icon account-icon-bkash"
         src={`${import.meta.env.BASE_URL}icons/bkash.svg`}
         alt=""
         aria-hidden="true"
       />
-    ) : (
-    <svg
+    );
+  }
+
+  const Icon = ACCOUNT_ICONS[name];
+  if (!Icon) return null;
+
+  return (
+    <Icon
       className={`account-icon account-icon-${name}`}
-      viewBox="0 0 24 24"
       aria-hidden="true"
       focusable="false"
-    >
-      {paths[name]}
-    </svg>
-    )
+    />
   );
 }
-
 function loadTheme() {
   try {
     return localStorage.getItem(STORAGE_KEYS.theme) === "dark"

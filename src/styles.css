@@ -880,11 +880,8 @@ header {
   display: block;
   width: 24px;
   height: 24px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.8;
+  fill: currentColor;
+  stroke: none;
 }
 .account-icon-bkash {
   object-fit: contain;
