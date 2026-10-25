@@ -910,16 +910,32 @@ h2 {
 
 .form-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 15px;
-  margin-top: 20px;
+  grid-template-columns: minmax(0, 1.45fr) minmax(0, 0.7fr) minmax(0, 1fr);
+  gap: 18px 16px;
+  margin-top: 22px;
 }
 
 .form-grid > div {
   min-width: 0;
 }
 .description-field {
-  grid-column: span 2;
+  grid-column: auto;
+}
+
+.expense-form-title {
+  line-height: 20px;
+}
+
+.expense-form-plus {
+  display: inline-block;
+  width: auto;
+  height: auto;
+  margin-right: 8px;
+  color: var(--muted);
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 20px;
+  vertical-align: 1px;
 }
 
 label {
@@ -1020,7 +1036,7 @@ textarea:focus {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin-top: 18px;
+  margin-top: 24px;
 }
 
 .currency-hint {
@@ -1028,9 +1044,16 @@ textarea:focus {
 }
 
 .form-actions button {
-  flex: 1 1 0;
-  min-width: max-content;
+  min-width: 178px;
   white-space: nowrap;
+}
+
+.expense-submit::before {
+  content: "+";
+  margin-right: 8px;
+  font-size: 18px;
+  font-weight: 400;
+  vertical-align: -1px;
 }
 
 .form-message {
@@ -1151,54 +1174,178 @@ textarea:focus {
   padding: 0;
   list-style: none;
 }
+.recurring-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.recurring-refresh-button {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--green);
+}
+.recurring-refresh-button:hover {
+  border-color: var(--line);
+  background: var(--soft-green);
+}
+.recurring-refresh-button:focus-visible {
+  outline: 3px solid rgba(57, 120, 93, 0.2);
+  outline-offset: 2px;
+}
+.recurring-refresh-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+.recurring-refresh-button.is-busy .account-icon {
+  animation: account-refresh-spin 0.9s linear infinite;
+}
+.recurring-refresh-button .account-icon {
+  width: 24px;
+  height: 24px;
+  stroke-width: 1.7;
+}
+.recurring-refresh-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+.recurring-callout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.75fr);
+  gap: 20px;
+  align-items: center;
+  margin-top: 18px;
+  padding: 18px 20px;
+  border: 1px solid color-mix(in srgb, var(--green) 60%, var(--line));
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--soft-green) 48%, var(--card));
+}
+.recurring-callout-copy {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+.recurring-callout-copy .currency-hint {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+}
+.recurring-callout-icon {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--green);
+  color: white;
+  font-size: 16px;
+  font-weight: 700;
+}
+.recurring-callout .notification-controls {
+  display: block;
+  margin: 0;
+}
+.recurring-callout .notification-button {
+  width: 100%;
+  min-height: 52px;
+  border-color: var(--green);
+  border-radius: 11px;
+  background: var(--card);
+  color: var(--green);
+  font-size: 14px;
+  font-weight: 700;
+  text-align: left;
+}
+.recurring-callout .notification-status {
+  margin-top: 8px;
+}
+.recurring-list-title {
+  margin: 28px 0 0;
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
 .recurring-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 8px 10px;
-  padding: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  gap: 8px 20px;
+  padding: 18px 20px;
   border: 1px solid var(--line);
-  border-radius: 11px;
+  border-radius: 16px;
+  background: var(--card);
 }
 .recurring-info {
   min-width: 0;
-  flex: 1;
+  grid-row: 1 / -1;
 }
 .recurring-name {
   overflow: hidden;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 17px;
+  font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.recurring-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.recurring-tags span {
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--soft-green);
+  color: var(--green);
+  font-size: 12px;
+  line-height: 1;
+}
 .recurring-meta {
-  margin-top: 4px;
+  margin-top: 10px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.3;
   overflow-wrap: anywhere;
 }
 .recurring-amount {
-  font-size: 13px;
-  font-weight: 600;
+  align-self: start;
+  font-size: 18px;
+  font-weight: 700;
   white-space: nowrap;
 }
 .recurring-actions {
+  align-self: end;
   display: flex;
   gap: 6px;
+  justify-content: flex-end;
 }
 .recurring-action {
-  min-height: 32px;
-  padding: 0 8px;
+  min-height: 36px;
+  padding: 0 13px;
   border: 1px solid var(--line);
   background: var(--card);
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   white-space: nowrap;
 }
 .recurring-action:hover {
   background: var(--field);
   color: var(--ink);
+}
+.recurring-actions .recurring-action:last-child {
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--line));
+  color: var(--danger);
 }
 .recurring-empty {
   margin: 15px 0 0;
@@ -1729,6 +1876,28 @@ button:focus-visible,
   .recurring-panel {
     padding: 18px;
   }
+  .recurring-callout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+    margin-top: 14px;
+    padding: 14px;
+  }
+  .recurring-callout .notification-button {
+    min-height: 46px;
+  }
+  .recurring-list-title {
+    margin-top: 22px;
+  }
+  .recurring-row {
+    gap: 8px 12px;
+    padding: 14px;
+  }
+  .recurring-name {
+    font-size: 15px;
+  }
+  .recurring-amount {
+    font-size: 16px;
+  }
   .recurring-panel > .currency-hint {
     margin: 8px 0;
   }
@@ -1893,7 +2062,7 @@ button:focus-visible,
   }
   .form-actions button {
     width: 100%;
-    flex: 1 0 auto;
+    min-width: 0;
   }
   .budget-form {
     grid-template-columns: minmax(0, 1fr);

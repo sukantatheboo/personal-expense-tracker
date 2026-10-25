@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CATEGORIES,
   CURRENCIES,
+  emptyAccountData,
   PRIMARY_CURRENCY,
   STORAGE_KEYS,
   calculateAccountBalance,
@@ -37,6 +38,7 @@ import {
 } from "./cloud-sync.js";
 
 const CURRENCY_API = "https://api.frankfurter.dev/v2";
+const LOCAL_DATA_OWNER_KEY = "spend-local-data-owner-v1";
 
 function AccountIcon({ name }) {
   const paths = {
@@ -68,6 +70,14 @@ function AccountIcon({ name }) {
         <path d="M4 8V3l-3 3 3 3" />
         <path d="M4 6a9 9 0 1 1-1 9" />
         <path d="M12 8v5l3 2" />
+      </>
+    ),
+    repeat: (
+      <>
+        <path d="M17 2l4 4-4 4" />
+        <path d="M3 11V9a3 3 0 0 1 3-3h15" />
+        <path d="m7 22-4-4 4-4" />
+        <path d="M21 13v2a3 3 0 0 1-3 3H3" />
       </>
     ),
     refresh: (
@@ -225,10 +235,10 @@ function hasMeaningfulLocalAccountSettings(data) {
 function mergeCloudSnapshots(local, cloud, preferLocal) {
   if (!cloud) return local;
 
-  const cloudExpenses = loadExpenses(cloud.expenses);
-  const cloudBudgets = loadBudgets(cloud.budgets);
-  const cloudSchedules = loadRecurringSchedules(cloud.recurringSchedules);
-  const cloudAccounts = loadAccountData(cloud.accountData);
+  const cloudExpenses = loadExpenses(cloud.expenses ?? []);
+  const cloudBudgets = loadBudgets(cloud.budgets ?? {});
+  const cloudSchedules = loadRecurringSchedules(cloud.recurringSchedules ?? []);
+  const cloudAccounts = loadAccountData(cloud.accountData ?? emptyAccountData());
   if (!preferLocal) {
     return {
       expenses: cloudExpenses,
@@ -269,6 +279,22 @@ function isCloudSyncOptedIn(user) {
     );
   } catch {
     return false;
+  }
+}
+
+function loadLocalDataOwner() {
+  try {
+    return localStorage.getItem(LOCAL_DATA_OWNER_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function saveLocalDataOwner(userId) {
+  try {
+    localStorage.setItem(LOCAL_DATA_OWNER_KEY, userId);
+  } catch {
+    // In-memory ownership still protects this session when storage is unavailable.
   }
 }
 
@@ -329,6 +355,8 @@ export default function App() {
   const [cloudSyncRetry, setCloudSyncRetry] = useState(0);
   const [accountRefreshBusy, setAccountRefreshBusy] = useState(false);
   const [accountRefreshStatus, setAccountRefreshStatus] = useState("");
+  const [recurringRefreshBusy, setRecurringRefreshBusy] = useState(false);
+  const [recurringRefreshStatus, setRecurringRefreshStatus] = useState("");
   const [backupStatus, setBackupStatus] = useState("");
   const authModalRef = useRef(null);
   const authTriggerRef = useRef(null);
@@ -339,6 +367,7 @@ export default function App() {
   const cloudSnapshotRef = useRef(null);
   const cloudVersionRef = useRef(null);
   const authUserIdRef = useRef(null);
+  const localDataOwnerRef = useRef(loadLocalDataOwner());
   cloudSnapshotRef.current = {
     expenses,
     budgets,
@@ -347,6 +376,35 @@ export default function App() {
     theme,
     targetCurrency,
   };
+
+  function resetDataForNewUser() {
+    const empty = emptyAccountData();
+    setExpenses([]);
+    setBudgets({});
+    setRecurringSchedules([]);
+    setAccountData(empty);
+    setStartingBalances({
+      bkash: "0",
+      bank: "0",
+      date: empty.settings.startDate,
+    });
+    setExpenseForm(makeExpenseForm());
+    setTransactionForm(makeTransactionForm());
+    setBudgetAmount("");
+    setQuery("");
+    setCategoryFilter("");
+    setEditingExpenseId(null);
+    setEditingAmount("");
+    setRecurringReminder("");
+    setCloudSyncStatus("");
+    setAccountRefreshStatus("");
+    setRecurringRefreshStatus("");
+  }
+
+  function adoptLocalDataForUser(userId) {
+    localDataOwnerRef.current = userId;
+    saveLocalDataOwner(userId);
+  }
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -387,6 +445,10 @@ export default function App() {
       }
       if (active) {
         const user = data.session?.user || null;
+        if (user && localDataOwnerRef.current && localDataOwnerRef.current !== user.id) {
+          resetDataForNewUser();
+        }
+        if (user && !localDataOwnerRef.current) adoptLocalDataForUser(user.id);
         authUserIdRef.current = user?.id ?? null;
         setPushUser(user);
         setCloudSyncReady(false);
@@ -399,6 +461,15 @@ export default function App() {
       const user = session?.user || null;
       setPushUser(user);
       if (authUserIdRef.current === user?.id) return;
+      if (
+        user &&
+        ((authUserIdRef.current && authUserIdRef.current !== user.id) ||
+          (localDataOwnerRef.current &&
+            localDataOwnerRef.current !== user.id))
+      ) {
+        resetDataForNewUser();
+      }
+      if (user && !localDataOwnerRef.current) adoptLocalDataForUser(user.id);
       authUserIdRef.current = user?.id ?? null;
       setBackgroundPushEnabled(false);
       setCloudSyncReady(false);
@@ -440,7 +511,10 @@ export default function App() {
           merged = mergeCloudSnapshots(
             local,
             remote?.data,
-            hasMeaningfulLocalData(local),
+            !localDataOwnerRef.current ||
+              localDataOwnerRef.current === pushUser.id
+              ? hasMeaningfulLocalData(local)
+              : false,
           );
           try {
             savedVersion = await saveCloudData(
@@ -459,6 +533,7 @@ export default function App() {
         }
         if (!active) return;
         cloudVersionRef.current = savedVersion;
+        adoptLocalDataForUser(pushUser.id);
         applyCloudSnapshot(merged);
         setCloudSyncReady(true);
         setCloudSyncStatus("Cloud sync is on. Your data is saved to Supabase.");
@@ -1248,6 +1323,7 @@ export default function App() {
             cloudVersionRef.current = remote.updated_at ?? cloudVersionRef.current;
             setCloudSyncStatus("Cloud data refreshed from Supabase.");
           }
+
         }
         setAccountRefreshStatus("Account balances updated.");
       } catch (error) {
@@ -1255,6 +1331,39 @@ export default function App() {
       } finally {
         setAccountRefreshBusy(false);
       }
+  }
+
+  async function refreshRecurringSchedules() {
+    if (recurringRefreshBusy) return;
+    setRecurringRefreshBusy(true);
+    setRecurringRefreshStatus("Refreshing recurring expenses…");
+    try {
+      if (pushUser && cloudSyncEnabled && cloudSyncReady) {
+        const remote = await loadCloudData(pushUser.id);
+        if (!remote?.data) {
+          throw new Error("No cloud data was returned.");
+        }
+        setRecurringSchedules(
+          loadRecurringSchedules(remote.data.recurringSchedules ?? []),
+        );
+        cloudVersionRef.current = remote.updated_at ?? cloudVersionRef.current;
+        setCloudSyncStatus("Cloud data refreshed from Supabase.");
+        setRecurringRefreshStatus(
+          "Recurring expenses refreshed from Supabase.",
+        );
+      } else {
+        setRecurringSchedules(loadRecurringSchedules());
+        setRecurringRefreshStatus(
+          "Recurring expenses refreshed on this device.",
+        );
+      }
+    } catch (error) {
+      setRecurringRefreshStatus(
+        `Could not refresh recurring expenses: ${error.message}`,
+      );
+    } finally {
+      setRecurringRefreshBusy(false);
+    }
   }
 
   async function removeCloudCopy() {
@@ -1845,7 +1954,12 @@ export default function App() {
       </section>
 
       <section className="panel" aria-labelledby="form-title">
-        <h2 id="form-title">Add an expense</h2>
+        <h2 id="form-title" className="expense-form-title">
+          <span className="expense-form-plus" aria-hidden="true">
+            +
+          </span>
+          Add an expense
+        </h2>
         <form
           id="expense-form"
           onSubmit={handleExpenseSubmit}
@@ -1956,7 +2070,9 @@ export default function App() {
                 ? "Enter amounts in BDT. You can add a missing amount later from Recent expenses."
                 : "Recurring expenses need an amount and are added when due."}
             </span>
-            <button type="submit">Add expense</button>
+            <button className="expense-submit" type="submit">
+              Add expense
+            </button>
           </div>
           {expenseMessage && (
             <p className="form-message" role="alert">
@@ -2358,11 +2474,32 @@ export default function App() {
         className="panel recurring-panel"
         aria-labelledby="recurring-title"
       >
-        <h2 id="recurring-title">Recurring expenses</h2>
-        <p className="currency-hint">
-          Weekly/monthly expenses are added when due. Sign in for reminders
-          while closed.
-        </p>
+        <h2 id="recurring-title" className="recurring-title">
+          Recurring expenses
+          <button
+            className={`recurring-refresh-button${recurringRefreshBusy ? " is-busy" : ""}`}
+            type="button"
+            aria-label="Refresh recurring expenses"
+            title="Refresh recurring expenses"
+            onClick={refreshRecurringSchedules}
+            disabled={recurringRefreshBusy}
+          >
+            <AccountIcon name="repeat" />
+          </button>
+        </h2>
+        {recurringRefreshStatus && (
+          <span className="recurring-refresh-status" role="status">
+            {recurringRefreshStatus}
+          </span>
+        )}
+        <div className="recurring-callout">
+          <div className="recurring-callout-copy">
+            <span className="recurring-callout-icon" aria-hidden="true">i</span>
+            <p className="currency-hint">
+              Weekly/monthly expenses are added when due. Sign in for reminders
+              while closed.
+            </p>
+          </div>
         {recurringReminder && (
           <p className="recurring-reminder" role="status" aria-live="polite">
             {recurringReminder}
@@ -2439,7 +2576,7 @@ export default function App() {
             {authStatus}
           </p>
         )}
-        <div className="notification-controls">
+          <div className="notification-controls">
           <button
             className="notification-button"
             type="button"
@@ -2465,6 +2602,7 @@ export default function App() {
           <p className="notification-status" role="status" aria-live="polite">
             {notificationStatus}
           </p>
+          </div>
         </div>
         {pushBackendConfigured && pushUser && (
           <div className="reminder-time-setting">
@@ -2482,21 +2620,25 @@ export default function App() {
           </div>
         )}
         {recurringSchedules.length ? (
-          <ul className="recurring-list">
+          <>
+            <h3 className="recurring-list-title">Active recurring expenses</h3>
+            <ul className="recurring-list">
             {recurringSchedules.map((schedule) => {
               const cadence =
                 schedule.interval === "weekly" ? "Weekly" : "Monthly";
-              const paymentAccount = isAccountId(schedule.account)
-                ? ` · ${accountName(schedule.account)}`
-                : "";
               return (
                 <li className="recurring-row" key={schedule.id}>
                   <div className="recurring-info">
                     <div className="recurring-name">{schedule.description}</div>
+                    <div className="recurring-tags">
+                      <span>{schedule.active ? cadence : "Paused"}</span>
+                      <span>{schedule.category}</span>
+                      {isAccountId(schedule.account) && (
+                        <span>{accountName(schedule.account)}</span>
+                      )}
+                    </div>
                     <div className="recurring-meta">
-                      {schedule.active ? cadence : `Paused · ${cadence}`} ·{" "}
-                      {schedule.category}
-                      {paymentAccount} · Next {formatDate(schedule.nextDate)}
+                      Next: {formatDate(schedule.nextDate)}
                     </div>
                   </div>
                   <span className="recurring-amount">
@@ -2544,13 +2686,14 @@ export default function App() {
                         );
                       }}
                     >
-                      Remove
+                      <span>Remove</span>
                     </button>
                   </div>
                 </li>
               );
             })}
-          </ul>
+            </ul>
+          </>
         ) : (
           <p className="recurring-empty">
             Set a weekly or monthly schedule when adding an expense.
