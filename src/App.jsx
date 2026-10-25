@@ -39,6 +39,7 @@ import {
 
 const CURRENCY_API = "https://api.frankfurter.dev/v2";
 const LOCAL_DATA_OWNER_KEY = "spend-local-data-owner-v1";
+const LOCAL_USER_SNAPSHOTS_KEY = "spend-local-user-snapshots-v1";
 
 function AccountIcon({ name }) {
   const paths = {
@@ -272,16 +273,6 @@ function mergeCloudSnapshots(local, cloud, preferLocal) {
   };
 }
 
-function isCloudSyncOptedIn(user) {
-  try {
-    return Boolean(
-      user && localStorage.getItem(CLOUD_SYNC_USER_KEY) === user.id,
-    );
-  } catch {
-    return false;
-  }
-}
-
 function loadLocalDataOwner() {
   try {
     return localStorage.getItem(LOCAL_DATA_OWNER_KEY);
@@ -295,6 +286,48 @@ function saveLocalDataOwner(userId) {
     localStorage.setItem(LOCAL_DATA_OWNER_KEY, userId);
   } catch {
     // In-memory ownership still protects this session when storage is unavailable.
+  }
+}
+
+function readLocalUserSnapshots() {
+  try {
+    const saved = JSON.parse(
+      localStorage.getItem(LOCAL_USER_SNAPSHOTS_KEY) || "{}",
+    );
+    return saved && typeof saved === "object" && !Array.isArray(saved)
+      ? saved
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function loadLocalUserSnapshot(userId) {
+  const snapshot = readLocalUserSnapshots()[userId];
+  if (!snapshot || typeof snapshot !== "object") return null;
+  return {
+    expenses: loadExpenses(snapshot.expenses ?? []),
+    budgets: loadBudgets(snapshot.budgets ?? {}),
+    recurringSchedules: loadRecurringSchedules(
+      snapshot.recurringSchedules ?? [],
+    ),
+    accountData: loadAccountData(snapshot.accountData ?? emptyAccountData()),
+    theme: snapshot.theme === "dark" ? "dark" : "light",
+    targetCurrency:
+      typeof snapshot.targetCurrency === "string" &&
+      /^[A-Z]{3}$/.test(snapshot.targetCurrency)
+        ? snapshot.targetCurrency
+        : "USD",
+  };
+}
+
+function saveLocalUserSnapshot(userId, snapshot) {
+  try {
+    const snapshots = readLocalUserSnapshots();
+    snapshots[userId] = snapshot;
+    localStorage.setItem(LOCAL_USER_SNAPSHOTS_KEY, JSON.stringify(snapshots));
+  } catch {
+    // Shared local storage remains as a compatibility fallback.
   }
 }
 
@@ -352,6 +385,8 @@ export default function App() {
   const [cloudSyncEnabled, setCloudSyncEnabled] = useState(false);
   const [cloudSyncReady, setCloudSyncReady] = useState(false);
   const [cloudSyncStatus, setCloudSyncStatus] = useState("");
+  const [cloudSyncConflict, setCloudSyncConflict] = useState(false);
+  const [undoAction, setUndoAction] = useState(null);
   const [cloudSyncRetry, setCloudSyncRetry] = useState(0);
   const [accountRefreshBusy, setAccountRefreshBusy] = useState(false);
   const [accountRefreshStatus, setAccountRefreshStatus] = useState("");
@@ -366,6 +401,7 @@ export default function App() {
   const pushScheduleSyncRef = useRef(Promise.resolve());
   const cloudSnapshotRef = useRef(null);
   const cloudVersionRef = useRef(null);
+  const undoTimerRef = useRef(null);
   const authUserIdRef = useRef(null);
   const localDataOwnerRef = useRef(loadLocalDataOwner());
   cloudSnapshotRef.current = {
@@ -406,6 +442,25 @@ export default function App() {
     saveLocalDataOwner(userId);
   }
 
+  function switchLocalUser(userId) {
+    const previousUserId = localDataOwnerRef.current;
+    if (previousUserId && previousUserId !== userId) {
+      saveLocalUserSnapshot(previousUserId, cloudSnapshotRef.current);
+    }
+    const snapshot = loadLocalUserSnapshot(userId);
+    adoptLocalDataForUser(userId);
+    if (snapshot) {
+      applyCloudSnapshot(snapshot);
+      setStartingBalances({
+        bkash: String(snapshot.accountData.settings.balances.bkash),
+        bank: String(snapshot.accountData.settings.balances.bank),
+        date: snapshot.accountData.settings.startDate,
+      });
+    } else {
+      resetDataForNewUser();
+    }
+  }
+
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     try {
@@ -428,6 +483,18 @@ export default function App() {
     writeStorage(STORAGE_KEYS.accounts, accountData);
   }, [accountData]);
   useEffect(() => {
+    const owner = localDataOwnerRef.current;
+    if (!owner) return;
+    saveLocalUserSnapshot(owner, cloudSnapshotRef.current);
+  }, [
+    expenses,
+    budgets,
+    recurringSchedules,
+    accountData,
+    theme,
+    targetCurrency,
+  ]);
+  useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEYS.currency, targetCurrency);
     } catch {
@@ -445,14 +512,16 @@ export default function App() {
       }
       if (active) {
         const user = data.session?.user || null;
-        if (user && localDataOwnerRef.current && localDataOwnerRef.current !== user.id) {
-          resetDataForNewUser();
+        if (user && localDataOwnerRef.current !== user.id) {
+          switchLocalUser(user.id);
+        } else if (user && !localDataOwnerRef.current) {
+          adoptLocalDataForUser(user.id);
         }
-        if (user && !localDataOwnerRef.current) adoptLocalDataForUser(user.id);
         authUserIdRef.current = user?.id ?? null;
         setPushUser(user);
         setCloudSyncReady(false);
-        setCloudSyncEnabled(isCloudSyncOptedIn(user));
+        setCloudSyncEnabled(Boolean(user));
+        setCloudSyncConflict(false);
       }
     });
     const {
@@ -461,20 +530,17 @@ export default function App() {
       const user = session?.user || null;
       setPushUser(user);
       if (authUserIdRef.current === user?.id) return;
-      if (
-        user &&
-        ((authUserIdRef.current && authUserIdRef.current !== user.id) ||
-          (localDataOwnerRef.current &&
-            localDataOwnerRef.current !== user.id))
-      ) {
-        resetDataForNewUser();
+      if (user && localDataOwnerRef.current !== user.id) {
+        switchLocalUser(user.id);
+      } else if (user && !localDataOwnerRef.current) {
+        adoptLocalDataForUser(user.id);
       }
-      if (user && !localDataOwnerRef.current) adoptLocalDataForUser(user.id);
       authUserIdRef.current = user?.id ?? null;
       setBackgroundPushEnabled(false);
       setCloudSyncReady(false);
       cloudVersionRef.current = null;
-      setCloudSyncEnabled(isCloudSyncOptedIn(user));
+      setCloudSyncEnabled(Boolean(user));
+      setCloudSyncConflict(false);
       setAuthStatus("");
       if (!user) {
         try {
@@ -505,6 +571,7 @@ export default function App() {
         let remote = await loadCloudData(pushUser.id);
         let merged;
         let savedVersion = null;
+        let firstSyncConfirmed = false;
         for (let attempt = 0; attempt < 3; attempt += 1) {
           if (!active) return;
           const local = cloudSnapshotRef.current;
@@ -516,6 +583,22 @@ export default function App() {
               ? hasMeaningfulLocalData(local)
               : false,
           );
+          if (
+            !remote &&
+            !firstSyncConfirmed &&
+            hasMeaningfulLocalData(local) &&
+            !window.confirm(
+              "Your local expenses and account data will be synced to this account. Continue?",
+            )
+          ) {
+            setCloudSyncEnabled(false);
+            setCloudSyncReady(false);
+            setCloudSyncStatus(
+              "Cloud sync paused. Your local data remains on this device.",
+            );
+            return;
+          }
+          firstSyncConfirmed = true;
           try {
             savedVersion = await saveCloudData(
               pushUser.id,
@@ -536,11 +619,13 @@ export default function App() {
         adoptLocalDataForUser(pushUser.id);
         applyCloudSnapshot(merged);
         setCloudSyncReady(true);
+        setCloudSyncConflict(false);
         setCloudSyncStatus("Cloud sync is on. Your data is saved to Supabase.");
       } catch (error) {
         if (active) {
           setCloudSyncEnabled(false);
           setCloudSyncReady(false);
+          setCloudSyncConflict(false);
           try {
             localStorage.removeItem(CLOUD_SYNC_USER_KEY);
           } catch {
@@ -574,14 +659,16 @@ export default function App() {
         if (!savedVersion) {
           cloudVersionRef.current = null;
           setCloudSyncReady(false);
+          setCloudSyncConflict(true);
           setCloudSyncStatus(
-            "Cloud data changed on another device. Refresh Spend to load the latest copy before editing more.",
+            "Newer cloud data was found on another device. Refresh to load it before editing more.",
           );
           return;
         }
         cloudVersionRef.current = savedVersion;
         setCloudSyncStatus("Cloud sync is on. Your data is saved to Supabase.");
       } catch (error) {
+        setCloudSyncConflict(false);
         setCloudSyncStatus(`Could not sync your data: ${error.message}`);
       }
     }, 500);
@@ -712,6 +799,34 @@ export default function App() {
         0,
       ),
     [monthExpenses],
+  );
+  const previousMonth = useMemo(() => shiftMonth(selectedMonth, -1), [selectedMonth]);
+  const previousMonthTotal = useMemo(
+    () =>
+      expenses
+        .filter((expense) => expense.date.slice(0, 7) === previousMonth)
+        .reduce(
+          (sum, expense) =>
+            sum + (expense.amount === null ? 0 : Number(expense.amount)),
+          0,
+        ),
+    [expenses, previousMonth],
+  );
+  const topCategory = useMemo(() => {
+    const totals = monthExpenses.reduce((map, expense) => {
+      if (expense.amount !== null) {
+        map[expense.category] = (map[expense.category] || 0) + Number(expense.amount);
+      }
+      return map;
+    }, {});
+    return Object.entries(totals).sort((a, b) => b[1] - a[1])[0] || null;
+  }, [monthExpenses]);
+  const nextRecurring = useMemo(
+    () =>
+      recurringSchedules
+        .filter((schedule) => schedule.active && schedule.nextDate >= localDate())
+        .sort((a, b) => a.nextDate.localeCompare(b.nextDate))[0] || null,
+    [recurringSchedules],
   );
   const visibleExpenses = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase();
@@ -1142,11 +1257,28 @@ export default function App() {
   }
 
   function clearBudget() {
+    const previousBudget = budgets[selectedMonth];
     setBudgets((current) => {
       const next = { ...current };
       delete next[selectedMonth];
       return next;
     });
+    if (previousBudget) offerUndo("Budget cleared", () =>
+      setBudgets((current) => ({ ...current, [selectedMonth]: previousBudget })),
+    );
+  }
+
+  function offerUndo(label, undo) {
+    if (undoTimerRef.current) window.clearTimeout(undoTimerRef.current);
+    setUndoAction({ label, undo });
+    undoTimerRef.current = window.setTimeout(() => setUndoAction(null), 6000);
+  }
+
+  function undoLastAction() {
+    if (!undoAction) return;
+    undoAction.undo();
+    setUndoAction(null);
+    if (undoTimerRef.current) window.clearTimeout(undoTimerRef.current);
   }
 
   function exportExpenses() {
@@ -1272,18 +1404,6 @@ export default function App() {
     setTargetCurrency(snapshot.targetCurrency);
   }
 
-  function enableCloudSync() {
-    if (!pushUser) return;
-    try {
-      localStorage.setItem(CLOUD_SYNC_USER_KEY, pushUser.id);
-      setCloudSyncReady(false);
-      setCloudSyncEnabled(true);
-      setCloudSyncStatus("Connecting to Supabase and preparing your data…");
-    } catch (error) {
-      setCloudSyncStatus(`Could not enable cloud sync: ${error.message}`);
-    }
-  }
-
   function disableCloudSync() {
     try {
       localStorage.removeItem(CLOUD_SYNC_USER_KEY);
@@ -1294,6 +1414,13 @@ export default function App() {
       );
     } catch (error) {
       setCloudSyncStatus(`Could not disable cloud sync: ${error.message}`);
+    }
+
+    function retryCloudSync() {
+      setCloudSyncConflict(false);
+      setCloudSyncReady(false);
+      setCloudSyncEnabled(true);
+      setCloudSyncRetry((retry) => retry + 1);
     }
   }
 
@@ -1685,7 +1812,15 @@ export default function App() {
             }
           >
             <span className="sync-status-dot" aria-hidden="true" />
-            <span>{cloudSyncEnabled ? "Cloud sync on" : "Local only"}</span>
+            <span>
+              {!pushUser
+                ? "Local only"
+                : !cloudSyncEnabled
+                  ? "Cloud sync paused"
+                  : cloudSyncReady
+                    ? "Cloud sync on"
+                    : "Syncing…"}
+            </span>
           </div>
           <div
             className={`header-actions${pushUser ? " is-authenticated" : ""}`}
@@ -1884,6 +2019,32 @@ export default function App() {
               in {formatMonth(selectedMonth)}
             </span>
           </p>
+        </div>
+        <div className="summary-insights" aria-label="Spending insights">
+          <div>
+            <span>vs previous month</span>
+            <strong>
+              {previousMonthTotal
+                ? `${monthlyTotal >= previousMonthTotal ? "+" : ""}${formatCurrency(monthlyTotal - previousMonthTotal)}`
+                : "No prior data"}
+            </strong>
+          </div>
+          <div>
+            <span>Top category</span>
+            <strong>
+              {topCategory
+                ? `${topCategory[0]} · ${formatCurrency(topCategory[1])}`
+                : "No spending yet"}
+            </strong>
+          </div>
+          <div>
+            <span>Next recurring</span>
+            <strong>
+              {nextRecurring
+                ? `${nextRecurring.description} · ${formatDate(nextRecurring.nextDate)}`
+                : "Nothing scheduled"}
+            </strong>
+          </div>
         </div>
         <button
           className="conversion-toggle"
@@ -2508,56 +2669,53 @@ export default function App() {
         {pushBackendConfigured ? (
           <>
             <p className="push-setup-note">
-              Reminder settings use Supabase. Expenses stay local unless sync
-              is on.
+              Reminder settings use Supabase. Expenses sync automatically when
+              you are signed in.
             </p>
             {pushUser ? (
               <div className="cloud-sync-panel">
                 <h3>Expense cloud sync</h3>
                 <p className="push-setup-note">
-                  {cloudSyncEnabled
-                    ? "Expenses, budgets, schedules, accounts and transactions sync to Supabase. A copy stays on this device."
-                    : "Optionally sync expenses and account data to Supabase. Local storage and backups remain available."}
+                  Expenses, budgets, schedules, accounts and transactions sync
+                  to Supabase automatically while you are signed in. A copy
+                  stays on this device.
                 </p>
                 <div className="push-auth-actions">
-                  {cloudSyncEnabled ? (
-                    <>
-                      <button
-                        className="push-account-action"
-                        type="button"
-                        disabled={authBusy}
-                        onClick={disableCloudSync}
-                      >
-                        Pause cloud sync
-                      </button>
-                      <button
-                        className="push-account-action"
-                        type="button"
-                        disabled={authBusy}
-                        onClick={removeCloudCopy}
-                      >
-                        Delete cloud copy
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={authBusy}
-                      onClick={enableCloudSync}
-                    >
-                      Enable cloud sync
-                    </button>
-                  )}
+                  <button
+                    className="push-account-action"
+                    type="button"
+                    disabled={authBusy}
+                    onClick={disableCloudSync}
+                  >
+                    Pause cloud sync
+                  </button>
+                  <button
+                    className="push-account-action"
+                    type="button"
+                    disabled={authBusy}
+                    onClick={removeCloudCopy}
+                  >
+                    Delete cloud copy
+                  </button>
                 </div>
                 {cloudSyncStatus && (
                   <p className="backup-status" role="status" aria-live="polite">
                     {cloudSyncStatus}
                   </p>
                 )}
+                {cloudSyncConflict && (
+                  <button
+                    className="push-account-action"
+                    type="button"
+                    onClick={retryCloudSync}
+                  >
+                    Refresh cloud data
+                  </button>
+                )}
               </div>
             ) : (
               <p className="push-setup-note">
-                Sign in for cloud sync and background reminders.
+                Sign in for automatic cloud sync and background reminders.
               </p>
             )}
           </>
@@ -2683,6 +2841,12 @@ export default function App() {
                           return;
                         setRecurringSchedules((current) =>
                           current.filter((item) => item.id !== schedule.id),
+                        );
+                        offerUndo("Recurring expense removed", () =>
+                          setRecurringSchedules((current) => [
+                            ...current,
+                            schedule,
+                          ]),
                         );
                       }}
                     >
@@ -2832,11 +2996,14 @@ export default function App() {
                     type="button"
                     aria-label={`Remove ${expense.description}`}
                     title="Remove expense"
-                    onClick={() =>
+                    onClick={() => {
                       setExpenses((current) =>
                         current.filter((item) => item.id !== expense.id),
-                      )
-                    }
+                      );
+                      offerUndo("Expense removed", () =>
+                        setExpenses((current) => [...current, expense]),
+                      );
+                    }}
                   >
                     ×
                   </button>
@@ -2847,11 +3014,19 @@ export default function App() {
         ) : (
           <div className="empty-state">
             {monthExpenses.length === 0
-              ? `No expenses recorded in ${formatMonth(selectedMonth)}.`
+              ? `No expenses recorded in ${formatMonth(selectedMonth)}. Add your first expense above to start your monthly summary.`
               : "No expenses match your search and category filter."}
           </div>
         )}
       </section>
+      {undoAction && (
+        <div className="undo-toast" role="status" aria-live="polite">
+          <span>{undoAction.label}</span>
+          <button type="button" onClick={undoLastAction}>
+            Undo
+          </button>
+        </div>
+      )}
 
     </main>
   );
