@@ -7,6 +7,7 @@ import {
   FaCalendarDays,
   FaCar,
   FaCartShopping,
+  FaCirclePlus,
   FaClockRotateLeft,
   FaEllipsis,
   FaHeartPulse,
@@ -17,6 +18,7 @@ import {
   FaRightLeft,
   FaTag,
   FaUtensils,
+  FaUser,
   FaWallet,
 } from "react-icons/fa6";
 import {
@@ -117,6 +119,49 @@ function AccountIcon({ name }) {
     />
   );
 }
+function CategoryBreakdown({ items, total, titleId, className }) {
+  return (
+    <div className={className} aria-labelledby={titleId}>
+      <div className="category-breakdown-heading">
+        <h3 id={titleId}>Where your money goes</h3>
+        <span>{items.length} categories</span>
+      </div>
+      {items.length ? (
+        <div className="category-breakdown-list">
+          {items.map(([category, amount]) => {
+            const percentage = total
+              ? Math.round((amount / total) * 100)
+              : 0;
+            return (
+              <div className="category-breakdown-row" key={category}>
+                <div className="category-breakdown-label">
+                  <span>{category}</span>
+                  <strong>{formatCurrency(amount)}</strong>
+                </div>
+                <div
+                  className="category-breakdown-track"
+                  role="progressbar"
+                  aria-label={`${category} spending`}
+                  aria-valuemin="0"
+                  aria-valuemax="100"
+                  aria-valuenow={percentage}
+                  aria-valuetext={`${formatCurrency(amount)}, ${percentage}% of monthly spending`}
+                >
+                  <span style={{ width: `${percentage}%` }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="category-breakdown-empty">
+          No spending recorded for this month yet.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function loadTheme() {
   try {
     return localStorage.getItem(STORAGE_KEYS.theme) === "dark"
@@ -158,6 +203,17 @@ function userDisplayName(user) {
   const name = metadata.full_name || metadata.name || metadata.username;
   if (typeof name === "string" && name.trim()) return name.trim();
   return user?.email?.split("@")[0] || "Account";
+}
+
+function userInitial(user) {
+  const metadata = user?.user_metadata ?? {};
+  const firstName =
+    metadata.first_name ||
+    metadata.given_name ||
+    userDisplayName(user).trim().split(/\s+/)[0] ||
+    user?.email?.trim().split("@")[0] ||
+    "A";
+  return Array.from(String(firstName).trim())[0]?.toLocaleUpperCase() || "A";
 }
 
 function formatLastSynced(value) {
@@ -406,6 +462,7 @@ export default function App() {
   const [targetCurrency, setTargetCurrency] = useState(loadCurrency);
   const [reminderTime, setReminderTime] = useState(loadReminderTime);
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+  const [mobileView, setMobileView] = useState("home");
   const [expenseForm, setExpenseForm] = useState(makeExpenseForm);
   const [expenseMessage, setExpenseMessage] = useState("");
   const [transactionForm, setTransactionForm] = useState(makeTransactionForm);
@@ -1038,6 +1095,13 @@ export default function App() {
       )
       .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
   }, [monthExpenses, categoryFilter, query]);
+  const recentExpenses = useMemo(
+    () =>
+      [...monthExpenses]
+        .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id))
+        .slice(0, 3),
+    [monthExpenses],
+  );
   const accountBalances = useMemo(
     () => ({
       bkash: calculateAccountBalance("bkash", expenses, accountData),
@@ -1344,6 +1408,7 @@ export default function App() {
     }
     setSelectedMonth(expenseForm.date.slice(0, 7));
     setExpenseForm(makeExpenseForm());
+    navigateMobile("activity");
   }
 
   function handleOpeningBalancesSubmit(event) {
@@ -1971,14 +2036,30 @@ export default function App() {
     setSelectedMonth((month) => shiftMonth(month, offset));
   }
 
+  function navigateMobile(view) {
+    setMobileView(view);
+    if (window.matchMedia("(max-width: 800px)").matches)
+      window.scrollTo(0, 0);
+  }
+
   const countText =
     visibleExpenses.length === monthExpenses.length
       ? `${visibleExpenses.length} ${visibleExpenses.length === 1 ? "expense" : "expenses"}`
       : `${visibleExpenses.length} of ${monthExpenses.length} shown`;
+  const mobileSectionTitle = {
+    activity: "Activity",
+    add: "Add expense",
+    budget: "Budget",
+    accounts: "Accounts",
+    more: "More",
+  }[mobileView];
 
   return (
-    <main>
+    <main data-mobile-view={mobileView}>
       <header>
+        <span className="mobile-section-title" aria-live="polite">
+          {mobileSectionTitle}
+        </span>
         <div className="header-topline">
           <div className="brand">
             <span className="brand-mark" aria-hidden="true">
@@ -2041,13 +2122,32 @@ export default function App() {
           <div
             className={`header-actions${pushUser ? " is-authenticated" : ""}`}
           >
-            {supabaseConfigured &&
-              (pushUser ? (
-                <>
-                  <div className="header-account header-account-full">
+            {pushUser ? (
+              <>
+                <div className="header-account header-account-full">
+                  <span className="header-avatar" aria-hidden="true">
+                    {userInitial(pushUser)}
+                  </span>
+                  <span className="header-user" title={pushUser.email}>
+                    <span>{userDisplayName(pushUser)}</span>
+                    <small>{pushUser.email}</small>
+                  </span>
+                  <button
+                    className="header-account-action"
+                    type="button"
+                    disabled={authBusy}
+                    onClick={signOutOfPush}
+                  >
+                    Sign out
+                  </button>
+                </div>
+                <details className="header-account-mobile">
+                  <summary aria-label={`Account menu for ${userDisplayName(pushUser)}`}>
                     <span className="header-avatar" aria-hidden="true">
-                      {pushUser.email?.trim().slice(0, 1).toUpperCase() || "A"}
+                      {userInitial(pushUser)}
                     </span>
+                  </summary>
+                  <div className="header-account-popover">
                     <span className="header-user" title={pushUser.email}>
                       <span>{userDisplayName(pushUser)}</span>
                       <small>{pushUser.email}</small>
@@ -2061,41 +2161,25 @@ export default function App() {
                       Sign out
                     </button>
                   </div>
-                  <details className="header-account-mobile">
-                    <summary aria-label={`Account menu for ${userDisplayName(pushUser)}`}>
-                      <span className="header-avatar" aria-hidden="true">
-                        {pushUser.email?.trim().slice(0, 1).toUpperCase() || "A"}
-                      </span>
-                    </summary>
-                    <div className="header-account-popover">
-                      <span className="header-user" title={pushUser.email}>
-                        <span>{userDisplayName(pushUser)}</span>
-                        <small>{pushUser.email}</small>
-                      </span>
-                      <button
-                        className="header-account-action"
-                        type="button"
-                        disabled={authBusy}
-                        onClick={signOutOfPush}
-                      >
-                        Sign out
-                      </button>
-                    </div>
-                  </details>
-                </>
-              ) : (
+                </details>
+              </>
+            ) : (
                 <button
                   className="header-account-action"
                   type="button"
                   ref={authTriggerRef}
+                  aria-label="Sign in to Spend"
                   onClick={() => {
                     setAuthStatus("");
                     setAuthModalOpen(true);
                   }}
                 >
-                  Sign in
+                  <span className="header-signin-icon" aria-hidden="true">
+                    <FaUser focusable="false" />
+                  </span>
+                  <span className="header-signin-label">Sign in</span>
                 </button>
-              ))}
+            )}
           </div>
         </div>
       </header>
@@ -2127,7 +2211,9 @@ export default function App() {
                         : "Sign in to Spend"}
                 </h2>
                 <p>
-                  {authMode === "forgot-password"
+                  {!supabaseConfigured
+                    ? "Sign-in is not configured in this version. Your expenses remain available on this device."
+                    : authMode === "forgot-password"
                     ? "We’ll email you a secure password reset link."
                     : authMode === "update-password"
                       ? "Choose a new password for your Spend account."
@@ -2144,6 +2230,8 @@ export default function App() {
               ×
               </button>
             </div>
+            {supabaseConfigured ? (
+              <>
             <form
               className="push-auth-form auth-modal-form"
               onSubmit={handleAuthSubmit}
@@ -2238,11 +2326,17 @@ export default function App() {
                 {authStatus}
               </p>
             )}
+              </>
+            ) : (
+              <p className="auth-unavailable" role="status">
+                You can keep using Spend locally. Connect an account service to enable sign-in and cloud sync.
+              </p>
+            )}
           </section>
         </div>
       )}
 
-      <section className="summary" aria-labelledby="summary-title">
+      <section className="summary" data-mobile-page="home" aria-labelledby="summary-title">
         <div className="summary-topline">
           <p className="eyebrow" id="summary-title">
             <span className="summary-label-prefix">Month total</span>
@@ -2331,40 +2425,12 @@ export default function App() {
             </strong>
           </div>
         </div>
-        {categoryBreakdown.length > 0 && (
-          <div className="category-breakdown" aria-labelledby="category-breakdown-title">
-            <div className="category-breakdown-heading">
-              <h3 id="category-breakdown-title">Where your money goes</h3>
-              <span>{categoryBreakdown.length} categories</span>
-            </div>
-            <div className="category-breakdown-list">
-              {categoryBreakdown.map(([category, amount]) => {
-                const percentage = monthlyTotal
-                  ? Math.round((amount / monthlyTotal) * 100)
-                  : 0;
-                return (
-                  <div className="category-breakdown-row" key={category}>
-                    <div className="category-breakdown-label">
-                      <span>{category}</span>
-                      <strong>{formatCurrency(amount)}</strong>
-                    </div>
-                    <div
-                      className="category-breakdown-track"
-                      role="progressbar"
-                      aria-label={`${category} spending`}
-                      aria-valuemin="0"
-                      aria-valuemax="100"
-                      aria-valuenow={percentage}
-                      aria-valuetext={`${formatCurrency(amount)}, ${percentage}% of monthly spending`}
-                    >
-                      <span style={{ width: `${percentage}%` }} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
+        <CategoryBreakdown
+          items={categoryBreakdown}
+          total={monthlyTotal}
+          titleId="category-breakdown-title"
+          className="category-breakdown summary-category-breakdown"
+        />
         <button
           className="conversion-toggle"
           type="button"
@@ -2433,7 +2499,71 @@ export default function App() {
         )}
       </section>
 
-      <section className="panel" aria-labelledby="form-title">
+      <section
+        className="home-transactions"
+        data-mobile-page="home"
+        aria-labelledby="home-transactions-title"
+      >
+        <div className="home-transactions-heading">
+          <h2 id="home-transactions-title">Recent Transactions</h2>
+          <button
+            className="home-transactions-see-all"
+            type="button"
+            onClick={() => {
+              setQuery("");
+              setCategoryFilter("");
+              navigateMobile("activity");
+            }}
+          >
+            See all
+          </button>
+        </div>
+        {recentExpenses.length ? (
+          <ul className="home-transaction-list">
+            {recentExpenses.map((expense) => (
+              <li className="home-transaction-row" key={expense.id}>
+                <span className="home-transaction-icon" aria-hidden="true">
+                  <CategoryIcon category={expense.category} />
+                </span>
+                <span className="home-transaction-copy">
+                  <strong title={expense.description}>{expense.description}</strong>
+                  <span>
+                    {expense.category} · {formatDate(expense.date)}
+                  </span>
+                </span>
+                <strong className="home-transaction-amount">
+                  {expense.amount === null
+                    ? "Add amount"
+                    : formatCurrency(expense.amount)}
+                </strong>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="home-transactions-empty">
+            <span className="home-transactions-empty-icon" aria-hidden="true">
+              <FaWallet focusable="false" />
+            </span>
+            <strong>No transactions yet</strong>
+            <p>Start tracking your expenses to see them here.</p>
+          </div>
+        )}
+      </section>
+
+      <section
+        className="home-category-breakdown"
+        data-mobile-page="home"
+        aria-labelledby="home-category-breakdown-title"
+      >
+        <CategoryBreakdown
+          items={categoryBreakdown}
+          total={monthlyTotal}
+          titleId="home-category-breakdown-title"
+          className="category-breakdown home-category-breakdown-card"
+        />
+      </section>
+
+      <section className="panel" data-mobile-page="add" aria-labelledby="form-title">
         <h2 id="form-title" className="expense-form-title">
           <span className="expense-form-plus" aria-hidden="true">
             +
@@ -2562,7 +2692,7 @@ export default function App() {
         </form>
       </section>
 
-      <section className="panel" aria-labelledby="accounts-title">
+      <section className="panel" data-mobile-page="accounts" aria-labelledby="accounts-title">
         <div className="account-panel-header">
           <div>
             <h2 id="accounts-title">Account balances</h2>
@@ -2884,6 +3014,7 @@ export default function App() {
 
       <section
         className="panel budget-panel"
+        data-mobile-page="budget"
         aria-labelledby="budget-title"
       >
         <div className="budget-heading">
@@ -3021,7 +3152,39 @@ export default function App() {
       </section>
 
       <section
+        className="panel mobile-appearance-panel"
+        data-mobile-page="more"
+        aria-labelledby="appearance-title"
+      >
+        <div className="mobile-appearance-heading">
+          <h2 id="appearance-title">Appearance</h2>
+          <p>Choose the look that feels right.</p>
+        </div>
+        <button
+          className="mobile-appearance-setting"
+          type="button"
+          role="switch"
+          aria-checked={theme === "dark"}
+          onClick={() =>
+            setTheme((current) => (current === "dark" ? "light" : "dark"))
+          }
+        >
+          <span className="mobile-appearance-icon" aria-hidden="true">
+            {theme === "dark" ? "☾" : "☀"}
+          </span>
+          <span className="mobile-appearance-copy">
+            <strong>Dark mode</strong>
+            <span>{theme === "dark" ? "On" : "Off"}</span>
+          </span>
+          <span className="mobile-appearance-switch" aria-hidden="true">
+            <span />
+          </span>
+        </button>
+      </section>
+
+      <section
         className="panel recurring-panel"
+        data-mobile-page="more"
         aria-labelledby="recurring-title"
       >
         <div className="recurring-heading">
@@ -3033,6 +3196,12 @@ export default function App() {
               className="recurring-add-button"
               href="#expense-repeat"
               aria-label="Add a recurring expense"
+              onClick={(event) => {
+                if (window.matchMedia("(max-width: 800px)").matches) {
+                  event.preventDefault();
+                  navigateMobile("add");
+                }
+              }}
             >
               <span aria-hidden="true">＋</span>
               <span className="recurring-add-label">Add recurring</span>
@@ -3286,7 +3455,7 @@ export default function App() {
           )}
       </section>
 
-      <section className="list-panel" aria-labelledby="list-title">
+      <section className="list-panel" data-mobile-page="activity" aria-labelledby="list-title">
         <div className="list-heading">
           <div className="list-heading-title">
             <h2 id="list-title">Expenses</h2>
@@ -3448,6 +3617,32 @@ export default function App() {
           </button>
         </div>
       )}
+
+      <nav className="mobile-dock" aria-label="Main navigation">
+        {[
+          { id: "home", label: "Home", Icon: FaHouse },
+          { id: "activity", label: "Activity", Icon: FaClockRotateLeft },
+          { id: "add", label: "Add", Icon: FaCirclePlus },
+          { id: "budget", label: "Budget", Icon: FaCalendarDays },
+          { id: "accounts", label: "Accounts", Icon: FaBuildingColumns },
+          { id: "more", label: "More", Icon: FaEllipsis },
+        ].map(({ id, label, Icon }) => (
+          <button
+            className={`mobile-dock-item${id === "add" ? " mobile-dock-add" : ""}`}
+            type="button"
+            key={id}
+            aria-current={mobileView === id ? "page" : undefined}
+            onClick={() => navigateMobile(id)}
+          >
+            <Icon
+              className="mobile-dock-icon"
+              aria-hidden="true"
+              focusable="false"
+            />
+            <span className="mobile-dock-label">{label}</span>
+          </button>
+        ))}
+      </nav>
 
     </main>
   );
