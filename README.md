@@ -42,6 +42,7 @@ Create a production build with `npm run build`. The site is built and deployed t
 - The app reuses the existing `spend-*` storage keys, so data already saved for the published site remains available when the app is updated on the same origin.
 - Browser storage is erased when site data is cleared. CSV export is available for spreadsheet use.
 - The installable app shell can work offline after the first online visit. Currency conversion requires an internet connection.
+- Account sign-in includes a **Forgot your password?** flow. Supabase emails a one-time recovery link, and Spend lets the user choose a new password after returning to the configured site URL.
 - Background push notifications require a configured Supabase project, an account in Spend, notification permission, and an installed Home Screen app on iOS 16.4 or later. Choose a reminder time in Spend; reminders use that time in the device timezone and default to 9:00 AM. Android Chrome supports installed and browser push where notifications are allowed.
 - When signed in, cloud sync uploads expenses and amounts, budgets, recurring schedules, account balances, and account transactions to Supabase. Background push separately stores the account email, push subscription, and reminder details needed to send notifications.
 - Currency conversion sends only the currency pair to Frankfurter; no expense amounts or account details are sent.
@@ -53,7 +54,7 @@ Create a production build with `npm run build`. The site is built and deployed t
 
 Background reminders need a Supabase project; GitHub Pages alone cannot send push notifications while the app is closed.
 
-1. Create a Supabase project. In **Authentication → URL Configuration**, set the site URL and allowed redirect URL to `https://sukantatheboo.github.io/personal-expense-tracker/`. Enable email/password sign-in.
+1. Create a Supabase project. In **Authentication → URL Configuration**, set the site URL and allowed redirect URL to `https://sukantatheboo.github.io/personal-expense-tracker/`. Enable email/password sign-in. The same URL is used for password recovery links.
 2. Install the Supabase CLI, sign in, link the project, and apply the database migrations:
 
    ```sh

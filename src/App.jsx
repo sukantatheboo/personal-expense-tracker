@@ -169,6 +169,14 @@ function shiftMonth(monthValue, offset) {
   return localDate(shifted).slice(0, 7);
 }
 
+function formatCompactMonth(monthValue) {
+  const [year, month] = (monthValue || currentMonth()).split("-").map(Number);
+  return new Date(year, month - 1, 1).toLocaleDateString(undefined, {
+    month: "short",
+    year: "2-digit",
+  });
+}
+
 function makeExpenseForm() {
   return {
     description: "",
@@ -528,6 +536,10 @@ export default function App() {
         }
         authUserIdRef.current = user?.id ?? null;
         setPushUser(user);
+        if (window.location.hash.includes("type=recovery")) {
+          setAuthMode("update-password");
+          setAuthModalOpen(true);
+        }
         setCloudSyncReady(false);
         setLastSyncedAt(null);
         setCloudSyncEnabled(Boolean(user));
@@ -535,9 +547,14 @@ export default function App() {
     });
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
       const user = session?.user || null;
       setPushUser(user);
+      if (event === "PASSWORD_RECOVERY") {
+        setAuthMode("update-password");
+        setAuthStatus("");
+        setAuthModalOpen(true);
+      }
       if (authUserIdRef.current === user?.id) return;
       if (user && localDataOwnerRef.current !== user.id) {
         switchLocalUser(user.id);
@@ -1483,6 +1500,35 @@ export default function App() {
     setAuthBusy(true);
     setAuthStatus("");
     try {
+      if (authMode === "forgot-password") {
+        const { error } = await supabase.auth.resetPasswordForEmail(
+          authEmail.trim(),
+          {
+            redirectTo: new URL(
+              import.meta.env.BASE_URL,
+              window.location.origin,
+            ).href,
+          },
+        );
+        if (error) throw error;
+        setAuthStatus(
+          "If an account exists for this email, a password reset link is on its way.",
+        );
+        setAuthPassword("");
+        return;
+      }
+
+      if (authMode === "update-password") {
+        const { error } = await supabase.auth.updateUser({
+          password: authPassword,
+        });
+        if (error) throw error;
+        setAuthStatus("Password updated. You can continue using Spend.");
+        setAuthPassword("");
+        setAuthMode("sign-in");
+        return;
+      }
+
       const result =
         authMode === "sign-up"
           ? await supabase.auth.signUp({
@@ -1515,7 +1561,15 @@ export default function App() {
       setAuthPassword("");
     } catch (error) {
       setAuthStatus(
-        `Could not ${authMode === "sign-up" ? "create account" : "sign in"}: ${error.message}`,
+        `Could not ${
+          authMode === "sign-up"
+            ? "create account"
+            : authMode === "forgot-password"
+              ? "send the reset email"
+              : authMode === "update-password"
+                ? "update your password"
+                : "sign in"
+        }: ${error.message}`,
       );
     } finally {
       setAuthBusy(false);
@@ -1821,7 +1875,7 @@ export default function App() {
           </div>
         </div>
       </header>
-      {authModalOpen && !pushUser && (
+      {authModalOpen && (!pushUser || authMode === "update-password") && (
         <div
           className="auth-modal-backdrop"
           onMouseDown={(event) => {
@@ -1842,18 +1896,28 @@ export default function App() {
                 <h2 id="auth-modal-title">
                   {authMode === "sign-up"
                     ? "Create your Spend account"
-                    : "Sign in to Spend"}
+                    : authMode === "forgot-password"
+                      ? "Reset your password"
+                      : authMode === "update-password"
+                        ? "Choose a new password"
+                        : "Sign in to Spend"}
                 </h2>
-                <p>Use your account for reminders and automatic cloud sync.</p>
+                <p>
+                  {authMode === "forgot-password"
+                    ? "We’ll email you a secure password reset link."
+                    : authMode === "update-password"
+                      ? "Choose a new password for your Spend account."
+                      : "Use your account for reminders and automatic cloud sync."}
+                </p>
               </div>
               <button
-                className="auth-modal-close"
-                type="button"
-                aria-label="Close sign-in dialog"
+              className="auth-modal-close"
+              type="button"
+              aria-label="Close sign-in dialog"
                 disabled={authBusy}
                 onClick={() => setAuthModalOpen(false)}
               >
-                ×
+              ×
               </button>
             </div>
             <form
@@ -1873,48 +1937,78 @@ export default function App() {
                     onChange={(event) => setAuthEmail(event.target.value)}
                   />
                 </div>
-                <div>
-                  <label htmlFor="push-password">Password</label>
-                  <input
-                    id="push-password"
-                    type="password"
-                    autoComplete={
-                      authMode === "sign-up"
-                        ? "new-password"
-                        : "current-password"
-                    }
-                    minLength="6"
-                    required
-                    value={authPassword}
-                    onChange={(event) => setAuthPassword(event.target.value)}
-                  />
-                </div>
+                {authMode !== "forgot-password" && (
+                  <div>
+                    <label htmlFor="push-password">
+                      {authMode === "update-password"
+                        ? "New password"
+                        : "Password"}
+                    </label>
+                    <input
+                      id="push-password"
+                      type="password"
+                      autoComplete={
+                        authMode === "sign-up" || authMode === "update-password"
+                          ? "new-password"
+                          : "current-password"
+                      }
+                      minLength="6"
+                      required
+                      value={authPassword}
+                      onChange={(event) => setAuthPassword(event.target.value)}
+                    />
+                  </div>
+                )}
               </div>
               <div className="push-auth-actions">
                 <button type="submit" disabled={authBusy}>
                   {authBusy
                     ? "Please wait…"
-                    : authMode === "sign-up"
-                      ? "Create account"
-                      : "Sign in"}
+                    : authMode === "forgot-password"
+                      ? "Send reset link"
+                      : authMode === "update-password"
+                        ? "Update password"
+                        : authMode === "sign-up"
+                          ? "Create account"
+                          : "Sign in"}
                 </button>
-                <button
-                  className="push-account-action"
-                  type="button"
-                  disabled={authBusy}
-                  onClick={() => {
-                    setAuthMode((mode) =>
-                      mode === "sign-up" ? "sign-in" : "sign-up",
-                    );
-                    setAuthStatus("");
-                  }}
-                >
-                  {authMode === "sign-up"
-                    ? "I already have an account"
-                    : "Create an account"}
-                </button>
+                {authMode !== "update-password" && (
+                  <button
+                    className="push-account-action"
+                    type="button"
+                    disabled={authBusy}
+                    onClick={() => {
+                      setAuthMode((mode) => {
+                        if (mode === "forgot-password") return "sign-in";
+                        return mode === "sign-up" ? "sign-in" : "sign-up";
+                      });
+                      setAuthStatus("");
+                      setAuthPassword("");
+                    }}
+                  >
+                    {authMode === "forgot-password"
+                      ? "Back to sign in"
+                      : authMode === "sign-up"
+                        ? "I already have an account"
+                        : "Create an account"}
+                  </button>
+                )}
               </div>
             </form>
+            {authMode === "sign-in" && (
+              <button
+                className="auth-forgot-password"
+                type="button"
+                disabled={authBusy}
+                onClick={() => {
+                  setAuthMode("forgot-password");
+                  setAuthStatus("");
+                  setAuthPassword("");
+                }}
+              >
+                Forgot your password?
+              </button>
+            )}
             {authStatus && (
               <p className="auth-modal-status" role="status" aria-live="polite">
                 {authStatus}
@@ -1945,7 +2039,12 @@ export default function App() {
             </button>
             <label className="month-select">
               <span className="month-display" aria-hidden="true">
-                <span>{formatMonth(selectedMonth)}</span>
+                <span className="month-display-full">
+                  {formatMonth(selectedMonth)}
+                </span>
+                <span className="month-display-compact">
+                  {formatCompactMonth(selectedMonth)}
+                </span>
                 <span className="month-calendar-icon" />
               </span>
               <input

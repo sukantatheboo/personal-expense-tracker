@@ -466,8 +466,8 @@ header {
   margin-top: 14px;
 }
 
-.auth-modal-fields {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.auth-modal-form .auth-modal-fields {
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
 }
 
@@ -493,6 +493,28 @@ header {
 
 .auth-modal-status {
   margin-top: 12px;
+}
+
+.auth-forgot-password {
+  margin-top: 10px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 600;
+  transition: color 0.15s;
+}
+
+.auth-forgot-password:hover {
+  background: transparent;
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+.auth-forgot-password:focus-visible {
+  outline: 3px solid var(--green);
+  outline-offset: 3px;
 }
 
 .summary {
@@ -568,7 +590,7 @@ header {
   min-height: 54px;
   align-items: center;
   margin: 0;
-  padding: 0 16px;
+  padding: 0 12px;
   border: 0;
   border-right: 1px solid rgba(255, 255, 255, 0.25);
   border-left: 1px solid rgba(255, 255, 255, 0.25);
@@ -581,19 +603,24 @@ header {
   white-space: nowrap;
 }
 .month-display {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   width: 178px;
   min-height: 54px;
   align-items: center;
-  justify-content: space-between;
-  gap: 4px;
+  gap: 10px;
   font-size: 15px;
 }
-.month-display > span:first-child {
+.month-display-full,
+.month-display-compact {
   min-width: 0;
-  flex: 1 1 auto;
   overflow: hidden;
+  text-align: center;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.month-display-compact {
+  display: none;
 }
 .month-calendar-icon {
   position: relative;
@@ -2418,7 +2445,7 @@ button:focus-visible,
   }
   .month-select {
     min-height: 46px;
-    padding: 0 10px;
+    padding: 0 8px;
     justify-content: center;
     border-color: rgba(255, 255, 255, 0.38);
     border-radius: 0;
@@ -2527,27 +2554,42 @@ button:focus-visible,
 
 @container monthly-total (max-width: 300px) {
   .summary-topline {
-    gap: 10px;
+    align-items: center;
+    flex-direction: row;
+    gap: 8px;
   }
   .summary-topline .eyebrow {
-    flex: 0 0 auto;
+    flex: 1 1 auto;
+    min-width: 0;
     font-size: 10px;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.06em;
   }
   .summary-currency {
+    margin-left: 3px;
     padding: 3px 5px;
   }
   .month-navigation {
-    gap: 2px;
+    flex: 0 1 auto;
+    align-self: center;
+    gap: 0;
+    min-height: 36px;
   }
   .month-step {
-    width: 24px;
-    min-width: 24px;
-    min-height: 28px;
-    font-size: 15px;
+    width: 28px;
+    min-width: 28px;
+    min-height: 36px;
+    font-size: 18px;
   }
   .month-display {
-    font-size: 9px;
+    width: 82px;
+    min-height: 36px;
+    font-size: 10px;
+  }
+  .month-display-full {
+    display: none;
+  }
+  .month-display-compact {
+    display: block;
   }
 }
 
