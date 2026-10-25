@@ -171,6 +171,75 @@ header {
   white-space: nowrap;
 }
 
+.category-breakdown {
+  margin-top: 14px;
+  padding: 18px 20px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.category-breakdown-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.category-breakdown-heading h3 {
+  margin: 0;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.category-breakdown-heading span {
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 12px;
+}
+
+.category-breakdown-list {
+  display: grid;
+  gap: 12px;
+}
+
+.category-breakdown-row {
+  display: grid;
+  gap: 6px;
+}
+
+.category-breakdown-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 12px;
+}
+
+.category-breakdown-label strong {
+  color: #fff;
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.category-breakdown-track {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.category-breakdown-track span {
+  display: block;
+  height: 100%;
+  min-width: 4px;
+  border-radius: inherit;
+  background: rgba(255, 255, 255, 0.82);
+}
+
 .undo-toast {
   position: fixed;
   right: 20px;
@@ -2395,6 +2464,9 @@ button:focus-visible,
   }
   .summary-insights strong {
     font-size: clamp(14px, 3.5cqi, 18px);
+  }
+  .category-breakdown {
+    padding: 16px;
   }
 }
 

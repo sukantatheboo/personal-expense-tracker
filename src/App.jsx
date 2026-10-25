@@ -821,6 +821,18 @@ export default function App() {
     }, {});
     return Object.entries(totals).sort((a, b) => b[1] - a[1])[0] || null;
   }, [monthExpenses]);
+  const categoryBreakdown = useMemo(() => {
+    const totals = monthExpenses.reduce((map, expense) => {
+      if (expense.amount !== null) {
+        map[expense.category] =
+          (map[expense.category] || 0) + Number(expense.amount);
+      }
+      return map;
+    }, {});
+    return Object.entries(totals)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5);
+  }, [monthExpenses]);
   const nextRecurring = useMemo(
     () =>
       recurringSchedules
@@ -2046,6 +2058,40 @@ export default function App() {
             </strong>
           </div>
         </div>
+        {categoryBreakdown.length > 0 && (
+          <div className="category-breakdown" aria-labelledby="category-breakdown-title">
+            <div className="category-breakdown-heading">
+              <h3 id="category-breakdown-title">Where your money goes</h3>
+              <span>{categoryBreakdown.length} categories</span>
+            </div>
+            <div className="category-breakdown-list">
+              {categoryBreakdown.map(([category, amount]) => {
+                const percentage = monthlyTotal
+                  ? Math.round((amount / monthlyTotal) * 100)
+                  : 0;
+                return (
+                  <div className="category-breakdown-row" key={category}>
+                    <div className="category-breakdown-label">
+                      <span>{category}</span>
+                      <strong>{formatCurrency(amount)}</strong>
+                    </div>
+                    <div
+                      className="category-breakdown-track"
+                      role="progressbar"
+                      aria-label={`${category} spending`}
+                      aria-valuemin="0"
+                      aria-valuemax="100"
+                      aria-valuenow={percentage}
+                      aria-valuetext={`${formatCurrency(amount)}, ${percentage}% of monthly spending`}
+                    >
+                      <span style={{ width: `${percentage}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
         <button
           className="conversion-toggle"
           type="button"
