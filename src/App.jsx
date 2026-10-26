@@ -463,6 +463,7 @@ export default function App() {
   const [reminderTime, setReminderTime] = useState(loadReminderTime);
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [mobileView, setMobileView] = useState("home");
+  const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [expenseForm, setExpenseForm] = useState(makeExpenseForm);
   const [expenseMessage, setExpenseMessage] = useState("");
   const [transactionForm, setTransactionForm] = useState(makeTransactionForm);
@@ -2037,6 +2038,7 @@ export default function App() {
   }
 
   function navigateMobile(view) {
+    setIsMoreOpen(false);
     setMobileView(view);
     if (window.matchMedia("(max-width: 800px)").matches)
       window.scrollTo(0, 0);
@@ -2052,10 +2054,14 @@ export default function App() {
     budget: "Budget",
     accounts: "Accounts",
     more: "More",
+    recurring: "Recurring expenses",
   }[mobileView];
 
   return (
-    <main data-mobile-view={mobileView}>
+    <main
+      data-mobile-view={mobileView}
+      data-more-open={isMoreOpen ? "true" : undefined}
+    >
       <header>
         <span className="mobile-section-title" aria-live="polite">
           {mobileSectionTitle}
@@ -2371,6 +2377,13 @@ export default function App() {
                 aria-label="Choose month"
                 title="Choose month"
                 value={selectedMonth}
+                onPointerDown={(event) => {
+                  const picker = event.currentTarget;
+                  if (typeof picker.showPicker === "function") {
+                    event.preventDefault();
+                    picker.showPicker();
+                  }
+                }}
                 onChange={(event) =>
                   setSelectedMonth(event.target.value || currentMonth())
                 }
@@ -3184,7 +3197,7 @@ export default function App() {
 
       <section
         className="panel recurring-panel"
-        data-mobile-page="more"
+        data-mobile-page="recurring"
         aria-labelledby="recurring-title"
       >
         <div className="recurring-heading">
@@ -3618,30 +3631,103 @@ export default function App() {
         </div>
       )}
 
-      <nav className="mobile-dock" aria-label="Main navigation">
-        {[
-          { id: "home", label: "Home", Icon: FaHouse },
-          { id: "activity", label: "Activity", Icon: FaClockRotateLeft },
-          { id: "add", label: "Add", Icon: FaCirclePlus },
-          { id: "budget", label: "Budget", Icon: FaCalendarDays },
-          { id: "accounts", label: "Accounts", Icon: FaBuildingColumns },
-          { id: "more", label: "More", Icon: FaEllipsis },
-        ].map(({ id, label, Icon }) => (
-          <button
-            className={`mobile-dock-item${id === "add" ? " mobile-dock-add" : ""}`}
-            type="button"
-            key={id}
-            aria-current={mobileView === id ? "page" : undefined}
-            onClick={() => navigateMobile(id)}
+      {isMoreOpen && (
+        <button
+          className="mobile-dock-backdrop"
+          type="button"
+          aria-label="Close more menu"
+          onClick={() => setIsMoreOpen(false)}
+        />
+      )}
+      <nav
+        className={`mobile-dock${isMoreOpen ? " is-more-open" : ""}`}
+        aria-label="Main navigation"
+      >
+        {isMoreOpen && (
+          <div
+            className="mobile-dock-menu"
+            id="mobile-more-menu"
+            role="menu"
+            aria-label="More sections"
           >
-            <Icon
+            <div className="mobile-dock-menu-heading">
+              <span>Options</span>
+              <button
+                type="button"
+                aria-label="Close more menu"
+                onClick={() => setIsMoreOpen(false)}
+              >
+                <FaCirclePlus aria-hidden="true" focusable="false" />
+              </button>
+            </div>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => navigateMobile("budget")}
+            >
+              <FaCalendarDays aria-hidden="true" focusable="false" />
+              <span>Budget</span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => navigateMobile("recurring")}
+            >
+              <FaRepeat aria-hidden="true" focusable="false" />
+              <span>Recurring expenses</span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => navigateMobile("more")}
+            >
+              <FaEllipsis aria-hidden="true" focusable="false" />
+              <span>More settings</span>
+            </button>
+          </div>
+        )}
+        <div className="mobile-dock-row">
+          {[
+            { id: "home", label: "Home", Icon: FaHouse },
+            { id: "activity", label: "Activity", Icon: FaClockRotateLeft },
+            { id: "add", label: "Add", Icon: FaCirclePlus },
+            { id: "accounts", label: "Accounts", Icon: FaBuildingColumns },
+          ].map(({ id, label, Icon }) => (
+            <button
+              className={`mobile-dock-item${id === "add" ? " mobile-dock-add" : ""}`}
+              type="button"
+              key={id}
+              aria-current={mobileView === id ? "page" : undefined}
+              onClick={() => navigateMobile(id)}
+            >
+              <Icon
+                className="mobile-dock-icon"
+                aria-hidden="true"
+                focusable="false"
+              />
+              <span className="mobile-dock-label">{label}</span>
+            </button>
+          ))}
+          <button
+            className="mobile-dock-item"
+            type="button"
+            aria-expanded={isMoreOpen}
+            aria-controls="mobile-more-menu"
+            aria-current={
+              ["budget", "more", "recurring"].includes(mobileView)
+                ? "page"
+                : undefined
+            }
+            onClick={() => setIsMoreOpen((open) => !open)}
+          >
+            <FaEllipsis
               className="mobile-dock-icon"
               aria-hidden="true"
               focusable="false"
             />
-            <span className="mobile-dock-label">{label}</span>
+            <span className="mobile-dock-label">More</span>
           </button>
-        ))}
+        </div>
       </nav>
 
     </main>
