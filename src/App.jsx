@@ -13,6 +13,7 @@ import {
   FaHeartPulse,
   FaHouse,
   FaMusic,
+  FaPalette,
   FaPenToSquare,
   FaRepeat,
   FaRightLeft,
@@ -2265,7 +2266,8 @@ export default function App() {
     add: "Add expense",
     budget: "Budget",
     accounts: "Accounts",
-    more: "More",
+    more: "Appearance",
+    profile: "Profile",
     recurring: "Recurring expenses",
   }[mobileView];
 
@@ -3408,6 +3410,54 @@ export default function App() {
       </section>
 
       <section
+        className="panel mobile-profile-panel"
+        data-mobile-page="profile"
+        aria-labelledby="profile-title"
+      >
+        <div className="mobile-profile-hero">
+          <span className="mobile-profile-avatar" aria-hidden="true">
+            {pushUser ? userInitial(pushUser) : "L"}
+          </span>
+          <div className="mobile-profile-copy">
+            <span className="mobile-profile-eyebrow">
+              {pushUser ? "Spend account" : "Local profile"}
+            </span>
+            <h2 id="profile-title">
+              {pushUser ? userDisplayName(pushUser) : "Local profile"}
+            </h2>
+            <p>
+              {pushUser?.email || "Sign in to add your email and sync your account."}
+            </p>
+          </div>
+        </div>
+        <div className="mobile-profile-status">
+          <span>Account status</span>
+          <strong>{pushUser ? "Connected" : "Local only"}</strong>
+        </div>
+        {pushUser ? (
+          <button
+            className="mobile-profile-action"
+            type="button"
+            disabled={authBusy}
+            onClick={signOutOfPush}
+          >
+            Sign out
+          </button>
+        ) : (
+          <button
+            className="mobile-profile-action"
+            type="button"
+            onClick={() => {
+              setAuthStatus("");
+              setAuthModalOpen(true);
+            }}
+          >
+            Sign in to sync
+          </button>
+        )}
+      </section>
+
+      <section
         className="panel recurring-panel"
         data-mobile-page="recurring"
         aria-labelledby="recurring-title"
@@ -3847,25 +3897,28 @@ export default function App() {
         </div>
       )}
 
-      {isMoreOpen && (
-        <button
-          className="mobile-dock-backdrop"
-          type="button"
-          aria-label="Close more menu"
-          onClick={() => setIsMoreOpen(false)}
-        />
-      )}
+      <button
+        className={`mobile-dock-backdrop${isMoreOpen ? " is-visible" : ""}`}
+        type="button"
+        aria-label="Close more menu"
+        aria-hidden={!isMoreOpen}
+        disabled={!isMoreOpen}
+        tabIndex={isMoreOpen ? 0 : -1}
+        onClick={() => setIsMoreOpen(false)}
+      />
       <nav
         className={`mobile-dock${isMoreOpen ? " is-more-open" : ""}`}
         aria-label="Main navigation"
       >
-        {isMoreOpen && (
-          <div
-            className="mobile-dock-menu"
-            id="mobile-more-menu"
-            role="menu"
-            aria-label="More sections"
-          >
+        <div
+          className="mobile-dock-menu"
+          id="mobile-more-menu"
+          role="menu"
+          aria-label="More sections"
+          aria-hidden={!isMoreOpen}
+          inert={!isMoreOpen}
+        >
+          <div className="mobile-dock-menu-content">
             <div className="mobile-dock-menu-heading">
               <span>Options</span>
               <button
@@ -3876,6 +3929,27 @@ export default function App() {
                 <FaCirclePlus aria-hidden="true" focusable="false" />
               </button>
             </div>
+            <button
+              className="mobile-dock-profile"
+              type="button"
+              role="menuitem"
+              onClick={() => navigateMobile("profile")}
+            >
+              <span className="mobile-dock-profile-avatar" aria-hidden="true">
+                {pushUser ? userInitial(pushUser) : "L"}
+              </span>
+              <span className="mobile-dock-profile-copy">
+                <strong>
+                  {pushUser ? userDisplayName(pushUser) : "Local profile"}
+                </strong>
+                <small>
+                  {pushUser?.email || "Sign in to sync your account"}
+                </small>
+              </span>
+              <span className="mobile-dock-profile-chevron" aria-hidden="true">
+                ›
+              </span>
+            </button>
             <button
               type="button"
               role="menuitem"
@@ -3897,11 +3971,11 @@ export default function App() {
               role="menuitem"
               onClick={() => navigateMobile("more")}
             >
-              <FaEllipsis aria-hidden="true" focusable="false" />
-              <span>More settings</span>
+              <FaPalette aria-hidden="true" focusable="false" />
+              <span>Appearance</span>
             </button>
           </div>
-        )}
+        </div>
         <div className="mobile-dock-row">
           {[
             { id: "home", label: "Home", Icon: FaHouse },
@@ -3930,7 +4004,7 @@ export default function App() {
             aria-expanded={isMoreOpen}
             aria-controls="mobile-more-menu"
             aria-current={
-              ["budget", "more", "recurring"].includes(mobileView)
+              ["budget", "more", "profile", "recurring"].includes(mobileView)
                 ? "page"
                 : undefined
             }

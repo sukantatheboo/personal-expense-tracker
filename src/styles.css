@@ -3369,6 +3369,10 @@ button:focus-visible,
   display: none;
 }
 
+.mobile-dock-backdrop {
+  display: none;
+}
+
 @media (max-width: 800px) {
   body {
     background: var(--paper);
@@ -3392,6 +3396,7 @@ button:focus-visible,
   main[data-mobile-view="budget"] > [data-mobile-page="budget"],
   main[data-mobile-view="accounts"] > [data-mobile-page="accounts"],
   main[data-mobile-view="more"] > [data-mobile-page="more"],
+  main[data-mobile-view="profile"] > [data-mobile-page="profile"],
   main[data-mobile-view="recurring"] > [data-mobile-page="recurring"] {
     display: block;
   }
@@ -3403,34 +3408,34 @@ button:focus-visible,
   .mobile-dock {
     position: fixed;
     z-index: 30;
-    right: 12px;
+    left: 50%;
+    right: auto;
     bottom: max(10px, env(safe-area-inset-bottom));
-    left: 12px;
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    align-items: center;
+    display: flex;
+    width: calc(100% - 24px);
+    flex-direction: column;
     min-height: 70px;
     padding: 7px 5px calc(7px + env(safe-area-inset-bottom));
+    overflow: hidden;
     border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
     border-radius: 23px;
     background: #121514f5;
     color: #d7e1dc;
     box-shadow: 0 14px 38px rgb(20 35 25 / 16%);
+    transform: translateX(-50%);
     -webkit-backdrop-filter: blur(18px);
     backdrop-filter: blur(18px);
     transition:
-      width 520ms cubic-bezier(0.16, 1, 0.3, 1),
-      right 520ms cubic-bezier(0.16, 1, 0.3, 1),
-      left 520ms cubic-bezier(0.16, 1, 0.3, 1),
-      min-height 520ms cubic-bezier(0.16, 1, 0.3, 1),
-      padding 520ms cubic-bezier(0.16, 1, 0.3, 1),
-      border-radius 520ms cubic-bezier(0.16, 1, 0.3, 1),
-      transform 520ms cubic-bezier(0.16, 1, 0.3, 1),
-      box-shadow 520ms cubic-bezier(0.16, 1, 0.3, 1);
+      width 700ms cubic-bezier(0.16, 1, 0.3, 1),
+      padding 700ms cubic-bezier(0.16, 1, 0.3, 1),
+      border-radius 700ms cubic-bezier(0.16, 1, 0.3, 1),
+      background 700ms cubic-bezier(0.16, 1, 0.3, 1),
+      box-shadow 700ms cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .mobile-dock-item {
     display: flex;
+    width: 100%;
     min-width: 0;
     min-height: 52px;
     align-items: center;
@@ -3445,6 +3450,9 @@ button:focus-visible,
     cursor: pointer;
     text-align: center;
     -webkit-tap-highlight-color: transparent;
+    transition:
+      opacity 420ms ease,
+      transform 520ms cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .mobile-dock-item[aria-current="page"] {
@@ -3522,9 +3530,9 @@ button:focus-visible,
 
   .mobile-dock-icon {
     display: block;
-    width: 19px;
-    height: 19px;
-    flex: 0 0 19px;
+    width: 20px;
+    height: 20px;
+    flex: 0 0 20px;
   }
 
   .mobile-dock-label {
@@ -3626,17 +3634,89 @@ button:focus-visible,
     color: var(--green);
   }
 
+  .mobile-dock-menu .mobile-dock-profile {
+    min-height: 68px;
+    gap: 11px;
+    padding: 9px 10px;
+    border: 1px solid color-mix(in srgb, var(--line) 75%, transparent);
+    border-radius: 15px;
+    background: color-mix(in srgb, var(--surface) 76%, transparent);
+    text-align: left;
+    white-space: normal;
+  }
+
+  .mobile-dock-menu .mobile-dock-profile:hover,
+  .mobile-dock-menu .mobile-dock-profile:focus-visible {
+    background: color-mix(in srgb, var(--green) 13%, var(--surface));
+    color: var(--ink);
+  }
+
+  .mobile-dock-profile-avatar {
+    display: grid;
+    width: 44px;
+    height: 44px;
+    flex: 0 0 44px;
+    place-items: center;
+    border: 1px solid color-mix(in srgb, var(--green) 35%, var(--line));
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--green) 17%, var(--surface));
+    color: var(--green);
+    font-size: 17px;
+    font-weight: 750;
+    letter-spacing: -0.03em;
+  }
+
+  .mobile-dock-profile-copy {
+    display: grid;
+    min-width: 0;
+    flex: 1;
+    gap: 3px;
+  }
+
+  .mobile-dock-profile-copy strong,
+  .mobile-dock-profile-copy small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-dock-profile-copy strong {
+    color: var(--ink);
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .mobile-dock-profile-copy small {
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 500;
+  }
+
+  .mobile-dock-profile-chevron {
+    color: var(--muted);
+    font-size: 25px;
+    line-height: 1;
+  }
+
   .mobile-dock-backdrop {
     position: fixed;
     z-index: 90;
     inset: 0;
+    display: block;
     border: 0;
     background: rgb(8 13 11 / 64%);
     cursor: default;
     box-shadow: none;
-    opacity: 1;
+    opacity: 0;
+    pointer-events: none;
     -webkit-backdrop-filter: blur(16px) saturate(55%) brightness(68%);
     backdrop-filter: blur(16px) saturate(55%) brightness(68%);
+    transition: opacity 500ms ease;
+  }
+
+  .mobile-dock-backdrop.is-visible {
+    opacity: 1;
+    pointer-events: auto;
   }
 
   .mobile-dock-backdrop:hover,
@@ -3653,7 +3733,7 @@ button:focus-visible,
   }
 
   .mobile-dock {
-    display: block;
+    display: flex;
     overflow: visible;
     z-index: 91;
   }
@@ -3662,9 +3742,10 @@ button:focus-visible,
     position: relative;
     right: auto;
     bottom: auto;
+    display: grid;
+    grid-template-rows: 0fr;
     width: 100%;
     min-width: 0;
-    max-height: 0;
     margin: 0;
     padding: 0;
     overflow: hidden;
@@ -3673,12 +3754,20 @@ button:focus-visible,
     background: transparent;
     box-shadow: none;
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(8px);
     transition:
-      max-height 520ms cubic-bezier(0.16, 1, 0.3, 1),
-      padding 520ms cubic-bezier(0.16, 1, 0.3, 1),
-      opacity 260ms ease,
-      transform 520ms cubic-bezier(0.16, 1, 0.3, 1);
+      grid-template-rows 700ms cubic-bezier(0.16, 1, 0.3, 1),
+      padding 700ms cubic-bezier(0.16, 1, 0.3, 1),
+      opacity 500ms ease,
+      transform 700ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .mobile-dock-menu-content {
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
+    gap: 2px;
+    overflow: hidden;
   }
 
   .mobile-dock-menu::after {
@@ -3686,22 +3775,15 @@ button:focus-visible,
   }
 
   .mobile-dock.is-more-open {
-    right: 50%;
-    left: auto;
     width: min(390px, calc(100% - 24px));
     padding: 12px 12px 8px;
     border-radius: 30px;
     background: #121514f5;
-    transform: translateX(50%);
-    transition:
-      width 700ms cubic-bezier(0.16, 1, 0.3, 1),
-      padding 700ms cubic-bezier(0.16, 1, 0.3, 1),
-      border-radius 700ms cubic-bezier(0.16, 1, 0.3, 1),
-      box-shadow 700ms cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 20px 48px rgb(0 0 0 / 30%);
   }
 
   .mobile-dock.is-more-open .mobile-dock-menu {
-    max-height: 290px;
+    grid-template-rows: 1fr;
     padding: 0 0 12px;
     opacity: 1;
     transform: translateY(0);
@@ -3739,7 +3821,6 @@ button:focus-visible,
 
   .mobile-dock.is-more-open .mobile-dock-row {
     padding-top: 8px;
-    border-top: 1px solid color-mix(in srgb, var(--line) 75%, transparent);
   }
 
   .mobile-dock.is-more-open .mobile-dock-add {
@@ -3751,9 +3832,6 @@ button:focus-visible,
   .mobile-dock.is-more-open .mobile-dock-item:not(.mobile-dock-add) {
     opacity: 0.34;
     transform: scale(0.9);
-    transition:
-      opacity 420ms ease,
-      transform 520ms cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .mobile-dock.is-more-open .mobile-dock-row > .mobile-dock-item[aria-current="page"] {
@@ -4036,11 +4114,13 @@ button:focus-visible,
   }
 
   .mobile-dock {
-    right: 9px;
+    left: 50%;
+    right: auto;
     bottom: max(7px, env(safe-area-inset-bottom));
-    left: 9px;
+    width: calc(100% - 18px);
     min-height: 66px;
     border-radius: 21px;
+    transform: translateX(-50%);
   }
 }
 
@@ -4668,9 +4748,14 @@ button:focus-visible,
   main[data-mobile-view]:not([data-mobile-view="home"]) > header {
     margin: 0 -16px 16px;
     padding: 10px 18px;
-    border-bottom: 1px solid var(--line);
+    border-bottom: 0;
     background: var(--paper);
-    box-shadow: 0 5px 14px rgb(20 35 25 / 4%);
+    box-shadow: none;
+  }
+
+  main[data-mobile-view]:not([data-mobile-view="home"]) .local-note,
+  main[data-mobile-view]:not([data-mobile-view="home"]) .header-actions {
+    display: none;
   }
 
   .mobile-section-title {
@@ -4818,6 +4903,10 @@ button:focus-visible,
   display: none;
 }
 
+.mobile-profile-panel {
+  display: none;
+}
+
 @media (max-width: 800px) {
   .theme-toggle {
     display: none;
@@ -4826,6 +4915,98 @@ button:focus-visible,
   .mobile-appearance-panel {
     display: block;
     padding: 19px 17px 15px;
+  }
+
+  .mobile-profile-panel {
+    display: block;
+    padding: 21px 18px 18px;
+  }
+
+  .mobile-profile-hero {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+  }
+
+  .mobile-profile-avatar {
+    display: grid;
+    width: 68px;
+    height: 68px;
+    flex: 0 0 68px;
+    place-items: center;
+    border: 1px solid color-mix(in srgb, var(--green) 38%, var(--line));
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--green) 16%, var(--surface));
+    color: var(--green);
+    font-size: 27px;
+    font-weight: 750;
+    letter-spacing: -0.04em;
+  }
+
+  .mobile-profile-copy {
+    min-width: 0;
+  }
+
+  .mobile-profile-eyebrow {
+    color: var(--green);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .mobile-profile-copy h2 {
+    overflow: hidden;
+    margin: 4px 0 3px;
+    color: var(--ink);
+    font-size: 20px;
+    font-weight: 720;
+    letter-spacing: -0.03em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-profile-copy p {
+    overflow-wrap: anywhere;
+    margin: 0;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .mobile-profile-status {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 22px;
+    padding-top: 15px;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .mobile-profile-status strong {
+    color: var(--ink);
+    font-weight: 650;
+  }
+
+  .mobile-profile-action {
+    width: 100%;
+    min-height: 46px;
+    margin-top: 17px;
+    border: 0;
+    border-radius: 14px;
+    background: var(--green);
+    color: var(--button-ink);
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .mobile-profile-action:hover,
+  .mobile-profile-action:focus-visible {
+    background: var(--green-dark);
   }
 
   .mobile-appearance-heading h2 {
