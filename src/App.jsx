@@ -281,15 +281,106 @@ function accountActivityPrefix(activity) {
   return activity.type === "expense" ? "−" : "";
 }
 
+function emptyDeletedRecords() {
+  return {
+    expenses: {},
+    budgets: {},
+    recurringSchedules: {},
+    accountTransactions: {},
+  };
+}
+
+function normalizeDeletedRecords(value) {
+  const cleanChanges = (changes) => {
+    if (Array.isArray(changes))
+      return Object.fromEntries(
+        [...new Set(changes.filter((id) => typeof id === "string" && id))].map(
+          (id) => [id, { deleted: true, updatedAt: 0 }],
+        ),
+      );
+    if (!changes || typeof changes !== "object") return {};
+    return Object.fromEntries(
+      Object.entries(changes).flatMap(([id, change]) =>
+        typeof id === "string" &&
+        id &&
+        change &&
+        typeof change === "object" &&
+        typeof change.deleted === "boolean"
+          ? [[
+              id,
+              {
+                deleted: change.deleted,
+                updatedAt: Number.isFinite(Number(change.updatedAt))
+                  ? Number(change.updatedAt)
+                  : 0,
+              },
+            ]]
+          : [],
+      ),
+    );
+  };
+  return {
+    expenses: cleanChanges(value?.expenses),
+    budgets: cleanChanges(value?.budgets),
+    recurringSchedules: cleanChanges(value?.recurringSchedules),
+    accountTransactions: cleanChanges(value?.accountTransactions),
+  };
+}
+
+function mergeDeletedRecords(...values) {
+  const merged = emptyDeletedRecords();
+  for (const value of values) {
+    const normalized = normalizeDeletedRecords(value);
+    for (const key of Object.keys(merged)) {
+      for (const [id, change] of Object.entries(normalized[key])) {
+        if (
+          !merged[key][id] ||
+          change.updatedAt >= merged[key][id].updatedAt
+        )
+          merged[key][id] = change;
+      }
+    }
+  }
+  return merged;
+}
+
+function isRecordDeleted(changes, id) {
+  return changes?.[id]?.deleted === true;
+}
+
 function csvCell(value) {
   let text = String(value ?? "");
   if (/^[\t\r ]*[=+@-]/.test(text)) text = `'${text}`;
   return `"${text.replaceAll('"', '""')}"`;
 }
 
-function mergeRecords(cloudRecords, localRecords) {
+function mergeRecords(cloudRecords, localRecords, deletedChanges = {}) {
   const records = new Map(cloudRecords.map((record) => [record.id, record]));
   for (const record of localRecords) records.set(record.id, record);
+  for (const id of records.keys())
+    if (isRecordDeleted(deletedChanges, id)) records.delete(id);
+  return [...records.values()];
+}
+
+function expenseOccurrenceKey(expense) {
+  return expense.recurringId
+    ? `recurring:${expense.recurringId}:${expense.date}`
+    : null;
+}
+
+function mergeExpenseRecords(cloudExpenses, localExpenses, deletedChanges) {
+  const byId = new Map(cloudExpenses.map((expense) => [expense.id, expense]));
+  for (const expense of localExpenses) byId.set(expense.id, expense);
+  const records = new Map();
+  for (const expense of byId.values()) {
+    const occurrenceKey = expenseOccurrenceKey(expense);
+    if (
+      isRecordDeleted(deletedChanges, expense.id) ||
+      (occurrenceKey && isRecordDeleted(deletedChanges, occurrenceKey))
+    )
+      continue;
+    records.set(occurrenceKey ?? `expense:${expense.id}`, expense);
+  }
   return [...records.values()];
 }
 
@@ -302,6 +393,9 @@ function hasMeaningfulLocalData(data) {
     data.accountData.settings.configured ||
     data.accountData.settings.balances.bkash !== 0 ||
     data.accountData.settings.balances.bank !== 0 ||
+    Object.values(normalizeDeletedRecords(data.deletedRecords)).some(
+      (changes) => Object.keys(changes).length > 0,
+    ) ||
     (isValidReminderTime(data.reminderTime) && data.reminderTime !== "09:00")
   );
 }
@@ -321,12 +415,42 @@ function mergeCloudSnapshots(local, cloud, preferLocal) {
   const cloudBudgets = loadBudgets(cloud.budgets ?? {});
   const cloudSchedules = loadRecurringSchedules(cloud.recurringSchedules ?? []);
   const cloudAccounts = loadAccountData(cloud.accountData ?? emptyAccountData());
+  const deletedRecords = mergeDeletedRecords(
+    cloud.deletedRecords,
+    local.deletedRecords,
+  );
+  const withoutDeleted = (records, collection) => {
+    return records.filter(
+      (record) => !isRecordDeleted(deletedRecords[collection], record.id),
+    );
+  };
+  const withoutDeletedBudgets = (budgets) => {
+    return Object.fromEntries(
+      Object.entries(budgets).filter(
+        ([month]) => !isRecordDeleted(deletedRecords.budgets, month),
+      ),
+    );
+  };
   if (!preferLocal) {
     return {
-      expenses: cloudExpenses,
-      budgets: cloudBudgets,
-      recurringSchedules: cloudSchedules,
-      accountData: cloudAccounts,
+      expenses: mergeExpenseRecords(
+        cloudExpenses,
+        [],
+        deletedRecords.expenses,
+      ),
+      budgets: withoutDeletedBudgets(cloudBudgets),
+      recurringSchedules: withoutDeleted(
+        cloudSchedules,
+        "recurringSchedules",
+      ),
+      accountData: {
+        ...cloudAccounts,
+        transactions: withoutDeleted(
+          cloudAccounts.transactions,
+          "accountTransactions",
+        ),
+      },
+      deletedRecords,
       theme: cloud.theme === "dark" ? "dark" : "light",
       targetCurrency:
         typeof cloud.targetCurrency === "string" &&
@@ -342,9 +466,17 @@ function mergeCloudSnapshots(local, cloud, preferLocal) {
   }
 
   return {
-    expenses: mergeRecords(cloudExpenses, local.expenses),
-    budgets: { ...cloudBudgets, ...local.budgets },
-    recurringSchedules: mergeRecords(cloudSchedules, local.recurringSchedules),
+    expenses: mergeExpenseRecords(
+      cloudExpenses,
+      local.expenses,
+      deletedRecords.expenses,
+    ),
+    budgets: withoutDeletedBudgets({ ...cloudBudgets, ...local.budgets }),
+    recurringSchedules: mergeRecords(
+      cloudSchedules,
+      local.recurringSchedules,
+      deletedRecords.recurringSchedules,
+    ),
     accountData: {
       settings: hasMeaningfulLocalAccountSettings(local)
         ? local.accountData.settings
@@ -352,8 +484,10 @@ function mergeCloudSnapshots(local, cloud, preferLocal) {
       transactions: mergeRecords(
         cloudAccounts.transactions,
         local.accountData.transactions,
+        deletedRecords.accountTransactions,
       ),
     },
+    deletedRecords,
     theme: local.theme,
     targetCurrency: local.targetCurrency,
     reminderTime:
@@ -429,6 +563,7 @@ function loadLocalUserSnapshot(userId) {
       snapshot.recurringSchedules ?? [],
     ),
     accountData: loadAccountData(snapshot.accountData ?? emptyAccountData()),
+    deletedRecords: normalizeDeletedRecords(snapshot.deletedRecords),
     theme: snapshot.theme === "dark" ? "dark" : "light",
     targetCurrency:
       typeof snapshot.targetCurrency === "string" &&
@@ -458,6 +593,11 @@ export default function App() {
     loadRecurringSchedules,
   );
   const [accountData, setAccountData] = useState(loadAccountData);
+  const [deletedRecords, setDeletedRecords] = useState(() => {
+    const owner = loadLocalDataOwner();
+    const snapshot = owner ? readLocalUserSnapshots()[owner] : null;
+    return normalizeDeletedRecords(snapshot?.deletedRecords);
+  });
   const [theme, setTheme] = useState(loadTheme);
   const [targetCurrency, setTargetCurrency] = useState(loadCurrency);
   const [reminderTime, setReminderTime] = useState(loadReminderTime);
@@ -534,6 +674,7 @@ export default function App() {
       budgets,
       recurringSchedules,
       accountData,
+      deletedRecords,
       theme,
       targetCurrency,
       reminderTime,
@@ -543,6 +684,7 @@ export default function App() {
       budgets,
       recurringSchedules,
       accountData,
+      deletedRecords,
       theme,
       targetCurrency,
       reminderTime,
@@ -555,6 +697,7 @@ export default function App() {
     setBudgets({});
     setRecurringSchedules([]);
     setAccountData(empty);
+    setDeletedRecords(emptyDeletedRecords());
     setTheme("light");
     setTargetCurrency("USD");
     setReminderTime("09:00");
@@ -698,6 +841,7 @@ export default function App() {
     budgets,
     recurringSchedules,
     accountData,
+    deletedRecords,
     theme,
     targetCurrency,
     reminderTime,
@@ -895,6 +1039,7 @@ export default function App() {
     expenses,
     pushUser?.id,
     recurringSchedules,
+    deletedRecords,
     targetCurrency,
     theme,
     reminderTime,
@@ -1203,10 +1348,15 @@ export default function App() {
       let nextDate = schedule.nextDate;
       let generated = 0;
       while (nextDate <= today && generated < 240) {
-        const exists = nextExpenses.some(
-          (expense) =>
-            expense.recurringId === schedule.id && expense.date === nextDate,
-        );
+        const exists =
+          isRecordDeleted(
+            deletedRecords.expenses,
+            `recurring:${schedule.id}:${nextDate}`,
+          ) ||
+          nextExpenses.some(
+            (expense) =>
+              expense.recurringId === schedule.id && expense.date === nextDate,
+          );
         if (!exists) {
           nextExpenses.push({
             id: makeId(),
@@ -1494,11 +1644,56 @@ export default function App() {
     setEditingAmount("");
   }
 
+  function setRecordDeleted(collection, id, isDeleted) {
+    setDeletedRecords((current) => {
+      const normalized = normalizeDeletedRecords(current);
+      const existing = normalized[collection][id];
+      if (!isDeleted && !existing?.deleted) return current;
+      const previous = existing?.updatedAt ?? 0;
+      return {
+        ...normalized,
+        [collection]: {
+          ...normalized[collection],
+          [id]: {
+            deleted: isDeleted,
+            updatedAt: Math.max(Date.now(), previous + 1),
+          },
+        },
+      };
+    });
+  }
+
+  function setExpenseDeleted(expense, isDeleted) {
+    setRecordDeleted("expenses", expense.id, isDeleted);
+    if (expense.recurringId)
+      setRecordDeleted(
+        "expenses",
+        `recurring:${expense.recurringId}:${expense.date}`,
+        isDeleted,
+      );
+  }
+
+  function restoreExpense(expense) {
+    setExpenseDeleted(expense, false);
+    setExpenses((current) =>
+      current.some((item) => item.id === expense.id)
+        ? current
+        : [...current, expense],
+    );
+  }
+
+  function removeExpense(expense) {
+    setExpenses((current) =>
+      current.filter((item) => item.id !== expense.id),
+    );
+    setExpenseDeleted(expense, true);
+    offerUndo("Expense removed", () => restoreExpense(expense));
+  }
+
   function removeAccountActivity(activity) {
     if (activity.type === "expense") {
-      setExpenses((current) =>
-        current.filter((item) => item.id !== activity.id),
-      );
+      const expense = expenses.find((item) => item.id === activity.id);
+      if (expense) removeExpense(expense);
     } else {
       setAccountData((current) => ({
         ...current,
@@ -1506,6 +1701,15 @@ export default function App() {
           (item) => item.id !== activity.id,
         ),
       }));
+      setRecordDeleted("accountTransactions", activity.id, true);
+      offerUndo("Account activity removed", () => {
+        setRecordDeleted("accountTransactions", activity.id, false);
+        setAccountData((current) =>
+          current.transactions.some((item) => item.id === activity.id)
+            ? current
+            : { ...current, transactions: [...current.transactions, activity] },
+        );
+      });
     }
   }
 
@@ -1513,6 +1717,7 @@ export default function App() {
     event.preventDefault();
     const amount = Number(budgetAmount);
     if (!Number.isFinite(amount) || amount <= 0) return;
+    setRecordDeleted("budgets", selectedMonth, false);
     setBudgets((current) => ({
       ...current,
       [selectedMonth]: roundMoney(amount),
@@ -1527,9 +1732,13 @@ export default function App() {
       delete next[selectedMonth];
       return next;
     });
-    if (previousBudget) offerUndo("Budget cleared", () =>
-      setBudgets((current) => ({ ...current, [selectedMonth]: previousBudget })),
-    );
+    if (previousBudget) {
+      setRecordDeleted("budgets", selectedMonth, true);
+      offerUndo("Budget cleared", () => {
+        setRecordDeleted("budgets", selectedMonth, false);
+        setBudgets((current) => ({ ...current, [selectedMonth]: previousBudget }));
+      });
+    }
   }
 
   function offerUndo(label, undo) {
@@ -1592,6 +1801,7 @@ export default function App() {
         budgets,
         recurringSchedules,
         accountData,
+        deletedRecords,
         theme,
         targetCurrency,
         reminderTime,
@@ -1652,6 +1862,7 @@ export default function App() {
       setBudgets(loadBudgets(data.budgets));
       setRecurringSchedules(loadRecurringSchedules(data.recurringSchedules));
       setAccountData(loadAccountData(data.accountData));
+      setDeletedRecords(normalizeDeletedRecords(data.deletedRecords));
       setTheme(data.theme);
       setTargetCurrency(data.targetCurrency);
       if (isValidReminderTime(data.reminderTime)) {
@@ -1675,6 +1886,7 @@ export default function App() {
     setBudgets(snapshot.budgets);
     setRecurringSchedules(snapshot.recurringSchedules);
     setAccountData(snapshot.accountData);
+    setDeletedRecords(normalizeDeletedRecords(snapshot.deletedRecords));
     setTheme(snapshot.theme);
     setTargetCurrency(snapshot.targetCurrency);
     setReminderTime(
@@ -3342,12 +3554,23 @@ export default function App() {
                         setRecurringSchedules((current) =>
                           current.filter((item) => item.id !== schedule.id),
                         );
-                        offerUndo("Recurring expense removed", () =>
-                          setRecurringSchedules((current) => [
-                            ...current,
-                            schedule,
-                          ]),
+                        setRecordDeleted(
+                          "recurringSchedules",
+                          schedule.id,
+                          true,
                         );
+                        offerUndo("Recurring expense removed", () => {
+                          setRecordDeleted(
+                            "recurringSchedules",
+                            schedule.id,
+                            false,
+                          );
+                          setRecurringSchedules((current) =>
+                            current.some((item) => item.id === schedule.id)
+                              ? current
+                              : [...current, schedule],
+                          );
+                        });
                       }}
                     >
                       <span>Remove</span>
@@ -3599,14 +3822,7 @@ export default function App() {
                     type="button"
                     aria-label={`Remove ${expense.description}`}
                     title="Remove expense"
-                    onClick={() => {
-                      setExpenses((current) =>
-                        current.filter((item) => item.id !== expense.id),
-                      );
-                      offerUndo("Expense removed", () =>
-                        setExpenses((current) => [...current, expense]),
-                      );
-                    }}
+                    onClick={() => removeExpense(expense)}
                   >
                     ×
                   </button>
