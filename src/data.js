@@ -6,6 +6,7 @@ export const STORAGE_KEYS = {
   theme: "spend-theme-v1",
   currency: "spend-target-currency-v1",
   reminderTime: "spend-reminder-time-v1",
+  profileName: "spend-profile-name-v1",
 };
 
 export const CATEGORIES = [

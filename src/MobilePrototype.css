@@ -198,6 +198,10 @@
   color: var(--mut);
   font-size: 13px;
   margin-bottom: 4px;
+  max-width: min(250px, calc(100vw - 132px));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .mobile-prototype .hd h1 {
   margin: 0;
@@ -462,6 +466,31 @@
   text-align: center;
   flex: none;
   background: color-mix(in srgb, var(--c) 18%, transparent);
+}
+.mobile-prototype .ic svg {
+  display: block;
+  width: 21px;
+  height: 21px;
+  flex: none;
+}
+.mobile-prototype .category-symbol {
+  display: inline-grid;
+  width: 1.2em;
+  height: 1.2em;
+  place-items: center;
+  vertical-align: -0.2em;
+  line-height: 1;
+}
+.mobile-prototype .category-symbol-other {
+  width: 1.15em;
+  height: 1.15em;
+  fill: currentColor;
+  stroke: none;
+}
+.mobile-prototype .ic .category-symbol {
+  width: 22px;
+  height: 22px;
+  vertical-align: 0;
 }
 .mobile-prototype .nm {
   flex: 1;
@@ -920,7 +949,58 @@
   text-transform: uppercase;
 }
 .mobile-prototype .settings-profile-row {
+  min-height: 66px;
+  gap: 12px;
+  padding: 8px 4px;
   border-bottom: 0;
+  color: var(--ink);
+  text-align: left;
+}
+.mobile-prototype button.settings-profile-row {
+  border-radius: 14px;
+}
+.mobile-prototype button.settings-profile-row:hover,
+.mobile-prototype button.settings-profile-row:focus-visible {
+  background: color-mix(in srgb, var(--g) 7%, transparent);
+}
+.mobile-prototype button.settings-profile-row:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--g) 55%, transparent);
+  outline-offset: 2px;
+}
+.mobile-prototype .settings-profile-row > .ic {
+  width: 52px;
+  height: 52px;
+  border-radius: 17px;
+  font-size: 22px;
+}
+.mobile-prototype .settings-profile-row .nm b {
+  font-size: 16px;
+  line-height: 1.25;
+}
+.mobile-prototype .settings-profile-row .nm small {
+  display: block;
+  overflow: hidden;
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mobile-prototype .settings-profile-edit {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--bg);
+  color: var(--g);
+}
+.mobile-prototype .settings-profile-edit svg {
+  display: block;
+  width: 17px;
+  height: 17px;
 }
 .mobile-prototype .settings-note,
 .mobile-prototype .settings-status {
@@ -959,9 +1039,18 @@
   text-align: center;
 }
 .mobile-prototype .settings-chevron {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  place-items: center;
   color: var(--mut);
-  font-size: 22px;
   line-height: 1;
+}
+.mobile-prototype .settings-chevron svg {
+  display: block;
+  width: 17px;
+  height: 17px;
 }
 .mobile-prototype .settings-inline-action {
   flex: none;

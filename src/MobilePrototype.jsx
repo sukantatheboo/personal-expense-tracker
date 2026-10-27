@@ -1,4 +1,5 @@
-import { Fragment, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
+import { FaPenToSquare } from "react-icons/fa6";
 import "./MobilePrototype.css";
 
 /* ───────────── constants ───────────── */
@@ -12,7 +13,7 @@ const CAT = {
   Entertainment: ["🎧", "#20a4a4"],
   Education: ["📚", "#5b73d9"],
   Savings: ["🐖", "#2f9a6b"],
-  Other: ["✦", "#7d8a82"],
+  Other: ["", "#7d8a82"],
 };
 const ACC = { bkash: ["bKash", "#e2136e"], bank: ["Bank", "#2563a8"] };
 const TABS = [
@@ -79,6 +80,24 @@ const ICONS = {
   ),
 };
 const Icon = ({ n }) => <svg viewBox="0 0 24 24">{ICONS[n]}</svg>;
+
+function CategorySymbol({ category }) {
+  if (category === "Other") {
+    return (
+      <svg
+        className="category-symbol category-symbol-other"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <circle cx="5" cy="12" r="1.4" />
+        <circle cx="12" cy="12" r="1.4" />
+        <circle cx="19" cy="12" r="1.4" />
+      </svg>
+    );
+  }
+  return <span className="category-symbol" aria-hidden="true">{CAT[category]?.[0] || ""}</span>;
+}
 
 /* ───────────── helpers ───────────── */
 const ld = (d = new Date()) =>
@@ -170,11 +189,11 @@ const MonthSwitch = ({ m, onShift }) => (
 );
 
 function ExpenseRow({ e, onOpen }) {
-  const [em, c] = CAT[e.cat];
+  const [, c] = CAT[e.cat];
   return (
     <button className="ri" onClick={() => onOpen(e.id)}>
       <i className="ic" style={{ "--c": c }}>
-        {em}
+        <CategorySymbol category={e.cat} />
       </i>
       <span className="nm">
         <b>{e.desc}</b>
@@ -210,7 +229,8 @@ function Sheet({ onClose, children }) {
 }
 
 /* ───────────── screens ───────────── */
-function Home({ S, onShift, onTab, onBudget, onOpen, onSettings }) {
+function Home({ S, profile, onShift, onTab, onBudget, onOpen, onSettings }) {
+  const [currentTime, setCurrentTime] = useState(() => new Date());
   const t = tot(S, S.m),
     p = tot(S, shift(S.m, -1)),
     b = S.bud[S.m] || 0,
@@ -224,7 +244,20 @@ function Home({ S, onShift, onTab, onBudget, onOpen, onSettings }) {
   const nx = S.rec
     .filter((r) => r.on)
     .sort((x, y) => x.next.localeCompare(y.next))[0];
-  const h = new Date().getHours();
+  const h = currentTime.getHours();
+  useEffect(() => {
+    const timer = window.setInterval(() => setCurrentTime(new Date()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const timeGreeting =
+    h < 12
+      ? "Good morning"
+      : h < 17
+        ? "Good afternoon"
+        : h < 21
+          ? "Good evening"
+          : "Good night";
+  const greetingName = profile?.hasName ? profile.name : "there";
 
   return (
     <>
@@ -237,19 +270,19 @@ function Home({ S, onShift, onTab, onBudget, onOpen, onSettings }) {
           </span>
           Spend
         </div>
-        <button className="av" aria-label="Settings" onClick={onSettings}>
-          S
+        <button
+          className="av"
+          aria-label="Profile and settings"
+          onClick={onSettings}
+        >
+          {profile?.initial || "A"}
         </button>
       </div>
 
       <div className="hd">
         <div>
           <small>
-            {h < 12
-              ? "Good morning"
-              : h < 18
-                ? "Good afternoon"
-                : "Good evening"}
+            {timeGreeting}, {greetingName}
           </small>
           <h1>{fM(S.m)}</h1>
         </div>
@@ -295,7 +328,15 @@ function Home({ S, onShift, onTab, onBudget, onOpen, onSettings }) {
       <div className="mini">
         <div className="card">
           <small>Top category</small>
-          <b>{cs[0] ? CAT[cs[0][0]][0] + " " + cs[0][0] : "—"}</b>
+          <b>
+            {cs[0] ? (
+              <>
+                <CategorySymbol category={cs[0][0]} /> {cs[0][0]}
+              </>
+            ) : (
+              "—"
+            )}
+          </b>
         </div>
         <div className="card">
           <small>Next recurring</small>
@@ -379,7 +420,7 @@ function Activity({ S, q, setQ, cf, setCf, onShift, onOpen }) {
             className={cf === c ? "on" : ""}
             onClick={() => setCf(c)}
           >
-            {CAT[c][0]} {c}
+            <CategorySymbol category={c} /> {c}
           </button>
         ))}
       </div>
@@ -611,7 +652,7 @@ function Plans({
           S.rec.map((r) => (
             <div className="ri" key={r.id} style={{ opacity: r.on ? 1 : 0.55 }}>
               <i className="ic" style={{ "--c": CAT[r.cat][1] }}>
-                {CAT[r.cat][0]}
+                <CategorySymbol category={r.cat} />
               </i>
               <span className="nm">
                 <b>{r.desc}</b>
@@ -723,7 +764,7 @@ function AddSheet({ iv, onSave, onClose }) {
             className={f.cat === c ? "on" : ""}
             onClick={() => set("cat", c)}
           >
-            {CAT[c][0]} {c}
+            <CategorySymbol category={c} /> {c}
           </button>
         ))}
       </div>
@@ -920,7 +961,12 @@ function SettingsSheet({ S, profile, onTheme, onAdvanced, onClose }) {
   return (
     <Sheet onClose={onClose}>
       <h3>Settings</h3>
-      <div className="ri settings-profile-row">
+      <button
+        className="ri settings-profile-row"
+        type="button"
+        aria-label="Open profile and sync settings"
+        onClick={onAdvanced}
+      >
         <i className="ic" style={{ "--c": "#2f7a5a" }}>
           {profile?.initial || "S"}
         </i>
@@ -928,7 +974,10 @@ function SettingsSheet({ S, profile, onTheme, onAdvanced, onClose }) {
           <b>{profile?.name || "Local profile"}</b>
           <small>{profile?.email || "Data stays on this device"}</small>
         </span>
-      </div>
+        <span className="settings-chevron" aria-hidden="true">
+          <Icon n="r" />
+        </span>
+      </button>
       <button className="ri" type="button" onClick={onTheme}>
         <span className="nm">
           <b>Dark mode</b>
@@ -941,7 +990,9 @@ function SettingsSheet({ S, profile, onTheme, onAdvanced, onClose }) {
           <b>More app settings</b>
           <small>Profile, accounts, reminders, and backups</small>
         </span>
-        <span aria-hidden="true">›</span>
+        <span className="settings-chevron" aria-hidden="true">
+          <Icon n="r" />
+        </span>
       </button>
     </Sheet>
   );
@@ -958,7 +1009,9 @@ function AppSettingsPage({
   backgroundPushEnabled,
   backupStatus,
   accountStatus,
+  profileStatus,
   authBusy,
+  onEditProfile,
   onBack,
   onAccounts,
   onSignIn,
@@ -971,7 +1024,7 @@ function AppSettingsPage({
   const notificationUnavailable = notificationPermission === "unsupported";
   const notificationBlocked = notificationPermission === "denied";
   const notificationLabel = pushBackendConfigured
-    ? profile
+    ? profile?.connected
       ? backgroundPushEnabled
         ? "On"
         : "Off"
@@ -983,7 +1036,7 @@ function AppSettingsPage({
         : notificationPermission === "granted"
           ? "Allowed"
           : "Off";
-  const syncLabel = !profile
+  const syncLabel = !profile?.connected
     ? "Your data stays on this device."
     : !cloudSyncEnabled
       ? "Cloud sync is paused."
@@ -1010,7 +1063,12 @@ function AppSettingsPage({
 
       <section className="card app-settings-card">
         <h2>Profile &amp; sync</h2>
-        <div className="ri settings-profile-row">
+        <button
+          className="ri settings-profile-row"
+          type="button"
+          aria-label="Edit profile name"
+          onClick={onEditProfile}
+        >
           <i className="ic" style={{ "--c": "#2f7a5a" }}>
             {profile?.initial || "S"}
           </i>
@@ -1018,8 +1076,16 @@ function AppSettingsPage({
             <b>{profile?.name || "Local profile"}</b>
             <small>{profile?.email || "No account connected"}</small>
           </span>
-        </div>
+          <span className="settings-profile-edit" aria-hidden="true">
+            <FaPenToSquare focusable="false" />
+          </span>
+        </button>
         <p className="settings-note">{syncLabel}</p>
+        {profileStatus && (
+          <p className="settings-status" role="status" aria-live="polite">
+            {profileStatus}
+          </p>
+        )}
         {accountStatus && (
           <p className="settings-status" role="status" aria-live="polite">
             {accountStatus}
@@ -1029,9 +1095,9 @@ function AppSettingsPage({
           className="btn settings-account-action"
           type="button"
           disabled={authBusy}
-          onClick={profile ? onSignOut : onSignIn}
+          onClick={profile?.connected ? onSignOut : onSignIn}
         >
-          {profile ? (authBusy ? "Signing out…" : "Sign out") : "Sign in to sync"}
+          {profile?.connected ? (authBusy ? "Signing out…" : "Sign out") : "Sign in to sync"}
         </button>
       </section>
 
@@ -1050,7 +1116,7 @@ function AppSettingsPage({
             <small>Starting balances, transfers, and account activity</small>
           </span>
           <span className="settings-chevron" aria-hidden="true">
-            ›
+            <Icon n="r" />
           </span>
         </button>
       </section>
@@ -1073,7 +1139,7 @@ function AppSettingsPage({
             onChange={(event) => onReminder(event.target.value)}
           />
         </div>
-        {pushBackendConfigured && profile ? (
+        {pushBackendConfigured && profile?.connected ? (
           <button
             className="ri settings-action"
             type="button"
@@ -1111,7 +1177,7 @@ function AppSettingsPage({
               <small>Sign in to enable push reminders</small>
             </span>
             <span className="settings-chevron" aria-hidden="true">
-              ›
+              <Icon n="r" />
             </span>
           </button>
         ) : (
@@ -1135,7 +1201,7 @@ function AppSettingsPage({
         )}
         <p className="settings-note" role="status" aria-live="polite">
           {notificationStatus ||
-            (pushBackendConfigured && !profile
+            (pushBackendConfigured && !profile?.connected
               ? "Sign in to enable background reminders."
               : "Notifications remind you when a scheduled expense is due.")}
         </p>
@@ -1156,7 +1222,7 @@ function AppSettingsPage({
             <small>Save expenses, budgets, and settings as a file</small>
           </span>
           <span className="settings-chevron" aria-hidden="true">
-            ›
+            <Icon n="r" />
           </span>
         </button>
         <button
@@ -1172,7 +1238,7 @@ function AppSettingsPage({
             <small>Choose a Spend backup file</small>
           </span>
           <span className="settings-chevron" aria-hidden="true">
-            ›
+            <Icon n="r" />
           </span>
         </button>
         <p className="settings-note">
@@ -1208,7 +1274,9 @@ export default function MobilePrototype({
   onReminder,
   onSignIn,
   onSignOut,
+  onEditProfile,
   profile,
+  profileStatus,
   cloudSyncEnabled,
   cloudSyncReady,
   pushBackendConfigured,
@@ -1319,7 +1387,9 @@ export default function MobilePrototype({
             backgroundPushEnabled={backgroundPushEnabled}
             backupStatus={backupStatus}
             accountStatus={accountStatus}
+            profileStatus={profileStatus}
             authBusy={authBusy}
+            onEditProfile={onEditProfile}
             onBack={() => {
               setAppSettingsOpen(false);
               setSheet({ type: "set" });
@@ -1336,6 +1406,7 @@ export default function MobilePrototype({
           tab === "home" && (
             <Home
               S={S}
+              profile={profile}
               onShift={onShift}
               onTab={nav}
               onBudget={openBudget}

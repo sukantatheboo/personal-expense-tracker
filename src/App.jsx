@@ -197,6 +197,15 @@ function loadReminderTime() {
   }
 }
 
+function loadLocalProfileName() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEYS.profileName);
+    return typeof saved === "string" ? saved.trim() : "";
+  } catch {
+    return "";
+  }
+}
+
 function accountName(accountId) {
   return accountId === "bkash" ? "bKash" : "Bank";
 }
@@ -208,15 +217,13 @@ function userDisplayName(user) {
   return user?.email?.split("@")[0] || "Account";
 }
 
+function profileInitial(name) {
+  return Array.from(String(name || "").trim().split(/\s+/)[0] || "A")[0]
+    ?.toLocaleUpperCase() || "A";
+}
+
 function userInitial(user) {
-  const metadata = user?.user_metadata ?? {};
-  const firstName =
-    metadata.first_name ||
-    metadata.given_name ||
-    userDisplayName(user).trim().split(/\s+/)[0] ||
-    user?.email?.trim().split("@")[0] ||
-    "A";
-  return Array.from(String(firstName).trim())[0]?.toLocaleUpperCase() || "A";
+  return profileInitial(userDisplayName(user));
 }
 
 function formatLastSynced(value) {
@@ -604,6 +611,11 @@ export default function App() {
   const [theme, setTheme] = useState(loadTheme);
   const [targetCurrency, setTargetCurrency] = useState(loadCurrency);
   const [reminderTime, setReminderTime] = useState(loadReminderTime);
+  const [localProfileName, setLocalProfileName] = useState(loadLocalProfileName);
+  const [profileEditorOpen, setProfileEditorOpen] = useState(false);
+  const [profileDraft, setProfileDraft] = useState("");
+  const [profileStatus, setProfileStatus] = useState("");
+  const [profileSaving, setProfileSaving] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [mobileView, setMobileView] = useState("home");
   const [isMoreOpen, setIsMoreOpen] = useState(false);
@@ -661,6 +673,7 @@ export default function App() {
   const [backupStatus, setBackupStatus] = useState("");
   const authModalRef = useRef(null);
   const authTriggerRef = useRef(null);
+  const profileEditorTriggerRef = useRef(null);
   const backupFileInputRef = useRef(null);
   const pendingDueRef = useRef([]);
   const lastRecurringCheckRef = useRef("");
@@ -1069,6 +1082,14 @@ export default function App() {
       else if (previousFocus?.isConnected) previousFocus.focus();
     };
   }, [authBusy, authModalOpen, pushUser]);
+
+  useEffect(() => {
+    if (profileEditorOpen) return undefined;
+    if (profileEditorTriggerRef.current?.isConnected)
+      profileEditorTriggerRef.current.focus();
+    profileEditorTriggerRef.current = null;
+    return undefined;
+  }, [profileEditorOpen]);
 
   function trapAuthModalFocus(event) {
     if (event.key !== "Tab") return;
@@ -2181,6 +2202,51 @@ export default function App() {
     }
   }
 
+  function openProfileEditor() {
+    profileEditorTriggerRef.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    setProfileDraft(pushUser ? userDisplayName(pushUser) : localProfileName);
+    setProfileStatus("");
+    setProfileEditorOpen(true);
+  }
+
+  async function saveProfileName(value) {
+    const name = value.trim();
+    if (!name || name.length > 48) {
+      setProfileStatus("Enter a name with 1 to 48 characters.");
+      return false;
+    }
+
+    setProfileSaving(true);
+    setProfileStatus("");
+    try {
+      if (pushUser && supabase) {
+        const { data, error } = await supabase.auth.updateUser({
+          data: { full_name: name, name },
+        });
+        if (error) throw error;
+        setPushUser(
+          data.user ?? {
+            ...pushUser,
+            user_metadata: { ...pushUser.user_metadata, full_name: name, name },
+          },
+        );
+      } else {
+        localStorage.setItem(STORAGE_KEYS.profileName, name);
+        setLocalProfileName(name);
+      }
+      setProfileStatus("Profile updated.");
+      return true;
+    } catch (error) {
+      setProfileStatus(`Could not update your profile: ${error.message}`);
+      return false;
+    } finally {
+      setProfileSaving(false);
+    }
+  }
+
   async function signOutOfPush() {
     if (!supabase || !pushUser) return;
     setAuthBusy(true);
@@ -2436,11 +2502,19 @@ export default function App() {
         setTheme((current) => (current === "dark" ? "light" : "dark"))
       }
       onReminder={updateReminderTime}
-      profile={pushUser ? {
-        name: userDisplayName(pushUser),
-        email: pushUser.email,
-        initial: userInitial(pushUser),
-      } : null}
+      profile={{
+        name: pushUser
+          ? userDisplayName(pushUser)
+          : localProfileName || "Local profile",
+        email: pushUser?.email || "",
+        initial: pushUser
+          ? userInitial(pushUser)
+          : profileInitial(localProfileName || "Local profile"),
+        connected: Boolean(pushUser),
+        hasName: Boolean(pushUser || localProfileName),
+      }}
+      onEditProfile={openProfileEditor}
+      profileStatus={profileStatus}
       cloudSyncEnabled={cloudSyncEnabled}
       cloudSyncReady={cloudSyncReady}
       pushBackendConfigured={pushBackendConfigured}
@@ -2745,6 +2819,109 @@ export default function App() {
                 You can keep using Spend locally. Connect an account service to enable sign-in and cloud sync.
               </p>
             )}
+          </section>
+        </div>,
+        document.body,
+      )}
+      {profileEditorOpen && createPortal(
+        <div
+          className="profile-editor-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !profileSaving)
+              setProfileEditorOpen(false);
+          }}
+        >
+          <section
+            className="profile-editor"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="profile-editor-title"
+            onKeyDown={(event) => {
+              if (event.key === "Escape" && !profileSaving) {
+                setProfileEditorOpen(false);
+                return;
+              }
+              if (event.key !== "Tab") return;
+              const focusable = event.currentTarget.querySelectorAll(
+                "button:not([disabled]), input:not([disabled])",
+              );
+              if (!focusable.length) return;
+              const first = focusable[0];
+              const last = focusable[focusable.length - 1];
+              if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last.focus();
+              } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first.focus();
+              }
+            }}
+          >
+            <div className="profile-editor-heading">
+              <div>
+                <span>PROFILE</span>
+                <h2 id="profile-editor-title">Edit your profile</h2>
+              </div>
+              <button
+                className="profile-editor-close"
+                type="button"
+                aria-label="Close profile editor"
+                disabled={profileSaving}
+                onClick={() => setProfileEditorOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+            <form
+              onSubmit={async (event) => {
+                event.preventDefault();
+                if (await saveProfileName(profileDraft))
+                  setProfileEditorOpen(false);
+              }}
+            >
+              <label htmlFor="profile-display-name">Display name</label>
+              <input
+                id="profile-display-name"
+                type="text"
+                autoComplete="name"
+                autoFocus
+                maxLength={48}
+                required
+                placeholder="Your name"
+                value={profileDraft}
+                onChange={(event) => setProfileDraft(event.target.value)}
+              />
+              <p className="profile-editor-hint">
+                This name appears in your greeting and profile avatar.
+              </p>
+              {profileStatus && (
+                <p
+                  className={`profile-editor-status${
+                    profileStatus.startsWith("Could not") ||
+                    profileStatus.startsWith("Enter ")
+                      ? " is-error"
+                      : ""
+                  }`}
+                  role="status"
+                  aria-live="polite"
+                >
+                  {profileStatus}
+                </p>
+              )}
+              <div className="profile-editor-actions">
+                <button
+                  className="profile-editor-cancel"
+                  type="button"
+                  disabled={profileSaving}
+                  onClick={() => setProfileEditorOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button type="submit" disabled={profileSaving}>
+                  {profileSaving ? "Saving…" : "Save name"}
+                </button>
+              </div>
+            </form>
           </section>
         </div>,
         document.body,
@@ -3610,24 +3787,41 @@ export default function App() {
       >
         <div className="mobile-profile-hero">
           <span className="mobile-profile-avatar" aria-hidden="true">
-            {pushUser ? userInitial(pushUser) : "L"}
+            {pushUser
+              ? userInitial(pushUser)
+              : profileInitial(localProfileName || "Local profile")}
           </span>
           <div className="mobile-profile-copy">
             <span className="mobile-profile-eyebrow">
               {pushUser ? "Spend account" : "Local profile"}
             </span>
             <h2 id="profile-title">
-              {pushUser ? userDisplayName(pushUser) : "Local profile"}
+              {pushUser
+                ? userDisplayName(pushUser)
+                : localProfileName || "Local profile"}
             </h2>
             <p>
               {pushUser?.email || "Sign in to add your email and sync your account."}
             </p>
           </div>
+          <button
+            className="mobile-profile-edit"
+            type="button"
+            aria-label="Edit profile name"
+            onClick={openProfileEditor}
+          >
+            <FaPenToSquare aria-hidden="true" focusable="false" />
+          </button>
         </div>
         <div className="mobile-profile-status">
           <span>Account status</span>
           <strong>{pushUser ? "Connected" : "Local only"}</strong>
         </div>
+        {profileStatus && (
+          <p className="mobile-profile-message" role="status" aria-live="polite">
+            {profileStatus}
+          </p>
+        )}
         {pushUser ? (
           <button
             className="mobile-profile-action"
@@ -4130,11 +4324,15 @@ export default function App() {
               onClick={() => navigateMobile("profile")}
             >
               <span className="mobile-dock-profile-avatar" aria-hidden="true">
-                {pushUser ? userInitial(pushUser) : "L"}
+                {pushUser
+                  ? userInitial(pushUser)
+                  : profileInitial(localProfileName || "Local profile")}
               </span>
               <span className="mobile-dock-profile-copy">
                 <strong>
-                  {pushUser ? userDisplayName(pushUser) : "Local profile"}
+                  {pushUser
+                    ? userDisplayName(pushUser)
+                    : localProfileName || "Local profile"}
                 </strong>
                 <small>
                   {pushUser?.email || "Sign in to sync your account"}
