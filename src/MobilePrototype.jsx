@@ -314,8 +314,7 @@ function Plans({ S, plan, setPlan, onShift, onBudget, onAddRec, onToggleRec, onR
               </small>
             </span>
             <button className={'sw ' + (r.on ? 'on' : '')} aria-label="Pause or resume" onClick={() => onToggleRec(r.id)} />
-            <button aria-label="Remove" onClick={() => onRemoveRec(r.id)}
-              style={{ color: 'var(--mut)', fontSize: 22, padding: '0 4px' }}>×</button>
+            <button className="remove-rec" aria-label="Remove" onClick={() => onRemoveRec(r.id)}>×</button>
           </div>
         )) : <div className="emp">No recurring expenses.</div>}
       </div>
