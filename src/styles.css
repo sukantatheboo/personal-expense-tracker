@@ -5091,9 +5091,9 @@ button:focus-visible,
     height: 42px;
     flex: 0 0 42px;
     place-items: center;
-    border: 1px solid var(--line);
+    border: 1px solid color-mix(in srgb, var(--green) 26%, var(--line));
     border-radius: 14px;
-    background: var(--paper);
+    background: color-mix(in srgb, var(--green) 13%, var(--surface));
     color: var(--green);
     cursor: pointer;
   }

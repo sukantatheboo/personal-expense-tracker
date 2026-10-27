@@ -200,10 +200,17 @@ function loadReminderTime() {
 function loadLocalProfileName() {
   try {
     const saved = localStorage.getItem(STORAGE_KEYS.profileName);
-    return typeof saved === "string" ? saved.trim() : "";
+    return typeof saved === "string" ? capitalizeFirst(saved) : "";
   } catch {
     return "";
   }
+}
+
+function capitalizeFirst(value) {
+  const characters = Array.from(String(value ?? "").trim());
+  if (!characters.length) return "";
+  characters[0] = characters[0].toLocaleUpperCase();
+  return characters.join("");
 }
 
 function accountName(accountId) {
@@ -212,9 +219,16 @@ function accountName(accountId) {
 
 function userDisplayName(user) {
   const metadata = user?.user_metadata ?? {};
-  const name = metadata.full_name || metadata.name || metadata.username;
-  if (typeof name === "string" && name.trim()) return name.trim();
-  return user?.email?.split("@")[0] || "Account";
+  const profileName = [
+    metadata.first_name || metadata.given_name,
+    metadata.last_name || metadata.family_name,
+  ]
+    .filter((part) => typeof part === "string" && part.trim())
+    .join(" ");
+  const name =
+    metadata.full_name || metadata.name || profileName || metadata.username;
+  if (typeof name === "string" && name.trim()) return capitalizeFirst(name);
+  return capitalizeFirst(user?.email?.split("@")[0] || "Account");
 }
 
 function profileInitial(name) {
@@ -410,15 +424,24 @@ function hasMeaningfulLocalData(data) {
   );
 }
 
-function hasMeaningfulLocalAccountSettings(data) {
+function hasMeaningfulAccountSettings(settings) {
   return (
-    data.accountData.settings.configured ||
-    data.accountData.settings.balances.bkash !== 0 ||
-    data.accountData.settings.balances.bank !== 0
+    settings.configured ||
+    settings.balances.bkash !== 0 ||
+    settings.balances.bank !== 0
   );
 }
 
-function mergeCloudSnapshots(local, cloud, preferLocal) {
+function hasMeaningfulLocalAccountSettings(data) {
+  return hasMeaningfulAccountSettings(data.accountData.settings);
+}
+
+function mergeCloudSnapshots(
+  local,
+  cloud,
+  preferLocal,
+  preferLocalAccountSettings = preferLocal,
+) {
   if (!cloud) return local;
 
   const cloudExpenses = loadExpenses(cloud.expenses ?? []);
@@ -488,7 +511,8 @@ function mergeCloudSnapshots(local, cloud, preferLocal) {
       deletedRecords.recurringSchedules,
     ),
     accountData: {
-      settings: hasMeaningfulLocalAccountSettings(local)
+      settings:
+        preferLocalAccountSettings && hasMeaningfulLocalAccountSettings(local)
         ? local.accountData.settings
         : cloudAccounts.settings,
       transactions: mergeRecords(
@@ -611,7 +635,7 @@ export default function App() {
   const [theme, setTheme] = useState(loadTheme);
   const [targetCurrency, setTargetCurrency] = useState(loadCurrency);
   const [reminderTime, setReminderTime] = useState(loadReminderTime);
-  const [localProfileName, setLocalProfileName] = useState(loadLocalProfileName);
+  const [localProfileName] = useState(loadLocalProfileName);
   const [profileEditorOpen, setProfileEditorOpen] = useState(false);
   const [profileDraft, setProfileDraft] = useState("");
   const [profileStatus, setProfileStatus] = useState("");
@@ -968,13 +992,23 @@ export default function App() {
         for (let attempt = 0; attempt < 3; attempt += 1) {
           if (!active) return;
           const local = cloudSnapshotRef.current;
+          const localBelongsToUser =
+            !localDataOwnerRef.current ||
+            localDataOwnerRef.current === pushUser.id;
+          const preferLocal =
+            localBelongsToUser && hasMeaningfulLocalData(local);
+          const cloudAccountSettings = loadAccountData(
+            remote?.data?.accountData ?? emptyAccountData(),
+          ).settings;
+          const preferLocalAccountSettings =
+            preferLocal &&
+            hasMeaningfulLocalAccountSettings(local) &&
+            !hasMeaningfulAccountSettings(cloudAccountSettings);
           merged = mergeCloudSnapshots(
             local,
             remote?.data,
-            !localDataOwnerRef.current ||
-              localDataOwnerRef.current === pushUser.id
-              ? hasMeaningfulLocalData(local)
-              : false,
+            preferLocal,
+            preferLocalAccountSettings,
           );
           try {
             savedVersion = await saveCloudData(
@@ -2203,40 +2237,54 @@ export default function App() {
   }
 
   function openProfileEditor() {
+    if (!pushUser || !supabase) {
+      openSignInModal();
+      return;
+    }
     profileEditorTriggerRef.current =
       document.activeElement instanceof HTMLElement
         ? document.activeElement
         : null;
-    setProfileDraft(pushUser ? userDisplayName(pushUser) : localProfileName);
+    setProfileDraft(userDisplayName(pushUser));
     setProfileStatus("");
     setProfileEditorOpen(true);
   }
 
+  function openSignInModal() {
+    authTriggerRef.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    setAuthMode("sign-in");
+    setAuthStatus("");
+    setAuthPassword("");
+    setAuthModalOpen(true);
+  }
+
   async function saveProfileName(value) {
-    const name = value.trim();
+    const name = capitalizeFirst(value);
     if (!name || name.length > 48) {
       setProfileStatus("Enter a name with 1 to 48 characters.");
+      return false;
+    }
+    if (!pushUser || !supabase) {
+      setProfileStatus("Sign in to edit your profile.");
       return false;
     }
 
     setProfileSaving(true);
     setProfileStatus("");
     try {
-      if (pushUser && supabase) {
-        const { data, error } = await supabase.auth.updateUser({
-          data: { full_name: name, name },
-        });
-        if (error) throw error;
-        setPushUser(
-          data.user ?? {
-            ...pushUser,
-            user_metadata: { ...pushUser.user_metadata, full_name: name, name },
-          },
-        );
-      } else {
-        localStorage.setItem(STORAGE_KEYS.profileName, name);
-        setLocalProfileName(name);
-      }
+      const { data, error } = await supabase.auth.updateUser({
+        data: { full_name: name, name },
+      });
+      if (error) throw error;
+      setPushUser(
+        data.user ?? {
+          ...pushUser,
+          user_metadata: { ...pushUser.user_metadata, full_name: name, name },
+        },
+      );
       setProfileStatus("Profile updated.");
       return true;
     } catch (error) {
@@ -2528,15 +2576,7 @@ export default function App() {
       onSignOut={signOutOfPush}
       accountStatus={authStatus}
       authBusy={authBusy}
-      onSignIn={() => {
-        authTriggerRef.current = document.activeElement instanceof HTMLElement
-          ? document.activeElement
-          : null;
-        setAuthMode("sign-in");
-        setAuthStatus("");
-        setAuthPassword("");
-        setAuthModalOpen(true);
-      }}
+      onSignIn={openSignInModal}
     />
     <main
       className="full-app"
@@ -3804,14 +3844,16 @@ export default function App() {
               {pushUser?.email || "Sign in to add your email and sync your account."}
             </p>
           </div>
-          <button
-            className="mobile-profile-edit"
-            type="button"
-            aria-label="Edit profile name"
-            onClick={openProfileEditor}
-          >
-            <FaPenToSquare aria-hidden="true" focusable="false" />
-          </button>
+          {pushUser && (
+            <button
+              className="mobile-profile-edit"
+              type="button"
+              aria-label="Edit profile name"
+              onClick={openProfileEditor}
+            >
+              <FaPenToSquare aria-hidden="true" focusable="false" />
+            </button>
+          )}
         </div>
         <div className="mobile-profile-status">
           <span>Account status</span>
@@ -3835,12 +3877,9 @@ export default function App() {
           <button
             className="mobile-profile-action"
             type="button"
-            onClick={() => {
-              setAuthStatus("");
-              setAuthModalOpen(true);
-            }}
+            onClick={openSignInModal}
           >
-            Sign in to sync
+            Sign in to edit profile
           </button>
         )}
       </section>

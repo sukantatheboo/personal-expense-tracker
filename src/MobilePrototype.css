@@ -967,6 +967,23 @@
   outline: 2px solid color-mix(in srgb, var(--g) 55%, transparent);
   outline-offset: 2px;
 }
+.mobile-prototype .settings-profile-guest .nm small {
+  color: var(--g);
+}
+.mobile-prototype .settings-profile-signin-label {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+  color: var(--g);
+  font-size: 11px;
+  font-weight: 800;
+}
+.mobile-prototype .settings-profile-signin-label svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
 .mobile-prototype .settings-profile-row > .ic {
   width: 52px;
   height: 52px;
@@ -992,15 +1009,54 @@
   height: 40px;
   flex: 0 0 40px;
   place-items: center;
-  border: 1px solid var(--line);
+  border: 1px solid color-mix(in srgb, var(--g) 26%, var(--line));
   border-radius: 13px;
-  background: var(--bg);
+  background: color-mix(in srgb, var(--g) 13%, var(--card));
   color: var(--g);
+  cursor: pointer;
+}
+.mobile-prototype .settings-profile-edit:hover,
+.mobile-prototype .settings-profile-edit:focus-visible {
+  background: color-mix(in srgb, var(--g) 22%, var(--card));
+  outline: 2px solid color-mix(in srgb, var(--g) 45%, transparent);
+  outline-offset: 2px;
 }
 .mobile-prototype .settings-profile-edit svg {
   display: block;
   width: 17px;
   height: 17px;
+  fill: currentColor;
+  stroke: none;
+  stroke-width: 0;
+}
+.mobile-prototype .profile-sync-status {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 4px 0;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--bg);
+  color: var(--mut);
+  font-size: 13px;
+  font-weight: 700;
+}
+.mobile-prototype .profile-sync-indicator {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 9px;
+  border-radius: 50%;
+  background: var(--line);
+}
+.mobile-prototype .profile-sync-status.is-on {
+  border-color: color-mix(in srgb, var(--g) 26%, var(--line));
+  color: var(--ink);
+}
+.mobile-prototype .profile-sync-status.is-on .profile-sync-indicator {
+  background: var(--g);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--g) 14%, transparent);
 }
 .mobile-prototype .settings-note,
 .mobile-prototype .settings-status {

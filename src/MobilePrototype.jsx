@@ -99,6 +99,16 @@ function CategorySymbol({ category }) {
   return <span className="category-symbol" aria-hidden="true">{CAT[category]?.[0] || ""}</span>;
 }
 
+function greetingFirstName(profile) {
+  const firstName = profile?.hasName
+    ? String(profile.name || "").trim().split(/\s+/)[0]
+    : "";
+  if (!firstName) return "there";
+  const characters = Array.from(firstName);
+  characters[0] = characters[0].toLocaleUpperCase();
+  return characters.join("");
+}
+
 /* ───────────── helpers ───────────── */
 const ld = (d = new Date()) =>
   d.getFullYear() +
@@ -257,7 +267,7 @@ function Home({ S, profile, onShift, onTab, onBudget, onOpen, onSettings }) {
         : h < 21
           ? "Good evening"
           : "Good night";
-  const greetingName = profile?.hasName ? profile.name : "there";
+  const greetingName = greetingFirstName(profile);
 
   return (
     <>
@@ -956,7 +966,14 @@ function BudgetSheet({ S, onSave, onClear, onClose }) {
   );
 }
 
-function SettingsSheet({ S, profile, onTheme, onAdvanced, onClose }) {
+function SettingsSheet({
+  S,
+  profile,
+  onTheme,
+  onAdvanced,
+  onProfileSettings,
+  onClose,
+}) {
   const dark = S.theme === "dark";
   return (
     <Sheet onClose={onClose}>
@@ -965,7 +982,7 @@ function SettingsSheet({ S, profile, onTheme, onAdvanced, onClose }) {
         className="ri settings-profile-row"
         type="button"
         aria-label="Open profile and sync settings"
-        onClick={onAdvanced}
+        onClick={onProfileSettings}
       >
         <i className="ic" style={{ "--c": "#2f7a5a" }}>
           {profile?.initial || "S"}
@@ -987,8 +1004,8 @@ function SettingsSheet({ S, profile, onTheme, onAdvanced, onClose }) {
       </button>
       <button className="ri" type="button" onClick={onAdvanced}>
         <span className="nm">
-          <b>More app settings</b>
-          <small>Profile, accounts, reminders, and backups</small>
+          <b>App settings</b>
+          <small>Accounts, reminders, and backups</small>
         </span>
         <span className="settings-chevron" aria-hidden="true">
           <Icon n="r" />
@@ -998,24 +1015,139 @@ function SettingsSheet({ S, profile, onTheme, onAdvanced, onClose }) {
   );
 }
 
-function AppSettingsPage({
-  S,
+function ProfileSettingsPage({
   profile,
   cloudSyncEnabled,
   cloudSyncReady,
-  pushBackendConfigured,
-  notificationPermission,
-  notificationStatus,
-  backgroundPushEnabled,
-  backupStatus,
   accountStatus,
   profileStatus,
   authBusy,
   onEditProfile,
   onBack,
-  onAccounts,
   onSignIn,
   onSignOut,
+}) {
+  const syncLabel = !profile?.connected
+    ? "Your data stays on this device."
+    : !cloudSyncEnabled
+      ? "Cloud sync is paused."
+      : cloudSyncReady
+        ? "Cloud sync is on."
+        : "Syncing your data…";
+
+  return (
+    <>
+      <div className="settings-page-header">
+        <button
+          className="settings-page-back"
+          type="button"
+          aria-label="Back to settings"
+          onClick={onBack}
+        >
+          <Icon n="l" />
+        </button>
+        <h1>Profile</h1>
+      </div>
+      <p className="settings-page-intro">
+        {profile?.connected
+          ? "Manage your name, account, and cloud sync."
+          : "Sign in to add a profile name and sync across devices."}
+      </p>
+
+      <section className="card app-settings-card">
+        <h2>Your profile</h2>
+        {profile?.connected ? (
+          <div className="ri settings-profile-row">
+            <i className="ic" style={{ "--c": "#2f7a5a" }}>
+              {profile.initial || "S"}
+            </i>
+            <span className="nm">
+              <b>{profile.name || "Account"}</b>
+              <small>{profile.email || "Signed-in account"}</small>
+            </span>
+            <button
+              className="settings-profile-edit"
+              type="button"
+              aria-label="Edit profile name"
+              onClick={onEditProfile}
+            >
+              <FaPenToSquare aria-hidden="true" focusable="false" />
+            </button>
+          </div>
+        ) : (
+          <button
+            className="ri settings-profile-row settings-profile-guest"
+            type="button"
+            aria-label="Sign in to edit your profile"
+            onClick={onSignIn}
+          >
+            <i className="ic" style={{ "--c": "#2f7a5a" }}>
+              {profile?.initial || "S"}
+            </i>
+            <span className="nm">
+              <b>{profile?.name || "Local profile"}</b>
+              <small>Sign in to edit your profile</small>
+            </span>
+            <span className="settings-profile-signin-label" aria-hidden="true">
+              Sign in
+              <Icon n="r" />
+            </span>
+          </button>
+        )}
+        {profileStatus && (
+          <p className="settings-status" role="status" aria-live="polite">
+            {profileStatus}
+          </p>
+        )}
+      </section>
+
+      <section className="card app-settings-card">
+        <h2>Sync</h2>
+        <div
+          className={`profile-sync-status${
+            profile?.connected && cloudSyncEnabled && cloudSyncReady
+              ? " is-on"
+              : ""
+          }`}
+          role="status"
+          aria-live="polite"
+        >
+          <span className="profile-sync-indicator" aria-hidden="true" />
+          <span>{syncLabel}</span>
+        </div>
+        {accountStatus && (
+          <p className="settings-status" role="status" aria-live="polite">
+            {accountStatus}
+          </p>
+        )}
+        <button
+          className="btn settings-account-action"
+          type="button"
+          disabled={authBusy}
+          onClick={profile?.connected ? onSignOut : onSignIn}
+        >
+          {profile?.connected
+            ? authBusy
+              ? "Signing out…"
+              : "Sign out"
+            : "Sign in to sync"}
+        </button>
+      </section>
+    </>
+  );
+}
+
+function AppSettingsPage({
+  S,
+  profile,
+  pushBackendConfigured,
+  notificationPermission,
+  notificationStatus,
+  backgroundPushEnabled,
+  backupStatus,
+  onBack,
+  onAccounts,
+  onSignIn,
   onReminder,
   onToggleNotifications,
   onBackupDownload,
@@ -1036,14 +1168,6 @@ function AppSettingsPage({
         : notificationPermission === "granted"
           ? "Allowed"
           : "Off";
-  const syncLabel = !profile?.connected
-    ? "Your data stays on this device."
-    : !cloudSyncEnabled
-      ? "Cloud sync is paused."
-      : cloudSyncReady
-        ? "Cloud sync is on."
-        : "Syncing your data…";
-
   return (
     <>
       <div className="settings-page-header">
@@ -1058,48 +1182,8 @@ function AppSettingsPage({
         <h1>App settings</h1>
       </div>
       <p className="settings-page-intro">
-        Manage your profile, accounts, reminders, and data.
+        Manage accounts, reminders, and data backups.
       </p>
-
-      <section className="card app-settings-card">
-        <h2>Profile &amp; sync</h2>
-        <button
-          className="ri settings-profile-row"
-          type="button"
-          aria-label="Edit profile name"
-          onClick={onEditProfile}
-        >
-          <i className="ic" style={{ "--c": "#2f7a5a" }}>
-            {profile?.initial || "S"}
-          </i>
-          <span className="nm">
-            <b>{profile?.name || "Local profile"}</b>
-            <small>{profile?.email || "No account connected"}</small>
-          </span>
-          <span className="settings-profile-edit" aria-hidden="true">
-            <FaPenToSquare focusable="false" />
-          </span>
-        </button>
-        <p className="settings-note">{syncLabel}</p>
-        {profileStatus && (
-          <p className="settings-status" role="status" aria-live="polite">
-            {profileStatus}
-          </p>
-        )}
-        {accountStatus && (
-          <p className="settings-status" role="status" aria-live="polite">
-            {accountStatus}
-          </p>
-        )}
-        <button
-          className="btn settings-account-action"
-          type="button"
-          disabled={authBusy}
-          onClick={profile?.connected ? onSignOut : onSignIn}
-        >
-          {profile?.connected ? (authBusy ? "Signing out…" : "Sign out") : "Sign in to sync"}
-        </button>
-      </section>
 
       <section className="card app-settings-card">
         <h2>Accounts</h2>
@@ -1296,6 +1380,7 @@ export default function MobilePrototype({
   const [cf, setCf] = useState("");
   const [sheet, setSheet] = useState(null);
   const [appSettingsOpen, setAppSettingsOpen] = useState(false);
+  const [profileSettingsOpen, setProfileSettingsOpen] = useState(false);
   const [toastMsg, setToastMsg] = useState(null);
   const timer = useRef();
 
@@ -1307,6 +1392,7 @@ export default function MobilePrototype({
   const close = () => setSheet(null);
   const nav = (t) => {
     setAppSettingsOpen(false);
+    setProfileSettingsOpen(false);
     setTab(t);
     window.scrollTo(0, 0);
   };
@@ -1367,7 +1453,14 @@ export default function MobilePrototype({
   };
   const advanced = () => {
     setSheet(null);
+    setProfileSettingsOpen(false);
     setAppSettingsOpen(true);
+    window.scrollTo(0, 0);
+  };
+  const openProfileSettings = () => {
+    setSheet(null);
+    setAppSettingsOpen(false);
+    setProfileSettingsOpen(true);
     window.scrollTo(0, 0);
   };
   const signIn = () => onSignIn?.();
@@ -1375,28 +1468,37 @@ export default function MobilePrototype({
   return (
     <div className="mobile-prototype" data-theme={S.theme} hidden={legacyView}>
       <div id="app">
-        {appSettingsOpen ? (
-          <AppSettingsPage
-            S={S}
+        {profileSettingsOpen ? (
+          <ProfileSettingsPage
             profile={profile}
             cloudSyncEnabled={cloudSyncEnabled}
             cloudSyncReady={cloudSyncReady}
+            accountStatus={accountStatus}
+            profileStatus={profileStatus}
+            authBusy={authBusy}
+            onEditProfile={onEditProfile}
+            onSignIn={signIn}
+            onSignOut={onSignOut}
+            onBack={() => {
+              setProfileSettingsOpen(false);
+              setSheet({ type: "set" });
+            }}
+          />
+        ) : appSettingsOpen ? (
+          <AppSettingsPage
+            S={S}
+            profile={profile}
             pushBackendConfigured={pushBackendConfigured}
             notificationPermission={notificationPermission}
             notificationStatus={notificationStatus}
             backgroundPushEnabled={backgroundPushEnabled}
             backupStatus={backupStatus}
-            accountStatus={accountStatus}
-            profileStatus={profileStatus}
-            authBusy={authBusy}
-            onEditProfile={onEditProfile}
             onBack={() => {
               setAppSettingsOpen(false);
               setSheet({ type: "set" });
             }}
             onAccounts={() => nav("accounts")}
             onSignIn={signIn}
-            onSignOut={onSignOut}
             onReminder={onReminder}
             onToggleNotifications={onToggleNotifications}
             onBackupDownload={onBackupDownload}
@@ -1415,7 +1517,7 @@ export default function MobilePrototype({
             />
           )
         )}
-        {!appSettingsOpen && tab === "activity" && (
+        {!appSettingsOpen && !profileSettingsOpen && tab === "activity" && (
           <Activity
             S={S}
             q={q}
@@ -1426,10 +1528,10 @@ export default function MobilePrototype({
             onOpen={openExpense}
           />
         )}
-        {!appSettingsOpen && tab === "accounts" && (
+        {!appSettingsOpen && !profileSettingsOpen && tab === "accounts" && (
           <Accounts S={S} onTx={(t) => setSheet({ type: "tx", t })} />
         )}
-        {!appSettingsOpen && tab === "plans" && (
+        {!appSettingsOpen && !profileSettingsOpen && tab === "plans" && (
           <Plans
             S={S}
             plan={plan}
@@ -1472,6 +1574,7 @@ export default function MobilePrototype({
           onClose={close}
           onTheme={onTheme}
           onAdvanced={advanced}
+          onProfileSettings={openProfileSettings}
         />
       )}
 
@@ -1506,7 +1609,12 @@ export default function MobilePrototype({
             ) : (
               <button
                 key={t}
-                className={"t " + (!appSettingsOpen && tab === t ? "on" : "")}
+                className={
+                  "t " +
+                  (!appSettingsOpen && !profileSettingsOpen && tab === t
+                    ? "on"
+                    : "")
+                }
                 aria-label={l}
                 onClick={() => nav(t)}
               >
