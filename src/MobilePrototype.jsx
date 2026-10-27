@@ -249,7 +249,7 @@ function Sheet({ onClose, children }) {
 }
 
 /* ───────────── screens ───────────── */
-function Home({ S, onShift, onTab, onBudget, onOpen }) {
+function Home({ S, profile, onShift, onTab, onBudget, onOpen }) {
   const [currentTime, setCurrentTime] = useState(() => new Date());
   const t = tot(S, S.m),
     p = tot(S, shift(S.m, -1)),
@@ -1523,7 +1523,7 @@ export default function MobilePrototype({
     : appSettingsOpen
       ? "App settings"
       : tab === "home"
-        ? ""
+        ? "Spend"
         : tab === "activity"
           ? "Activity"
           : tab === "accounts"
@@ -1531,7 +1531,6 @@ export default function MobilePrototype({
             : "Plans";
   const headerTitle =
     !settingsRoute && tab === "home" && isScrolled ? fM(S.m) : routeTitle;
-  const showHeaderTitle = settingsRoute || tab !== "home" || isScrolled;
   const screenKey = profileSettingsOpen
     ? "profile-settings"
     : appSettingsOpen
@@ -1554,9 +1553,7 @@ export default function MobilePrototype({
               <Icon n="l" />
             </button>
           )}
-          {showHeaderTitle && (
-            <h1 className="prototype-header-title">{headerTitle}</h1>
-          )}
+          <h1 className="prototype-header-title">{headerTitle}</h1>
         </div>
         {!settingsRoute && (
           <div
@@ -1650,6 +1647,7 @@ export default function MobilePrototype({
             tab === "home" && (
               <Home
                 S={S}
+                profile={profile}
                 onShift={onShift}
                 onTab={nav}
                 onBudget={openBudget}
