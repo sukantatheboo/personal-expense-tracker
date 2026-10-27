@@ -63,6 +63,12 @@ const ICONS = {
     </>
   ),
   bank: <path d="M3 10l9-6 9 6M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 21h18" />,
+  calendar: (
+    <>
+      <rect x="3" y="5" width="18" height="16" rx="2" />
+      <path d="M16 3v4M8 3v4M3 10h18" />
+    </>
+  ),
   bell: (
     <>
       <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
@@ -243,7 +249,7 @@ function Sheet({ onClose, children }) {
 }
 
 /* ───────────── screens ───────────── */
-function Home({ S, profile, onShift, onTab, onBudget, onOpen, onSettings }) {
+function Home({ S, onShift, onTab, onBudget, onOpen }) {
   const [currentTime, setCurrentTime] = useState(() => new Date());
   const t = tot(S, S.m),
     p = tot(S, shift(S.m, -1)),
@@ -275,24 +281,6 @@ function Home({ S, profile, onShift, onTab, onBudget, onOpen, onSettings }) {
 
   return (
     <>
-      <div className="bar2">
-        <div className="brand">
-          <span className="bm">
-            <svg viewBox="0 0 64 64">
-              <path d="M22 43 43 22M28 22h15v15" />
-            </svg>
-          </span>
-          Spend
-        </div>
-        <button
-          className="av"
-          aria-label="Profile and settings"
-          onClick={onSettings}
-        >
-          {profile?.initial || "A"}
-        </button>
-      </div>
-
       <div className="hd">
         <div>
           <small>
@@ -401,7 +389,7 @@ function Home({ S, profile, onShift, onTab, onBudget, onOpen, onSettings }) {
   );
 }
 
-function Activity({ S, q, setQ, cf, setCf, onShift, onOpen }) {
+function Activity({ S, q, setQ, cf, setCf, onShift, onOpen, searchRef }) {
   const l = monthExp(S).filter(
     (e) =>
       (!cf || e.cat === cf) &&
@@ -412,13 +400,11 @@ function Activity({ S, q, setQ, cf, setCf, onShift, onOpen }) {
 
   return (
     <>
-      <div className="top">
-        <h1>Activity</h1>
-      </div>
       <MonthSwitch m={S.m} onShift={onShift} />
       <label className="srch">
         <Icon n="s" />
         <input
+          ref={searchRef}
           placeholder="Search expenses"
           value={q}
           onChange={(e) => setQ(e.target.value)}
@@ -498,9 +484,6 @@ function Accounts({ S, onTx }) {
 
   return (
     <>
-      <div className="top">
-        <h1>Accounts</h1>
-      </div>
       <div className="card" style={{ margin: 0 }}>
         <small className="lbl">Total balance</small>
         <div className="big" style={{ margin: "4px 0 0" }}>
@@ -705,9 +688,6 @@ function Plans({
 
   return (
     <>
-      <div className="top">
-        <h1>Plans</h1>
-      </div>
       <div
         className="seg"
         style={{ marginBottom: 14, background: "var(--card)" }}
@@ -1031,7 +1011,6 @@ function ProfileSettingsPage({
   profileStatus,
   authBusy,
   onEditProfile,
-  onBack,
   onSignIn,
   onSignOut,
 }) {
@@ -1069,17 +1048,6 @@ function ProfileSettingsPage({
 
   return (
     <>
-      <div className="settings-page-header">
-        <button
-          className="settings-page-back"
-          type="button"
-          aria-label="Back to settings"
-          onClick={onBack}
-        >
-          <Icon n="l" />
-        </button>
-        <h1>Profile</h1>
-      </div>
       <p className="settings-page-intro">
         {profile?.connected
           ? "Manage your name, account, and cloud sync."
@@ -1201,7 +1169,6 @@ function AppSettingsPage({
   notificationStatus,
   backgroundPushEnabled,
   backupStatus,
-  onBack,
   onAccounts,
   onSignIn,
   onReminder,
@@ -1226,17 +1193,6 @@ function AppSettingsPage({
           : "Off";
   return (
     <>
-      <div className="settings-page-header">
-        <button
-          className="settings-page-back"
-          type="button"
-          aria-label="Back to settings"
-          onClick={onBack}
-        >
-          <Icon n="l" />
-        </button>
-        <h1>App settings</h1>
-      </div>
       <p className="settings-page-intro">
         Manage accounts, reminders, and data backups.
       </p>
@@ -1442,7 +1398,20 @@ export default function MobilePrototype({
   const [appSettingsOpen, setAppSettingsOpen] = useState(false);
   const [profileSettingsOpen, setProfileSettingsOpen] = useState(false);
   const [toastMsg, setToastMsg] = useState(null);
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [slideDirection, setSlideDirection] = useState("forward");
+  const [animateScreen, setAnimateScreen] = useState(false);
   const timer = useRef();
+  const screenScrollRef = useRef(null);
+  const activitySearchRef = useRef(null);
+
+  const resetScreenScroll = () => {
+    if (screenScrollRef.current) screenScrollRef.current.scrollTop = 0;
+    setIsScrolled(false);
+  };
+  const onScreenScroll = (event) => {
+    setIsScrolled(event.currentTarget.scrollTop > 60);
+  };
 
   const toast = (msg, undo) => {
     clearTimeout(timer.current);
@@ -1451,10 +1420,18 @@ export default function MobilePrototype({
   };
   const close = () => setSheet(null);
   const nav = (t) => {
+    if (t === tab && !appSettingsOpen && !profileSettingsOpen) {
+      screenScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+    const currentIndex = TABS.findIndex(([key]) => key === tab);
+    const nextIndex = TABS.findIndex(([key]) => key === t);
+    setSlideDirection(nextIndex >= currentIndex ? "forward" : "backward");
+    setAnimateScreen(true);
     setAppSettingsOpen(false);
     setProfileSettingsOpen(false);
     setTab(t);
-    window.scrollTo(0, 0);
+    resetScreenScroll();
   };
   const openExpense = (id) => setSheet({ type: "det", id });
   const openBudget = () => setSheet({ type: "bud" });
@@ -1515,99 +1492,200 @@ export default function MobilePrototype({
     setSheet(null);
     setProfileSettingsOpen(false);
     setAppSettingsOpen(true);
-    window.scrollTo(0, 0);
+    setAnimateScreen(true);
+    resetScreenScroll();
   };
   const openProfileSettings = () => {
     setSheet(null);
     setAppSettingsOpen(false);
     setProfileSettingsOpen(true);
-    window.scrollTo(0, 0);
+    setAnimateScreen(true);
+    resetScreenScroll();
+  };
+  const backToSettings = () => {
+    setProfileSettingsOpen(false);
+    setAppSettingsOpen(false);
+    setSheet({ type: "set" });
+    setAnimateScreen(true);
+    resetScreenScroll();
+  };
+  const focusActivitySearch = () => {
+    screenScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    window.requestAnimationFrame(() =>
+      activitySearchRef.current?.focus({ preventScroll: true }),
+    );
   };
   const signIn = () => onSignIn?.();
 
+  const settingsRoute = appSettingsOpen || profileSettingsOpen;
+  const routeTitle = profileSettingsOpen
+    ? "Profile"
+    : appSettingsOpen
+      ? "App settings"
+      : tab === "home"
+        ? ""
+        : tab === "activity"
+          ? "Activity"
+          : tab === "accounts"
+            ? "Accounts"
+            : "Plans";
+  const headerTitle =
+    !settingsRoute && tab === "home" && isScrolled ? fM(S.m) : routeTitle;
+  const showHeaderTitle = settingsRoute || tab !== "home" || isScrolled;
+  const screenKey = profileSettingsOpen
+    ? "profile-settings"
+    : appSettingsOpen
+      ? "app-settings"
+      : tab;
+
   return (
     <div className="mobile-prototype" data-theme={S.theme} hidden={legacyView}>
-      <div id="app">
-        {profileSettingsOpen ? (
-          <ProfileSettingsPage
-            profile={profile}
-            cloudSyncEnabled={cloudSyncEnabled}
-            cloudSyncReady={cloudSyncReady}
-            normalizedAccountSync={normalizedAccountSync}
-            cloudRealtimeStatus={cloudRealtimeStatus}
-            cloudSyncActivity={cloudSyncActivity}
-            lastSyncedLabel={lastSyncedLabel}
-            accountStatus={accountStatus}
-            profileStatus={profileStatus}
-            authBusy={authBusy}
-            onEditProfile={onEditProfile}
-            onSignIn={signIn}
-            onSignOut={onSignOut}
-            onBack={() => {
-              setProfileSettingsOpen(false);
-              setSheet({ type: "set" });
-            }}
-          />
-        ) : appSettingsOpen ? (
-          <AppSettingsPage
-            S={S}
-            profile={profile}
-            pushBackendConfigured={pushBackendConfigured}
-            notificationPermission={notificationPermission}
-            notificationStatus={notificationStatus}
-            backgroundPushEnabled={backgroundPushEnabled}
-            backupStatus={backupStatus}
-            onBack={() => {
-              setAppSettingsOpen(false);
-              setSheet({ type: "set" });
-            }}
-            onAccounts={() => nav("accounts")}
-            onSignIn={signIn}
-            onReminder={onReminder}
-            onToggleNotifications={onToggleNotifications}
-            onBackupDownload={onBackupDownload}
-            onBackupRestore={onBackupRestore}
-          />
-        ) : (
-          tab === "home" && (
-            <Home
+      <header
+        className={`prototype-header${isScrolled ? " is-scrolled" : ""}${settingsRoute ? " is-settings-route" : ""}`}
+      >
+        <div className="prototype-header-main">
+          {settingsRoute && (
+            <button
+              className="prototype-header-back"
+              type="button"
+              aria-label="Back to settings"
+              onClick={backToSettings}
+            >
+              <Icon n="l" />
+            </button>
+          )}
+          {showHeaderTitle && (
+            <h1 className="prototype-header-title">{headerTitle}</h1>
+          )}
+        </div>
+        {!settingsRoute && (
+          <div
+            className={`prototype-header-actions${animateScreen ? " animate-in" : ""}`}
+            key={screenKey}
+          >
+            {tab === "home" ? (
+              <button
+                className="prototype-header-avatar"
+                type="button"
+                aria-label="Profile and settings"
+                onClick={() => setSheet({ type: "set" })}
+              >
+                {profile?.initial || "A"}
+              </button>
+            ) : tab === "activity" ? (
+              <button
+                className="prototype-header-action"
+                type="button"
+                aria-label="Search activity"
+                onClick={focusActivitySearch}
+              >
+                <Icon n="s" />
+              </button>
+            ) : tab === "accounts" ? (
+              <button
+                className="prototype-header-action"
+                type="button"
+                aria-label="Add income"
+                onClick={() => setSheet({ type: "tx", t: "income" })}
+              >
+                <Icon n="plus" />
+              </button>
+            ) : (
+              <button
+                className="prototype-header-action"
+                type="button"
+                aria-label="Set monthly budget"
+                onClick={openBudget}
+              >
+                <Icon n="calendar" />
+              </button>
+            )}
+          </div>
+        )}
+      </header>
+
+      <main
+        id="app"
+        ref={screenScrollRef}
+        className="prototype-screen-scroll"
+        onScroll={onScreenScroll}
+      >
+        <div
+          key={screenKey}
+          className={`prototype-screen-enter${animateScreen ? ` ${slideDirection === "forward" ? "slides-from-right" : "slides-from-left"}` : ""}`}
+        >
+          {profileSettingsOpen ? (
+            <ProfileSettingsPage
+              profile={profile}
+              cloudSyncEnabled={cloudSyncEnabled}
+              cloudSyncReady={cloudSyncReady}
+              normalizedAccountSync={normalizedAccountSync}
+              cloudRealtimeStatus={cloudRealtimeStatus}
+              cloudSyncActivity={cloudSyncActivity}
+              lastSyncedLabel={lastSyncedLabel}
+              accountStatus={accountStatus}
+              profileStatus={profileStatus}
+              authBusy={authBusy}
+              onEditProfile={onEditProfile}
+              onSignIn={signIn}
+              onSignOut={onSignOut}
+            />
+          ) : appSettingsOpen ? (
+            <AppSettingsPage
               S={S}
               profile={profile}
-              onShift={onShift}
-              onTab={nav}
-              onBudget={openBudget}
-              onOpen={openExpense}
-              onSettings={() => setSheet({ type: "set" })}
+              pushBackendConfigured={pushBackendConfigured}
+              notificationPermission={notificationPermission}
+              notificationStatus={notificationStatus}
+              backgroundPushEnabled={backgroundPushEnabled}
+              backupStatus={backupStatus}
+              onAccounts={() => nav("accounts")}
+              onSignIn={signIn}
+              onReminder={onReminder}
+              onToggleNotifications={onToggleNotifications}
+              onBackupDownload={onBackupDownload}
+              onBackupRestore={onBackupRestore}
             />
-          )
-        )}
-        {!appSettingsOpen && !profileSettingsOpen && tab === "activity" && (
-          <Activity
-            S={S}
-            q={q}
-            setQ={setQ}
-            cf={cf}
-            setCf={setCf}
-            onShift={onShift}
-            onOpen={openExpense}
-          />
-        )}
-        {!appSettingsOpen && !profileSettingsOpen && tab === "accounts" && (
-          <Accounts S={S} onTx={(t) => setSheet({ type: "tx", t })} />
-        )}
-        {!appSettingsOpen && !profileSettingsOpen && tab === "plans" && (
-          <Plans
-            S={S}
-            plan={plan}
-            setPlan={setPlan}
-            onShift={onShift}
-            onBudget={openBudget}
-            onAddRec={() => setSheet({ type: "add", iv: "monthly" })}
-            onToggleRec={onToggleRec}
-            onRemoveRec={removeRecurring}
-          />
-        )}
-      </div>
+          ) : (
+            tab === "home" && (
+              <Home
+                S={S}
+                onShift={onShift}
+                onTab={nav}
+                onBudget={openBudget}
+                onOpen={openExpense}
+              />
+            )
+          )}
+          {!appSettingsOpen && !profileSettingsOpen && tab === "activity" && (
+            <Activity
+              S={S}
+              q={q}
+              setQ={setQ}
+              cf={cf}
+              setCf={setCf}
+              onShift={onShift}
+              onOpen={openExpense}
+              searchRef={activitySearchRef}
+            />
+          )}
+          {!appSettingsOpen && !profileSettingsOpen && tab === "accounts" && (
+            <Accounts S={S} onTx={(t) => setSheet({ type: "tx", t })} />
+          )}
+          {!appSettingsOpen && !profileSettingsOpen && tab === "plans" && (
+            <Plans
+              S={S}
+              plan={plan}
+              setPlan={setPlan}
+              onShift={onShift}
+              onBudget={openBudget}
+              onAddRec={() => setSheet({ type: "add", iv: "monthly" })}
+              onToggleRec={onToggleRec}
+              onRemoveRec={removeRecurring}
+            />
+          )}
+        </div>
+      </main>
 
       {sheet?.type === "add" && (
         <AddSheet iv={sheet.iv} onSave={saveExpense} onClose={close} />
@@ -1680,6 +1758,11 @@ export default function MobilePrototype({
                     : "")
                 }
                 aria-label={l}
+                aria-current={
+                  !appSettingsOpen && !profileSettingsOpen && tab === t
+                    ? "page"
+                    : undefined
+                }
                 onClick={() => nav(t)}
               >
                 <span className="tab-icon">
