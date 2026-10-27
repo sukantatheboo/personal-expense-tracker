@@ -554,8 +554,16 @@
   letter-spacing: 0.04em;
 }
 .mobile-prototype .mini b {
-  display: block;
+  display: flex;
+  min-height: 1.35em;
+  align-items: center;
+  gap: 6px;
   margin-top: 4px;
+  line-height: 1.3;
+}
+.mobile-prototype .mini b .category-symbol {
+  flex: 0 0 1.2em;
+  vertical-align: 0;
 }
 .mobile-prototype .ri {
   display: flex;
@@ -704,6 +712,31 @@
   border-radius: 99px;
   padding: 8px 14px;
   font-size: 14px;
+}
+.mobile-prototype .chips button {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  line-height: 1;
+}
+.mobile-prototype .chips button .category-symbol {
+  flex: 0 0 auto;
+  vertical-align: 0;
+}
+.mobile-prototype .cg button {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  line-height: 1;
+}
+.mobile-prototype .cg button .category-symbol {
+  flex: 0 0 1.2em;
+  vertical-align: 0;
 }
 .mobile-prototype .chips .on,
 .mobile-prototype .cg .on {
@@ -956,11 +989,6 @@
 .mobile-prototype .tabs nav .t.on {
   color: var(--g);
   font-weight: 800;
-}
-@media (hover: hover) {
-  .mobile-prototype .tabs nav .t:not(.on):hover {
-    color: var(--g);
-  }
 }
 .mobile-prototype .tabs nav .fab {
   position: relative;

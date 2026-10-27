@@ -333,7 +333,8 @@ function Home({ S, profile, onShift, onTab, onBudget, onOpen }) {
           <b>
             {cs[0] ? (
               <>
-                <CategorySymbol category={cs[0][0]} /> {cs[0][0]}
+                <CategorySymbol category={cs[0][0]} />
+                <span>{cs[0][0]}</span>
               </>
             ) : (
               "—"
