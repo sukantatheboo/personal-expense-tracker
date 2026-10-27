@@ -460,11 +460,39 @@ function SettingsSheet({ S, onTheme, onReminder, onSignIn, onAdvanced, onClose }
         <input type="time" className="in" style={{ width: 'auto' }} value={S.rt} onChange={e => onReminder(e.target.value)} />
       </div>
       <button className="ri" onClick={onAdvanced}>
-        <span className="nm"><b>More app settings</b><small>Account setup, notifications and backups</small></span>
+        <span className="nm"><b>More app settings</b><small>Appearance and display settings</small></span>
         <span aria-hidden="true">›</span>
       </button>
       <button className="btn" onClick={onSignIn}>Sign in to sync</button>
     </Sheet>
+  );
+}
+
+function AppearancePage({ S, onTheme, onBack }) {
+  const dark = S.theme === 'dark';
+  return (
+    <>
+      <div className="appearance-header">
+        <button className="appearance-back" aria-label="Back to settings" onClick={onBack}>
+          <Icon n="l" />
+        </button>
+        <h1>Appearance</h1>
+      </div>
+      <p className="appearance-page-hint">Choose the look that feels right.</p>
+      <div className="card appearance-card">
+        <button
+          className="ri appearance-setting"
+          role="switch"
+          aria-checked={dark}
+          aria-label="Dark mode"
+          onClick={onTheme}
+        >
+          <i className="ic appearance-icon" aria-hidden="true">{dark ? '☾' : '☀'}</i>
+          <span className="nm"><b>Dark mode</b><small>{dark ? 'On' : 'Off'}</small></span>
+          <span className={'sw ' + (dark ? 'on' : '')} aria-hidden="true" />
+        </button>
+      </div>
+    </>
   );
 }
 
@@ -486,13 +514,13 @@ export default function MobilePrototype({
   onTheme,
   onReminder,
   onSignIn,
-  onAdvanced,
 }) {
   const [tab, setTab] = useState('home');
   const [plan, setPlan] = useState('budget');
   const [q, setQ] = useState('');
   const [cf, setCf] = useState('');
   const [sheet, setSheet] = useState(null);
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
   const [toastMsg, setToastMsg] = useState(null);
   const timer = useRef();
 
@@ -502,7 +530,7 @@ export default function MobilePrototype({
     timer.current = setTimeout(() => setToastMsg(null), 4200);
   };
   const close = () => setSheet(null);
-  const nav = t => { setTab(t); window.scrollTo(0, 0); };
+  const nav = t => { setAppearanceOpen(false); setTab(t); window.scrollTo(0, 0); };
   const openExpense = id => setSheet({ type: 'det', id });
   const openBudget = () => setSheet({ type: 'bud' });
   const detail = sheet?.type === 'det' ? S.exp.find(x => x.id === sheet.id) : null;
@@ -552,8 +580,9 @@ export default function MobilePrototype({
     toast('Recurring expense removed', undo);
   };
   const advanced = () => {
-    close();
-    onAdvanced?.();
+    setSheet(null);
+    setAppearanceOpen(true);
+    window.scrollTo(0, 0);
   };
   const signIn = () => {
     close();
@@ -563,14 +592,23 @@ export default function MobilePrototype({
   return (
     <div className="mobile-prototype" data-theme={S.theme} hidden={legacyView}>
       <div id="app">
-        {tab === 'home' && (
+        {appearanceOpen ? (
+          <AppearancePage
+            S={S}
+            onTheme={onTheme}
+            onBack={() => {
+              setAppearanceOpen(false);
+              setSheet({ type: 'set' });
+            }}
+          />
+        ) : tab === 'home' && (
           <Home S={S} onShift={onShift} onTab={nav} onBudget={openBudget} onOpen={openExpense} onSettings={() => setSheet({ type: 'set' })} />
         )}
-        {tab === 'activity' && (
+        {!appearanceOpen && tab === 'activity' && (
           <Activity S={S} q={q} setQ={setQ} cf={cf} setCf={setCf} onShift={onShift} onOpen={openExpense} />
         )}
-        {tab === 'accounts' && <Accounts S={S} onTx={t => setSheet({ type: 'tx', t })} />}
-        {tab === 'plans' && (
+        {!appearanceOpen && tab === 'accounts' && <Accounts S={S} onTx={t => setSheet({ type: 'tx', t })} />}
+        {!appearanceOpen && tab === 'plans' && (
           <Plans S={S} plan={plan} setPlan={setPlan} onShift={onShift} onBudget={openBudget}
             onAddRec={() => setSheet({ type: 'add', iv: 'monthly' })} onToggleRec={onToggleRec} onRemoveRec={removeRecurring} />
         )}
@@ -597,8 +635,8 @@ export default function MobilePrototype({
           {TABS.map(([t, l]) => t === 'add' ? (
             <button key={t} className="fab" aria-label="Add expense" onClick={() => setSheet({ type: 'add' })}><Icon n="plus" /></button>
           ) : (
-            <button key={t} className={'t ' + (tab === t ? 'on' : '')} aria-label={l} onClick={() => nav(t)}>
-              <Icon n={t} /><span>{l}</span>
+            <button key={t} className={'t ' + (!appearanceOpen && tab === t ? 'on' : '')} aria-label={l} onClick={() => nav(t)}>
+              <span className="tab-icon"><Icon n={t} /></span><span>{l}</span>
             </button>
           ))}
         </nav>

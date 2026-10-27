@@ -2441,7 +2441,6 @@ export default function App() {
           setAuthModalOpen(true);
         }
       }}
-      onAdvanced={() => navigateMobile("more")}
     />
     <main
       className="full-app"
