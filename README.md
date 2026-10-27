@@ -37,6 +37,8 @@ The app is deployed to [GitHub Pages](https://sukantatheboo.github.io/personal-e
 
 - Data is stored in browser storage by default.
 - Signed-in users get automatic Supabase cloud sync.
+- Account settings and account activity are synchronized to validated, normalized Supabase tables with a per-user change history. The legacy snapshot copy is retained for compatibility and rollback.
+- Realtime updates refresh signed-in devices when another device changes synced data.
 - Each account has its own local and cloud data.
 - Supabase row-level security protects synced records.
 - Cloud sync is not an archival backup.
@@ -51,6 +53,8 @@ Sign-in and cloud sync require:
 VITE_SUPABASE_URL=your-supabase-url
 VITE_SUPABASE_ANON_KEY=your-supabase-anon-key
 ```
+
+Apply every SQL migration in `supabase/migrations` to the Supabase project before deploying the app. The normalized account and live-sync migration adds the required tables to the `supabase_realtime` publication and backfills existing account settings and activity.
 
 Background push reminders additionally require:
 

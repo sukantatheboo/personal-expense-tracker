@@ -1,5 +1,9 @@
 import { Fragment, useEffect, useRef, useState } from "react";
-import { FaPenToSquare } from "react-icons/fa6";
+import {
+  FaArrowsRotate,
+  FaCloudArrowUp,
+  FaPenToSquare,
+} from "react-icons/fa6";
 import "./MobilePrototype.css";
 
 /* ───────────── constants ───────────── */
@@ -1019,6 +1023,10 @@ function ProfileSettingsPage({
   profile,
   cloudSyncEnabled,
   cloudSyncReady,
+  normalizedAccountSync,
+  cloudRealtimeStatus,
+  cloudSyncActivity,
+  lastSyncedLabel,
   accountStatus,
   profileStatus,
   authBusy,
@@ -1027,13 +1035,37 @@ function ProfileSettingsPage({
   onSignIn,
   onSignOut,
 }) {
-  const syncLabel = !profile?.connected
-    ? "Your data stays on this device."
-    : !cloudSyncEnabled
-      ? "Cloud sync is paused."
-      : cloudSyncReady
-        ? "Cloud sync is on."
-        : "Syncing your data…";
+  const syncLabel = (() => {
+    if (!profile?.connected) return "Your data stays on this device.";
+    if (!cloudSyncEnabled) return "Cloud sync is paused.";
+    if (
+      cloudSyncActivity === "offline" ||
+      cloudRealtimeStatus === "offline"
+    ) {
+      return "Offline · Changes will sync when online.";
+    }
+    if (cloudSyncActivity === "error") return "Sync needs attention.";
+    if (cloudSyncReady && !normalizedAccountSync)
+      return "Live sync setup required.";
+    if (!cloudSyncReady) return "Syncing your data…";
+    if (cloudSyncActivity === "syncing") return "Syncing changes…";
+    if (cloudRealtimeStatus === "live") return "Live sync is on.";
+    if (cloudRealtimeStatus === "reconnecting")
+      return "Reconnecting live updates…";
+    return "Cloud sync is on.";
+  })();
+  const isSyncing =
+    profile?.connected &&
+    cloudSyncEnabled &&
+    !["offline", "error"].includes(cloudSyncActivity) &&
+    (cloudSyncActivity === "syncing" || !cloudSyncReady);
+  const isLive =
+    profile?.connected &&
+    cloudSyncEnabled &&
+    normalizedAccountSync &&
+    cloudRealtimeStatus === "live" &&
+    !["offline", "error"].includes(cloudSyncActivity);
+  const syncIcon = isSyncing ? <FaArrowsRotate /> : <FaCloudArrowUp />;
 
   return (
     <>
@@ -1105,15 +1137,39 @@ function ProfileSettingsPage({
         <h2>Sync</h2>
         <div
           className={`profile-sync-status${
-            profile?.connected && cloudSyncEnabled && cloudSyncReady
-              ? " is-on"
+            isLive ? " is-live" : ""
+          }${isSyncing ? " is-syncing" : ""}${
+            cloudSyncActivity === "error" ? " has-error" : ""
+          }${
+            cloudRealtimeStatus === "offline" || cloudSyncActivity === "offline"
+              ? " is-offline"
+              : cloudSyncReady && !normalizedAccountSync
+                ? " is-setup-needed"
               : ""
           }`}
+          data-sync-state={
+            isLive
+              ? "live"
+              : isSyncing
+                ? "syncing"
+                : cloudRealtimeStatus
+          }
           role="status"
           aria-live="polite"
         >
-          <span className="profile-sync-indicator" aria-hidden="true" />
-          <span>{syncLabel}</span>
+          <span className="profile-sync-indicator" aria-hidden="true">
+            {syncIcon}
+          </span>
+          <span className="profile-sync-copy">
+            <b>{syncLabel}</b>
+            {cloudSyncReady && !normalizedAccountSync ? (
+              <small>
+                Apply the latest Supabase migration to enable cross-device updates.
+              </small>
+            ) : (
+              isLive && lastSyncedLabel && <small>{lastSyncedLabel}</small>
+            )}
+          </span>
         </div>
         {accountStatus && (
           <p className="settings-status" role="status" aria-live="polite">
@@ -1363,6 +1419,10 @@ export default function MobilePrototype({
   profileStatus,
   cloudSyncEnabled,
   cloudSyncReady,
+  normalizedAccountSync,
+  cloudRealtimeStatus,
+  cloudSyncActivity,
+  lastSyncedLabel,
   pushBackendConfigured,
   notificationPermission,
   notificationStatus,
@@ -1473,6 +1533,10 @@ export default function MobilePrototype({
             profile={profile}
             cloudSyncEnabled={cloudSyncEnabled}
             cloudSyncReady={cloudSyncReady}
+            normalizedAccountSync={normalizedAccountSync}
+            cloudRealtimeStatus={cloudRealtimeStatus}
+            cloudSyncActivity={cloudSyncActivity}
+            lastSyncedLabel={lastSyncedLabel}
             accountStatus={accountStatus}
             profileStatus={profileStatus}
             authBusy={authBusy}

@@ -60,6 +60,7 @@ import {
   CLOUD_SYNC_USER_KEY,
   loadCloudData,
   saveCloudData,
+  subscribeToCloudChanges,
 } from "./cloud-sync.js";
 
 const CURRENCY_API = "https://api.frankfurter.dev/v2";
@@ -443,6 +444,95 @@ function areAccountSettingsEqual(left, right) {
   );
 }
 
+function stableSnapshotValue(value) {
+  if (Array.isArray(value)) return value.map(stableSnapshotValue);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.keys(value)
+      .sort()
+      .map((key) => [key, stableSnapshotValue(value[key])]),
+  );
+}
+
+function areCloudSnapshotsEqual(left, right) {
+  if (!left || !right) return false;
+  return (
+    JSON.stringify(stableSnapshotValue(left)) ===
+    JSON.stringify(stableSnapshotValue(right))
+  );
+}
+
+function getCloudSyncLabels({
+  signedIn,
+  enabled,
+  ready,
+  normalized,
+  realtimeStatus,
+  activity,
+}) {
+  if (!signedIn) {
+    return {
+      long: "Local only",
+      short: "Local",
+      accessible: "Expense data stays on this device",
+    };
+  }
+  if (!enabled) {
+    return {
+      long: "Cloud sync paused",
+      short: "Paused",
+      accessible: "Expense cloud sync is paused",
+    };
+  }
+  if (activity === "error") {
+    return {
+      long: "Sync issue",
+      short: "Issue",
+      accessible: "Cloud sync needs attention",
+    };
+  }
+  if (realtimeStatus === "offline" || activity === "offline") {
+    return {
+      long: "Offline",
+      short: "Offline",
+      accessible: "Cloud sync is offline",
+    };
+  }
+  if (!ready || activity === "syncing") {
+    return {
+      long: "Syncing…",
+      short: "Syncing",
+      accessible: "Cloud data is syncing",
+    };
+  }
+  if (!normalized) {
+    return {
+      long: "Setup needed",
+      short: "Setup",
+      accessible: "Apply the latest Supabase migration to enable live sync",
+    };
+  }
+  if (realtimeStatus === "live") {
+    return {
+      long: "Live sync",
+      short: "Live",
+      accessible: "Live cloud sync is connected",
+    };
+  }
+  if (realtimeStatus === "reconnecting") {
+    return {
+      long: "Reconnecting",
+      short: "Connecting",
+      accessible: "Cloud sync is reconnecting",
+    };
+  }
+  return {
+    long: "Cloud sync",
+    short: "Cloud",
+    accessible: "Cloud sync is on",
+  };
+}
+
 function hasMeaningfulLocalAccountSettings(data) {
   return hasMeaningfulAccountSettings(data.accountData.settings);
 }
@@ -698,6 +788,9 @@ export default function App() {
   const [cloudSyncEnabled, setCloudSyncEnabled] = useState(false);
   const [cloudSyncReady, setCloudSyncReady] = useState(false);
   const [cloudSyncStatus, setCloudSyncStatus] = useState("");
+  const [cloudRealtimeStatus, setCloudRealtimeStatus] = useState("disconnected");
+  const [cloudSyncActivity, setCloudSyncActivity] = useState("idle");
+  const [normalizedAccountSync, setNormalizedAccountSync] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState(null);
   const [undoAction, setUndoAction] = useState(null);
   const [cloudSyncRetry, setCloudSyncRetry] = useState(0);
@@ -716,7 +809,9 @@ export default function App() {
   const cloudSnapshotRef = useRef(null);
   const cloudVersionRef = useRef(null);
   const cloudAccountSettingsRef = useRef(null);
+  const lastSyncedSnapshotRef = useRef(null);
   const cloudSaveQueueRef = useRef(Promise.resolve());
+  const liveChangeTimerRef = useRef(null);
   const undoTimerRef = useRef(null);
   const authUserIdRef = useRef(null);
   const localDataOwnerRef = useRef(loadLocalDataOwner());
@@ -816,6 +911,14 @@ export default function App() {
         }
 
         let snapshot = cloudSnapshotRef.current;
+        if (
+          lastSyncedSnapshotRef.current &&
+          areCloudSnapshotsEqual(snapshot, lastSyncedSnapshotRef.current)
+        ) {
+          setCloudSyncActivity("synced");
+          return;
+        }
+        setCloudSyncActivity("syncing");
         for (let attempt = 0; attempt < 3; attempt += 1) {
           let savedVersion = null;
           try {
@@ -835,7 +938,9 @@ export default function App() {
             ) {
               cloudVersionRef.current = savedVersion;
               cloudAccountSettingsRef.current = snapshot.accountData.settings;
+              lastSyncedSnapshotRef.current = snapshot;
               setLastSyncedAt(Date.now());
+              setCloudSyncActivity("synced");
               setCloudSyncStatus(
                 "Cloud sync is on. Your data is saved to Supabase.",
               );
@@ -852,24 +957,96 @@ export default function App() {
           }
           snapshot = cloudSnapshotRef.current;
           if (remote?.data) {
+            const remoteSnapshot = mergeCloudSnapshots(
+              snapshot,
+              remote.data,
+              false,
+            );
+            const localAccountSettingsChanged =
+              !areAccountSettingsEqual(
+                snapshot.accountData.settings,
+                cloudAccountSettingsRef.current,
+              );
             snapshot = mergeCloudSnapshots(
               snapshot,
               remote.data,
               true,
-              !areAccountSettingsEqual(
-                snapshot.accountData.settings,
-                cloudAccountSettingsRef.current,
-              ),
+              localAccountSettingsChanged,
             );
+            lastSyncedSnapshotRef.current = remoteSnapshot;
+            cloudAccountSettingsRef.current =
+              remoteSnapshot.accountData.settings;
             applyCloudSnapshot(snapshot);
           }
           cloudVersionRef.current = remote?.updated_at ?? null;
         }
 
         throw new Error("Cloud data changed repeatedly; please try again.");
+      })
+      .catch((error) => {
+        if (authUserIdRef.current === userId) {
+          setCloudSyncActivity(navigator.onLine ? "error" : "offline");
+        }
+        throw error;
       });
     cloudSaveQueueRef.current = saveTask;
     return saveTask;
+  }
+
+  function queueCloudSnapshotRefresh(userId, source = "live") {
+    const refreshTask = cloudSaveQueueRef.current
+      .catch(() => {})
+      .then(async () => {
+        if (
+          authUserIdRef.current !== userId ||
+          localDataOwnerRef.current !== userId
+        ) {
+          return null;
+        }
+
+        const remote = await loadCloudData(userId);
+        if (!remote?.data) return null;
+        const local = cloudSnapshotRef.current;
+        const previousCloud = lastSyncedSnapshotRef.current;
+        const hasPendingChanges =
+          previousCloud && !areCloudSnapshotsEqual(local, previousCloud);
+        const accountSettingsChanged =
+          previousCloud &&
+          !areAccountSettingsEqual(
+            local.accountData.settings,
+            previousCloud.accountData.settings,
+          );
+        const remoteSnapshot = mergeCloudSnapshots(local, remote.data, false);
+        const refreshed = mergeCloudSnapshots(
+          local,
+          remote.data,
+          Boolean(hasPendingChanges),
+          Boolean(accountSettingsChanged),
+        );
+
+        setNormalizedAccountSync(remote.normalizedAccountSync !== false);
+        cloudVersionRef.current = remote.updated_at ?? cloudVersionRef.current;
+        cloudAccountSettingsRef.current = remoteSnapshot.accountData.settings;
+        lastSyncedSnapshotRef.current = remoteSnapshot;
+        setLastSyncedAt(Date.now());
+        setCloudSyncStatus(
+          source === "live"
+            ? "Cloud data updated live."
+            : "Cloud data refreshed from Supabase.",
+        );
+        if (!areCloudSnapshotsEqual(local, refreshed)) {
+          applyCloudSnapshot(refreshed);
+        }
+        setCloudSyncActivity(
+          areCloudSnapshotsEqual(refreshed, remoteSnapshot)
+            ? "synced"
+            : "syncing",
+        );
+        return refreshed;
+      });
+
+    cloudSaveQueueRef.current = refreshTask;
+    return refreshTask;
   }
 
   useEffect(() => {
@@ -944,6 +1121,10 @@ export default function App() {
         }
         setCloudSyncReady(false);
         setLastSyncedAt(null);
+        setCloudRealtimeStatus(user ? "connecting" : "disconnected");
+        setCloudSyncActivity(user ? "syncing" : "idle");
+        setNormalizedAccountSync(false);
+        lastSyncedSnapshotRef.current = null;
         setCloudSyncEnabled(Boolean(user));
       }
     });
@@ -980,6 +1161,10 @@ export default function App() {
       setLastSyncedAt(null);
       cloudVersionRef.current = null;
       cloudAccountSettingsRef.current = null;
+      lastSyncedSnapshotRef.current = null;
+      setCloudRealtimeStatus(user ? "connecting" : "disconnected");
+      setCloudSyncActivity(user ? "syncing" : "idle");
+      setNormalizedAccountSync(false);
       setCloudSyncEnabled(Boolean(user));
       setAuthStatus("");
       if (!user) {
@@ -1007,10 +1192,13 @@ export default function App() {
 
     async function initializeCloudSync() {
       setCloudSyncStatus("Preparing your cloud data…");
+      setCloudSyncActivity("syncing");
       try {
         let remote = await loadCloudData(pushUser.id);
+        setNormalizedAccountSync(remote?.normalizedAccountSync !== false);
         let merged;
         let savedVersion = null;
+        let lastSuccessfulSnapshot = null;
         for (let attempt = 0; attempt < 3; attempt += 1) {
           if (!active) return;
           const local = cloudSnapshotRef.current;
@@ -1039,9 +1227,10 @@ export default function App() {
               remote?.updated_at ?? null,
             );
           } catch (error) {
-            if (error.code !== "23505" || remote) throw error;
+            if (error.code !== "23505" || remote?.data) throw error;
           }
           if (savedVersion) {
+            lastSuccessfulSnapshot = merged;
             if (cloudSnapshotRef.current === local) break;
             remote = { data: merged, updated_at: savedVersion };
             if (attempt < 2) {
@@ -1060,22 +1249,32 @@ export default function App() {
             break;
           }
           remote = await loadCloudData(pushUser.id);
+          setNormalizedAccountSync(remote?.normalizedAccountSync !== false);
         }
         if (!savedVersion || !merged) {
           throw new Error("Cloud data changed repeatedly; please try again.");
         }
         if (!active) return;
         cloudVersionRef.current = savedVersion;
-        cloudAccountSettingsRef.current = merged.accountData.settings;
+        lastSyncedSnapshotRef.current = lastSuccessfulSnapshot ?? merged;
+        cloudAccountSettingsRef.current =
+          lastSyncedSnapshotRef.current.accountData.settings;
         adoptLocalDataForUser(pushUser.id);
         applyCloudSnapshot(merged);
         setCloudSyncReady(true);
         setLastSyncedAt(Date.now());
+        setCloudSyncActivity(
+          areCloudSnapshotsEqual(merged, lastSyncedSnapshotRef.current)
+            ? "synced"
+            : "syncing",
+        );
         setCloudSyncStatus("Cloud sync is on. Your data is saved to Supabase.");
       } catch (error) {
         if (active) {
           setCloudSyncEnabled(false);
           setCloudSyncReady(false);
+          setCloudSyncActivity("error");
+          setCloudRealtimeStatus("disconnected");
           try {
             localStorage.removeItem(CLOUD_SYNC_USER_KEY);
           } catch {
@@ -1094,6 +1293,83 @@ export default function App() {
       active = false;
     };
   }, [cloudSyncEnabled, pushUser?.id]);
+
+  useEffect(() => {
+    if (!supabase || !pushUser || !cloudSyncEnabled || !cloudSyncReady) {
+      setCloudRealtimeStatus(
+        pushUser && cloudSyncEnabled ? "connecting" : "disconnected",
+      );
+      return undefined;
+    }
+
+    let active = true;
+    setCloudRealtimeStatus("connecting");
+
+    const handleCloudChange = () => {
+      if (!active || authUserIdRef.current !== pushUser.id) return;
+      window.clearTimeout(liveChangeTimerRef.current);
+      setCloudSyncActivity("syncing");
+      liveChangeTimerRef.current = window.setTimeout(async () => {
+        try {
+          if (!active || authUserIdRef.current !== pushUser.id) return;
+          await queueCloudSnapshotRefresh(pushUser.id);
+        } catch (error) {
+          if (active && authUserIdRef.current === pushUser.id) {
+            setCloudSyncActivity(navigator.onLine ? "error" : "offline");
+            setCloudSyncStatus(`Could not refresh live data: ${error.message}`);
+          }
+        }
+      }, 180);
+    };
+
+    const unsubscribe = subscribeToCloudChanges(
+      pushUser.id,
+      handleCloudChange,
+      (status) => {
+        if (!active) return;
+        if (status === "SUBSCRIBED") {
+          setCloudRealtimeStatus("live");
+          return;
+        }
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          setCloudRealtimeStatus("reconnecting");
+          return;
+        }
+        if (status === "CLOSED") setCloudRealtimeStatus("reconnecting");
+      },
+      normalizedAccountSync,
+    );
+
+    const handleOffline = () => {
+      setCloudRealtimeStatus("offline");
+      setCloudSyncActivity("offline");
+    };
+    const handleOnline = () => {
+      setCloudRealtimeStatus("connecting");
+      handleCloudChange();
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") handleCloudChange();
+    };
+    window.addEventListener("offline", handleOffline);
+    window.addEventListener("online", handleOnline);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    if (!navigator.onLine) handleOffline();
+
+    return () => {
+      active = false;
+      window.clearTimeout(liveChangeTimerRef.current);
+      window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("online", handleOnline);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      unsubscribe();
+    };
+  }, [
+    cloudSyncEnabled,
+    cloudSyncReady,
+    normalizedAccountSync,
+    pushUser?.id,
+  ]);
 
   useEffect(() => {
     if (!supabase || !pushUser || !cloudSyncEnabled || !cloudSyncReady)
@@ -2121,19 +2397,7 @@ export default function App() {
     try {
       if (pushUser && cloudSyncEnabled && cloudSyncReady) {
         await queueCloudSnapshotSave(pushUser.id);
-        const remote = await loadCloudData(pushUser.id);
-        if (remote?.data) {
-          const refreshed = mergeCloudSnapshots(
-            cloudSnapshotRef.current,
-            remote.data,
-            false,
-          );
-          applyCloudSnapshot(refreshed);
-          cloudVersionRef.current = remote.updated_at ?? cloudVersionRef.current;
-          cloudAccountSettingsRef.current = refreshed.accountData.settings;
-          setLastSyncedAt(Date.now());
-          setCloudSyncStatus("Cloud data refreshed from Supabase.");
-        }
+        await queueCloudSnapshotRefresh(pushUser.id, "manual");
       } else {
         const localAccountData = loadAccountData();
         setAccountData(localAccountData);
@@ -2158,20 +2422,13 @@ export default function App() {
     try {
       if (pushUser && cloudSyncEnabled && cloudSyncReady) {
         await queueCloudSnapshotSave(pushUser.id);
-        const remote = await loadCloudData(pushUser.id);
-        if (!remote?.data) {
+        const refreshed = await queueCloudSnapshotRefresh(
+          pushUser.id,
+          "manual",
+        );
+        if (!refreshed) {
           throw new Error("No cloud data was returned.");
         }
-        const refreshed = mergeCloudSnapshots(
-          cloudSnapshotRef.current,
-          remote.data,
-          false,
-        );
-        applyCloudSnapshot(refreshed);
-        cloudVersionRef.current = remote.updated_at ?? cloudVersionRef.current;
-        cloudAccountSettingsRef.current = refreshed.accountData.settings;
-        setLastSyncedAt(Date.now());
-        setCloudSyncStatus("Cloud data refreshed from Supabase.");
         setRecurringRefreshStatus("Schedules refreshed.");
       } else {
         setRecurringSchedules(loadRecurringSchedules());
@@ -2555,6 +2812,14 @@ export default function App() {
     profile: "Profile",
     recurring: "Recurring expenses",
   }[mobileView];
+  const cloudSyncLabels = getCloudSyncLabels({
+    signedIn: Boolean(pushUser),
+    enabled: cloudSyncEnabled,
+    ready: cloudSyncReady,
+    normalized: normalizedAccountSync,
+    realtimeStatus: cloudRealtimeStatus,
+    activity: cloudSyncActivity,
+  });
 
   return (
     <>
@@ -2597,6 +2862,10 @@ export default function App() {
       profileStatus={profileStatus}
       cloudSyncEnabled={cloudSyncEnabled}
       cloudSyncReady={cloudSyncReady}
+      normalizedAccountSync={normalizedAccountSync}
+      cloudRealtimeStatus={cloudRealtimeStatus}
+      cloudSyncActivity={cloudSyncActivity}
+      lastSyncedLabel={lastSyncedAt ? formatLastSynced(lastSyncedAt) : ""}
       pushBackendConfigured={pushBackendConfigured}
       notificationPermission={notificationPermission}
       notificationStatus={notificationStatus}
@@ -2644,34 +2913,14 @@ export default function App() {
         </div>
         <div className="header-bottomline">
           <div
-            className={`local-note${cloudSyncEnabled ? " is-sync-enabled" : " is-local-only"}`}
+            className={`local-note${cloudSyncEnabled ? " is-sync-enabled" : " is-local-only"}${cloudRealtimeStatus === "live" ? " is-sync-live" : ""}${cloudSyncActivity === "syncing" ? " is-syncing" : ""}${cloudRealtimeStatus === "offline" || cloudSyncActivity === "offline" ? " is-sync-offline" : ""}${cloudSyncActivity === "error" ? " is-sync-error" : ""}${cloudSyncEnabled && cloudSyncReady && !normalizedAccountSync ? " is-sync-setup-needed" : ""}`}
             role="status"
             aria-live="polite"
-            aria-label={
-              cloudSyncEnabled
-                ? "Expense cloud sync is on"
-                : "Expense data stays on this device"
-            }
+            aria-label={cloudSyncLabels.accessible}
           >
             <span className="sync-status-dot" aria-hidden="true" />
-            <span className="local-note-long">
-              {!pushUser
-                ? "Local only"
-                : !cloudSyncEnabled
-                  ? "Cloud sync paused"
-                  : cloudSyncReady
-                    ? "Cloud sync on"
-                    : "Syncing…"}
-            </span>
-            <span className="local-note-mobile">
-              {!pushUser
-                ? "Local"
-                : !cloudSyncEnabled
-                  ? "Paused"
-                  : cloudSyncReady
-                    ? "Synced"
-                    : "Syncing"}
-            </span>
+            <span className="local-note-long">{cloudSyncLabels.long}</span>
+            <span className="local-note-mobile">{cloudSyncLabels.short}</span>
             {pushUser && cloudSyncReady && lastSyncedAt && (
               <span className="sync-last-saved">
                 {formatLastSynced(lastSyncedAt)}

@@ -159,6 +159,7 @@ header {
 }
 
 .sync-status-dot {
+  position: relative;
   width: 7px;
   height: 7px;
   flex: 0 0 7px;
@@ -168,6 +169,46 @@ header {
 
 .local-note.is-sync-enabled .sync-status-dot {
   background: #4c9667;
+}
+
+.local-note.is-sync-live .sync-status-dot::after,
+.local-note.is-syncing .sync-status-dot::after {
+  position: absolute;
+  inset: -4px;
+  border: 1px solid color-mix(in srgb, #4c9667 42%, transparent);
+  border-radius: 50%;
+  content: "";
+  animation: cloud-sync-pulse 2.2s ease-out infinite;
+}
+
+.local-note.is-sync-offline .sync-status-dot {
+  background: #c88845;
+}
+
+.local-note.is-sync-error .sync-status-dot {
+  background: #c75b50;
+}
+
+.local-note.is-sync-setup-needed .sync-status-dot {
+  background: #c88845;
+}
+
+@keyframes cloud-sync-pulse {
+  0% {
+    opacity: 0.8;
+    transform: scale(0.72);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.7);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .local-note.is-sync-live .sync-status-dot::after,
+  .local-note.is-syncing .sync-status-dot::after {
+    animation: none;
+  }
 }
 
 .sync-last-saved {
