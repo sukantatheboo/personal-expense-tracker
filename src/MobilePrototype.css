@@ -13,7 +13,7 @@
     left: 50%;
     right: auto;
     transform: translateX(-50%);
-    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(0, 1fr);
     width: min(100%, 480px);
     height: 100vh;
     height: 100dvh;
@@ -122,7 +122,7 @@
   min-height: 0;
   height: 100%;
   margin: 0;
-  padding: 0 18px 18px;
+  padding: 0 18px calc(96px + env(safe-area-inset-bottom, 0px));
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -221,8 +221,13 @@
   min-height: 0;
 }
 .mobile-prototype .prototype-screen-enter {
+  display: flex;
+  flex-direction: column;
   min-height: 100%;
   transform: translateX(0);
+}
+.mobile-prototype .prototype-screen-content {
+  flex: 1 0 auto;
 }
 .mobile-prototype .prototype-screen-enter.slides-from-right {
   animation: prototype-screen-from-right 260ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
@@ -554,16 +559,8 @@
   letter-spacing: 0.04em;
 }
 .mobile-prototype .mini b {
-  display: flex;
-  min-height: 1.35em;
-  align-items: center;
-  gap: 6px;
+  display: block;
   margin-top: 4px;
-  line-height: 1.3;
-}
-.mobile-prototype .mini b .category-symbol {
-  flex: 0 0 1.2em;
-  vertical-align: 0;
 }
 .mobile-prototype .ri {
   display: flex;
@@ -921,42 +918,41 @@
   outline-offset: 3px;
 }
 .mobile-prototype .tabs {
-  grid-row: 3;
-  position: relative;
-  left: auto;
-  right: auto;
-  bottom: auto;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
   z-index: 5;
   display: flex;
   justify-content: center;
-  padding: 7px 12px 8px;
+  padding: 0 12px calc(10px + env(safe-area-inset-bottom, 0px));
 }
 .mobile-prototype .tabs nav {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  display: flex;
   align-items: center;
-  justify-items: center;
+  justify-content: space-around;
   width: 100%;
   max-width: 420px;
   padding: 6px;
-  background: var(--card);
-  background: color-mix(in srgb, var(--card) 78%, transparent);
+  background: color-mix(in srgb, var(--bg) 58%, transparent);
   border-radius: 24px;
-  border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
-  box-shadow: 0 8px 26px rgb(10 25 18/18%);
-  -webkit-backdrop-filter: blur(18px) saturate(140%);
-  backdrop-filter: blur(18px) saturate(140%);
+  border: 1px solid color-mix(in srgb, var(--line) 92%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--card) 48%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--line) 18%, transparent),
+    0 10px 32px rgb(10 25 18/22%);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  backdrop-filter: blur(30px) saturate(180%);
 }
 .mobile-prototype .tabs nav .t {
   display: flex;
-  width: 100%;
+  flex: 1;
   min-width: 0;
-  min-height: 46px;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  flex-direction: column;
-  gap: 2px;
-  padding: 4px 2px;
+  gap: 1px;
+  padding: 4px 6px;
   border-radius: 14px;
   color: var(--mut);
   font-size: 10.5px;
@@ -993,7 +989,7 @@
 .mobile-prototype .tabs nav .fab {
   position: relative;
   z-index: 1;
-  justify-self: center;
+  flex: none;
   width: 50px;
   min-width: 50px;
   height: 50px;
@@ -1003,9 +999,8 @@
   color: var(--on);
   display: grid;
   place-items: center;
-  margin: 0;
+  margin: -22px 6px 0;
   padding: 0;
-  transform: translateY(-14px);
   box-shadow: 0 6px 18px rgb(47 122 90/45%);
 }
 .mobile-prototype .fab svg {

@@ -333,8 +333,7 @@ function Home({ S, profile, onShift, onTab, onBudget, onOpen }) {
           <b>
             {cs[0] ? (
               <>
-                <CategorySymbol category={cs[0][0]} />
-                <span>{cs[0][0]}</span>
+                <CategorySymbol category={cs[0][0]} /> {cs[0][0]}
               </>
             ) : (
               "—"
@@ -1612,6 +1611,7 @@ export default function MobilePrototype({
           key={screenKey}
           className={`prototype-screen-enter${animateScreen ? ` ${slideDirection === "forward" ? "slides-from-right" : "slides-from-left"}` : ""}`}
         >
+          <div className="prototype-screen-content">
           {profileSettingsOpen ? (
             <ProfileSettingsPage
               profile={profile}
@@ -1683,8 +1683,48 @@ export default function MobilePrototype({
               onRemoveRec={removeRecurring}
             />
           )}
+          </div>
         </div>
       </main>
+
+      <div className="tabs">
+        <nav aria-label="Main navigation">
+          {TABS.map(([t, l]) =>
+            t === "add" ? (
+              <button
+                key={t}
+                className="fab"
+                aria-label="Add expense"
+                onClick={() => setSheet({ type: "add" })}
+              >
+                <Icon n="plus" />
+              </button>
+            ) : (
+              <button
+                key={t}
+                className={
+                  "t " +
+                  (!appSettingsOpen && !profileSettingsOpen && tab === t
+                    ? "on"
+                    : "")
+                }
+                aria-label={l}
+                aria-current={
+                  !appSettingsOpen && !profileSettingsOpen && tab === t
+                    ? "page"
+                    : undefined
+                }
+                onClick={() => nav(t)}
+              >
+                <span className="tab-icon">
+                  <Icon n={t} />
+                </span>
+                <span>{l}</span>
+              </button>
+            ),
+          )}
+        </nav>
+      </div>
 
       {sheet?.type === "add" && (
         <AddSheet iv={sheet.iv} onSave={saveExpense} onClose={close} />
@@ -1735,44 +1775,6 @@ export default function MobilePrototype({
         </div>
       )}
 
-      <div className="tabs">
-        <nav aria-label="Main navigation">
-          {TABS.map(([t, l]) =>
-            t === "add" ? (
-              <button
-                key={t}
-                className="fab"
-                aria-label="Add expense"
-                onClick={() => setSheet({ type: "add" })}
-              >
-                <Icon n="plus" />
-              </button>
-            ) : (
-              <button
-                key={t}
-                className={
-                  "t " +
-                  (!appSettingsOpen && !profileSettingsOpen && tab === t
-                    ? "on"
-                    : "")
-                }
-                aria-label={l}
-                aria-current={
-                  !appSettingsOpen && !profileSettingsOpen && tab === t
-                    ? "page"
-                    : undefined
-                }
-                onClick={() => nav(t)}
-              >
-                <span className="tab-icon">
-                  <Icon n={t} />
-                </span>
-                <span>{l}</span>
-              </button>
-            ),
-          )}
-        </nav>
-      </div>
     </div>
   );
 }
