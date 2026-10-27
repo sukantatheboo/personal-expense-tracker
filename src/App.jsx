@@ -22,6 +22,7 @@ import {
   FaUser,
   FaWallet,
 } from "react-icons/fa6";
+import MobilePrototype from "./MobilePrototype";
 import {
   CATEGORIES,
   CURRENCIES,
@@ -1273,6 +1274,46 @@ export default function App() {
       .slice(0, 8);
   }, [expenses, accountData]);
 
+  const mobilePrototypeData = {
+    m: selectedMonth,
+    theme,
+    rt: reminderTime,
+    bud: budgets,
+    exp: expenses.map((expense) => ({
+      id: expense.id,
+      desc: expense.description,
+      amt: expense.amount,
+      cat: expense.category,
+      date: expense.date,
+      acct: expense.account,
+      rec: Boolean(expense.recurringId),
+    })),
+    rec: recurringSchedules.map((schedule) => ({
+      id: schedule.id,
+      desc: schedule.description,
+      amt: schedule.amount,
+      cat: schedule.category,
+      iv: schedule.interval,
+      next: schedule.nextDate,
+      on: schedule.active ? 1 : 0,
+      acct: schedule.account,
+    })),
+    start: {
+      ...accountData.settings.balances,
+      date: accountData.settings.startDate,
+    },
+    tx: accountData.transactions.map((transaction) => ({
+      id: transaction.id,
+      type: transaction.type === "adjustment" ? "adjust" : transaction.type,
+      acct: transaction.account ?? transaction.fromAccount,
+      to: transaction.toAccount,
+      dir: transaction.direction === "increase" ? "up" : "down",
+      amt: transaction.amount,
+      note: transaction.description,
+      date: transaction.date,
+    })),
+  };
+
   const monthBudget = Number(budgets[selectedMonth] || 0);
   const budgetEditorOpen =
     monthBudget <= 0 || budgetEditingMonth === selectedMonth;
@@ -1480,40 +1521,39 @@ export default function App() {
     };
   }, [conversionOpen, targetCurrency]);
 
-  function handleExpenseSubmit(event) {
-    event.preventDefault();
-    const description = expenseForm.description.trim();
-    const rawAmount = expenseForm.amount.trim();
+  function saveExpenseData(form) {
+    const description = form.description.trim();
+    const rawAmount = String(form.amount ?? "").trim();
     const amount = rawAmount === "" ? null : Number(rawAmount);
     if (
       !description ||
-      !isValidDateString(expenseForm.date) ||
+      !isValidDateString(form.date) ||
       (amount !== null && (!Number.isFinite(amount) || amount <= 0)) ||
-      (expenseForm.interval !== "none" && amount === null)
+      (form.interval !== "none" && amount === null)
     ) {
       setExpenseMessage(
-        expenseForm.interval !== "none" && amount === null
+        form.interval !== "none" && amount === null
           ? "Recurring expenses need an amount."
           : "Check the description, amount, and date, then try again.",
       );
-      return;
+      return false;
     }
     setExpenseMessage("");
-    if (expenseForm.interval === "none") {
+    if (form.interval === "none") {
       setExpenses((current) => [
         ...current,
         {
           id: makeId(),
           description,
           amount: amount === null ? null : roundMoney(amount),
-          category: expenseForm.category,
-          date: expenseForm.date,
-          account: expenseForm.account,
+          category: form.category,
+          date: form.date,
+          account: form.account,
         },
       ]);
     } else {
       const scheduleId = makeId();
-      let nextDate = expenseForm.date;
+      let nextDate = form.date;
       const today = localDate();
       const generatedExpenses = [];
       let generated = 0;
@@ -1522,15 +1562,15 @@ export default function App() {
           id: makeId(),
           description,
           amount: roundMoney(amount),
-          category: expenseForm.category,
+          category: form.category,
           date: nextDate,
-          account: expenseForm.account,
+          account: form.account,
           recurringId: scheduleId,
         });
         nextDate = nextOccurrenceDate(
           nextDate,
-          expenseForm.interval,
-          Number(expenseForm.date.slice(-2)),
+          form.interval,
+          Number(form.date.slice(-2)),
         );
         generated += 1;
       }
@@ -1540,10 +1580,10 @@ export default function App() {
           id: scheduleId,
           description,
           amount: roundMoney(amount),
-          category: expenseForm.category,
-          interval: expenseForm.interval,
-          account: expenseForm.account,
-          dayOfMonth: Number(expenseForm.date.slice(-2)),
+          category: form.category,
+          interval: form.interval,
+          account: form.account,
+          dayOfMonth: Number(form.date.slice(-2)),
           nextDate,
           active: true,
         },
@@ -1558,9 +1598,32 @@ export default function App() {
         );
       }
     }
-    setSelectedMonth(expenseForm.date.slice(0, 7));
+    setSelectedMonth(form.date.slice(0, 7));
     setExpenseForm(makeExpenseForm());
-    navigateMobile("activity");
+    return true;
+  }
+
+  function handleExpenseSubmit(event) {
+    event.preventDefault();
+    if (saveExpenseData(expenseForm)) navigateMobile("activity");
+  }
+
+  function saveMobileExpense(form) {
+    return saveExpenseData(form);
+  }
+
+  function saveMobileAmount(expenseId, amount) {
+    if (!Number.isFinite(amount) || amount <= 0) return false;
+    setExpenses((current) =>
+      current.map((expense) =>
+        expense.id === expenseId
+          ? { ...expense, amount: roundMoney(amount) }
+          : expense,
+      ),
+    );
+    setEditingExpenseId(null);
+    setEditingAmount("");
+    return true;
   }
 
   function handleOpeningBalancesSubmit(event) {
@@ -1632,6 +1695,75 @@ export default function App() {
     });
   }
 
+  function saveMobileTransaction(form) {
+    const amount = Number(form.amt);
+    if (!Number.isFinite(amount) || amount <= 0) return false;
+    const type = form.type === "adjust" ? "adjustment" : form.type;
+    const transaction = {
+      id: makeId(),
+      type,
+      amount: roundMoney(amount),
+      date: localDate(),
+      description: String(form.note ?? "").trim(),
+    };
+    if (type === "income") {
+      transaction.account = form.acct;
+    } else if (type === "adjustment") {
+      transaction.account = form.acct;
+      transaction.direction = form.dir === "up" ? "increase" : "decrease";
+    } else if (type === "transfer") {
+      transaction.fromAccount = form.acct;
+      transaction.toAccount = form.acct === "bank" ? "bkash" : "bank";
+    } else {
+      return false;
+    }
+    setAccountData((current) => ({
+      ...current,
+      transactions: [...current.transactions, transaction],
+    }));
+    setTransactionForm(makeTransactionForm());
+    return true;
+  }
+
+  function toggleMobileRecurring(scheduleId) {
+    setRecurringSchedules((current) =>
+      current.map((schedule) => {
+        if (schedule.id !== scheduleId) return schedule;
+        if (schedule.active) return { ...schedule, active: false };
+        let nextDate = schedule.nextDate;
+        let skipped = 0;
+        while (nextDate <= localDate() && skipped < 240) {
+          nextDate = nextOccurrenceDate(
+            nextDate,
+            schedule.interval,
+            schedule.dayOfMonth,
+          );
+          skipped += 1;
+        }
+        return { ...schedule, active: true, nextDate };
+      }),
+    );
+  }
+
+  function removeMobileRecurring(scheduleId) {
+    const schedule = recurringSchedules.find((item) => item.id === scheduleId);
+    if (!schedule) return undefined;
+    setRecurringSchedules((current) =>
+      current.filter((item) => item.id !== scheduleId),
+    );
+    setRecordDeleted("recurringSchedules", scheduleId, true);
+    const restore = () => {
+      setRecordDeleted("recurringSchedules", scheduleId, false);
+      setRecurringSchedules((current) =>
+        current.some((item) => item.id === scheduleId)
+          ? current
+          : [...current, schedule],
+      );
+    };
+    offerUndo("Recurring expense removed", restore);
+    return restore;
+  }
+
   function saveMissingExpenseAmount(event, expense) {
     event.preventDefault();
     const amount = Number(editingAmount);
@@ -1688,7 +1820,9 @@ export default function App() {
       current.filter((item) => item.id !== expense.id),
     );
     setExpenseDeleted(expense, true);
-    offerUndo("Expense removed", () => restoreExpense(expense));
+    const restore = () => restoreExpense(expense);
+    offerUndo("Expense removed", restore);
+    return restore;
   }
 
   function removeAccountActivity(activity) {
@@ -1735,10 +1869,12 @@ export default function App() {
     });
     if (previousBudget) {
       setRecordDeleted("budgets", selectedMonth, true);
-      offerUndo("Budget cleared", () => {
+      const restore = () => {
         setRecordDeleted("budgets", selectedMonth, false);
         setBudgets((current) => ({ ...current, [selectedMonth]: previousBudget }));
-      });
+      };
+      offerUndo("Budget cleared", restore);
+      return restore;
     }
   }
 
@@ -2272,7 +2408,43 @@ export default function App() {
   }[mobileView];
 
   return (
+    <>
+    <MobilePrototype
+      S={mobilePrototypeData}
+      legacyView={mobileView === "more" || mobileView === "profile"}
+      onShift={addMonth}
+      onExpenseSave={saveMobileExpense}
+      onAmountSave={saveMobileAmount}
+      onExpenseDelete={removeExpense}
+      onBudgetSave={(amount) => {
+        setRecordDeleted("budgets", selectedMonth, false);
+        setBudgets((current) => ({
+          ...current,
+          [selectedMonth]: roundMoney(amount),
+        }));
+        setBudgetEditingMonth(null);
+        return true;
+      }}
+      onBudgetClear={clearBudget}
+      onTransactionSave={saveMobileTransaction}
+      onToggleRec={toggleMobileRecurring}
+      onRemoveRec={removeMobileRecurring}
+      onTheme={() =>
+        setTheme((current) => (current === "dark" ? "light" : "dark"))
+      }
+      onReminder={updateReminderTime}
+      onSignIn={() => {
+        navigateMobile("profile");
+        if (!pushUser) {
+          setAuthMode("sign-in");
+          setAuthStatus("");
+          setAuthModalOpen(true);
+        }
+      }}
+      onAdvanced={() => navigateMobile("more")}
+    />
     <main
+      className="full-app"
       data-mobile-view={mobileView}
       data-more-open={isMoreOpen ? "true" : undefined}
     >
@@ -4021,5 +4193,6 @@ export default function App() {
       </nav>
 
     </main>
+    </>
   );
 }
