@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   FaArrowsRotate,
   FaBolt,
@@ -2433,13 +2434,32 @@ export default function App() {
         setTheme((current) => (current === "dark" ? "light" : "dark"))
       }
       onReminder={updateReminderTime}
+      profile={pushUser ? {
+        name: userDisplayName(pushUser),
+        email: pushUser.email,
+        initial: userInitial(pushUser),
+      } : null}
+      cloudSyncEnabled={cloudSyncEnabled}
+      cloudSyncReady={cloudSyncReady}
+      pushBackendConfigured={pushBackendConfigured}
+      notificationPermission={notificationPermission}
+      notificationStatus={notificationStatus}
+      backgroundPushEnabled={backgroundPushEnabled}
+      onToggleNotifications={toggleNotifications}
+      backupStatus={backupStatus}
+      onBackupDownload={downloadBackup}
+      onBackupRestore={() => backupFileInputRef.current?.click()}
+      onSignOut={signOutOfPush}
+      accountStatus={authStatus}
+      authBusy={authBusy}
       onSignIn={() => {
-        navigateMobile("profile");
-        if (!pushUser) {
-          setAuthMode("sign-in");
-          setAuthStatus("");
-          setAuthModalOpen(true);
-        }
+        authTriggerRef.current = document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null;
+        setAuthMode("sign-in");
+        setAuthStatus("");
+        setAuthPassword("");
+        setAuthModalOpen(true);
       }}
     />
     <main
@@ -2574,7 +2594,7 @@ export default function App() {
           </div>
         </div>
       </header>
-      {authModalOpen && (!pushUser || authMode === "update-password") && (
+      {authModalOpen && (!pushUser || authMode === "update-password") && createPortal(
         <div
           className="auth-modal-backdrop"
           onMouseDown={(event) => {
@@ -2724,7 +2744,8 @@ export default function App() {
               </p>
             )}
           </section>
-        </div>
+        </div>,
+        document.body,
       )}
 
       <section className="summary" data-mobile-page="home" aria-labelledby="summary-title">
@@ -4192,6 +4213,13 @@ export default function App() {
       </nav>
 
     </main>
+    <input
+      ref={backupFileInputRef}
+      type="file"
+      accept=".json,application/json"
+      hidden
+      onChange={restoreBackup}
+    />
     </>
   );
 }
