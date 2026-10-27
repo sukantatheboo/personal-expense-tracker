@@ -2188,7 +2188,9 @@ export default function App() {
       if (cloudSyncEnabled && cloudSyncReady) {
         await queueCloudSnapshotSave(pushUser.id);
       }
-      await disableBackgroundPush(pushUser.id);
+      if (pushBackendConfigured) {
+        await disableBackgroundPush(pushUser.id);
+      }
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
       setBackgroundPushEnabled(false);

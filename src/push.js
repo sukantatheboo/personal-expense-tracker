@@ -76,7 +76,6 @@ export async function enableBackgroundPush(userId) {
 
 export async function disableBackgroundPush(userId) {
   if (!supabase) throw new Error("Background push has not been configured.");
-  const registration = await navigator.serviceWorker.getRegistration();
   const deviceId = getDeviceId();
   const { error: remindersError } = await supabase
     .from("push_reminders")
@@ -90,8 +89,19 @@ export async function disableBackgroundPush(userId) {
     .eq("user_id", userId)
     .eq("device_id", deviceId);
   if (deviceError) throw deviceError;
-  const subscription = await registration?.pushManager.getSubscription();
-  if (subscription && !(await subscription.unsubscribe())) {
+  const registration = "serviceWorker" in navigator
+    ? await navigator.serviceWorker.getRegistration()
+    : null;
+  const pushManager = registration?.pushManager;
+  const subscription =
+    typeof pushManager?.getSubscription === "function"
+      ? await pushManager.getSubscription()
+      : null;
+  if (
+    subscription &&
+    typeof subscription.unsubscribe === "function" &&
+    !(await subscription.unsubscribe())
+  ) {
     throw new Error(
       "The browser could not unsubscribe from push notifications.",
     );
