@@ -432,6 +432,17 @@ function hasMeaningfulAccountSettings(settings) {
   );
 }
 
+function areAccountSettingsEqual(left, right) {
+  return Boolean(
+    left &&
+      right &&
+      left.startDate === right.startDate &&
+      left.balances.bkash === right.balances.bkash &&
+      left.balances.bank === right.balances.bank &&
+      left.configured === right.configured,
+  );
+}
+
 function hasMeaningfulLocalAccountSettings(data) {
   return hasMeaningfulAccountSettings(data.accountData.settings);
 }
@@ -513,8 +524,8 @@ function mergeCloudSnapshots(
     accountData: {
       settings:
         preferLocalAccountSettings && hasMeaningfulLocalAccountSettings(local)
-        ? local.accountData.settings
-        : cloudAccounts.settings,
+          ? local.accountData.settings
+          : cloudAccounts.settings,
       transactions: mergeRecords(
         cloudAccounts.transactions,
         local.accountData.transactions,
@@ -704,6 +715,7 @@ export default function App() {
   const pushScheduleSyncRef = useRef(Promise.resolve());
   const cloudSnapshotRef = useRef(null);
   const cloudVersionRef = useRef(null);
+  const cloudAccountSettingsRef = useRef(null);
   const cloudSaveQueueRef = useRef(Promise.resolve());
   const undoTimerRef = useRef(null);
   const authUserIdRef = useRef(null);
@@ -822,6 +834,7 @@ export default function App() {
               localDataOwnerRef.current === userId
             ) {
               cloudVersionRef.current = savedVersion;
+              cloudAccountSettingsRef.current = snapshot.accountData.settings;
               setLastSyncedAt(Date.now());
               setCloudSyncStatus(
                 "Cloud sync is on. Your data is saved to Supabase.",
@@ -839,7 +852,15 @@ export default function App() {
           }
           snapshot = cloudSnapshotRef.current;
           if (remote?.data) {
-            snapshot = mergeCloudSnapshots(snapshot, remote.data, true);
+            snapshot = mergeCloudSnapshots(
+              snapshot,
+              remote.data,
+              true,
+              !areAccountSettingsEqual(
+                snapshot.accountData.settings,
+                cloudAccountSettingsRef.current,
+              ),
+            );
             applyCloudSnapshot(snapshot);
           }
           cloudVersionRef.current = remote?.updated_at ?? null;
@@ -958,6 +979,7 @@ export default function App() {
       setCloudSyncReady(false);
       setLastSyncedAt(null);
       cloudVersionRef.current = null;
+      cloudAccountSettingsRef.current = null;
       setCloudSyncEnabled(Boolean(user));
       setAuthStatus("");
       if (!user) {
@@ -1030,6 +1052,10 @@ export default function App() {
               cloudSnapshotRef.current,
               merged,
               true,
+              !areAccountSettingsEqual(
+                cloudSnapshotRef.current.accountData.settings,
+                local.accountData.settings,
+              ),
             );
             break;
           }
@@ -1040,6 +1066,7 @@ export default function App() {
         }
         if (!active) return;
         cloudVersionRef.current = savedVersion;
+        cloudAccountSettingsRef.current = merged.accountData.settings;
         adoptLocalDataForUser(pushUser.id);
         applyCloudSnapshot(merged);
         setCloudSyncReady(true);
@@ -2103,6 +2130,7 @@ export default function App() {
           );
           applyCloudSnapshot(refreshed);
           cloudVersionRef.current = remote.updated_at ?? cloudVersionRef.current;
+          cloudAccountSettingsRef.current = refreshed.accountData.settings;
           setLastSyncedAt(Date.now());
           setCloudSyncStatus("Cloud data refreshed from Supabase.");
         }
@@ -2134,10 +2162,14 @@ export default function App() {
         if (!remote?.data) {
           throw new Error("No cloud data was returned.");
         }
-        setRecurringSchedules(
-          loadRecurringSchedules(remote.data.recurringSchedules ?? []),
+        const refreshed = mergeCloudSnapshots(
+          cloudSnapshotRef.current,
+          remote.data,
+          false,
         );
+        applyCloudSnapshot(refreshed);
         cloudVersionRef.current = remote.updated_at ?? cloudVersionRef.current;
+        cloudAccountSettingsRef.current = refreshed.accountData.settings;
         setLastSyncedAt(Date.now());
         setCloudSyncStatus("Cloud data refreshed from Supabase.");
         setRecurringRefreshStatus("Schedules refreshed.");
