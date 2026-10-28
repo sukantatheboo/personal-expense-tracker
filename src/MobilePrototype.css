@@ -325,10 +325,16 @@ textarea {
   --bad: #c0483a;
   --on: #fff;
   --shadow: 0 6px 24px rgb(30 50 38/8%);
-  --dock-surface: color-mix(in srgb, var(--card) 76%, transparent);
-  --dock-border: color-mix(in srgb, var(--line) 72%, #fff 28%);
-  --dock-highlight: rgb(255 255 255 / 78%);
-  --dock-shadow: 0 12px 32px rgb(32 52 40/14%), 0 2px 8px rgb(32 52 40/6%);
+  --dock-surface: color-mix(in srgb, var(--card) 68%, transparent);
+  --dock-border: color-mix(in srgb, var(--line) 76%, #fff 24%);
+  --dock-highlight: rgb(255 255 255 / 76%);
+  --dock-glass-sheen: linear-gradient(
+    180deg,
+    rgb(255 255 255 / 42%),
+    rgb(255 255 255 / 13%) 52%,
+    rgb(255 255 255 / 3%)
+  );
+  --dock-shadow: 0 14px 34px rgb(32 52 40/16%), 0 2px 9px rgb(32 52 40/7%);
   box-sizing: border-box;
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -347,10 +353,16 @@ textarea {
     --bad: #ee8b7d;
     --on: #0c1a12;
     --shadow: 0 6px 24px rgb(0 0 0/30%);
-    --dock-surface: color-mix(in srgb, var(--card) 78%, transparent);
-    --dock-border: color-mix(in srgb, var(--line) 90%, transparent);
-    --dock-highlight: color-mix(in srgb, var(--card) 48%, transparent);
-    --dock-shadow: 0 12px 32px rgb(0 0 0/30%), 0 2px 8px rgb(0 0 0/18%);
+    --dock-surface: color-mix(in srgb, var(--card) 72%, transparent);
+    --dock-border: color-mix(in srgb, var(--line) 82%, transparent);
+    --dock-highlight: rgb(255 255 255 / 13%);
+    --dock-glass-sheen: linear-gradient(
+      180deg,
+      rgb(255 255 255 / 10%),
+      rgb(255 255 255 / 3%) 54%,
+      transparent
+    );
+    --dock-shadow: 0 14px 34px rgb(0 0 0/34%), 0 2px 9px rgb(0 0 0/20%);
     color-scheme: dark;
   }
 }
@@ -366,10 +378,16 @@ textarea {
   --bad: #ee8b7d;
   --on: #0c1a12;
   --shadow: 0 6px 24px rgb(0 0 0/30%);
-  --dock-surface: color-mix(in srgb, var(--card) 78%, transparent);
-  --dock-border: color-mix(in srgb, var(--line) 90%, transparent);
-  --dock-highlight: color-mix(in srgb, var(--card) 48%, transparent);
-  --dock-shadow: 0 12px 32px rgb(0 0 0/30%), 0 2px 8px rgb(0 0 0/18%);
+  --dock-surface: color-mix(in srgb, var(--card) 72%, transparent);
+  --dock-border: color-mix(in srgb, var(--line) 82%, transparent);
+  --dock-highlight: rgb(255 255 255 / 13%);
+  --dock-glass-sheen: linear-gradient(
+    180deg,
+    rgb(255 255 255 / 10%),
+    rgb(255 255 255 / 3%) 54%,
+    transparent
+  );
+  --dock-shadow: 0 14px 34px rgb(0 0 0/34%), 0 2px 9px rgb(0 0 0/20%);
   color-scheme: dark;
 }
 .mobile-prototype {
@@ -1402,6 +1420,7 @@ textarea {
   padding: 0 12px calc(10px + env(safe-area-inset-bottom, 0px));
 }
 .mobile-prototype .tabs nav {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-around;
@@ -1409,6 +1428,7 @@ textarea {
   max-width: 420px;
   padding: 6px;
   background: var(--dock-surface);
+  background-image: var(--dock-glass-sheen);
   border-radius: 24px;
   border: 1px solid var(--dock-border);
   box-shadow:
@@ -1417,9 +1437,39 @@ textarea {
     var(--dock-shadow);
   -webkit-backdrop-filter: blur(30px) saturate(180%);
   backdrop-filter: blur(30px) saturate(180%);
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+.mobile-prototype .dock-active-indicator {
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  left: 0;
+  z-index: 0;
+  width: 0;
+  border: 1px solid color-mix(in srgb, var(--g) 13%, transparent);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--g) 9%, var(--dock-surface));
+  box-shadow: inset 0 1px 0 var(--dock-highlight);
+  opacity: 1;
+  pointer-events: none;
+  transform: translate3d(0, 0, 0);
+  transition:
+    transform 340ms cubic-bezier(0.2, 0.82, 0.24, 1.16),
+    width 240ms cubic-bezier(0.2, 0.82, 0.24, 1.16),
+    opacity 160ms ease;
+  will-change: transform, width;
+  -webkit-backdrop-filter: blur(14px) saturate(150%);
+  backdrop-filter: blur(14px) saturate(150%);
+}
+.mobile-prototype .dock-active-indicator.is-hidden {
+  opacity: 0;
 }
 .mobile-prototype .tabs nav .t {
   position: relative;
+  z-index: 1;
   display: flex;
   flex: 1;
   min-width: 0;
@@ -1458,6 +1508,8 @@ textarea {
   min-height: 11px;
   line-height: 11px;
   text-align: center;
+  opacity: 0.84;
+  transition: opacity 160ms ease;
 }
 .mobile-prototype .tabs nav .t:hover {
   background: color-mix(in srgb, var(--g) 7%, transparent);
@@ -1475,12 +1527,16 @@ textarea {
   background: color-mix(in srgb, var(--g) 9%, transparent);
 }
 .mobile-prototype .tabs nav .t.on {
-  background: color-mix(in srgb, var(--g) 9%, transparent);
+  background: transparent;
   color: var(--g);
   font-weight: 800;
 }
 .mobile-prototype .tabs nav .t.on .tab-icon {
-  animation: dock-tab-select 280ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: dock-tab-select 320ms cubic-bezier(0.2, 0.82, 0.24, 1.16) both;
+}
+.mobile-prototype .tabs nav .t.on > span:last-child {
+  opacity: 1;
+  animation: dock-label-in 220ms ease-out both;
 }
 .mobile-prototype .tabs nav .fab {
   position: relative;
@@ -1845,13 +1901,23 @@ textarea {
 }
 @keyframes dock-tab-select {
   0% {
-    transform: scale(0.78) translateY(2px);
+    transform: scale(0.84) translateY(2px);
   }
-  65% {
-    transform: scale(1.12) translateY(-1px);
+  58% {
+    transform: scale(1.1) translateY(-2px);
   }
   100% {
     transform: scale(1) translateY(0);
+  }
+}
+@keyframes dock-label-in {
+  from {
+    opacity: 0.5;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1910,6 +1976,22 @@ textarea {
   .mobile-prototype textarea,
   .mobile-prototype select {
     transition: none;
+  }
+
+  .mobile-prototype .dock-active-indicator {
+    opacity: 0;
+    transition: opacity 150ms ease;
+  }
+  .mobile-prototype .tabs nav .t {
+    transition:
+      background-color 150ms ease,
+      color 150ms ease !important;
+  }
+  .mobile-prototype .tabs nav .t.on {
+    background: color-mix(in srgb, var(--g) 9%, transparent);
+  }
+  .mobile-prototype .tabs nav .t.on > span:last-child {
+    animation: none;
   }
 }
 

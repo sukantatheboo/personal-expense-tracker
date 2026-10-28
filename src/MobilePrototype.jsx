@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { FaPenToSquare } from "react-icons/fa6";
 import "./MobilePrototype.css";
 
@@ -1623,6 +1623,9 @@ export default function MobilePrototype({
   const mobileRootRef = useRef(null);
   const screenScrollRef = useRef(null);
   const activitySearchRef = useRef(null);
+  const dockNavRef = useRef(null);
+  const dockIndicatorRef = useRef(null);
+  const dockTabRefs = useRef({});
 
   const resetScreenScroll = () => {
     if (screenScrollRef.current) screenScrollRef.current.scrollTop = 0;
@@ -1795,6 +1798,35 @@ export default function MobilePrototype({
   const signIn = () => onSignIn?.();
 
   const settingsRoute = appSettingsOpen || profileSettingsOpen;
+  useLayoutEffect(() => {
+    const navNode = dockNavRef.current;
+    const indicatorNode = dockIndicatorRef.current;
+    const activeTabNode = dockTabRefs.current[tab];
+    if (!navNode || !indicatorNode || !activeTabNode) return undefined;
+
+    const updateIndicator = () => {
+      const navRect = navNode.getBoundingClientRect();
+      const activeRect = activeTabNode.getBoundingClientRect();
+      indicatorNode.style.width = `${activeRect.width}px`;
+      indicatorNode.style.transform = `translate3d(${activeRect.left - navRect.left - navNode.clientLeft}px, 0, 0)`;
+    };
+    updateIndicator();
+
+    const resizeObserver =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(updateIndicator);
+    resizeObserver?.observe(navNode);
+    resizeObserver?.observe(activeTabNode);
+    window.addEventListener("resize", updateIndicator);
+    window.visualViewport?.addEventListener("resize", updateIndicator);
+
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", updateIndicator);
+      window.visualViewport?.removeEventListener("resize", updateIndicator);
+    };
+  }, [tab, settingsRoute]);
   const routeTitle = profileSettingsOpen
     ? "Profile"
     : appSettingsOpen
@@ -1976,7 +2008,12 @@ export default function MobilePrototype({
       </main>
 
       <div className="tabs">
-        <nav aria-label="Main navigation">
+        <nav ref={dockNavRef} aria-label="Main navigation">
+          <span
+            ref={dockIndicatorRef}
+            className={`dock-active-indicator${settingsRoute ? " is-hidden" : ""}`}
+            aria-hidden="true"
+          />
           {TABS.map(([t, l]) =>
             t === "add" ? (
               <button
@@ -1996,6 +2033,10 @@ export default function MobilePrototype({
                     ? "on"
                     : "")
                 }
+                ref={(node) => {
+                  if (node) dockTabRefs.current[t] = node;
+                  else delete dockTabRefs.current[t];
+                }}
                 aria-label={l}
                 aria-current={
                   !appSettingsOpen && !profileSettingsOpen && tab === t
