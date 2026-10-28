@@ -100,9 +100,9 @@ function CategorySymbol({ category }) {
         aria-hidden="true"
         focusable="false"
       >
-        <circle cx="5" cy="12" r="1.4" />
-        <circle cx="12" cy="12" r="1.4" />
-        <circle cx="19" cy="12" r="1.4" />
+        <circle cx="4" cy="12" r="2.1" />
+        <circle cx="12" cy="12" r="2.1" />
+        <circle cx="20" cy="12" r="2.1" />
       </svg>
     );
   }
@@ -330,10 +330,11 @@ function Home({ S, profile, onShift, onTab, onBudget, onOpen }) {
       <div className="mini">
         <div className="card">
           <small>Top category</small>
-          <b>
+          <b className="top-category-value">
             {cs[0] ? (
               <>
-                <CategorySymbol category={cs[0][0]} /> {cs[0][0]}
+                <CategorySymbol category={cs[0][0]} />
+                <span>{cs[0][0]}</span>
               </>
             ) : (
               "—"
