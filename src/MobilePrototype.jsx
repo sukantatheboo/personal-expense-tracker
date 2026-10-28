@@ -731,6 +731,9 @@ function AddSheet({ iv, onSave, onClose }) {
         <span>৳</span>
         <input
           inputMode="decimal"
+          autoFocus
+          enterKeyHint="next"
+          aria-label="Expense amount"
           placeholder="0"
           value={f.amt}
           onChange={(e) => set("amt", e.target.value)}
