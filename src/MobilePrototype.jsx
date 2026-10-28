@@ -1351,12 +1351,10 @@ function AppSettingsPage({
   );
 }
 
-/* The supplied prototype's screen components stay presentational. The app
-   supplies its own data and persistence so the mobile design shares the same
-   expenses, budgets, accounts, and recurring schedules as the desktop app. */
+/* These screens stay presentational. App supplies shared expense data,
+   persistence, account actions, and sync state. */
 export default function MobilePrototype({
   S,
-  legacyView = false,
   onShift,
   onExpenseSave,
   onAmountSave,
@@ -1538,7 +1536,7 @@ export default function MobilePrototype({
       : tab;
 
   return (
-    <div className="mobile-prototype" data-theme={S.theme} hidden={legacyView}>
+    <div className="mobile-prototype" data-theme={S.theme}>
       <header
         className={`prototype-header${isScrolled ? " is-scrolled" : ""}${settingsRoute ? " is-settings-route" : ""}`}
       >
