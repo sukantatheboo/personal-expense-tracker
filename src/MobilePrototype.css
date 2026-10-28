@@ -712,10 +712,25 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  border: 1px solid transparent;
   background: var(--card);
   border-radius: 16px;
   padding: 0 14px;
   box-shadow: var(--shadow);
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease;
+}
+.mobile-prototype .srch:focus-within {
+  border-color: color-mix(in srgb, var(--g) 38%, var(--line));
+  background: color-mix(in srgb, var(--card) 96%, var(--g) 4%);
+}
+.mobile-prototype .srch > svg {
+  color: var(--mut);
+  transition: color 180ms ease;
+}
+.mobile-prototype .srch:focus-within > svg {
+  color: var(--g);
 }
 .mobile-prototype .srch input {
   flex: 1;
@@ -1326,6 +1341,16 @@
   .mobile-prototype .prototype-header-title {
     transition: none;
   }
+
+  .mobile-prototype .srch,
+  .mobile-prototype .srch > svg,
+  .mobile-prototype .amt input,
+  .mobile-prototype .in,
+  .mobile-prototype input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="button"]):not([type="submit"]):not([type="reset"]),
+  .mobile-prototype textarea,
+  .mobile-prototype select {
+    transition: none;
+  }
 }
 
 @keyframes prototype-screen-from-right {
@@ -1436,11 +1461,20 @@
   font-size: 52px;
   font-weight: 800;
   width: 70%;
-  border: 0;
+  border: 1px solid transparent;
+  border-radius: 14px;
   background: none;
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease;
   outline: 0;
   text-align: center;
   letter-spacing: -0.03em;
+  caret-color: var(--g);
+}
+.mobile-prototype .amt input:focus {
+  border-color: color-mix(in srgb, var(--g) 38%, var(--line));
+  background-color: color-mix(in srgb, var(--bg) 96%, var(--g) 4%);
 }
 .mobile-prototype .in {
   width: 100%;
@@ -1448,15 +1482,31 @@
   background: var(--bg);
   border-radius: 16px;
   padding: 14px;
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease;
   outline: 0;
 }
 .mobile-prototype .in:focus {
-  border-color: var(--line);
+  border-color: color-mix(in srgb, var(--g) 38%, var(--line));
+  background-color: color-mix(in srgb, var(--bg) 96%, var(--g) 4%);
+}
+.mobile-prototype .in,
+.mobile-prototype textarea,
+.mobile-prototype select {
+  caret-color: var(--g);
+}
+.mobile-prototype input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="button"]):not([type="submit"]):not([type="reset"]),
+.mobile-prototype textarea,
+.mobile-prototype select {
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease;
 }
 .mobile-prototype input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="button"]):not([type="submit"]):not([type="reset"]):focus,
 .mobile-prototype textarea:focus,
 .mobile-prototype select:focus {
-  border-color: var(--line);
+  border-color: color-mix(in srgb, var(--g) 38%, var(--line));
   outline: none;
   box-shadow: none;
 }
