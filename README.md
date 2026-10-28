@@ -62,4 +62,23 @@ Background push reminders additionally require:
 VITE_VAPID_PUBLIC_KEY=your-public-vapid-key
 ```
 
-The private VAPID key and cron secret must stay in Supabase secrets. See [`.env.example`](./.env.example) for the local configuration template.
+Deploy the worker and add its server-only secrets:
+
+```sh
+supabase functions deploy send-due-reminders --project-ref YOUR_PROJECT_REF
+supabase secrets set --project-ref YOUR_PROJECT_REF \
+  CRON_SECRET='replace-with-a-long-random-secret' \
+  VAPID_PUBLIC_KEY='your-public-vapid-key' \
+  VAPID_PRIVATE_KEY='your-private-vapid-key' \
+  VAPID_SUBJECT='mailto:you@example.com'
+```
+
+Create these three Vault secrets in the Supabase SQL Editor, using the same `CRON_SECRET` as the Edge Function secret and the public anon key from your app configuration:
+
+```sql
+select vault.create_secret('https://<project-ref>.supabase.co', 'spend_supabase_url');
+select vault.create_secret('<VITE_SUPABASE_ANON_KEY>', 'spend_anon_key');
+select vault.create_secret('<same-long-random-secret>', 'spend_cron_secret');
+```
+
+The scheduler migration may be applied before or after these Vault values; it checks Vault on each run and stays idle until all three values exist. It invokes the worker once per minute. Keep the VAPID private key and cron secret out of the frontend and repository. See [`.env.example`](./.env.example) for the local frontend configuration template.

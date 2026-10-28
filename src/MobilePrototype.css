@@ -161,6 +161,65 @@ textarea {
   border-color: var(--green);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 18%, transparent);
 }
+.auth-password-control {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--field);
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+.auth-password-control:focus-within {
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 18%, transparent);
+}
+.auth-modal .auth-password-control input {
+  flex: 1;
+  min-width: 0;
+  min-height: 42px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.auth-modal .auth-password-control input:focus-visible {
+  border-color: transparent;
+  box-shadow: none;
+}
+.auth-password-toggle {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  place-items: center;
+  margin-right: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.auth-password-toggle:hover {
+  background: color-mix(in srgb, var(--green) 10%, transparent);
+  color: var(--green);
+}
+.auth-password-toggle:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: -2px;
+  color: var(--green);
+}
+.auth-password-icon {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 .auth-modal-form .push-auth-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -807,6 +866,41 @@ textarea {
 }
 .mobile-prototype .ri:last-child {
   border: 0;
+}
+.mobile-prototype .account-activity-empty {
+  display: flex;
+  min-height: 112px;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 6px;
+}
+.mobile-prototype .account-activity-empty-icon {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
+  place-items: center;
+  border-radius: 15px;
+  background: color-mix(in srgb, var(--g) 13%, transparent);
+  color: var(--g);
+}
+.mobile-prototype .account-activity-empty-icon svg {
+  width: 21px;
+  height: 21px;
+}
+.mobile-prototype .account-activity-empty b {
+  display: block;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 800;
+}
+.mobile-prototype .account-activity-empty small {
+  display: block;
+  margin-top: 4px;
+  color: var(--mut);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
 }
 .mobile-prototype button.ri:hover,
 .mobile-prototype button.ri:focus-visible {

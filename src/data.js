@@ -1,6 +1,7 @@
 export const STORAGE_KEYS = {
   expenses: "spend-expenses-v1",
   budgets: "spend-monthly-budgets-v1",
+  budgetUpdatedAt: "spend-budget-updated-at-v1",
   recurring: "spend-recurring-expenses-v1",
   accounts: "spend-account-balances-v1",
   theme: "spend-theme-v1",
@@ -161,6 +162,7 @@ export function emptyAccountData() {
       startDate: localDate(),
       balances: { bkash: 0, bank: 0 },
       configured: false,
+      updatedAt: 0,
     },
     transactions: [],
   };
@@ -212,6 +214,14 @@ export function loadAccountData(
         bank: cleanBalance(balances.bank),
       },
       configured: settings.configured === true,
+      updatedAt:
+        typeof settings.updatedAt === "number" &&
+        Number.isFinite(settings.updatedAt)
+          ? settings.updatedAt
+          : typeof settings.updatedAt === "string" &&
+              Number.isFinite(Date.parse(settings.updatedAt))
+            ? Date.parse(settings.updatedAt)
+            : 0,
     },
     transactions: Array.isArray(saved.transactions)
       ? saved.transactions.filter(isValidAccountTransaction).map((item) => ({

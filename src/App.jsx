@@ -43,6 +43,7 @@ import {
 const CURRENCY_API = "https://api.frankfurter.dev/v2";
 const LOCAL_DATA_OWNER_KEY = "spend-local-data-owner-v1";
 const LOCAL_USER_SNAPSHOTS_KEY = "spend-local-user-snapshots-v1";
+const BUDGET_UPDATED_AT_KEY = STORAGE_KEYS.budgetUpdatedAt;
 
 function loadTheme() {
   try {
@@ -117,6 +118,31 @@ function profileInitial(name) {
         .trim()
         .split(/\s+/)[0] || "A",
     )[0]?.toLocaleUpperCase() || "A"
+  );
+}
+
+function PasswordVisibilityIcon({ visible }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+      className="auth-password-icon"
+    >
+      {visible ? (
+        <>
+          <path d="M3 3l18 18" />
+          <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" />
+          <path d="M9.9 5.2A10.8 10.8 0 0 1 12 5c5.5 0 9.5 7 9.5 7a15 15 0 0 1-3.2 3.8" />
+          <path d="M6.2 6.2A15 15 0 0 0 2.5 12s4 7 9.5 7a10.7 10.7 0 0 0 3.5-.6" />
+        </>
+      ) : (
+        <>
+          <path d="M2.5 12s4-7 9.5-7 9.5 7 9.5 7-4 7-9.5 7-9.5-7-9.5-7Z" />
+          <circle cx="12" cy="12" r="2.5" />
+        </>
+      )}
+    </svg>
   );
 }
 
@@ -261,12 +287,91 @@ function csvCell(value) {
   return `"${text.replaceAll('"', '""')}"`;
 }
 
-function mergeRecords(cloudRecords, localRecords, deletedChanges = {}) {
+function recordUpdatedAt(record) {
+  const value = record?.updatedAt ?? record?.updated_at;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value !== "string") return 0;
+  const numeric = Number(value);
+  if (Number.isFinite(numeric)) return numeric;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function preferLocalRecord(local, cloud, preferLocalOnTie = true) {
+  const localUpdatedAt = recordUpdatedAt(local);
+  const cloudUpdatedAt = recordUpdatedAt(cloud);
+  return (
+    localUpdatedAt > cloudUpdatedAt ||
+    (localUpdatedAt === cloudUpdatedAt && preferLocalOnTie)
+  );
+}
+
+function normalizeBudgetUpdatedAt(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([month, updatedAt]) => {
+      if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return [];
+      const timestamp = recordUpdatedAt({ updatedAt });
+      return [[month, timestamp]];
+    }),
+  );
+}
+
+function mergeBudgetValues(
+  cloudBudgets,
+  localBudgets,
+  cloudUpdatedAt,
+  localUpdatedAt,
+  deletedChanges,
+  preferLocalOnTie,
+) {
+  const budgets = {};
+  const updatedAt = {};
+  const months = new Set([
+    ...Object.keys(cloudBudgets),
+    ...Object.keys(localBudgets),
+  ]);
+  for (const month of months) {
+    const hasCloud = Object.hasOwn(cloudBudgets, month);
+    const hasLocal = Object.hasOwn(localBudgets, month);
+    const cloudTime = cloudUpdatedAt[month] ?? 0;
+    const localTime = localUpdatedAt[month] ?? 0;
+    const chooseLocal =
+      hasLocal &&
+      (!hasCloud ||
+        localTime > cloudTime ||
+        (localTime === cloudTime && preferLocalOnTie));
+    if (isRecordDeleted(deletedChanges, month)) continue;
+    if (chooseLocal) {
+      budgets[month] = localBudgets[month];
+      updatedAt[month] = localTime;
+    } else if (hasCloud) {
+      budgets[month] = cloudBudgets[month];
+      updatedAt[month] = cloudTime;
+    }
+  }
+  return { budgets, updatedAt };
+}
+
+function mergeRecords(
+  cloudRecords,
+  localRecords,
+  deletedChanges = {},
+  preferLocalOnTie = true,
+) {
   const records = new Map(cloudRecords.map((record) => [record.id, record]));
-  for (const record of localRecords) records.set(record.id, record);
-  for (const id of records.keys())
-    if (isRecordDeleted(deletedChanges, id)) records.delete(id);
-  return [...records.values()];
+  for (const record of localRecords) {
+    const cloudRecord = records.get(record.id);
+    if (
+      !cloudRecord ||
+      preferLocalRecord(record, cloudRecord, preferLocalOnTie)
+    ) {
+      records.set(record.id, record);
+    }
+  }
+  return [...records.values()].filter(
+    (record) => !isRecordDeleted(deletedChanges, record.id),
+  );
 }
 
 function expenseOccurrenceKey(expense) {
@@ -275,20 +380,37 @@ function expenseOccurrenceKey(expense) {
     : null;
 }
 
-function mergeExpenseRecords(cloudExpenses, localExpenses, deletedChanges) {
-  const byId = new Map(cloudExpenses.map((expense) => [expense.id, expense]));
-  for (const expense of localExpenses) byId.set(expense.id, expense);
+function mergeExpenseRecords(
+  cloudExpenses,
+  localExpenses,
+  deletedChanges,
+  preferLocalOnTie = true,
+) {
+  const localIds = new Set(localExpenses.map((expense) => expense.id));
+  const byId = mergeRecords(cloudExpenses, localExpenses, {}, preferLocalOnTie);
   const records = new Map();
-  for (const expense of byId.values()) {
+  for (const expense of byId) {
     const occurrenceKey = expenseOccurrenceKey(expense);
     if (
       isRecordDeleted(deletedChanges, expense.id) ||
       (occurrenceKey && isRecordDeleted(deletedChanges, occurrenceKey))
     )
       continue;
-    records.set(occurrenceKey ?? `expense:${expense.id}`, expense);
+    const key = occurrenceKey ?? `expense:${expense.id}`;
+    const current = records.get(key);
+    const isLocal = localIds.has(expense.id);
+    if (
+      !current ||
+      recordUpdatedAt(expense) > recordUpdatedAt(current.expense) ||
+      (recordUpdatedAt(expense) === recordUpdatedAt(current.expense) &&
+        preferLocalOnTie &&
+        isLocal &&
+        !current.isLocal)
+    ) {
+      records.set(key, { expense, isLocal });
+    }
   }
-  return [...records.values()];
+  return [...records.values()].map(({ expense }) => expense);
 }
 
 function hasMeaningfulLocalData(data) {
@@ -437,28 +559,37 @@ function mergeCloudSnapshots(
     cloud.deletedRecords,
     local.deletedRecords,
   );
-  const withoutDeleted = (records, collection) => {
-    return records.filter(
-      (record) => !isRecordDeleted(deletedRecords[collection], record.id),
-    );
-  };
-  const withoutDeletedBudgets = (budgets) => {
-    return Object.fromEntries(
-      Object.entries(budgets).filter(
-        ([month]) => !isRecordDeleted(deletedRecords.budgets, month),
-      ),
-    );
-  };
+  const budgetData = mergeBudgetValues(
+    cloudBudgets,
+    preferLocal ? local.budgets : {},
+    normalizeBudgetUpdatedAt(cloud.budgetUpdatedAt),
+    normalizeBudgetUpdatedAt(preferLocal ? local.budgetUpdatedAt : {}),
+    deletedRecords.budgets,
+    Boolean(preferLocal),
+  );
   if (!preferLocal) {
     return {
-      expenses: mergeExpenseRecords(cloudExpenses, [], deletedRecords.expenses),
-      budgets: withoutDeletedBudgets(cloudBudgets),
-      recurringSchedules: withoutDeleted(cloudSchedules, "recurringSchedules"),
+      expenses: mergeExpenseRecords(
+        cloudExpenses,
+        [],
+        deletedRecords.expenses,
+        false,
+      ),
+      budgets: budgetData.budgets,
+      budgetUpdatedAt: budgetData.updatedAt,
+      recurringSchedules: mergeRecords(
+        cloudSchedules,
+        [],
+        deletedRecords.recurringSchedules,
+        false,
+      ),
       accountData: {
         ...cloudAccounts,
-        transactions: withoutDeleted(
+        transactions: mergeRecords(
           cloudAccounts.transactions,
-          "accountTransactions",
+          [],
+          deletedRecords.accountTransactions,
+          false,
         ),
       },
       deletedRecords,
@@ -482,7 +613,8 @@ function mergeCloudSnapshots(
       local.expenses,
       deletedRecords.expenses,
     ),
-    budgets: withoutDeletedBudgets({ ...cloudBudgets, ...local.budgets }),
+    budgets: budgetData.budgets,
+    budgetUpdatedAt: budgetData.updatedAt,
     recurringSchedules: mergeRecords(
       cloudSchedules,
       local.recurringSchedules,
@@ -490,7 +622,13 @@ function mergeCloudSnapshots(
     ),
     accountData: {
       settings:
-        preferLocalAccountSettings && hasMeaningfulLocalAccountSettings(local)
+        preferLocalAccountSettings &&
+        hasMeaningfulLocalAccountSettings(local) &&
+        preferLocalRecord(
+          local.accountData.settings,
+          cloudAccounts.settings,
+          true,
+        )
           ? local.accountData.settings
           : cloudAccounts.settings,
       transactions: mergeRecords(
@@ -511,6 +649,16 @@ function mergeCloudSnapshots(
             ? local.reminderTime
             : "09:00",
   };
+}
+
+function loadBudgetUpdatedAt() {
+  try {
+    return normalizeBudgetUpdatedAt(
+      JSON.parse(localStorage.getItem(BUDGET_UPDATED_AT_KEY) || "{}"),
+    );
+  } catch {
+    return {};
+  }
 }
 
 function loadLocalDataOwner() {
@@ -541,6 +689,7 @@ function clearSharedFinancialData() {
   for (const key of [
     STORAGE_KEYS.expenses,
     STORAGE_KEYS.budgets,
+    BUDGET_UPDATED_AT_KEY,
     STORAGE_KEYS.recurring,
     STORAGE_KEYS.accounts,
   ]) {
@@ -571,6 +720,7 @@ function loadLocalUserSnapshot(userId) {
   return {
     expenses: loadExpenses(snapshot.expenses ?? []),
     budgets: loadBudgets(snapshot.budgets ?? {}),
+    budgetUpdatedAt: normalizeBudgetUpdatedAt(snapshot.budgetUpdatedAt),
     recurringSchedules: loadRecurringSchedules(
       snapshot.recurringSchedules ?? [],
     ),
@@ -601,6 +751,7 @@ function saveLocalUserSnapshot(userId, snapshot) {
 export default function App() {
   const [expenses, setExpenses] = useState(loadExpenses);
   const [budgets, setBudgets] = useState(loadBudgets);
+  const [budgetUpdatedAt, setBudgetUpdatedAt] = useState(loadBudgetUpdatedAt);
   const [recurringSchedules, setRecurringSchedules] = useState(
     loadRecurringSchedules,
   );
@@ -658,6 +809,7 @@ export default function App() {
   const [authMode, setAuthMode] = useState("sign-in");
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
+  const [showAuthPassword, setShowAuthPassword] = useState(false);
   const [authStatus, setAuthStatus] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -697,6 +849,7 @@ export default function App() {
     () => ({
       expenses,
       budgets,
+      budgetUpdatedAt,
       recurringSchedules,
       accountData,
       deletedRecords,
@@ -707,6 +860,7 @@ export default function App() {
     [
       expenses,
       budgets,
+      budgetUpdatedAt,
       recurringSchedules,
       accountData,
       deletedRecords,
@@ -720,6 +874,7 @@ export default function App() {
     const empty = emptyAccountData();
     setExpenses([]);
     setBudgets({});
+    setBudgetUpdatedAt({});
     setRecurringSchedules([]);
     setAccountData(empty);
     setDeletedRecords(emptyDeletedRecords());
@@ -942,6 +1097,9 @@ export default function App() {
     writeStorage(STORAGE_KEYS.budgets, budgets);
   }, [budgets]);
   useEffect(() => {
+    writeStorage(BUDGET_UPDATED_AT_KEY, budgetUpdatedAt);
+  }, [budgetUpdatedAt]);
+  useEffect(() => {
     writeStorage(STORAGE_KEYS.recurring, recurringSchedules);
   }, [recurringSchedules]);
   useEffect(() => {
@@ -954,6 +1112,7 @@ export default function App() {
   }, [
     expenses,
     budgets,
+    budgetUpdatedAt,
     recurringSchedules,
     accountData,
     deletedRecords,
@@ -1259,6 +1418,7 @@ export default function App() {
   }, [
     accountData,
     budgets,
+    budgetUpdatedAt,
     cloudSyncEnabled,
     cloudSyncReady,
     expenses,
@@ -1520,6 +1680,8 @@ export default function App() {
     bud: budgets,
     exp: expenses.map((expense) => ({
       id: expense.id,
+      createdAt: expense.createdAt,
+      updatedAt: expense.updatedAt,
       desc: expense.description,
       amt: expense.amount,
       cat: expense.category,
@@ -1543,6 +1705,8 @@ export default function App() {
     },
     tx: accountData.transactions.map((transaction) => ({
       id: transaction.id,
+      createdAt: transaction.createdAt,
+      updatedAt: transaction.updatedAt,
       type: transaction.type === "adjustment" ? "adjust" : transaction.type,
       acct: transaction.account ?? transaction.fromAccount,
       to: transaction.toAccount,
@@ -1639,8 +1803,11 @@ export default function App() {
               expense.recurringId === schedule.id && expense.date === nextDate,
           );
         if (!exists) {
+          const createdAt = Date.now();
           nextExpenses.push({
             id: makeId(),
+            createdAt,
+            updatedAt: createdAt,
             description: schedule.description,
             amount: Number(schedule.amount),
             category: schedule.category,
@@ -1663,7 +1830,7 @@ export default function App() {
         schedulesChanged = true;
       }
       return schedulesChanged && nextDate !== schedule.nextDate
-        ? { ...schedule, nextDate }
+        ? { ...schedule, nextDate, updatedAt: Date.now() }
         : schedule;
     });
     if (expensesChanged) setExpenses(nextExpenses);
@@ -1779,10 +1946,13 @@ export default function App() {
     }
     setExpenseMessage("");
     if (form.interval === "none") {
+      const createdAt = Date.now();
       setExpenses((current) => [
         ...current,
         {
           id: makeId(),
+          createdAt,
+          updatedAt: createdAt,
           description,
           amount: amount === null ? null : roundMoney(amount),
           category: form.category,
@@ -1797,8 +1967,11 @@ export default function App() {
       const generatedExpenses = [];
       let generated = 0;
       while (nextDate <= today && generated < 240) {
+        const createdAt = Date.now();
         generatedExpenses.push({
           id: makeId(),
+          createdAt,
+          updatedAt: createdAt,
           description,
           amount: roundMoney(amount),
           category: form.category,
@@ -1817,6 +1990,7 @@ export default function App() {
         ...current,
         {
           id: scheduleId,
+          updatedAt: Date.now(),
           description,
           amount: roundMoney(amount),
           category: form.category,
@@ -1856,7 +2030,7 @@ export default function App() {
     setExpenses((current) =>
       current.map((expense) =>
         expense.id === expenseId
-          ? { ...expense, amount: roundMoney(amount) }
+          ? { ...expense, amount: roundMoney(amount), updatedAt: Date.now() }
           : expense,
       ),
     );
@@ -1881,6 +2055,7 @@ export default function App() {
       ...current,
       settings: {
         startDate: startingBalances.date,
+        updatedAt: Date.now(),
         balances: { bkash: roundMoney(bkash), bank: roundMoney(bank) },
         configured: true,
       },
@@ -1896,8 +2071,11 @@ export default function App() {
       !isValidDateString(transactionForm.date)
     )
       return;
+    const createdAt = Date.now();
     const transaction = {
       id: makeId(),
+      createdAt,
+      updatedAt: createdAt,
       type: transactionForm.type,
       amount: roundMoney(amount),
       date: transactionForm.date,
@@ -1938,8 +2116,11 @@ export default function App() {
     const amount = Number(form.amt);
     if (!Number.isFinite(amount) || amount <= 0) return false;
     const type = form.type === "adjust" ? "adjustment" : form.type;
+    const createdAt = Date.now();
     const transaction = {
       id: makeId(),
+      createdAt,
+      updatedAt: createdAt,
       type,
       amount: roundMoney(amount),
       date: localDate(),
@@ -1968,7 +2149,8 @@ export default function App() {
     setRecurringSchedules((current) =>
       current.map((schedule) => {
         if (schedule.id !== scheduleId) return schedule;
-        if (schedule.active) return { ...schedule, active: false };
+        if (schedule.active)
+          return { ...schedule, active: false, updatedAt: Date.now() };
         let nextDate = schedule.nextDate;
         let skipped = 0;
         while (nextDate <= localDate() && skipped < 240) {
@@ -1979,7 +2161,7 @@ export default function App() {
           );
           skipped += 1;
         }
-        return { ...schedule, active: true, nextDate };
+        return { ...schedule, active: true, nextDate, updatedAt: Date.now() };
       }),
     );
   }
@@ -2009,7 +2191,9 @@ export default function App() {
     if (!Number.isFinite(amount) || amount <= 0) return;
     setExpenses((current) =>
       current.map((item) =>
-        item.id === expense.id ? { ...item, amount: roundMoney(amount) } : item,
+        item.id === expense.id
+          ? { ...item, amount: roundMoney(amount), updatedAt: Date.now() }
+          : item,
       ),
     );
     setEditingExpenseId(null);
@@ -2090,6 +2274,10 @@ export default function App() {
     const amount = Number(budgetAmount);
     if (!Number.isFinite(amount) || amount <= 0) return;
     setRecordDeleted("budgets", selectedMonth, false);
+    setBudgetUpdatedAt((current) => ({
+      ...current,
+      [selectedMonth]: Date.now(),
+    }));
     setBudgets((current) => ({
       ...current,
       [selectedMonth]: roundMoney(amount),
@@ -2105,9 +2293,17 @@ export default function App() {
       return next;
     });
     if (previousBudget) {
+      setBudgetUpdatedAt((current) => ({
+        ...current,
+        [selectedMonth]: Date.now(),
+      }));
       setRecordDeleted("budgets", selectedMonth, true);
       const restore = () => {
         setRecordDeleted("budgets", selectedMonth, false);
+        setBudgetUpdatedAt((current) => ({
+          ...current,
+          [selectedMonth]: Date.now(),
+        }));
         setBudgets((current) => ({
           ...current,
           [selectedMonth]: previousBudget,
@@ -2176,6 +2372,7 @@ export default function App() {
       data: {
         expenses,
         budgets,
+        budgetUpdatedAt,
         recurringSchedules,
         accountData,
         deletedRecords,
@@ -2235,11 +2432,42 @@ export default function App() {
         setBackupStatus("Restore canceled.");
         return;
       }
-      setExpenses(loadExpenses(data.expenses));
-      setBudgets(loadBudgets(data.budgets));
-      setRecurringSchedules(loadRecurringSchedules(data.recurringSchedules));
-      setAccountData(loadAccountData(data.accountData));
-      setDeletedRecords(normalizeDeletedRecords(data.deletedRecords));
+      const restoreTimestamp = Date.now();
+      setExpenses(
+        loadExpenses(data.expenses).map((expense) => ({
+          ...expense,
+          createdAt: expense.createdAt ?? restoreTimestamp,
+          updatedAt: restoreTimestamp,
+        })),
+      );
+      const restoredBudgets = loadBudgets(data.budgets);
+      setBudgets(restoredBudgets);
+      const restoredBudgetUpdatedAt = Object.fromEntries(
+        Object.keys(restoredBudgets).map((month) => [month, restoreTimestamp]),
+      );
+      setBudgetUpdatedAt(restoredBudgetUpdatedAt);
+      setRecurringSchedules(
+        loadRecurringSchedules(data.recurringSchedules).map((schedule) => ({
+          ...schedule,
+          updatedAt: restoreTimestamp,
+        })),
+      );
+      const restoredAccounts = loadAccountData(data.accountData);
+      setAccountData({
+        settings: { ...restoredAccounts.settings, updatedAt: restoreTimestamp },
+        transactions: restoredAccounts.transactions.map((transaction) => ({
+          ...transaction,
+          createdAt: transaction.createdAt ?? restoreTimestamp,
+          updatedAt: restoreTimestamp,
+        })),
+      });
+      const restoredDeletedRecords = normalizeDeletedRecords(data.deletedRecords);
+      for (const changes of Object.values(restoredDeletedRecords)) {
+        for (const change of Object.values(changes)) {
+          change.updatedAt = restoreTimestamp;
+        }
+      }
+      setDeletedRecords(restoredDeletedRecords);
       setTheme(data.theme);
       setTargetCurrency(data.targetCurrency);
       if (isValidReminderTime(data.reminderTime)) {
@@ -2261,6 +2489,7 @@ export default function App() {
   function applyCloudSnapshot(snapshot) {
     setExpenses(snapshot.expenses);
     setBudgets(snapshot.budgets);
+    setBudgetUpdatedAt(normalizeBudgetUpdatedAt(snapshot.budgetUpdatedAt));
     setRecurringSchedules(snapshot.recurringSchedules);
     setAccountData(snapshot.accountData);
     setDeletedRecords(normalizeDeletedRecords(snapshot.deletedRecords));
@@ -2430,6 +2659,7 @@ export default function App() {
     setAuthMode("sign-in");
     setAuthStatus("");
     setAuthPassword("");
+    setShowAuthPassword(false);
     setAuthModalOpen(true);
   }
 
@@ -2713,6 +2943,10 @@ export default function App() {
         onExpenseDelete={removeExpense}
         onBudgetSave={(amount) => {
           setRecordDeleted("budgets", selectedMonth, false);
+          setBudgetUpdatedAt((current) => ({
+            ...current,
+            [selectedMonth]: Date.now(),
+          }));
           setBudgets((current) => ({
             ...current,
             [selectedMonth]: roundMoney(amount),
@@ -2760,86 +2994,90 @@ export default function App() {
         authBusy={authBusy}
         onSignIn={openSignInModal}
       />
-        {authModalOpen &&
-          (!pushUser || authMode === "update-password") &&
-          createPortal(
-            <div
-              className="auth-modal-backdrop"
-              onMouseDown={(event) => {
-                if (event.target === event.currentTarget && !authBusy)
-                  setAuthModalOpen(false);
-              }}
+      {authModalOpen &&
+        (!pushUser || authMode === "update-password") &&
+        createPortal(
+          <div
+            className="auth-modal-backdrop"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget && !authBusy) {
+                setAuthModalOpen(false);
+                setShowAuthPassword(false);
+              }
+            }}
+          >
+            <section
+              className="auth-modal"
+              ref={authModalRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="auth-modal-title"
+              onKeyDown={trapAuthModalFocus}
             >
-              <section
-                className="auth-modal"
-                ref={authModalRef}
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="auth-modal-title"
-                onKeyDown={trapAuthModalFocus}
-              >
-                <div className="auth-modal-heading">
-                  <div>
-                    <h2 id="auth-modal-title">
-                      {authMode === "sign-up"
-                        ? "Create your Spend account"
-                        : authMode === "forgot-password"
-                          ? "Reset your password"
-                          : authMode === "update-password"
-                            ? "Choose a new password"
-                            : "Sign in to Spend"}
-                    </h2>
-                    <p>
-                      {!supabaseConfigured
-                        ? "Sign-in is not configured in this version. Your expenses remain available on this device."
-                        : authMode === "forgot-password"
-                          ? "We’ll email you a secure password reset link."
-                          : authMode === "update-password"
-                            ? "Choose a new password for your Spend account."
-                            : "Use your account for automatic cloud sync. Background reminders are optional."}
-                    </p>
-                  </div>
-                  <button
-                    className="auth-modal-close"
-                    type="button"
-                    aria-label="Close sign-in dialog"
-                    disabled={authBusy}
-                    onClick={() => setAuthModalOpen(false)}
-                  >
-                    ×
-                  </button>
+              <div className="auth-modal-heading">
+                <div>
+                  <h2 id="auth-modal-title">
+                    {authMode === "sign-up"
+                      ? "Create your Spend account"
+                      : authMode === "forgot-password"
+                        ? "Reset your password"
+                        : authMode === "update-password"
+                          ? "Choose a new password"
+                          : "Sign in to Spend"}
+                  </h2>
+                  <p>
+                    {!supabaseConfigured
+                      ? "Sign-in is not configured in this version. Your expenses remain available on this device."
+                      : authMode === "forgot-password"
+                        ? "We’ll email you a secure password reset link."
+                        : authMode === "update-password"
+                          ? "Choose a new password for your Spend account."
+                          : "Use your account for automatic cloud sync. Background reminders are optional."}
+                  </p>
                 </div>
-                {supabaseConfigured ? (
-                  <>
-                    <form
-                      className="push-auth-form auth-modal-form"
-                      onSubmit={handleAuthSubmit}
-                    >
-                      <div className="push-auth-fields auth-modal-fields">
+                <button
+                  className="auth-modal-close"
+                  type="button"
+                  aria-label="Close sign-in dialog"
+                  disabled={authBusy}
+                  onClick={() => {
+                    setAuthModalOpen(false);
+                    setShowAuthPassword(false);
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+              {supabaseConfigured ? (
+                <>
+                  <form
+                    className="push-auth-form auth-modal-form"
+                    onSubmit={handleAuthSubmit}
+                  >
+                    <div className="push-auth-fields auth-modal-fields">
+                      <div>
+                        <label htmlFor="push-email">Email</label>
+                        <input
+                          id="push-email"
+                          type="email"
+                          autoComplete="email"
+                          autoFocus
+                          required
+                          value={authEmail}
+                          onChange={(event) => setAuthEmail(event.target.value)}
+                        />
+                      </div>
+                      {authMode !== "forgot-password" && (
                         <div>
-                          <label htmlFor="push-email">Email</label>
-                          <input
-                            id="push-email"
-                            type="email"
-                            autoComplete="email"
-                            autoFocus
-                            required
-                            value={authEmail}
-                            onChange={(event) =>
-                              setAuthEmail(event.target.value)
-                            }
-                          />
-                        </div>
-                        {authMode !== "forgot-password" && (
-                          <div>
-                            <label htmlFor="push-password">
-                              {authMode === "update-password"
-                                ? "New password"
-                                : "Password"}
-                            </label>
+                          <label htmlFor="push-password">
+                            {authMode === "update-password"
+                              ? "New password"
+                              : "Password"}
+                          </label>
+                          <div className="auth-password-control">
                             <input
                               id="push-password"
-                              type="password"
+                              type={showAuthPassword ? "text" : "password"}
                               autoComplete={
                                 authMode === "sign-up" ||
                                 authMode === "update-password"
@@ -2853,188 +3091,201 @@ export default function App() {
                                 setAuthPassword(event.target.value)
                               }
                             />
+                            <button
+                              className="auth-password-toggle"
+                              type="button"
+                              aria-label={
+                                showAuthPassword
+                                  ? "Hide password"
+                                  : "Show password"
+                              }
+                              aria-pressed={showAuthPassword}
+                              aria-controls="push-password"
+                              onClick={() =>
+                                setShowAuthPassword((visible) => !visible)
+                              }
+                            >
+                              <PasswordVisibilityIcon
+                                visible={showAuthPassword}
+                              />
+                            </button>
                           </div>
-                        )}
-                      </div>
-                      <div className="push-auth-actions">
-                        <button type="submit" disabled={authBusy}>
-                          {authBusy
-                            ? "Please wait…"
-                            : authMode === "forgot-password"
-                              ? "Send reset link"
-                              : authMode === "update-password"
-                                ? "Update password"
-                                : authMode === "sign-up"
-                                  ? "Create account"
-                                  : "Sign in"}
-                        </button>
-                        {authMode !== "update-password" && (
-                          <button
-                            className="push-account-action"
-                            type="button"
-                            disabled={authBusy}
-                            onClick={() => {
-                              setAuthMode((mode) => {
-                                if (mode === "forgot-password")
-                                  return "sign-in";
-                                return mode === "sign-up"
-                                  ? "sign-in"
-                                  : "sign-up";
-                              });
-                              setAuthStatus("");
-                              setAuthPassword("");
-                            }}
-                          >
-                            {authMode === "forgot-password"
-                              ? "Back to sign in"
+                        </div>
+                      )}
+                    </div>
+                    <div className="push-auth-actions">
+                      <button type="submit" disabled={authBusy}>
+                        {authBusy
+                          ? "Please wait…"
+                          : authMode === "forgot-password"
+                            ? "Send reset link"
+                            : authMode === "update-password"
+                              ? "Update password"
                               : authMode === "sign-up"
-                                ? "I already have an account"
-                                : "Create an account"}
-                          </button>
-                        )}
-                      </div>
-                    </form>
-                    {authMode === "sign-in" && (
-                      <button
-                        className="auth-forgot-password"
-                        type="button"
-                        disabled={authBusy}
-                        onClick={() => {
-                          setAuthMode("forgot-password");
-                          setAuthStatus("");
-                          setAuthPassword("");
-                        }}
-                      >
-                        Forgot your password?
+                                ? "Create account"
+                                : "Sign in"}
                       </button>
-                    )}
-                    {authStatus && (
-                      <p
-                        className="auth-modal-status"
-                        role="status"
-                        aria-live="polite"
-                      >
-                        {authStatus}
-                      </p>
-                    )}
-                  </>
-                ) : (
-                  <p className="auth-unavailable" role="status">
-                    You can keep using Spend locally. Connect an account service
-                    to enable sign-in and cloud sync.
-                  </p>
-                )}
-              </section>
-            </div>,
-            document.body,
-          )}
-        {profileEditorOpen &&
-          createPortal(
-            <div
-              className="profile-editor-backdrop"
-              onMouseDown={(event) => {
-                if (event.target === event.currentTarget && !profileSaving)
-                  setProfileEditorOpen(false);
-              }}
-            >
-              <section
-                className="profile-editor"
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="profile-editor-title"
-                onKeyDown={(event) => {
-                  if (event.key === "Escape" && !profileSaving) {
-                    setProfileEditorOpen(false);
-                    return;
-                  }
-                  if (event.key !== "Tab") return;
-                  const focusable = event.currentTarget.querySelectorAll(
-                    "button:not([disabled]), input:not([disabled])",
-                  );
-                  if (!focusable.length) return;
-                  const first = focusable[0];
-                  const last = focusable[focusable.length - 1];
-                  if (event.shiftKey && document.activeElement === first) {
-                    event.preventDefault();
-                    last.focus();
-                  } else if (
-                    !event.shiftKey &&
-                    document.activeElement === last
-                  ) {
-                    event.preventDefault();
-                    first.focus();
-                  }
-                }}
-              >
-                <div className="profile-editor-heading">
-                  <div>
-                    <span>PROFILE</span>
-                    <h2 id="profile-editor-title">Edit your profile</h2>
-                  </div>
-                  <button
-                    className="profile-editor-close"
-                    type="button"
-                    aria-label="Close profile editor"
-                    disabled={profileSaving}
-                    onClick={() => setProfileEditorOpen(false)}
-                  >
-                    ×
-                  </button>
-                </div>
-                <form
-                  onSubmit={async (event) => {
-                    event.preventDefault();
-                    if (await saveProfileName(profileDraft))
-                      setProfileEditorOpen(false);
-                  }}
-                >
-                  <label htmlFor="profile-display-name">Display name</label>
-                  <input
-                    id="profile-display-name"
-                    type="text"
-                    autoComplete="name"
-                    autoFocus
-                    maxLength={48}
-                    required
-                    placeholder="Your name"
-                    value={profileDraft}
-                    onChange={(event) => setProfileDraft(event.target.value)}
-                  />
-                  <p className="profile-editor-hint">
-                    This name appears in your greeting and profile avatar.
-                  </p>
-                  {profileStatus && (
+                      {authMode !== "update-password" && (
+                        <button
+                          className="push-account-action"
+                          type="button"
+                          disabled={authBusy}
+                          onClick={() => {
+                            setAuthMode((mode) => {
+                              if (mode === "forgot-password") return "sign-in";
+                              return mode === "sign-up" ? "sign-in" : "sign-up";
+                            });
+                            setAuthStatus("");
+                            setAuthPassword("");
+                          }}
+                        >
+                          {authMode === "forgot-password"
+                            ? "Back to sign in"
+                            : authMode === "sign-up"
+                              ? "I already have an account"
+                              : "Create an account"}
+                        </button>
+                      )}
+                    </div>
+                  </form>
+                  {authMode === "sign-in" && (
+                    <button
+                      className="auth-forgot-password"
+                      type="button"
+                      disabled={authBusy}
+                      onClick={() => {
+                        setAuthMode("forgot-password");
+                        setAuthStatus("");
+                        setAuthPassword("");
+                      }}
+                    >
+                      Forgot your password?
+                    </button>
+                  )}
+                  {authStatus && (
                     <p
-                      className={`profile-editor-status${
-                        profileStatus.startsWith("Could not") ||
-                        profileStatus.startsWith("Enter ")
-                          ? " is-error"
-                          : ""
-                      }`}
+                      className="auth-modal-status"
                       role="status"
                       aria-live="polite"
                     >
-                      {profileStatus}
+                      {authStatus}
                     </p>
                   )}
-                  <div className="profile-editor-actions">
-                    <button
-                      className="profile-editor-cancel"
-                      type="button"
-                      disabled={profileSaving}
-                      onClick={() => setProfileEditorOpen(false)}
-                    >
-                      Cancel
-                    </button>
-                    <button type="submit" disabled={profileSaving}>
-                      {profileSaving ? "Saving…" : "Save name"}
-                    </button>
-                  </div>
-                </form>
-              </section>
-            </div>,
-            document.body,
-          )}
+                </>
+              ) : (
+                <p className="auth-unavailable" role="status">
+                  You can keep using Spend locally. Connect an account service
+                  to enable sign-in and cloud sync.
+                </p>
+              )}
+            </section>
+          </div>,
+          document.body,
+        )}
+      {profileEditorOpen &&
+        createPortal(
+          <div
+            className="profile-editor-backdrop"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget && !profileSaving)
+                setProfileEditorOpen(false);
+            }}
+          >
+            <section
+              className="profile-editor"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="profile-editor-title"
+              onKeyDown={(event) => {
+                if (event.key === "Escape" && !profileSaving) {
+                  setProfileEditorOpen(false);
+                  return;
+                }
+                if (event.key !== "Tab") return;
+                const focusable = event.currentTarget.querySelectorAll(
+                  "button:not([disabled]), input:not([disabled])",
+                );
+                if (!focusable.length) return;
+                const first = focusable[0];
+                const last = focusable[focusable.length - 1];
+                if (event.shiftKey && document.activeElement === first) {
+                  event.preventDefault();
+                  last.focus();
+                } else if (!event.shiftKey && document.activeElement === last) {
+                  event.preventDefault();
+                  first.focus();
+                }
+              }}
+            >
+              <div className="profile-editor-heading">
+                <div>
+                  <span>PROFILE</span>
+                  <h2 id="profile-editor-title">Edit your profile</h2>
+                </div>
+                <button
+                  className="profile-editor-close"
+                  type="button"
+                  aria-label="Close profile editor"
+                  disabled={profileSaving}
+                  onClick={() => setProfileEditorOpen(false)}
+                >
+                  ×
+                </button>
+              </div>
+              <form
+                onSubmit={async (event) => {
+                  event.preventDefault();
+                  if (await saveProfileName(profileDraft))
+                    setProfileEditorOpen(false);
+                }}
+              >
+                <label htmlFor="profile-display-name">Display name</label>
+                <input
+                  id="profile-display-name"
+                  type="text"
+                  autoComplete="name"
+                  autoFocus
+                  maxLength={48}
+                  required
+                  placeholder="Your name"
+                  value={profileDraft}
+                  onChange={(event) => setProfileDraft(event.target.value)}
+                />
+                <p className="profile-editor-hint">
+                  This name appears in your greeting and profile avatar.
+                </p>
+                {profileStatus && (
+                  <p
+                    className={`profile-editor-status${
+                      profileStatus.startsWith("Could not") ||
+                      profileStatus.startsWith("Enter ")
+                        ? " is-error"
+                        : ""
+                    }`}
+                    role="status"
+                    aria-live="polite"
+                  >
+                    {profileStatus}
+                  </p>
+                )}
+                <div className="profile-editor-actions">
+                  <button
+                    className="profile-editor-cancel"
+                    type="button"
+                    disabled={profileSaving}
+                    onClick={() => setProfileEditorOpen(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button type="submit" disabled={profileSaving}>
+                    {profileSaving ? "Saving…" : "Save name"}
+                  </button>
+                </div>
+              </form>
+            </section>
+          </div>,
+          document.body,
+        )}
       <input
         ref={backupFileInputRef}
         type="file"

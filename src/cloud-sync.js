@@ -21,13 +21,13 @@ async function loadLegacyCloudData(userId) {
         .maybeSingle(),
       supabase
         .from("spend_account_settings")
-        .select("start_date, bkash_balance, bank_balance, configured")
+        .select("start_date, bkash_balance, bank_balance, configured, updated_at")
         .eq("user_id", userId)
         .maybeSingle(),
       supabase
         .from("spend_account_transactions")
         .select(
-          "id, type, amount, transaction_date, description, account, direction, from_account, to_account",
+          "id, type, amount, transaction_date, description, account, direction, from_account, to_account, created_at, updated_at",
         )
         .eq("user_id", userId)
         .is("deleted_at", null)
@@ -75,9 +75,12 @@ async function loadLegacyCloudData(userId) {
             bank: settingsResult.data.bank_balance,
           },
           configured: settingsResult.data.configured,
+          updatedAt: Date.parse(settingsResult.data.updated_at) || 0,
         },
         transactions: transactionsResult.data.map((transaction) => ({
           id: transaction.id,
+          createdAt: Date.parse(transaction.created_at) || 0,
+          updatedAt: Date.parse(transaction.updated_at) || 0,
           type: transaction.type,
           amount: transaction.amount,
           date: transaction.transaction_date,

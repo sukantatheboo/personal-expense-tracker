@@ -151,6 +151,15 @@ const fD = (d) => {
   });
 };
 const dayMonth = (d) => fD(d).split(" ").slice(1).join(" ");
+const activityTime = (item) => {
+  const value = item.createdAt || item.updatedAt;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+};
 
 const tot = (S, m) =>
   S.exp
@@ -462,8 +471,19 @@ function Accounts({ S, onTx }) {
   const act = [
     ...S.exp
       .filter((e) => e.acct && e.amt != null)
-      .map((e) => ({ d: e.date, t: e.desc, a: -e.amt, k: ACC[e.acct][0] })),
+      .map((e) => ({
+        id: e.id,
+        createdAt: e.createdAt,
+        updatedAt: e.updatedAt,
+        d: e.date,
+        t: e.desc,
+        a: -e.amt,
+        k: ACC[e.acct][0],
+      })),
     ...S.tx.map((t) => ({
+      id: t.id,
+      createdAt: t.createdAt,
+      updatedAt: t.updatedAt,
       d: t.date,
       t:
         t.note ||
@@ -482,7 +502,12 @@ function Accounts({ S, onTx }) {
           : ACC[t.acct][0],
     })),
   ]
-    .sort((a, b) => b.d.localeCompare(a.d))
+    .sort(
+      (a, b) =>
+        b.d.localeCompare(a.d) ||
+        activityTime(a) - activityTime(b) ||
+        String(a.id).localeCompare(String(b.id)),
+    )
     .slice(0, 8);
 
   return (
@@ -534,23 +559,37 @@ function Accounts({ S, onTx }) {
         <h2>Account activity</h2>
       </div>
       <div className="card" style={{ margin: 0, padding: "6px 14px" }}>
-        {act.map((x, i) => (
-          <div className="ri" key={i}>
-            <span className="nm">
-              <b>{x.t}</b>
+        {act.length ? (
+          act.map((x) => (
+            <div className="ri" key={x.id}>
+              <span className="nm">
+                <b>{x.t}</b>
+                <small>
+                  {x.k} · {fD(x.d)}
+                </small>
+              </span>
+              <b
+                className="am"
+                style={{ color: x.a > 0 ? "var(--g)" : "inherit" }}
+              >
+                {x.a > 0 ? "+" : "−"}
+                {M(Math.abs(x.a))}
+              </b>
+            </div>
+          ))
+        ) : (
+          <div className="account-activity-empty" role="status">
+            <span className="account-activity-empty-icon">
+              <Icon n="activity" />
+            </span>
+            <span>
+              <b>No account activity yet</b>
               <small>
-                {x.k} · {fD(x.d)}
+                Income, transfers, and balance adjustments will show up here.
               </small>
             </span>
-            <b
-              className="am"
-              style={{ color: x.a > 0 ? "var(--g)" : "inherit" }}
-            >
-              {x.a > 0 ? "+" : "−"}
-              {M(Math.abs(x.a))}
-            </b>
           </div>
-        ))}
+        )}
       </div>
     </>
   );

@@ -214,9 +214,12 @@ Deno.serve(async (request) => {
         break;
       }
       if (
-        !["fcm.googleapis.com", "web.push.apple.com"].includes(
-          endpoint.hostname,
-        ) ||
+        ![
+          "fcm.googleapis.com",
+          "web.push.apple.com",
+          "updates.push.services.mozilla.com",
+          "push.services.mozilla.com",
+        ].includes(endpoint.hostname) ||
         endpoint.protocol !== "https:" ||
         device.subscription?.endpoint !== device.endpoint
       ) {
