@@ -249,7 +249,7 @@ function ExpenseRow({ e, onOpen, isNew = false }) {
   );
 }
 
-function Sheet({ onClose, children }) {
+function Sheet({ onClose, children, actions, actionsClassName = "" }) {
   const [dragOffset, setDragOffset] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const dragRef = useRef(null);
@@ -258,10 +258,11 @@ function Sheet({ onClose, children }) {
   useEffect(() => {
     const sheetNode = sheetRef.current;
     const initialFocus = sheetNode?.querySelector("[autofocus]");
-    if (!sheetNode || !initialFocus) return undefined;
+    const scrollNode = sheetNode?.querySelector(".sheet-content");
+    if (!scrollNode || !initialFocus) return undefined;
 
     const resetInitialFocusScroll = () => {
-      if (document.activeElement === initialFocus) sheetNode.scrollTop = 0;
+      if (document.activeElement === initialFocus) scrollNode.scrollTop = 0;
     };
     const viewport = window.visualViewport;
     const frame = window.requestAnimationFrame(resetInitialFocusScroll);
@@ -359,7 +360,14 @@ function Sheet({ onClose, children }) {
             <Icon n="x" />
           </button>
         </div>
-        {children}
+        <div className="sheet-content">{children}</div>
+        {actions && (
+          <div
+            className={`sheet-actions${actionsClassName ? ` ${actionsClassName}` : ""}`}
+          >
+            {actions}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -945,7 +953,14 @@ function AddSheet({ iv, onSave, onClose }) {
   const custom = f.date !== ld() && f.date !== ago(1);
 
   return (
-    <Sheet onClose={onClose}>
+    <Sheet
+      onClose={onClose}
+      actions={
+        <button className="btn" onClick={() => onSave(f)}>
+          Add expense
+        </button>
+      }
+    >
       <h3>New expense</h3>
       <div className="amt">
         <span>৳</span>
@@ -1033,11 +1048,6 @@ function AddSheet({ iv, onSave, onClose }) {
         ]}
       />
 
-      <div className="sheet-actions">
-        <button className="btn" onClick={() => onSave(f)}>
-          Add expense
-        </button>
-      </div>
     </Sheet>
   );
 }
@@ -1054,7 +1064,14 @@ function TxSheet({ type, onSave, onClose }) {
   const tr = g.type === "transfer";
 
   return (
-    <Sheet onClose={onClose}>
+    <Sheet
+      onClose={onClose}
+      actions={
+        <button className="btn" onClick={() => onSave(g)}>
+          Save
+        </button>
+      }
+    >
       <h3>Account activity</h3>
       <Seg
         value={g.type}
@@ -1113,11 +1130,6 @@ function TxSheet({ type, onSave, onClose }) {
         value={g.note}
         onChange={(e) => set("note", e.target.value)}
       />
-      <div className="sheet-actions">
-        <button className="btn" onClick={() => onSave(g)}>
-          Save
-        </button>
-      </div>
     </Sheet>
   );
 }
@@ -1125,7 +1137,20 @@ function TxSheet({ type, onSave, onClose }) {
 function DetailSheet({ e, onSave, onDelete, onClose }) {
   const [v, setV] = useState(e.amt ?? "");
   return (
-    <Sheet onClose={onClose}>
+    <Sheet
+      onClose={onClose}
+      actionsClassName="is-paired"
+      actions={
+        <>
+          <button className="btn" onClick={() => onSave(e.id, parseFloat(v))}>
+            Save amount
+          </button>
+          <button className="btn del" onClick={() => onDelete(e.id)}>
+            Delete expense
+          </button>
+        </>
+      }
+    >
       <h3>{e.desc}</h3>
       <p className="hint" style={{ textAlign: "left" }}>
         {e.cat} · {fD(e.date)}
@@ -1140,14 +1165,6 @@ function DetailSheet({ e, onSave, onDelete, onClose }) {
           onChange={(x) => setV(x.target.value)}
         />
       </div>
-      <div className="sheet-actions is-paired">
-        <button className="btn" onClick={() => onSave(e.id, parseFloat(v))}>
-          Save amount
-        </button>
-        <button className="btn del" onClick={() => onDelete(e.id)}>
-          Delete expense
-        </button>
-      </div>
     </Sheet>
   );
 }
@@ -1155,7 +1172,22 @@ function DetailSheet({ e, onSave, onDelete, onClose }) {
 function BudgetSheet({ S, onSave, onClear, onClose }) {
   const [v, setV] = useState(S.bud[S.m] || "");
   return (
-    <Sheet onClose={onClose}>
+    <Sheet
+      onClose={onClose}
+      actionsClassName={S.bud[S.m] ? "is-paired" : ""}
+      actions={
+        <>
+          <button className="btn" onClick={() => onSave(parseFloat(v))}>
+            Save budget
+          </button>
+          {S.bud[S.m] ? (
+            <button className="btn del" onClick={onClear}>
+              Clear budget
+            </button>
+          ) : null}
+        </>
+      }
+    >
       <h3>Monthly budget</h3>
       <p className="hint" style={{ textAlign: "left" }}>
         {fM(S.m)}
@@ -1169,16 +1201,6 @@ function BudgetSheet({ S, onSave, onClear, onClose }) {
           value={v}
           onChange={(x) => setV(x.target.value)}
         />
-      </div>
-      <div className={`sheet-actions${S.bud[S.m] ? " is-paired" : ""}`}>
-        <button className="btn" onClick={() => onSave(parseFloat(v))}>
-          Save budget
-        </button>
-        {S.bud[S.m] ? (
-          <button className="btn del" onClick={onClear}>
-            Clear budget
-          </button>
-        ) : null}
       </div>
     </Sheet>
   );
@@ -1649,6 +1671,32 @@ export default function MobilePrototype({
     [],
   );
   useEffect(() => {
+    if (!sheet) return undefined;
+    const body = document.body;
+    const documentElement = document.documentElement;
+    const previousScrollY = window.scrollY;
+    const previousBodyStyles = {
+      position: body.style.position,
+      top: body.style.top,
+      width: body.style.width,
+      overflow: body.style.overflow,
+    };
+    const previousDocumentOverflow = documentElement.style.overflow;
+    body.style.position = "fixed";
+    body.style.top = `-${previousScrollY}px`;
+    body.style.width = "100%";
+    body.style.overflow = "hidden";
+    documentElement.style.overflow = "hidden";
+    return () => {
+      body.style.position = previousBodyStyles.position;
+      body.style.top = previousBodyStyles.top;
+      body.style.width = previousBodyStyles.width;
+      body.style.overflow = previousBodyStyles.overflow;
+      documentElement.style.overflow = previousDocumentOverflow;
+      window.scrollTo(0, previousScrollY);
+    };
+  }, [sheet]);
+  useEffect(() => {
     const viewport = window.visualViewport;
     const root = mobileRootRef.current;
     if (!viewport || !root) return undefined;
@@ -1851,6 +1899,7 @@ export default function MobilePrototype({
       ref={mobileRootRef}
       className="mobile-prototype"
       data-theme={S.theme}
+      data-sheet-open={sheet ? "true" : undefined}
       data-sheet-closing={sheetClosing ? "true" : undefined}
     >
       <header
@@ -2007,7 +2056,7 @@ export default function MobilePrototype({
         </div>
       </main>
 
-      <div className="tabs">
+      <div className="tabs" data-scrolled={isScrolled ? "true" : undefined}>
         <nav ref={dockNavRef} aria-label="Main navigation">
           <span
             ref={dockIndicatorRef}

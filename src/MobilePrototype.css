@@ -335,6 +335,7 @@ textarea {
     rgb(255 255 255 / 3%)
   );
   --dock-shadow: 0 14px 34px rgb(32 52 40/16%), 0 2px 9px rgb(32 52 40/7%);
+  --dock-scrolled-shadow: 0 18px 42px rgb(32 52 40 / 21%), 0 3px 10px rgb(32 52 40 / 10%);
   box-sizing: border-box;
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -363,6 +364,7 @@ textarea {
       transparent
     );
     --dock-shadow: 0 14px 34px rgb(0 0 0/34%), 0 2px 9px rgb(0 0 0/20%);
+    --dock-scrolled-shadow: 0 18px 42px rgb(0 0 0 / 46%), 0 3px 10px rgb(0 0 0 / 24%);
     color-scheme: dark;
   }
 }
@@ -388,6 +390,7 @@ textarea {
     transparent
   );
   --dock-shadow: 0 14px 34px rgb(0 0 0/34%), 0 2px 9px rgb(0 0 0/20%);
+  --dock-scrolled-shadow: 0 18px 42px rgb(0 0 0 / 46%), 0 3px 10px rgb(0 0 0 / 24%);
   color-scheme: dark;
 }
 .mobile-prototype {
@@ -440,6 +443,10 @@ textarea {
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
+}
+.mobile-prototype[data-sheet-open="true"] #app {
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 .mobile-prototype #app::-webkit-scrollbar {
   display: none;
@@ -1440,7 +1447,14 @@ textarea {
   transition:
     background-color 180ms ease,
     border-color 180ms ease,
-    box-shadow 180ms ease;
+    box-shadow 220ms ease,
+    transform 280ms cubic-bezier(0.2, 0.82, 0.24, 1.08);
+}
+.mobile-prototype .tabs[data-scrolled="true"] nav {
+  --dock-surface: color-mix(in srgb, var(--card) 84%, transparent);
+  --dock-border: color-mix(in srgb, var(--line) 92%, transparent);
+  --dock-shadow: var(--dock-scrolled-shadow);
+  transform: translate3d(0, -3px, 0) scale(0.99);
 }
 .mobile-prototype .dock-active-indicator {
   position: absolute;
@@ -1578,15 +1592,14 @@ textarea {
   animation: prototype-fade-in 180ms ease-out both;
 }
 .mobile-prototype .sh {
+  display: flex;
+  flex-direction: column;
   width: 100%;
   max-width: 480px;
   max-height: min(92%, calc(var(--mobile-visible-height, 100dvh) - 12px));
   min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-  scroll-padding-block: 48px 112px;
-  padding: 10px 20px calc(22px + env(safe-area-inset-bottom, 0px));
+  overflow: hidden;
+  padding: 0;
   border-radius: 28px 28px 0 0;
   background: var(--card);
   transform: translate3d(0, var(--sheet-drag-y, 0px), 0);
@@ -1600,21 +1613,42 @@ textarea {
   user-select: none;
 }
 .mobile-prototype .sheet-topbar {
-  position: sticky;
-  top: 0;
+  position: relative;
   z-index: 5;
   display: flex;
+  flex: 0 0 44px;
   align-items: center;
   justify-content: center;
-  height: 40px;
-  margin: -10px -20px 8px;
+  height: 44px;
+  margin: 0;
   padding: 0 20px;
+  background: var(--card);
+}
+.mobile-prototype .sheet-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  scroll-padding-block: 0 20px;
+  padding: 0 20px 18px;
+}
+.mobile-prototype .sheet-content::-webkit-scrollbar {
+  display: none;
+}
+.mobile-prototype .sheet-content > h3:first-child {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  padding: 4px 0 8px;
   background: var(--card);
 }
 .mobile-prototype .sheet-drag-zone {
   display: flex;
   width: 100%;
-  height: 40px;
+  height: 44px;
   align-items: center;
   justify-content: center;
   touch-action: none;
@@ -1628,16 +1662,17 @@ textarea {
 .mobile-prototype .sheet-close {
   position: absolute;
   top: 0;
-  right: 16px;
+  right: 12px;
   display: grid;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   place-items: center;
   padding: 0;
-  border: 0;
+  border: 1px solid var(--line);
   border-radius: 50%;
-  background: transparent;
+  background: color-mix(in srgb, var(--bg) 84%, var(--card));
   color: var(--mut);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 44%);
   cursor: pointer;
   transition:
     color 140ms ease,
@@ -1651,11 +1686,12 @@ textarea {
 }
 .mobile-prototype .sheet-close:hover {
   color: var(--g);
-  background: color-mix(in srgb, var(--g) 8%, transparent);
+  border-color: color-mix(in srgb, var(--g) 30%, var(--line));
+  background: color-mix(in srgb, var(--g) 8%, var(--card));
 }
 .mobile-prototype .sheet-close:focus-visible {
   color: var(--g);
-  background: color-mix(in srgb, var(--g) 8%, transparent);
+  background: color-mix(in srgb, var(--g) 8%, var(--card));
   outline: 2px solid color-mix(in srgb, var(--g) 55%, transparent);
   outline-offset: 1px;
 }
@@ -1678,13 +1714,13 @@ textarea {
   pointer-events: none;
 }
 .mobile-prototype .sheet-actions {
-  position: sticky;
-  bottom: 0;
+  position: relative;
+  flex: 0 0 auto;
   z-index: 4;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 10px;
-  margin: 18px -20px 0;
+  margin: 0;
   padding: 12px 20px calc(12px + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
   background: var(--card);
@@ -1981,6 +2017,14 @@ textarea {
   .mobile-prototype .dock-active-indicator {
     opacity: 0;
     transition: opacity 150ms ease;
+  }
+  .mobile-prototype .tabs nav,
+  .mobile-prototype .tabs[data-scrolled="true"] nav {
+    transform: none;
+    transition:
+      background-color 150ms ease,
+      border-color 150ms ease,
+      box-shadow 150ms ease !important;
   }
   .mobile-prototype .tabs nav .t {
     transition:
