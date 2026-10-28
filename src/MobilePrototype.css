@@ -398,6 +398,13 @@ textarea {
   cursor: pointer;
   text-align: left;
 }
+.mobile-prototype button:not(:disabled) {
+  touch-action: manipulation;
+  transition: transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1.18);
+}
+.mobile-prototype button:not(:disabled):active {
+  transform: scale(0.97);
+}
 .mobile-prototype input {
   font: inherit;
   color: inherit;
@@ -486,7 +493,24 @@ textarea {
 }
 .mobile-prototype .prototype-header-action,
 .mobile-prototype .prototype-header-back {
-  transition: transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition:
+    transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1.22),
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+.mobile-prototype .prototype-header-action:hover,
+.mobile-prototype .prototype-header-action:focus-visible,
+.mobile-prototype .prototype-header-back:hover,
+.mobile-prototype .prototype-header-back:focus-visible {
+  border-color: color-mix(in srgb, var(--g) 28%, var(--line));
+  background: color-mix(in srgb, var(--card) 91%, var(--g) 9%);
+}
+.mobile-prototype .prototype-header-action:active,
+.mobile-prototype .prototype-header-back:active {
+  transform: scale(0.92);
+  border-color: color-mix(in srgb, var(--g) 38%, var(--line));
+  background: color-mix(in srgb, var(--card) 86%, var(--g) 14%);
 }
 .mobile-prototype .prototype-header-avatar {
   border: 0;
@@ -791,7 +815,7 @@ textarea {
 }
 .mobile-prototype .sec button:active {
   background: transparent;
-  transform: none;
+  transform: scale(0.97);
 }
 .mobile-prototype .stack {
   display: flex;
@@ -1040,7 +1064,7 @@ textarea {
 }
 .mobile-prototype .remove-rec:active {
   background: transparent;
-  transform: none;
+  transform: scale(0.9);
 }
 .mobile-prototype .day {
   display: flex;
@@ -1097,6 +1121,16 @@ textarea {
   border-radius: 99px;
   padding: 8px 14px;
   font-size: 14px;
+  transition:
+    transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1.18),
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease;
+  touch-action: manipulation;
+}
+.mobile-prototype .chips button:active,
+.mobile-prototype .cg button:active {
+  transform: scale(0.96);
 }
 .mobile-prototype .chips button {
   display: inline-flex;
@@ -1144,6 +1178,17 @@ textarea {
   font-size: 14px;
   border: 0;
   background: none;
+}
+.mobile-prototype .seg button {
+  transition:
+    transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1.18),
+    background-color 150ms ease,
+    box-shadow 150ms ease,
+    color 150ms ease;
+  touch-action: manipulation;
+}
+.mobile-prototype .seg button:active {
+  transform: scale(0.97);
 }
 .mobile-prototype .seg .on {
   background: var(--card);
@@ -1219,6 +1264,16 @@ textarea {
   text-align: center;
   box-shadow: var(--shadow);
   font-size: 13px;
+  transition:
+    transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1.22),
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+  touch-action: manipulation;
+}
+.mobile-prototype .acts button:active {
+  transform: scale(0.96);
+  background: color-mix(in srgb, var(--card) 92%, var(--g) 8%);
+  box-shadow: 0 2px 8px rgb(32 52 40 / 8%);
 }
 .mobile-prototype .acts svg {
   display: block;
@@ -1253,6 +1308,19 @@ textarea {
   font-weight: 800;
   font-size: 16px;
   margin-top: 18px;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 18%),
+    0 4px 12px color-mix(in srgb, var(--g) 18%, transparent);
+  transition:
+    transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1.22),
+    filter 160ms ease,
+    box-shadow 160ms ease;
+  touch-action: manipulation;
+}
+.mobile-prototype .btn:active {
+  transform: scale(0.985);
+  filter: brightness(0.96);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 12%);
 }
 .mobile-prototype .btn.alt {
   background: var(--bg);
@@ -1370,7 +1438,7 @@ textarea {
   transition:
     background-color 160ms ease,
     color 160ms ease,
-    transform 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1.22);
 }
 .mobile-prototype .tabs nav .t .tab-icon {
   display: grid;
@@ -1378,7 +1446,7 @@ textarea {
   height: 22px;
   flex: 0 0 22px;
   place-items: center;
-  transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1.22);
 }
 .mobile-prototype .tabs nav .t .tab-icon svg {
   display: block;
@@ -1431,10 +1499,11 @@ textarea {
   padding: 0;
   box-shadow: 0 6px 18px rgb(47 122 90/45%);
   transition:
-    transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1.22),
     box-shadow 160ms ease;
 }
 .mobile-prototype .tabs nav .fab:active {
+  transform: scale(0.9);
   box-shadow: 0 3px 10px rgb(47 122 90/32%);
 }
 .mobile-prototype .fab svg {
@@ -1455,10 +1524,12 @@ textarea {
 .mobile-prototype .sh {
   width: 100%;
   max-width: 480px;
-  max-height: 92%;
+  max-height: min(92%, calc(var(--mobile-visible-height, 100dvh) - 12px));
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scroll-padding-block: 48px 112px;
   padding: 10px 20px calc(22px + env(safe-area-inset-bottom, 0px));
   border-radius: 28px 28px 0 0;
   background: var(--card);
@@ -1613,7 +1684,7 @@ textarea {
   color: var(--g);
 }
 .mobile-prototype .settings-page-back:active {
-  transform: none;
+  transform: scale(0.92);
 }
 .mobile-prototype .settings-page-back svg {
   width: 18px;
@@ -1784,6 +1855,13 @@ textarea {
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .mobile-prototype button:not(:disabled) {
+    transition: none !important;
+  }
+  .mobile-prototype button:not(:disabled):active {
+    transform: none !important;
+  }
+
   .mobile-prototype .profile-sync-status.is-live .profile-sync-indicator::after,
   .mobile-prototype .tabs nav .t.on .tab-icon,
   .mobile-prototype
@@ -1820,6 +1898,11 @@ textarea {
   .mobile-prototype .prototype-header-action,
   .mobile-prototype .prototype-header-back,
   .mobile-prototype .tabs nav .fab,
+  .mobile-prototype .acts button,
+  .mobile-prototype .btn,
+  .mobile-prototype .chips button,
+  .mobile-prototype .cg button,
+  .mobile-prototype .seg button,
   .mobile-prototype
     input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(
       [type="button"]

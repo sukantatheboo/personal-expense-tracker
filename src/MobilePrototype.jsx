@@ -153,13 +153,15 @@ const fD = (d) => {
 };
 const dayMonth = (d) => fD(d).split(" ").slice(1).join(" ");
 const activityTime = (item) => {
-  const value = item.createdAt || item.updatedAt;
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string") {
-    const parsed = Date.parse(value);
-    return Number.isFinite(parsed) ? parsed : 0;
-  }
-  return 0;
+  const parse = (value) => {
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (typeof value === "string") {
+      const parsed = Date.parse(value);
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+    return 0;
+  };
+  return Math.max(parse(item.createdAt), parse(item.updatedAt));
 };
 
 const tot = (S, m) =>
@@ -251,6 +253,29 @@ function Sheet({ onClose, children }) {
   const [dragOffset, setDragOffset] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const dragRef = useRef(null);
+  const sheetRef = useRef(null);
+
+  useEffect(() => {
+    const sheetNode = sheetRef.current;
+    const initialFocus = sheetNode?.querySelector("[autofocus]");
+    if (!sheetNode || !initialFocus) return undefined;
+
+    const resetInitialFocusScroll = () => {
+      if (document.activeElement === initialFocus) sheetNode.scrollTop = 0;
+    };
+    const viewport = window.visualViewport;
+    const frame = window.requestAnimationFrame(resetInitialFocusScroll);
+    viewport?.addEventListener("resize", resetInitialFocusScroll);
+    const releaseViewportListener = window.setTimeout(() => {
+      viewport?.removeEventListener("resize", resetInitialFocusScroll);
+    }, 650);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(releaseViewportListener);
+      viewport?.removeEventListener("resize", resetInitialFocusScroll);
+    };
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (event) => {
@@ -309,6 +334,7 @@ function Sheet({ onClose, children }) {
       }}
     >
       <div
+        ref={sheetRef}
         className="sh"
         data-dragging={isDragging ? "true" : undefined}
         style={{ "--sheet-drag-y": `${dragOffset}px` }}
@@ -648,8 +674,7 @@ function Accounts({ S, onTx, highlightedExpenseId, highlightedTransactionId }) {
     .sort(
       (a, b) =>
         b.d.localeCompare(a.d) ||
-        activityTime(a) - activityTime(b) ||
-        String(a.id).localeCompare(String(b.id)),
+        activityTime(b) - activityTime(a),
     )
     .slice(0, 8);
 
@@ -1044,6 +1069,7 @@ function TxSheet({ type, onSave, onClose }) {
         <span>৳</span>
         <input
           inputMode="decimal"
+          autoFocus={type === "income"}
           placeholder="0"
           value={g.amt}
           onChange={(e) => set("amt", e.target.value)}
@@ -1138,6 +1164,7 @@ function BudgetSheet({ S, onSave, onClear, onClose }) {
         <span>৳</span>
         <input
           inputMode="decimal"
+          autoFocus
           placeholder="20000"
           value={v}
           onChange={(x) => setV(x.target.value)}
