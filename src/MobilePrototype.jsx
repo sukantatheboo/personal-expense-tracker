@@ -340,25 +340,15 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
         data-dragging={isDragging ? "true" : undefined}
         style={{ "--sheet-drag-y": `${dragOffset}px` }}
       >
-        <div className="sheet-topbar">
-          <div
-            className="sheet-drag-zone"
-            aria-hidden="true"
-            onPointerDown={startDrag}
-            onPointerMove={moveDrag}
-            onPointerUp={finishDrag}
-            onPointerCancel={cancelDrag}
-          >
-            <div className="grab" />
-          </div>
-          <button
-            className="sheet-close"
-            type="button"
-            aria-label="Close sheet"
-            onClick={onClose}
-          >
-            <Icon n="x" />
-          </button>
+        <div
+          className="sheet-drag-zone"
+          aria-hidden="true"
+          onPointerDown={startDrag}
+          onPointerMove={moveDrag}
+          onPointerUp={finishDrag}
+          onPointerCancel={cancelDrag}
+        >
+          <div className="grab" />
         </div>
         <div className="sheet-content">{children}</div>
         {actions && (
@@ -543,7 +533,7 @@ function Activity({ S, q, setQ, cf, setCf, onShift, onOpen, searchRef, highlight
           onChange={(e) => setQ(e.target.value)}
         />
       </label>
-      <div className="chips">
+      <div className="chips" data-dock-scroll-lock>
         <button className={cf ? "" : "on"} onClick={() => setCf("")}>
           All
         </button>
@@ -1653,9 +1643,19 @@ export default function MobilePrototype({
   const dockMinimizedRef = useRef(false);
   const lastTopRef = useRef(null);
   const dirAccRef = useRef(0);
+  const dockDirectionResetTimerRef = useRef();
+  const nestedScrollResumeTimerRef = useRef();
+  const dockPointerActiveRef = useRef(false);
+  const nestedScrollPointerRef = useRef(false);
   const baseViewportHeightRef = useRef(0);
 
+  const resetDockDirectionTimer = () => {
+    clearTimeout(dockDirectionResetTimerRef.current);
+    dockDirectionResetTimerRef.current = undefined;
+  };
+
   const resetScreenScroll = () => {
+    resetDockDirectionTimer();
     if (screenScrollRef.current) screenScrollRef.current.scrollTop = 0;
     setIsScrolled(false);
     dockMinimizedRef.current = false;
@@ -1664,18 +1664,29 @@ export default function MobilePrototype({
     dirAccRef.current = 0;
   };
   const onScreenScroll = (event) => {
+    // Ignore scroll events from nested scrollers (for example, the category chips).
+    if (event.target !== event.currentTarget) return;
     const scroller = event.currentTarget;
     const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
     const rawScrollTop = scroller.scrollTop;
     // Keep the last dock state during iOS elastic overscroll at either edge.
     if (rawScrollTop < 0 || rawScrollTop > maxScrollTop) return;
     const top = Math.min(maxScrollTop, Math.max(0, rawScrollTop));
-    setIsScrolled(top > 60);
+    if (!dockPointerActiveRef.current) setIsScrolled(top > 60);
+
+    // A finger on the dock or a nested scroller must not change the dock beneath it.
+    if (dockPointerActiveRef.current || nestedScrollPointerRef.current) {
+      lastTopRef.current = top;
+      dirAccRef.current = 0;
+      resetDockDirectionTimer();
+      return;
+    }
 
     // Short screens and the top edge always keep the full dock available.
     if (maxScrollTop < 160 || top <= 24) {
       lastTopRef.current = top;
       dirAccRef.current = 0;
+      resetDockDirectionTimer();
       dockMinimizedRef.current = false;
       setDockMinimized(false);
       return;
@@ -1695,15 +1706,37 @@ export default function MobilePrototype({
     const previousDirection = Math.sign(dirAccRef.current);
     dirAccRef.current =
       previousDirection === Math.sign(dy) ? dirAccRef.current + dy : dy;
-    dirAccRef.current = Math.max(-11, Math.min(15, dirAccRef.current));
+    dirAccRef.current = Math.max(-11, Math.min(13, dirAccRef.current));
 
-    if (dirAccRef.current > 14 && !dockMinimizedRef.current) {
+    if (dirAccRef.current > 12 && !dockMinimizedRef.current) {
       dockMinimizedRef.current = true;
       setDockMinimized(true);
     } else if (dirAccRef.current < -10 && dockMinimizedRef.current) {
       dockMinimizedRef.current = false;
       setDockMinimized(false);
     }
+
+    resetDockDirectionTimer();
+    dockDirectionResetTimerRef.current = setTimeout(() => {
+      dirAccRef.current = 0;
+      dockDirectionResetTimerRef.current = undefined;
+    }, 180);
+  };
+
+  const onScreenPointerDownCapture = (event) => {
+    if (!(event.target instanceof Element)) return;
+    if (!event.target.closest("[data-dock-scroll-lock]")) return;
+    clearTimeout(nestedScrollResumeTimerRef.current);
+    nestedScrollResumeTimerRef.current = undefined;
+    nestedScrollPointerRef.current = true;
+    dirAccRef.current = 0;
+    resetDockDirectionTimer();
+  };
+
+  const onDockPointerDownCapture = () => {
+    dockPointerActiveRef.current = true;
+    dirAccRef.current = 0;
+    resetDockDirectionTimer();
   };
 
   const toast = (msg, undo) => {
@@ -1716,9 +1749,57 @@ export default function MobilePrototype({
       clearTimeout(timer.current);
       clearTimeout(sheetCloseTimer.current);
       clearTimeout(highlightTimer.current);
+      resetDockDirectionTimer();
+      clearTimeout(nestedScrollResumeTimerRef.current);
     },
     [],
   );
+  useEffect(() => {
+    const releasePointer = () => {
+      const wasDockPointerActive = dockPointerActiveRef.current;
+      dockPointerActiveRef.current = false;
+      lastTopRef.current = screenScrollRef.current?.scrollTop ?? lastTopRef.current;
+      dirAccRef.current = 0;
+      resetDockDirectionTimer();
+
+      if (nestedScrollPointerRef.current) {
+        clearTimeout(nestedScrollResumeTimerRef.current);
+        nestedScrollResumeTimerRef.current = setTimeout(() => {
+          nestedScrollPointerRef.current = false;
+          nestedScrollResumeTimerRef.current = undefined;
+          const scroller = screenScrollRef.current;
+          if (!scroller) return;
+          const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+          if (maxScrollTop < 160 || scroller.scrollTop <= 24) {
+            dockMinimizedRef.current = false;
+            setDockMinimized(false);
+          }
+        }, 180);
+      } else if (wasDockPointerActive) {
+        // Keep the current size until click fires, so the target never shifts under the finger.
+        clearTimeout(nestedScrollResumeTimerRef.current);
+        nestedScrollResumeTimerRef.current = undefined;
+      }
+    };
+    const releaseAll = () => {
+      dockPointerActiveRef.current = false;
+      nestedScrollPointerRef.current = false;
+      clearTimeout(nestedScrollResumeTimerRef.current);
+      nestedScrollResumeTimerRef.current = undefined;
+      dirAccRef.current = 0;
+      lastTopRef.current = screenScrollRef.current?.scrollTop ?? lastTopRef.current;
+      resetDockDirectionTimer();
+    };
+
+    window.addEventListener("pointerup", releasePointer);
+    window.addEventListener("pointercancel", releasePointer);
+    window.addEventListener("blur", releaseAll);
+    return () => {
+      window.removeEventListener("pointerup", releasePointer);
+      window.removeEventListener("pointercancel", releasePointer);
+      window.removeEventListener("blur", releaseAll);
+    };
+  }, []);
   useEffect(() => {
     if (!sheet) return undefined;
     const body = document.body;
@@ -1817,10 +1898,16 @@ export default function MobilePrototype({
   const openSheet = (nextSheet) => {
     clearTimeout(sheetCloseTimer.current);
     sheetCloseTimer.current = null;
+    resetDockDirectionTimer();
+    dockMinimizedRef.current = false;
+    setDockMinimized(false);
+    dirAccRef.current = 0;
+    lastTopRef.current = screenScrollRef.current?.scrollTop ?? 0;
     setSheetClosing(false);
     setSheet(nextSheet);
   };
   const nav = (t) => {
+    resetDockDirectionTimer();
     const currentTop = screenScrollRef.current?.scrollTop ?? 0;
     dockMinimizedRef.current = false;
     setDockMinimized(false);
@@ -2076,6 +2163,7 @@ export default function MobilePrototype({
         ref={screenScrollRef}
         className="prototype-screen-scroll"
         onScroll={onScreenScroll}
+        onPointerDownCapture={onScreenPointerDownCapture}
       >
         <div
           key={screenKey}
@@ -2168,6 +2256,11 @@ export default function MobilePrototype({
         data-scrolled={isScrolled ? "true" : undefined}
         data-minimized={dockMinimized ? "true" : undefined}
         data-keyboard-open={keyboardOpen ? "true" : undefined}
+        data-hidden={keyboardOpen || Boolean(sheet) || settingsRoute ? "true" : undefined}
+        onPointerDownCapture={onDockPointerDownCapture}
+        onClickCapture={() =>
+          setIsScrolled((screenScrollRef.current?.scrollTop ?? 0) > 60)
+        }
       >
         <nav ref={dockNavRef} aria-label="Main navigation">
           <span

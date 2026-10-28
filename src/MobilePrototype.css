@@ -1432,9 +1432,11 @@ textarea {
   display: flex;
   justify-content: center;
   padding: 0 12px calc(10px + env(safe-area-inset-bottom, 0px));
+  visibility: visible;
   transition:
     opacity 160ms ease,
-    transform 220ms cubic-bezier(0.2, 0.82, 0.24, 1.08);
+    transform 220ms cubic-bezier(0.2, 0.82, 0.24, 1.08),
+    visibility 0s linear;
 }
 @supports (transition-timing-function: linear(0, 1)) {
   .mobile-prototype .tabs {
@@ -1458,10 +1460,16 @@ textarea {
     );
   }
 }
-.mobile-prototype .tabs[data-keyboard-open="true"] {
+.mobile-prototype .tabs[data-keyboard-open="true"],
+.mobile-prototype .tabs[data-hidden="true"] {
+  visibility: hidden;
   opacity: 0;
   pointer-events: none;
   transform: translate3d(0, calc(100% + 16px), 0);
+  transition:
+    opacity 160ms ease,
+    transform 220ms cubic-bezier(0.2, 0.82, 0.24, 1.08),
+    visibility 0s linear 220ms;
 }
 .mobile-prototype .tabs nav {
   --dock-blur: 14px;
@@ -1505,7 +1513,7 @@ textarea {
   height: var(--dock-h-min);
   --dock-shadow: var(--dock-minimized-shadow);
   transition:
-    height 380ms var(--dock-ease-out),
+    height 380ms var(--dock-ease-out) 120ms,
     background-color 300ms ease,
     border-color 300ms ease,
     box-shadow 300ms ease,
@@ -1573,9 +1581,11 @@ textarea {
   height: 22px;
   flex: 0 0 22px;
   place-items: center;
+  opacity: 1;
   transition:
     transform 450ms var(--dock-spring),
-    background-color 180ms ease;
+    background-color 180ms ease,
+    opacity 180ms ease 80ms;
 }
 .mobile-prototype .tabs nav .t .tab-icon svg {
   display: block;
@@ -1603,7 +1613,7 @@ textarea {
   opacity: 0;
   transition:
     opacity 120ms ease,
-    max-height 300ms cubic-bezier(0.32, 0.72, 0, 1) 50ms;
+    max-height 300ms cubic-bezier(0.32, 0.72, 0, 1) 120ms;
 }
 .mobile-prototype .tabs[data-minimized="true"] nav .t {
   min-height: 44px;
@@ -1642,6 +1652,14 @@ textarea {
   opacity: 1;
   animation: dock-label-in 220ms ease-out both;
 }
+.mobile-prototype .tabs[data-minimized="true"] nav .t .tab-label {
+  opacity: 0;
+  animation: none;
+}
+.mobile-prototype .tabs[data-minimized="true"] nav .t:not(.on) .tab-icon {
+  opacity: 0.72;
+  transition-delay: 120ms;
+}
 .mobile-prototype .tabs nav .fab {
   --fab-y: 0px;
   --fab-s: 1;
@@ -1669,7 +1687,7 @@ textarea {
   --fab-y: 6px;
   --fab-s: 0.88;
   transition:
-    transform 380ms var(--dock-ease-out),
+    transform 380ms var(--dock-ease-out) 120ms,
     box-shadow 160ms ease;
 }
 .mobile-prototype .tabs nav .fab:active {
@@ -1718,17 +1736,22 @@ textarea {
   transition: none;
   user-select: none;
 }
-.mobile-prototype .sheet-topbar {
+.mobile-prototype .sheet-drag-zone {
   position: relative;
   z-index: 5;
   display: flex;
   flex: 0 0 44px;
+  width: 100%;
   align-items: center;
   justify-content: center;
   height: 44px;
   margin: 0;
   padding: 0 20px;
   background: var(--card);
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .mobile-prototype .sheet-content {
   flex: 1 1 auto;
@@ -1751,59 +1774,8 @@ textarea {
   padding: 4px 0 8px;
   background: var(--card);
 }
-.mobile-prototype .sheet-drag-zone {
-  display: flex;
-  width: 100%;
-  height: 44px;
-  align-items: center;
-  justify-content: center;
-  touch-action: none;
-  cursor: grab;
-  user-select: none;
-  -webkit-user-select: none;
-}
 .mobile-prototype .sh[data-dragging="true"] .sheet-drag-zone {
   cursor: grabbing;
-}
-.mobile-prototype .sheet-close {
-  position: absolute;
-  top: 0;
-  right: 20px;
-  display: grid;
-  width: 44px;
-  height: 44px;
-  place-items: center;
-  padding: 0;
-  border: 1px solid var(--line);
-  border-radius: 50%;
-  background: var(--bg);
-  color: var(--mut);
-  box-shadow: 0 1px 3px rgb(20 35 26 / 8%);
-  cursor: pointer;
-  transition:
-    color 140ms ease,
-    background-color 140ms ease,
-    transform 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-.mobile-prototype .sheet-close svg {
-  width: 18px;
-  height: 18px;
-  stroke-width: 2.3;
-}
-.mobile-prototype .sheet-close:hover {
-  color: var(--g);
-  border-color: color-mix(in srgb, var(--g) 30%, var(--line));
-  background: color-mix(in srgb, var(--g) 8%, var(--card));
-}
-.mobile-prototype .sheet-close:focus-visible {
-  color: var(--g);
-  background: color-mix(in srgb, var(--g) 8%, var(--card));
-  outline: 2px solid color-mix(in srgb, var(--g) 55%, transparent);
-  outline-offset: 1px;
-}
-.mobile-prototype .sheet-close:active {
-  transform: scale(0.9);
-  background: color-mix(in srgb, var(--g) 13%, transparent);
 }
 .mobile-prototype .grab {
   width: 42px;
@@ -2090,7 +2062,6 @@ textarea {
   .mobile-prototype .tabs nav .t,
   .mobile-prototype .tabs nav .t .tab-icon,
   .mobile-prototype button.ri,
-  .mobile-prototype .sheet-close,
   .mobile-prototype .sw,
   .mobile-prototype .sw::after,
   .mobile-prototype .sh {
@@ -2136,9 +2107,15 @@ textarea {
       box-shadow 150ms ease !important;
   }
   .mobile-prototype .tabs,
-  .mobile-prototype .tabs[data-keyboard-open="true"] {
+  .mobile-prototype .tabs[data-keyboard-open="true"],
+  .mobile-prototype .tabs[data-hidden="true"] {
     transform: none;
     transition: opacity 150ms ease;
+  }
+  .mobile-prototype .tabs[data-hidden="true"] {
+    transition:
+      opacity 150ms ease,
+      visibility 0s linear 150ms;
   }
   .mobile-prototype .tabs nav .t {
     transition:
@@ -2148,8 +2125,14 @@ textarea {
   .mobile-prototype .tabs[data-minimized="true"] nav {
     height: var(--dock-h);
   }
-  .mobile-prototype .tabs[data-minimized="true"] .tab-label {
+  .mobile-prototype .tabs[data-minimized="true"] nav .t .tab-label {
     max-height: 16px;
+    opacity: 0;
+    animation: none;
+    transition: opacity 150ms ease;
+  }
+  .mobile-prototype .tabs[data-minimized="true"] nav .t:not(.on) .tab-icon {
+    opacity: 1;
     transition: opacity 150ms ease;
   }
   .mobile-prototype .tabs nav .fab,
@@ -2476,13 +2459,6 @@ textarea {
   }
 
   .mobile-prototype .sh {
-    transition: none !important;
-  }
-}
-
-
-@media (prefers-reduced-motion: reduce) {
-  .mobile-prototype .sheet-close {
     transition: none !important;
   }
 }
