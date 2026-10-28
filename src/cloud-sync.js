@@ -12,26 +12,27 @@ function isSnapshotRpcUnavailable(error) {
 }
 
 async function loadLegacyCloudData(userId) {
-  const [snapshotResult, settingsResult, transactionsResult] = await Promise.all([
-    supabase
-      .from("spend_user_data")
-      .select("data, updated_at")
-      .eq("user_id", userId)
-      .maybeSingle(),
-    supabase
-      .from("spend_account_settings")
-      .select("start_date, bkash_balance, bank_balance, configured")
-      .eq("user_id", userId)
-      .maybeSingle(),
-    supabase
-      .from("spend_account_transactions")
-      .select(
-        "id, type, amount, transaction_date, description, account, direction, from_account, to_account",
-      )
-      .eq("user_id", userId)
-      .is("deleted_at", null)
-      .order("created_at", { ascending: true }),
-  ]);
+  const [snapshotResult, settingsResult, transactionsResult] =
+    await Promise.all([
+      supabase
+        .from("spend_user_data")
+        .select("data, updated_at")
+        .eq("user_id", userId)
+        .maybeSingle(),
+      supabase
+        .from("spend_account_settings")
+        .select("start_date, bkash_balance, bank_balance, configured")
+        .eq("user_id", userId)
+        .maybeSingle(),
+      supabase
+        .from("spend_account_transactions")
+        .select(
+          "id, type, amount, transaction_date, description, account, direction, from_account, to_account",
+        )
+        .eq("user_id", userId)
+        .is("deleted_at", null)
+        .order("created_at", { ascending: true }),
+    ]);
 
   if (snapshotResult.error) throw snapshotResult.error;
 
@@ -82,11 +83,15 @@ async function loadLegacyCloudData(userId) {
           date: transaction.transaction_date,
           description: transaction.description,
           ...(transaction.account ? { account: transaction.account } : {}),
-          ...(transaction.direction ? { direction: transaction.direction } : {}),
+          ...(transaction.direction
+            ? { direction: transaction.direction }
+            : {}),
           ...(transaction.from_account
             ? { fromAccount: transaction.from_account }
             : {}),
-          ...(transaction.to_account ? { toAccount: transaction.to_account } : {}),
+          ...(transaction.to_account
+            ? { toAccount: transaction.to_account }
+            : {}),
         })),
       }
     : legacyAccounts;
@@ -147,18 +152,16 @@ export function subscribeToCloudChanges(
 ) {
   if (!supabase) return () => {};
 
-  const channel = supabase
-    .channel(`spend-live-${userId}`)
-    .on(
-      "postgres_changes",
-      {
-        event: "*",
-        schema: "public",
-        table: "spend_user_data",
-        filter: `user_id=eq.${userId}`,
-      },
-      onChange,
-    );
+  const channel = supabase.channel(`spend-live-${userId}`).on(
+    "postgres_changes",
+    {
+      event: "*",
+      schema: "public",
+      table: "spend_user_data",
+      filter: `user_id=eq.${userId}`,
+    },
+    onChange,
+  );
 
   if (includeNormalizedAccounts) {
     channel
@@ -184,8 +187,7 @@ export function subscribeToCloudChanges(
       );
   }
 
-  channel
-    .subscribe(onStatus);
+  channel.subscribe(onStatus);
 
   return () => {
     void supabase.removeChannel(channel);

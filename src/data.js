@@ -61,8 +61,10 @@ export function currentMonth() {
 }
 
 export function makeId() {
-  return globalThis.crypto?.randomUUID?.() ||
-    `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return (
+    globalThis.crypto?.randomUUID?.() ||
+    `${Date.now()}-${Math.random().toString(16).slice(2)}`
+  );
 }
 
 export function readStorage(key, fallback) {
@@ -93,11 +95,14 @@ export function loadExpenses(saved = readStorage(STORAGE_KEYS.expenses, [])) {
             typeof item.description === "string" &&
             isValidDateString(item.date) &&
             (item.amount === null ||
-              (Number.isFinite(Number(item.amount)) && Number(item.amount) > 0)),
+              (Number.isFinite(Number(item.amount)) &&
+                Number(item.amount) > 0)),
         )
         .map((item) => ({
           ...item,
-          category: CATEGORIES.includes(item.category) ? item.category : "Other",
+          category: CATEGORIES.includes(item.category)
+            ? item.category
+            : "Other",
           account: isAccountId(item.account) ? item.account : "",
         }))
     : [];
@@ -185,7 +190,9 @@ function isValidAccountTransaction(item) {
   return false;
 }
 
-export function loadAccountData(saved = readStorage(STORAGE_KEYS.accounts, null)) {
+export function loadAccountData(
+  saved = readStorage(STORAGE_KEYS.accounts, null),
+) {
   if (!saved || typeof saved !== "object") return emptyAccountData();
   const settings = saved.settings || {};
   const balances = settings.balances || {};

@@ -133,9 +133,7 @@ function CategoryBreakdown({ items, total, titleId, className }) {
       {items.length ? (
         <div className="category-breakdown-list">
           {items.map(([category, amount]) => {
-            const percentage = total
-              ? Math.round((amount / total) * 100)
-              : 0;
+            const percentage = total ? Math.round((amount / total) * 100) : 0;
             return (
               <div className="category-breakdown-row" key={category}>
                 <div className="category-breakdown-label">
@@ -233,8 +231,13 @@ function userDisplayName(user) {
 }
 
 function profileInitial(name) {
-  return Array.from(String(name || "").trim().split(/\s+/)[0] || "A")[0]
-    ?.toLocaleUpperCase() || "A";
+  return (
+    Array.from(
+      String(name || "")
+        .trim()
+        .split(/\s+/)[0] || "A",
+    )[0]?.toLocaleUpperCase() || "A"
+  );
 }
 
 function userInitial(user) {
@@ -331,15 +334,17 @@ function normalizeDeletedRecords(value) {
         change &&
         typeof change === "object" &&
         typeof change.deleted === "boolean"
-          ? [[
-              id,
-              {
-                deleted: change.deleted,
-                updatedAt: Number.isFinite(Number(change.updatedAt))
-                  ? Number(change.updatedAt)
-                  : 0,
-              },
-            ]]
+          ? [
+              [
+                id,
+                {
+                  deleted: change.deleted,
+                  updatedAt: Number.isFinite(Number(change.updatedAt))
+                    ? Number(change.updatedAt)
+                    : 0,
+                },
+              ],
+            ]
           : [],
       ),
     );
@@ -358,10 +363,7 @@ function mergeDeletedRecords(...values) {
     const normalized = normalizeDeletedRecords(value);
     for (const key of Object.keys(merged)) {
       for (const [id, change] of Object.entries(normalized[key])) {
-        if (
-          !merged[key][id] ||
-          change.updatedAt >= merged[key][id].updatedAt
-        )
+        if (!merged[key][id] || change.updatedAt >= merged[key][id].updatedAt)
           merged[key][id] = change;
       }
     }
@@ -436,11 +438,11 @@ function hasMeaningfulAccountSettings(settings) {
 function areAccountSettingsEqual(left, right) {
   return Boolean(
     left &&
-      right &&
-      left.startDate === right.startDate &&
-      left.balances.bkash === right.balances.bkash &&
-      left.balances.bank === right.balances.bank &&
-      left.configured === right.configured,
+    right &&
+    left.startDate === right.startDate &&
+    left.balances.bkash === right.balances.bkash &&
+    left.balances.bank === right.balances.bank &&
+    left.configured === right.configured,
   );
 }
 
@@ -548,7 +550,9 @@ function mergeCloudSnapshots(
   const cloudExpenses = loadExpenses(cloud.expenses ?? []);
   const cloudBudgets = loadBudgets(cloud.budgets ?? {});
   const cloudSchedules = loadRecurringSchedules(cloud.recurringSchedules ?? []);
-  const cloudAccounts = loadAccountData(cloud.accountData ?? emptyAccountData());
+  const cloudAccounts = loadAccountData(
+    cloud.accountData ?? emptyAccountData(),
+  );
   const deletedRecords = mergeDeletedRecords(
     cloud.deletedRecords,
     local.deletedRecords,
@@ -567,16 +571,9 @@ function mergeCloudSnapshots(
   };
   if (!preferLocal) {
     return {
-      expenses: mergeExpenseRecords(
-        cloudExpenses,
-        [],
-        deletedRecords.expenses,
-      ),
+      expenses: mergeExpenseRecords(cloudExpenses, [], deletedRecords.expenses),
       budgets: withoutDeletedBudgets(cloudBudgets),
-      recurringSchedules: withoutDeleted(
-        cloudSchedules,
-        "recurringSchedules",
-      ),
+      recurringSchedules: withoutDeleted(cloudSchedules, "recurringSchedules"),
       accountData: {
         ...cloudAccounts,
         transactions: withoutDeleted(
@@ -627,12 +624,12 @@ function mergeCloudSnapshots(
     targetCurrency: local.targetCurrency,
     reminderTime:
       isValidReminderTime(local.reminderTime) && local.reminderTime !== "09:00"
-      ? local.reminderTime
-      : isValidReminderTime(cloud.reminderTime)
-        ? cloud.reminderTime
-        : isValidReminderTime(local.reminderTime)
-          ? local.reminderTime
-          : "09:00",
+        ? local.reminderTime
+        : isValidReminderTime(cloud.reminderTime)
+          ? cloud.reminderTime
+          : isValidReminderTime(local.reminderTime)
+            ? local.reminderTime
+            : "09:00",
   };
 }
 
@@ -788,7 +785,8 @@ export default function App() {
   const [cloudSyncEnabled, setCloudSyncEnabled] = useState(false);
   const [cloudSyncReady, setCloudSyncReady] = useState(false);
   const [cloudSyncStatus, setCloudSyncStatus] = useState("");
-  const [cloudRealtimeStatus, setCloudRealtimeStatus] = useState("disconnected");
+  const [cloudRealtimeStatus, setCloudRealtimeStatus] =
+    useState("disconnected");
   const [cloudSyncActivity, setCloudSyncActivity] = useState("idle");
   const [normalizedAccountSync, setNormalizedAccountSync] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState(null);
@@ -962,11 +960,10 @@ export default function App() {
               remote.data,
               false,
             );
-            const localAccountSettingsChanged =
-              !areAccountSettingsEqual(
-                snapshot.accountData.settings,
-                cloudAccountSettingsRef.current,
-              );
+            const localAccountSettingsChanged = !areAccountSettingsEqual(
+              snapshot.accountData.settings,
+              cloudAccountSettingsRef.current,
+            );
             snapshot = mergeCloudSnapshots(
               snapshot,
               remote.data,
@@ -1364,12 +1361,7 @@ export default function App() {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       unsubscribe();
     };
-  }, [
-    cloudSyncEnabled,
-    cloudSyncReady,
-    normalizedAccountSync,
-    pushUser?.id,
-  ]);
+  }, [cloudSyncEnabled, cloudSyncReady, normalizedAccountSync, pushUser?.id]);
 
   useEffect(() => {
     if (!supabase || !pushUser || !cloudSyncEnabled || !cloudSyncReady)
@@ -1521,7 +1513,10 @@ export default function App() {
       ),
     [monthExpenses],
   );
-  const previousMonth = useMemo(() => shiftMonth(selectedMonth, -1), [selectedMonth]);
+  const previousMonth = useMemo(
+    () => shiftMonth(selectedMonth, -1),
+    [selectedMonth],
+  );
   const previousMonthTotal = useMemo(
     () =>
       expenses
@@ -1536,7 +1531,8 @@ export default function App() {
   const topCategory = useMemo(() => {
     const totals = monthExpenses.reduce((map, expense) => {
       if (expense.amount !== null) {
-        map[expense.category] = (map[expense.category] || 0) + Number(expense.amount);
+        map[expense.category] =
+          (map[expense.category] || 0) + Number(expense.amount);
       }
       return map;
     }, {});
@@ -1557,7 +1553,9 @@ export default function App() {
   const nextRecurring = useMemo(
     () =>
       recurringSchedules
-        .filter((schedule) => schedule.active && schedule.nextDate >= localDate())
+        .filter(
+          (schedule) => schedule.active && schedule.nextDate >= localDate(),
+        )
         .sort((a, b) => a.nextDate.localeCompare(b.nextDate))[0] || null,
     [recurringSchedules],
   );
@@ -1605,7 +1603,9 @@ export default function App() {
   const recentExpenses = useMemo(
     () =>
       [...monthExpenses]
-        .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id))
+        .sort(
+          (a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id),
+        )
         .slice(0, 3),
     [monthExpenses],
   );
@@ -2175,9 +2175,7 @@ export default function App() {
   }
 
   function removeExpense(expense) {
-    setExpenses((current) =>
-      current.filter((item) => item.id !== expense.id),
-    );
+    setExpenses((current) => current.filter((item) => item.id !== expense.id));
     setExpenseDeleted(expense, true);
     const restore = () => restoreExpense(expense);
     offerUndo("Expense removed", restore);
@@ -2230,7 +2228,10 @@ export default function App() {
       setRecordDeleted("budgets", selectedMonth, true);
       const restore = () => {
         setRecordDeleted("budgets", selectedMonth, false);
-        setBudgets((current) => ({ ...current, [selectedMonth]: previousBudget }));
+        setBudgets((current) => ({
+          ...current,
+          [selectedMonth]: previousBudget,
+        }));
       };
       offerUndo("Budget cleared", restore);
       return restore;
@@ -2386,7 +2387,9 @@ export default function App() {
     setTheme(snapshot.theme);
     setTargetCurrency(snapshot.targetCurrency);
     setReminderTime(
-      isValidReminderTime(snapshot.reminderTime) ? snapshot.reminderTime : "09:00",
+      isValidReminderTime(snapshot.reminderTime)
+        ? snapshot.reminderTime
+        : "09:00",
     );
   }
 
@@ -2795,8 +2798,7 @@ export default function App() {
   function navigateMobile(view) {
     setIsMoreOpen(false);
     setMobileView(view);
-    if (window.matchMedia("(max-width: 800px)").matches)
-      window.scrollTo(0, 0);
+    if (window.matchMedia("(max-width: 800px)").matches) window.scrollTo(0, 0);
   }
 
   const countText =
@@ -2823,139 +2825,119 @@ export default function App() {
 
   return (
     <>
-    <MobilePrototype
-      S={mobilePrototypeData}
-      legacyView={mobileView === "more" || mobileView === "profile"}
-      onShift={addMonth}
-      onExpenseSave={saveMobileExpense}
-      onAmountSave={saveMobileAmount}
-      onExpenseDelete={removeExpense}
-      onBudgetSave={(amount) => {
-        setRecordDeleted("budgets", selectedMonth, false);
-        setBudgets((current) => ({
-          ...current,
-          [selectedMonth]: roundMoney(amount),
-        }));
-        setBudgetEditingMonth(null);
-        return true;
-      }}
-      onBudgetClear={clearBudget}
-      onTransactionSave={saveMobileTransaction}
-      onToggleRec={toggleMobileRecurring}
-      onRemoveRec={removeMobileRecurring}
-      onTheme={() =>
-        setTheme((current) => (current === "dark" ? "light" : "dark"))
-      }
-      onReminder={updateReminderTime}
-      profile={{
-        name: pushUser
-          ? userDisplayName(pushUser)
-          : localProfileName || "Local profile",
-        email: pushUser?.email || "",
-        initial: pushUser
-          ? userInitial(pushUser)
-          : profileInitial(localProfileName || "Local profile"),
-        connected: Boolean(pushUser),
-        hasName: Boolean(pushUser || localProfileName),
-      }}
-      onEditProfile={openProfileEditor}
-      profileStatus={profileStatus}
-      cloudSyncEnabled={cloudSyncEnabled}
-      cloudSyncReady={cloudSyncReady}
-      normalizedAccountSync={normalizedAccountSync}
-      cloudRealtimeStatus={cloudRealtimeStatus}
-      cloudSyncActivity={cloudSyncActivity}
-      lastSyncedLabel={lastSyncedAt ? formatLastSynced(lastSyncedAt) : ""}
-      pushBackendConfigured={pushBackendConfigured}
-      notificationPermission={notificationPermission}
-      notificationStatus={notificationStatus}
-      backgroundPushEnabled={backgroundPushEnabled}
-      onToggleNotifications={toggleNotifications}
-      backupStatus={backupStatus}
-      onBackupDownload={downloadBackup}
-      onBackupRestore={() => backupFileInputRef.current?.click()}
-      onSignOut={signOutOfPush}
-      accountStatus={authStatus}
-      authBusy={authBusy}
-      onSignIn={openSignInModal}
-    />
-    <main
-      className="full-app"
-      data-mobile-view={mobileView}
-      data-more-open={isMoreOpen ? "true" : undefined}
-    >
-      <header>
-        <span className="mobile-section-title" aria-live="polite">
-          {mobileSectionTitle}
-        </span>
-        <div className="header-topline">
-          <div className="brand">
-            <span className="brand-mark" aria-hidden="true">
-              ↗
-            </span>
-            <span>Spend</span>
-          </div>
-          <button
-            className="theme-toggle"
-            type="button"
-            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-            aria-pressed={theme === "dark"}
-            title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-            onClick={() =>
-              setTheme((current) => (current === "dark" ? "light" : "dark"))
-            }
-          >
-            <span aria-hidden="true">{theme === "dark" ? "☀" : "☾"}</span>
-            <span className="theme-label">
-              {theme === "dark" ? "Light" : "Dark"}
-            </span>
-          </button>
-        </div>
-        <div className="header-bottomline">
-          <div
-            className={`local-note${cloudSyncEnabled ? " is-sync-enabled" : " is-local-only"}${cloudRealtimeStatus === "live" ? " is-sync-live" : ""}${cloudSyncActivity === "syncing" ? " is-syncing" : ""}${cloudRealtimeStatus === "offline" || cloudSyncActivity === "offline" ? " is-sync-offline" : ""}${cloudSyncActivity === "error" ? " is-sync-error" : ""}${cloudSyncEnabled && cloudSyncReady && !normalizedAccountSync ? " is-sync-setup-needed" : ""}`}
-            role="status"
-            aria-live="polite"
-            aria-label={cloudSyncLabels.accessible}
-          >
-            <span className="sync-status-dot" aria-hidden="true" />
-            <span className="local-note-long">{cloudSyncLabels.long}</span>
-            <span className="local-note-mobile">{cloudSyncLabels.short}</span>
-            {pushUser && cloudSyncReady && lastSyncedAt && (
-              <span className="sync-last-saved">
-                {formatLastSynced(lastSyncedAt)}
+      <MobilePrototype
+        S={mobilePrototypeData}
+        legacyView={mobileView === "more" || mobileView === "profile"}
+        onShift={addMonth}
+        onExpenseSave={saveMobileExpense}
+        onAmountSave={saveMobileAmount}
+        onExpenseDelete={removeExpense}
+        onBudgetSave={(amount) => {
+          setRecordDeleted("budgets", selectedMonth, false);
+          setBudgets((current) => ({
+            ...current,
+            [selectedMonth]: roundMoney(amount),
+          }));
+          setBudgetEditingMonth(null);
+          return true;
+        }}
+        onBudgetClear={clearBudget}
+        onTransactionSave={saveMobileTransaction}
+        onToggleRec={toggleMobileRecurring}
+        onRemoveRec={removeMobileRecurring}
+        onTheme={() =>
+          setTheme((current) => (current === "dark" ? "light" : "dark"))
+        }
+        onReminder={updateReminderTime}
+        profile={{
+          name: pushUser
+            ? userDisplayName(pushUser)
+            : localProfileName || "Local profile",
+          email: pushUser?.email || "",
+          initial: pushUser
+            ? userInitial(pushUser)
+            : profileInitial(localProfileName || "Local profile"),
+          connected: Boolean(pushUser),
+          hasName: Boolean(pushUser || localProfileName),
+        }}
+        onEditProfile={openProfileEditor}
+        profileStatus={profileStatus}
+        cloudSyncEnabled={cloudSyncEnabled}
+        cloudSyncReady={cloudSyncReady}
+        normalizedAccountSync={normalizedAccountSync}
+        cloudRealtimeStatus={cloudRealtimeStatus}
+        cloudSyncActivity={cloudSyncActivity}
+        lastSyncedLabel={lastSyncedAt ? formatLastSynced(lastSyncedAt) : ""}
+        pushBackendConfigured={pushBackendConfigured}
+        notificationPermission={notificationPermission}
+        notificationStatus={notificationStatus}
+        backgroundPushEnabled={backgroundPushEnabled}
+        onToggleNotifications={toggleNotifications}
+        backupStatus={backupStatus}
+        onBackupDownload={downloadBackup}
+        onBackupRestore={() => backupFileInputRef.current?.click()}
+        onSignOut={signOutOfPush}
+        accountStatus={authStatus}
+        authBusy={authBusy}
+        onSignIn={openSignInModal}
+      />
+      <main
+        className="full-app"
+        data-mobile-view={mobileView}
+        data-more-open={isMoreOpen ? "true" : undefined}
+      >
+        <header>
+          <span className="mobile-section-title" aria-live="polite">
+            {mobileSectionTitle}
+          </span>
+          <div className="header-topline">
+            <div className="brand">
+              <span className="brand-mark" aria-hidden="true">
+                ↗
               </span>
-            )}
+              <span>Spend</span>
+            </div>
+            <button
+              className="theme-toggle"
+              type="button"
+              aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+              aria-pressed={theme === "dark"}
+              title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+              onClick={() =>
+                setTheme((current) => (current === "dark" ? "light" : "dark"))
+              }
+            >
+              <span aria-hidden="true">{theme === "dark" ? "☀" : "☾"}</span>
+              <span className="theme-label">
+                {theme === "dark" ? "Light" : "Dark"}
+              </span>
+            </button>
           </div>
-          <div
-            className={`header-actions${pushUser ? " is-authenticated" : ""}`}
-          >
-            {pushUser ? (
-              <>
-                <div className="header-account header-account-full">
-                  <span className="header-avatar" aria-hidden="true">
-                    {userInitial(pushUser)}
-                  </span>
-                  <span className="header-user" title={pushUser.email}>
-                    <span>{userDisplayName(pushUser)}</span>
-                    <small>{pushUser.email}</small>
-                  </span>
-                  <button
-                    className="header-account-action"
-                    type="button"
-                    disabled={authBusy}
-                    onClick={signOutOfPush}
-                  >
-                    Sign out
-                  </button>
-                </div>
-                <details className="header-account-mobile">
-                  <summary aria-label={`Account menu for ${userDisplayName(pushUser)}`}>
+          <div className="header-bottomline">
+            <div
+              className={`local-note${cloudSyncEnabled ? " is-sync-enabled" : " is-local-only"}${cloudRealtimeStatus === "live" ? " is-sync-live" : ""}${cloudSyncActivity === "syncing" ? " is-syncing" : ""}${cloudRealtimeStatus === "offline" || cloudSyncActivity === "offline" ? " is-sync-offline" : ""}${cloudSyncActivity === "error" ? " is-sync-error" : ""}${cloudSyncEnabled && cloudSyncReady && !normalizedAccountSync ? " is-sync-setup-needed" : ""}`}
+              role="status"
+              aria-live="polite"
+              aria-label={cloudSyncLabels.accessible}
+            >
+              <span className="sync-status-dot" aria-hidden="true" />
+              <span className="local-note-long">{cloudSyncLabels.long}</span>
+              <span className="local-note-mobile">{cloudSyncLabels.short}</span>
+              {pushUser && cloudSyncReady && lastSyncedAt && (
+                <span className="sync-last-saved">
+                  {formatLastSynced(lastSyncedAt)}
+                </span>
+              )}
+            </div>
+            <div
+              className={`header-actions${pushUser ? " is-authenticated" : ""}`}
+            >
+              {pushUser ? (
+                <>
+                  <div className="header-account header-account-full">
                     <span className="header-avatar" aria-hidden="true">
                       {userInitial(pushUser)}
                     </span>
-                  </summary>
-                  <div className="header-account-popover">
                     <span className="header-user" title={pushUser.email}>
                       <span>{userDisplayName(pushUser)}</span>
                       <small>{pushUser.email}</small>
@@ -2969,9 +2951,31 @@ export default function App() {
                       Sign out
                     </button>
                   </div>
-                </details>
-              </>
-            ) : (
+                  <details className="header-account-mobile">
+                    <summary
+                      aria-label={`Account menu for ${userDisplayName(pushUser)}`}
+                    >
+                      <span className="header-avatar" aria-hidden="true">
+                        {userInitial(pushUser)}
+                      </span>
+                    </summary>
+                    <div className="header-account-popover">
+                      <span className="header-user" title={pushUser.email}>
+                        <span>{userDisplayName(pushUser)}</span>
+                        <small>{pushUser.email}</small>
+                      </span>
+                      <button
+                        className="header-account-action"
+                        type="button"
+                        disabled={authBusy}
+                        onClick={signOutOfPush}
+                      >
+                        Sign out
+                      </button>
+                    </div>
+                  </details>
+                </>
+              ) : (
                 <button
                   className="header-account-action"
                   type="button"
@@ -2987,1759 +2991,1820 @@ export default function App() {
                   </span>
                   <span className="header-signin-label">Sign in</span>
                 </button>
-            )}
+              )}
+            </div>
           </div>
-        </div>
-      </header>
-      {authModalOpen && (!pushUser || authMode === "update-password") && createPortal(
-        <div
-          className="auth-modal-backdrop"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget && !authBusy)
-              setAuthModalOpen(false);
-          }}
-        >
-          <section
-            className="auth-modal"
-            ref={authModalRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="auth-modal-title"
-            onKeyDown={trapAuthModalFocus}
-          >
-            <div className="auth-modal-heading">
-              <div>
-                <h2 id="auth-modal-title">
-                  {authMode === "sign-up"
-                    ? "Create your Spend account"
-                    : authMode === "forgot-password"
-                      ? "Reset your password"
-                      : authMode === "update-password"
-                        ? "Choose a new password"
-                        : "Sign in to Spend"}
-                </h2>
-                <p>
-                  {!supabaseConfigured
-                    ? "Sign-in is not configured in this version. Your expenses remain available on this device."
-                    : authMode === "forgot-password"
-                    ? "We’ll email you a secure password reset link."
-                    : authMode === "update-password"
-                      ? "Choose a new password for your Spend account."
-                      : "Use your account for automatic cloud sync. Background reminders are optional."}
-                </p>
-              </div>
-              <button
-              className="auth-modal-close"
-              type="button"
-              aria-label="Close sign-in dialog"
-                disabled={authBusy}
-                onClick={() => setAuthModalOpen(false)}
-              >
-              ×
-              </button>
-            </div>
-            {supabaseConfigured ? (
-              <>
-            <form
-              className="push-auth-form auth-modal-form"
-              onSubmit={handleAuthSubmit}
+        </header>
+        {authModalOpen &&
+          (!pushUser || authMode === "update-password") &&
+          createPortal(
+            <div
+              className="auth-modal-backdrop"
+              onMouseDown={(event) => {
+                if (event.target === event.currentTarget && !authBusy)
+                  setAuthModalOpen(false);
+              }}
             >
-              <div className="push-auth-fields auth-modal-fields">
-                <div>
-                  <label htmlFor="push-email">Email</label>
-                  <input
-                    id="push-email"
-                    type="email"
-                    autoComplete="email"
-                    autoFocus
-                    required
-                    value={authEmail}
-                    onChange={(event) => setAuthEmail(event.target.value)}
-                  />
-                </div>
-                {authMode !== "forgot-password" && (
+              <section
+                className="auth-modal"
+                ref={authModalRef}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="auth-modal-title"
+                onKeyDown={trapAuthModalFocus}
+              >
+                <div className="auth-modal-heading">
                   <div>
-                    <label htmlFor="push-password">
-                      {authMode === "update-password"
-                        ? "New password"
-                        : "Password"}
-                    </label>
-                    <input
-                      id="push-password"
-                      type="password"
-                      autoComplete={
-                        authMode === "sign-up" || authMode === "update-password"
-                          ? "new-password"
-                          : "current-password"
-                      }
-                      minLength="6"
-                      required
-                      value={authPassword}
-                      onChange={(event) => setAuthPassword(event.target.value)}
-                    />
+                    <h2 id="auth-modal-title">
+                      {authMode === "sign-up"
+                        ? "Create your Spend account"
+                        : authMode === "forgot-password"
+                          ? "Reset your password"
+                          : authMode === "update-password"
+                            ? "Choose a new password"
+                            : "Sign in to Spend"}
+                    </h2>
+                    <p>
+                      {!supabaseConfigured
+                        ? "Sign-in is not configured in this version. Your expenses remain available on this device."
+                        : authMode === "forgot-password"
+                          ? "We’ll email you a secure password reset link."
+                          : authMode === "update-password"
+                            ? "Choose a new password for your Spend account."
+                            : "Use your account for automatic cloud sync. Background reminders are optional."}
+                    </p>
                   </div>
-                )}
-              </div>
-              <div className="push-auth-actions">
-                <button type="submit" disabled={authBusy}>
-                  {authBusy
-                    ? "Please wait…"
-                    : authMode === "forgot-password"
-                      ? "Send reset link"
-                      : authMode === "update-password"
-                        ? "Update password"
-                        : authMode === "sign-up"
-                          ? "Create account"
-                          : "Sign in"}
-                </button>
-                {authMode !== "update-password" && (
                   <button
-                    className="push-account-action"
+                    className="auth-modal-close"
                     type="button"
+                    aria-label="Close sign-in dialog"
                     disabled={authBusy}
-                    onClick={() => {
-                      setAuthMode((mode) => {
-                        if (mode === "forgot-password") return "sign-in";
-                        return mode === "sign-up" ? "sign-in" : "sign-up";
-                      });
-                      setAuthStatus("");
-                      setAuthPassword("");
-                    }}
+                    onClick={() => setAuthModalOpen(false)}
                   >
-                    {authMode === "forgot-password"
-                      ? "Back to sign in"
-                      : authMode === "sign-up"
-                        ? "I already have an account"
-                        : "Create an account"}
+                    ×
                   </button>
+                </div>
+                {supabaseConfigured ? (
+                  <>
+                    <form
+                      className="push-auth-form auth-modal-form"
+                      onSubmit={handleAuthSubmit}
+                    >
+                      <div className="push-auth-fields auth-modal-fields">
+                        <div>
+                          <label htmlFor="push-email">Email</label>
+                          <input
+                            id="push-email"
+                            type="email"
+                            autoComplete="email"
+                            autoFocus
+                            required
+                            value={authEmail}
+                            onChange={(event) =>
+                              setAuthEmail(event.target.value)
+                            }
+                          />
+                        </div>
+                        {authMode !== "forgot-password" && (
+                          <div>
+                            <label htmlFor="push-password">
+                              {authMode === "update-password"
+                                ? "New password"
+                                : "Password"}
+                            </label>
+                            <input
+                              id="push-password"
+                              type="password"
+                              autoComplete={
+                                authMode === "sign-up" ||
+                                authMode === "update-password"
+                                  ? "new-password"
+                                  : "current-password"
+                              }
+                              minLength="6"
+                              required
+                              value={authPassword}
+                              onChange={(event) =>
+                                setAuthPassword(event.target.value)
+                              }
+                            />
+                          </div>
+                        )}
+                      </div>
+                      <div className="push-auth-actions">
+                        <button type="submit" disabled={authBusy}>
+                          {authBusy
+                            ? "Please wait…"
+                            : authMode === "forgot-password"
+                              ? "Send reset link"
+                              : authMode === "update-password"
+                                ? "Update password"
+                                : authMode === "sign-up"
+                                  ? "Create account"
+                                  : "Sign in"}
+                        </button>
+                        {authMode !== "update-password" && (
+                          <button
+                            className="push-account-action"
+                            type="button"
+                            disabled={authBusy}
+                            onClick={() => {
+                              setAuthMode((mode) => {
+                                if (mode === "forgot-password")
+                                  return "sign-in";
+                                return mode === "sign-up"
+                                  ? "sign-in"
+                                  : "sign-up";
+                              });
+                              setAuthStatus("");
+                              setAuthPassword("");
+                            }}
+                          >
+                            {authMode === "forgot-password"
+                              ? "Back to sign in"
+                              : authMode === "sign-up"
+                                ? "I already have an account"
+                                : "Create an account"}
+                          </button>
+                        )}
+                      </div>
+                    </form>
+                    {authMode === "sign-in" && (
+                      <button
+                        className="auth-forgot-password"
+                        type="button"
+                        disabled={authBusy}
+                        onClick={() => {
+                          setAuthMode("forgot-password");
+                          setAuthStatus("");
+                          setAuthPassword("");
+                        }}
+                      >
+                        Forgot your password?
+                      </button>
+                    )}
+                    {authStatus && (
+                      <p
+                        className="auth-modal-status"
+                        role="status"
+                        aria-live="polite"
+                      >
+                        {authStatus}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <p className="auth-unavailable" role="status">
+                    You can keep using Spend locally. Connect an account service
+                    to enable sign-in and cloud sync.
+                  </p>
                 )}
-              </div>
-            </form>
-            {authMode === "sign-in" && (
-              <button
-                className="auth-forgot-password"
-                type="button"
-                disabled={authBusy}
-                onClick={() => {
-                  setAuthMode("forgot-password");
-                  setAuthStatus("");
-                  setAuthPassword("");
-                }}
-              >
-                Forgot your password?
-              </button>
-            )}
-            {authStatus && (
-              <p className="auth-modal-status" role="status" aria-live="polite">
-                {authStatus}
-              </p>
-            )}
-              </>
-            ) : (
-              <p className="auth-unavailable" role="status">
-                You can keep using Spend locally. Connect an account service to enable sign-in and cloud sync.
-              </p>
-            )}
-          </section>
-        </div>,
-        document.body,
-      )}
-      {profileEditorOpen && createPortal(
-        <div
-          className="profile-editor-backdrop"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget && !profileSaving)
-              setProfileEditorOpen(false);
-          }}
-        >
-          <section
-            className="profile-editor"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="profile-editor-title"
-            onKeyDown={(event) => {
-              if (event.key === "Escape" && !profileSaving) {
-                setProfileEditorOpen(false);
-                return;
-              }
-              if (event.key !== "Tab") return;
-              const focusable = event.currentTarget.querySelectorAll(
-                "button:not([disabled]), input:not([disabled])",
-              );
-              if (!focusable.length) return;
-              const first = focusable[0];
-              const last = focusable[focusable.length - 1];
-              if (event.shiftKey && document.activeElement === first) {
-                event.preventDefault();
-                last.focus();
-              } else if (!event.shiftKey && document.activeElement === last) {
-                event.preventDefault();
-                first.focus();
-              }
-            }}
-          >
-            <div className="profile-editor-heading">
-              <div>
-                <span>PROFILE</span>
-                <h2 id="profile-editor-title">Edit your profile</h2>
-              </div>
-              <button
-                className="profile-editor-close"
-                type="button"
-                aria-label="Close profile editor"
-                disabled={profileSaving}
-                onClick={() => setProfileEditorOpen(false)}
-              >
-                ×
-              </button>
-            </div>
-            <form
-              onSubmit={async (event) => {
-                event.preventDefault();
-                if (await saveProfileName(profileDraft))
+              </section>
+            </div>,
+            document.body,
+          )}
+        {profileEditorOpen &&
+          createPortal(
+            <div
+              className="profile-editor-backdrop"
+              onMouseDown={(event) => {
+                if (event.target === event.currentTarget && !profileSaving)
                   setProfileEditorOpen(false);
               }}
             >
-              <label htmlFor="profile-display-name">Display name</label>
-              <input
-                id="profile-display-name"
-                type="text"
-                autoComplete="name"
-                autoFocus
-                maxLength={48}
-                required
-                placeholder="Your name"
-                value={profileDraft}
-                onChange={(event) => setProfileDraft(event.target.value)}
-              />
-              <p className="profile-editor-hint">
-                This name appears in your greeting and profile avatar.
-              </p>
-              {profileStatus && (
-                <p
-                  className={`profile-editor-status${
-                    profileStatus.startsWith("Could not") ||
-                    profileStatus.startsWith("Enter ")
-                      ? " is-error"
-                      : ""
-                  }`}
-                  role="status"
-                  aria-live="polite"
-                >
-                  {profileStatus}
-                </p>
-              )}
-              <div className="profile-editor-actions">
-                <button
-                  className="profile-editor-cancel"
-                  type="button"
-                  disabled={profileSaving}
-                  onClick={() => setProfileEditorOpen(false)}
-                >
-                  Cancel
-                </button>
-                <button type="submit" disabled={profileSaving}>
-                  {profileSaving ? "Saving…" : "Save name"}
-                </button>
-              </div>
-            </form>
-          </section>
-        </div>,
-        document.body,
-      )}
-
-      <section className="summary" data-mobile-page="home" aria-labelledby="summary-title">
-        <div className="summary-topline">
-          <p className="eyebrow" id="summary-title">
-            <span className="summary-label-prefix">Month total</span>
-            <span className="summary-currency">BDT</span>
-          </p>
-          <div
-            className="month-navigation"
-            aria-label="Monthly total navigation"
-          >
-            <button
-              className="month-step"
-              type="button"
-              aria-label="Previous month"
-              title="Previous month"
-              onClick={() => addMonth(-1)}
-            >
-              ‹
-            </button>
-            <label className="month-select">
-              <span className="month-display" aria-hidden="true">
-                <span className="month-display-full">
-                  {formatMonth(selectedMonth)}
-                </span>
-                <span className="month-display-compact">
-                  {formatCompactMonth(selectedMonth)}
-                </span>
-                <span className="month-calendar-icon" />
-              </span>
-              <input
-                className="month-picker"
-                type="month"
-                aria-label="Choose month"
-                title="Choose month"
-                value={selectedMonth}
-                onPointerDown={(event) => {
-                  const picker = event.currentTarget;
-                  if (typeof picker.showPicker === "function") {
+              <section
+                className="profile-editor"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="profile-editor-title"
+                onKeyDown={(event) => {
+                  if (event.key === "Escape" && !profileSaving) {
+                    setProfileEditorOpen(false);
+                    return;
+                  }
+                  if (event.key !== "Tab") return;
+                  const focusable = event.currentTarget.querySelectorAll(
+                    "button:not([disabled]), input:not([disabled])",
+                  );
+                  if (!focusable.length) return;
+                  const first = focusable[0];
+                  const last = focusable[focusable.length - 1];
+                  if (event.shiftKey && document.activeElement === first) {
                     event.preventDefault();
-                    picker.showPicker();
+                    last.focus();
+                  } else if (
+                    !event.shiftKey &&
+                    document.activeElement === last
+                  ) {
+                    event.preventDefault();
+                    first.focus();
                   }
                 }}
-                onChange={(event) =>
-                  setSelectedMonth(event.target.value || currentMonth())
-                }
-              />
-            </label>
-            <button
-              className="month-step"
-              type="button"
-              aria-label="Next month"
-              title="Next month"
-              onClick={() => addMonth(1)}
-            >
-              ›
-            </button>
-          </div>
-        </div>
-        <div className="summary-total-line">
-          <p className="total" aria-live="polite">
-            {formatCurrency(monthlyTotal)}
-          </p>
-          <p className="summary-caption">
-            Across all expenses
-            <span className="summary-caption-month">
-              {" "}
-              in {formatMonth(selectedMonth)}
-            </span>
-          </p>
-        </div>
-        <div className="summary-insights" aria-label="Spending insights">
-          <div>
-            <span>vs previous month</span>
-            <strong>
-              {previousMonthTotal
-                ? `${monthlyTotal >= previousMonthTotal ? "+" : ""}${formatCurrency(monthlyTotal - previousMonthTotal)}`
-                : "No prior data"}
-            </strong>
-          </div>
-          <div>
-            <span>Top category</span>
-            <strong>
-              {topCategory
-                ? `${topCategory[0]} · ${formatCurrency(topCategory[1])}`
-                : "No spending yet"}
-            </strong>
-          </div>
-          <div>
-            <span>Next recurring</span>
-            <strong>
-              {nextRecurring
-                ? `${nextRecurring.description} · ${formatDate(nextRecurring.nextDate)}`
-                : "Nothing scheduled"}
-            </strong>
-          </div>
-        </div>
-        <CategoryBreakdown
-          items={categoryBreakdown}
-          total={monthlyTotal}
-          titleId="category-breakdown-title"
-          className="category-breakdown summary-category-breakdown"
-        />
-        <button
-          className="conversion-toggle"
-          type="button"
-          aria-expanded={conversionOpen}
-          onClick={toggleConversion}
-        >
-          <span>{conversionOpen ? "Hide conversion" : "Show conversion"}</span>
-          <span id="conversion-toggle-icon" aria-hidden="true">
-            {conversionOpen ? "⌃" : "⌄"}
-          </span>
-        </button>
-        {conversionOpen && (
-          <div className="conversion-details">
-            <div className="conversion-picker">
-              <label htmlFor="conversion-currency">Convert BDT to</label>
-              <select
-                id="conversion-currency"
-                value={targetCurrency}
-                onChange={(event) => setTargetCurrency(event.target.value)}
               >
-                {currencyOptions.map((currency) => (
-                  <option key={currency.iso_code} value={currency.iso_code}>
-                    {currency.iso_code} — {currency.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {conversionReady && (
-              <div className="converted-total-block">
-                <p className="converted-total-label">
-                  Estimated total in {targetCurrency}
-                </p>
-                <p className="converted-total" aria-live="polite">
-                  {formatCurrency(
-                    monthlyTotal * conversionRate,
-                    targetCurrency,
-                  )}
-                </p>
-              </div>
-            )}
-            <p className="conversion-status" role="status" aria-live="polite">
-              {conversionStatus}
-            </p>
-            <p className="conversion-disclaimer">
-              Indicative daily mid-market rate. Your bank or card provider may
-              use a different rate. Source:{" "}
-              <a
-                href="https://frankfurter.dev/"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Frankfurter
-              </a>
-              .
-            </p>
-            {conversionFailed && (
-              <button
-                className="retry-rate"
-                type="button"
-                onClick={retryConversion}
-              >
-                Try again
-              </button>
-            )}
-          </div>
-        )}
-      </section>
-
-      <section
-        className="home-transactions"
-        data-mobile-page="home"
-        aria-labelledby="home-transactions-title"
-      >
-        <div className="home-transactions-heading">
-          <h2 id="home-transactions-title">Recent Transactions</h2>
-          <button
-            className="home-transactions-see-all"
-            type="button"
-            onClick={() => {
-              setQuery("");
-              setCategoryFilter("");
-              navigateMobile("activity");
-            }}
-          >
-            See all
-          </button>
-        </div>
-        {recentExpenses.length ? (
-          <ul className="home-transaction-list">
-            {recentExpenses.map((expense) => (
-              <li className="home-transaction-row" key={expense.id}>
-                <span className="home-transaction-icon" aria-hidden="true">
-                  <CategoryIcon category={expense.category} />
-                </span>
-                <span className="home-transaction-copy">
-                  <strong title={expense.description}>{expense.description}</strong>
-                  <span>
-                    {expense.category} · {formatDate(expense.date)}
-                  </span>
-                </span>
-                <strong className="home-transaction-amount">
-                  {expense.amount === null
-                    ? "Add amount"
-                    : formatCurrency(expense.amount)}
-                </strong>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <div className="home-transactions-empty">
-            <span className="home-transactions-empty-icon" aria-hidden="true">
-              <FaWallet focusable="false" />
-            </span>
-            <strong>No transactions yet</strong>
-            <p>Start tracking your expenses to see them here.</p>
-          </div>
-        )}
-      </section>
-
-      <section
-        className="home-category-breakdown"
-        data-mobile-page="home"
-        aria-labelledby="home-category-breakdown-title"
-      >
-        <CategoryBreakdown
-          items={categoryBreakdown}
-          total={monthlyTotal}
-          titleId="home-category-breakdown-title"
-          className="category-breakdown home-category-breakdown-card"
-        />
-      </section>
-
-      <section className="panel" data-mobile-page="add" aria-labelledby="form-title">
-        <h2 id="form-title" className="expense-form-title">
-          <span className="expense-form-plus" aria-hidden="true">
-            +
-          </span>
-          Add an expense
-        </h2>
-        <form
-          id="expense-form"
-          onSubmit={handleExpenseSubmit}
-          onChange={() => expenseMessage && setExpenseMessage("")}
-        >
-          <div className="form-grid">
-            <div className="description-field">
-              <label htmlFor="description">What was it for?</label>
-              <input
-                id="description"
-                type="text"
-                placeholder="e.g. Lunch"
-                maxLength="80"
-                required
-                autoComplete="off"
-                value={expenseForm.description}
-                onChange={(event) =>
-                  setExpenseForm({
-                    ...expenseForm,
-                    description: event.target.value,
-                  })
-                }
-              />
-            </div>
-            <div>
-              <label htmlFor="amount">Amount (BDT)</label>
-              <input
-                id="amount"
-                type="number"
-                placeholder="0.00"
-                min="0.01"
-                step="0.01"
-                inputMode="decimal"
-                required={expenseForm.interval !== "none"}
-                value={expenseForm.amount}
-                onChange={(event) =>
-                  setExpenseForm({ ...expenseForm, amount: event.target.value })
-                }
-              />
-            </div>
-            <div>
-              <label htmlFor="expense-category">Category</label>
-              <select
-                id="expense-category"
-                value={expenseForm.category}
-                onChange={(event) =>
-                  setExpenseForm({
-                    ...expenseForm,
-                    category: event.target.value,
-                  })
-                }
-              >
-                {CATEGORIES.map((category) => (
-                  <option key={category}>{category}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label htmlFor="expense-date">Date</label>
-              <input
-                id="expense-date"
-                type="date"
-                required
-                value={expenseForm.date}
-                onChange={(event) =>
-                  setExpenseForm({ ...expenseForm, date: event.target.value })
-                }
-              />
-            </div>
-            <div>
-              <label htmlFor="expense-repeat">Repeat</label>
-              <select
-                id="expense-repeat"
-                value={expenseForm.interval}
-                onChange={(event) =>
-                  setExpenseForm({
-                    ...expenseForm,
-                    interval: event.target.value,
-                  })
-                }
-              >
-                <option value="none">Does not repeat</option>
-                <option value="weekly">Weekly</option>
-                <option value="monthly">Monthly</option>
-              </select>
-            </div>
-            <div>
-              <label htmlFor="expense-account">Paid from</label>
-              <select
-                id="expense-account"
-                value={expenseForm.account}
-                onChange={(event) =>
-                  setExpenseForm({
-                    ...expenseForm,
-                    account: event.target.value,
-                  })
-                }
-              >
-                <option value="">Cash / Other (not tracked)</option>
-                <option value="bkash">bKash</option>
-                <option value="bank">Bank</option>
-              </select>
-            </div>
-          </div>
-          <div className="form-actions">
-            <span className="currency-hint">
-              {expenseForm.interval === "none"
-                ? "Enter amounts in BDT. You can add a missing amount later from Recent expenses."
-                : "Recurring expenses need an amount and are added when due."}
-            </span>
-            <button className="expense-submit" type="submit">
-              Add expense
-            </button>
-          </div>
-          {expenseMessage && (
-            <p className="form-message" role="alert">
-              {expenseMessage}
-            </p>
-          )}
-        </form>
-      </section>
-
-      <section className="panel" data-mobile-page="accounts" aria-labelledby="accounts-title">
-        <div className="account-panel-header">
-          <div>
-            <h2 id="accounts-title">Account balances</h2>
-            <p className="account-intro">
-              Updated as you log expenses and account activity.
-            </p>
-          </div>
-          <button
-            className={`account-refresh-button${accountRefreshBusy ? " is-busy" : ""}`}
-            type="button"
-            aria-label="Refresh account balances"
-            title="Refresh account balances"
-            onClick={refreshAccounts}
-            disabled={accountRefreshBusy}
-          >
-            <AccountIcon name="refresh" />
-            <span className="account-refresh-label">Refresh</span>
-          </button>
-          {accountRefreshStatus && (
-            <span className="account-refresh-status" role="status">
-              {accountRefreshStatus}
-            </span>
-          )}
-        </div>
-        <div className="account-cards">
-          {[
-            ["bkash", "bKash"],
-            ["bank", "Bank"],
-          ].map(([id, label]) => (
-            <article className="account-card" key={id}>
-              <div className="account-card-copy">
-                <h3 className="account-card-heading">
-                  <AccountIcon name={id} />
-                  {label}
-                </h3>
-                <p className="account-meta">
-                  {accountData.settings.configured
-                    ? `Since ${formatDate(accountData.settings.startDate)}`
-                    : "Starting amount needed"}
-                </p>
-              </div>
-              <p className="account-balance" aria-live="polite">
-                {formatCurrency(accountBalances[id])}
-              </p>
-            </article>
-          ))}
-        </div>
-
-        <details className="account-details">
-          <summary>
-            <span className="account-summary-label">
-              <AccountIcon name="wallet" />
-            Set starting balances
-            </span>
-          </summary>
-          <form onSubmit={handleOpeningBalancesSubmit}>
-            <div className="account-form-grid">
-              <div>
-                <label htmlFor="starting-bkash">bKash (BDT)</label>
-                <input
-                  id="starting-bkash"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  inputMode="decimal"
-                  placeholder="0.00"
-                  required
-                  value={startingBalances.bkash}
-                  onChange={(event) =>
-                    setStartingBalances({
-                      ...startingBalances,
-                      bkash: event.target.value,
-                    })
-                  }
-                />
-              </div>
-              <div>
-                <label htmlFor="starting-bank">Bank (BDT)</label>
-                <input
-                  id="starting-bank"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  inputMode="decimal"
-                  placeholder="0.00"
-                  required
-                  value={startingBalances.bank}
-                  onChange={(event) =>
-                    setStartingBalances({
-                      ...startingBalances,
-                      bank: event.target.value,
-                    })
-                  }
-                />
-              </div>
-              <div>
-                <label htmlFor="starting-date">Balances as of</label>
-                <input
-                  id="starting-date"
-                  type="date"
-                  required
-                  value={startingBalances.date}
-                  onChange={(event) =>
-                    setStartingBalances({
-                      ...startingBalances,
-                      date: event.target.value,
-                    })
-                  }
-                />
-              </div>
-            </div>
-            <div className="account-form-actions">
-              <button type="submit">Save starting balances</button>
-            </div>
-            <p className="account-form-note">
-              Earlier expenses stay in history and won’t change these starting
-              balances.
-            </p>
-          </form>
-        </details>
-
-        <details className="account-details account-transaction-details">
-          <summary>
-            <span className="account-summary-label">
-              <AccountIcon name="transfer" />
-            Record income, adjustment, or transfer
-            </span>
-          </summary>
-          <form onSubmit={handleAccountTransactionSubmit}>
-            <div className="account-form-grid account-transaction-grid">
-              <div>
-                <label htmlFor="transaction-type">Activity</label>
-                <select
-                  id="transaction-type"
-                  value={transactionForm.type}
-                  onChange={(event) =>
-                    setTransactionForm({
-                      ...transactionForm,
-                      type: event.target.value,
-                    })
-                  }
+                <div className="profile-editor-heading">
+                  <div>
+                    <span>PROFILE</span>
+                    <h2 id="profile-editor-title">Edit your profile</h2>
+                  </div>
+                  <button
+                    className="profile-editor-close"
+                    type="button"
+                    aria-label="Close profile editor"
+                    disabled={profileSaving}
+                    onClick={() => setProfileEditorOpen(false)}
+                  >
+                    ×
+                  </button>
+                </div>
+                <form
+                  onSubmit={async (event) => {
+                    event.preventDefault();
+                    if (await saveProfileName(profileDraft))
+                      setProfileEditorOpen(false);
+                  }}
                 >
-                  <option value="income">Income</option>
-                  <option value="adjustment">Balance adjustment</option>
-                  <option value="transfer">Transfer between accounts</option>
+                  <label htmlFor="profile-display-name">Display name</label>
+                  <input
+                    id="profile-display-name"
+                    type="text"
+                    autoComplete="name"
+                    autoFocus
+                    maxLength={48}
+                    required
+                    placeholder="Your name"
+                    value={profileDraft}
+                    onChange={(event) => setProfileDraft(event.target.value)}
+                  />
+                  <p className="profile-editor-hint">
+                    This name appears in your greeting and profile avatar.
+                  </p>
+                  {profileStatus && (
+                    <p
+                      className={`profile-editor-status${
+                        profileStatus.startsWith("Could not") ||
+                        profileStatus.startsWith("Enter ")
+                          ? " is-error"
+                          : ""
+                      }`}
+                      role="status"
+                      aria-live="polite"
+                    >
+                      {profileStatus}
+                    </p>
+                  )}
+                  <div className="profile-editor-actions">
+                    <button
+                      className="profile-editor-cancel"
+                      type="button"
+                      disabled={profileSaving}
+                      onClick={() => setProfileEditorOpen(false)}
+                    >
+                      Cancel
+                    </button>
+                    <button type="submit" disabled={profileSaving}>
+                      {profileSaving ? "Saving…" : "Save name"}
+                    </button>
+                  </div>
+                </form>
+              </section>
+            </div>,
+            document.body,
+          )}
+
+        <section
+          className="summary"
+          data-mobile-page="home"
+          aria-labelledby="summary-title"
+        >
+          <div className="summary-topline">
+            <p className="eyebrow" id="summary-title">
+              <span className="summary-label-prefix">Month total</span>
+              <span className="summary-currency">BDT</span>
+            </p>
+            <div
+              className="month-navigation"
+              aria-label="Monthly total navigation"
+            >
+              <button
+                className="month-step"
+                type="button"
+                aria-label="Previous month"
+                title="Previous month"
+                onClick={() => addMonth(-1)}
+              >
+                ‹
+              </button>
+              <label className="month-select">
+                <span className="month-display" aria-hidden="true">
+                  <span className="month-display-full">
+                    {formatMonth(selectedMonth)}
+                  </span>
+                  <span className="month-display-compact">
+                    {formatCompactMonth(selectedMonth)}
+                  </span>
+                  <span className="month-calendar-icon" />
+                </span>
+                <input
+                  className="month-picker"
+                  type="month"
+                  aria-label="Choose month"
+                  title="Choose month"
+                  value={selectedMonth}
+                  onPointerDown={(event) => {
+                    const picker = event.currentTarget;
+                    if (typeof picker.showPicker === "function") {
+                      event.preventDefault();
+                      picker.showPicker();
+                    }
+                  }}
+                  onChange={(event) =>
+                    setSelectedMonth(event.target.value || currentMonth())
+                  }
+                />
+              </label>
+              <button
+                className="month-step"
+                type="button"
+                aria-label="Next month"
+                title="Next month"
+                onClick={() => addMonth(1)}
+              >
+                ›
+              </button>
+            </div>
+          </div>
+          <div className="summary-total-line">
+            <p className="total" aria-live="polite">
+              {formatCurrency(monthlyTotal)}
+            </p>
+            <p className="summary-caption">
+              Across all expenses
+              <span className="summary-caption-month">
+                {" "}
+                in {formatMonth(selectedMonth)}
+              </span>
+            </p>
+          </div>
+          <div className="summary-insights" aria-label="Spending insights">
+            <div>
+              <span>vs previous month</span>
+              <strong>
+                {previousMonthTotal
+                  ? `${monthlyTotal >= previousMonthTotal ? "+" : ""}${formatCurrency(monthlyTotal - previousMonthTotal)}`
+                  : "No prior data"}
+              </strong>
+            </div>
+            <div>
+              <span>Top category</span>
+              <strong>
+                {topCategory
+                  ? `${topCategory[0]} · ${formatCurrency(topCategory[1])}`
+                  : "No spending yet"}
+              </strong>
+            </div>
+            <div>
+              <span>Next recurring</span>
+              <strong>
+                {nextRecurring
+                  ? `${nextRecurring.description} · ${formatDate(nextRecurring.nextDate)}`
+                  : "Nothing scheduled"}
+              </strong>
+            </div>
+          </div>
+          <CategoryBreakdown
+            items={categoryBreakdown}
+            total={monthlyTotal}
+            titleId="category-breakdown-title"
+            className="category-breakdown summary-category-breakdown"
+          />
+          <button
+            className="conversion-toggle"
+            type="button"
+            aria-expanded={conversionOpen}
+            onClick={toggleConversion}
+          >
+            <span>
+              {conversionOpen ? "Hide conversion" : "Show conversion"}
+            </span>
+            <span id="conversion-toggle-icon" aria-hidden="true">
+              {conversionOpen ? "⌃" : "⌄"}
+            </span>
+          </button>
+          {conversionOpen && (
+            <div className="conversion-details">
+              <div className="conversion-picker">
+                <label htmlFor="conversion-currency">Convert BDT to</label>
+                <select
+                  id="conversion-currency"
+                  value={targetCurrency}
+                  onChange={(event) => setTargetCurrency(event.target.value)}
+                >
+                  {currencyOptions.map((currency) => (
+                    <option key={currency.iso_code} value={currency.iso_code}>
+                      {currency.iso_code} — {currency.name}
+                    </option>
+                  ))}
                 </select>
               </div>
-              <div>
-                <label htmlFor="transaction-amount">Amount (BDT)</label>
+              {conversionReady && (
+                <div className="converted-total-block">
+                  <p className="converted-total-label">
+                    Estimated total in {targetCurrency}
+                  </p>
+                  <p className="converted-total" aria-live="polite">
+                    {formatCurrency(
+                      monthlyTotal * conversionRate,
+                      targetCurrency,
+                    )}
+                  </p>
+                </div>
+              )}
+              <p className="conversion-status" role="status" aria-live="polite">
+                {conversionStatus}
+              </p>
+              <p className="conversion-disclaimer">
+                Indicative daily mid-market rate. Your bank or card provider may
+                use a different rate. Source:{" "}
+                <a
+                  href="https://frankfurter.dev/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Frankfurter
+                </a>
+                .
+              </p>
+              {conversionFailed && (
+                <button
+                  className="retry-rate"
+                  type="button"
+                  onClick={retryConversion}
+                >
+                  Try again
+                </button>
+              )}
+            </div>
+          )}
+        </section>
+
+        <section
+          className="home-transactions"
+          data-mobile-page="home"
+          aria-labelledby="home-transactions-title"
+        >
+          <div className="home-transactions-heading">
+            <h2 id="home-transactions-title">Recent Transactions</h2>
+            <button
+              className="home-transactions-see-all"
+              type="button"
+              onClick={() => {
+                setQuery("");
+                setCategoryFilter("");
+                navigateMobile("activity");
+              }}
+            >
+              See all
+            </button>
+          </div>
+          {recentExpenses.length ? (
+            <ul className="home-transaction-list">
+              {recentExpenses.map((expense) => (
+                <li className="home-transaction-row" key={expense.id}>
+                  <span className="home-transaction-icon" aria-hidden="true">
+                    <CategoryIcon category={expense.category} />
+                  </span>
+                  <span className="home-transaction-copy">
+                    <strong title={expense.description}>
+                      {expense.description}
+                    </strong>
+                    <span>
+                      {expense.category} · {formatDate(expense.date)}
+                    </span>
+                  </span>
+                  <strong className="home-transaction-amount">
+                    {expense.amount === null
+                      ? "Add amount"
+                      : formatCurrency(expense.amount)}
+                  </strong>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="home-transactions-empty">
+              <span className="home-transactions-empty-icon" aria-hidden="true">
+                <FaWallet focusable="false" />
+              </span>
+              <strong>No transactions yet</strong>
+              <p>Start tracking your expenses to see them here.</p>
+            </div>
+          )}
+        </section>
+
+        <section
+          className="home-category-breakdown"
+          data-mobile-page="home"
+          aria-labelledby="home-category-breakdown-title"
+        >
+          <CategoryBreakdown
+            items={categoryBreakdown}
+            total={monthlyTotal}
+            titleId="home-category-breakdown-title"
+            className="category-breakdown home-category-breakdown-card"
+          />
+        </section>
+
+        <section
+          className="panel"
+          data-mobile-page="add"
+          aria-labelledby="form-title"
+        >
+          <h2 id="form-title" className="expense-form-title">
+            <span className="expense-form-plus" aria-hidden="true">
+              +
+            </span>
+            Add an expense
+          </h2>
+          <form
+            id="expense-form"
+            onSubmit={handleExpenseSubmit}
+            onChange={() => expenseMessage && setExpenseMessage("")}
+          >
+            <div className="form-grid">
+              <div className="description-field">
+                <label htmlFor="description">What was it for?</label>
                 <input
-                  id="transaction-amount"
+                  id="description"
+                  type="text"
+                  placeholder="e.g. Lunch"
+                  maxLength="80"
+                  required
+                  autoComplete="off"
+                  value={expenseForm.description}
+                  onChange={(event) =>
+                    setExpenseForm({
+                      ...expenseForm,
+                      description: event.target.value,
+                    })
+                  }
+                />
+              </div>
+              <div>
+                <label htmlFor="amount">Amount (BDT)</label>
+                <input
+                  id="amount"
                   type="number"
+                  placeholder="0.00"
                   min="0.01"
                   step="0.01"
                   inputMode="decimal"
-                  placeholder="0.00"
-                  required
-                  value={transactionForm.amount}
+                  required={expenseForm.interval !== "none"}
+                  value={expenseForm.amount}
                   onChange={(event) =>
-                    setTransactionForm({
-                      ...transactionForm,
+                    setExpenseForm({
+                      ...expenseForm,
                       amount: event.target.value,
                     })
                   }
                 />
               </div>
               <div>
-                <label htmlFor="transaction-date">Date</label>
+                <label htmlFor="expense-category">Category</label>
+                <select
+                  id="expense-category"
+                  value={expenseForm.category}
+                  onChange={(event) =>
+                    setExpenseForm({
+                      ...expenseForm,
+                      category: event.target.value,
+                    })
+                  }
+                >
+                  {CATEGORIES.map((category) => (
+                    <option key={category}>{category}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="expense-date">Date</label>
                 <input
-                  id="transaction-date"
+                  id="expense-date"
                   type="date"
                   required
-                  value={transactionForm.date}
+                  value={expenseForm.date}
                   onChange={(event) =>
-                    setTransactionForm({
-                      ...transactionForm,
-                      date: event.target.value,
-                    })
+                    setExpenseForm({ ...expenseForm, date: event.target.value })
                   }
                 />
               </div>
-              <div className="account-note-field">
-                <label htmlFor="transaction-note">Note</label>
-                <input
-                  id="transaction-note"
-                  type="text"
-                  maxLength="80"
-                  placeholder="e.g. Salary, cash deposit"
-                  autoComplete="off"
-                  value={transactionForm.note}
+              <div>
+                <label htmlFor="expense-repeat">Repeat</label>
+                <select
+                  id="expense-repeat"
+                  value={expenseForm.interval}
                   onChange={(event) =>
-                    setTransactionForm({
-                      ...transactionForm,
-                      note: event.target.value,
+                    setExpenseForm({
+                      ...expenseForm,
+                      interval: event.target.value,
                     })
                   }
+                >
+                  <option value="none">Does not repeat</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                </select>
+              </div>
+              <div>
+                <label htmlFor="expense-account">Paid from</label>
+                <select
+                  id="expense-account"
+                  value={expenseForm.account}
+                  onChange={(event) =>
+                    setExpenseForm({
+                      ...expenseForm,
+                      account: event.target.value,
+                    })
+                  }
+                >
+                  <option value="">Cash / Other (not tracked)</option>
+                  <option value="bkash">bKash</option>
+                  <option value="bank">Bank</option>
+                </select>
+              </div>
+            </div>
+            <div className="form-actions">
+              <span className="currency-hint">
+                {expenseForm.interval === "none"
+                  ? "Enter amounts in BDT. You can add a missing amount later from Recent expenses."
+                  : "Recurring expenses need an amount and are added when due."}
+              </span>
+              <button className="expense-submit" type="submit">
+                Add expense
+              </button>
+            </div>
+            {expenseMessage && (
+              <p className="form-message" role="alert">
+                {expenseMessage}
+              </p>
+            )}
+          </form>
+        </section>
+
+        <section
+          className="panel"
+          data-mobile-page="accounts"
+          aria-labelledby="accounts-title"
+        >
+          <div className="account-panel-header">
+            <div>
+              <h2 id="accounts-title">Account balances</h2>
+              <p className="account-intro">
+                Updated as you log expenses and account activity.
+              </p>
+            </div>
+            <button
+              className={`account-refresh-button${accountRefreshBusy ? " is-busy" : ""}`}
+              type="button"
+              aria-label="Refresh account balances"
+              title="Refresh account balances"
+              onClick={refreshAccounts}
+              disabled={accountRefreshBusy}
+            >
+              <AccountIcon name="refresh" />
+              <span className="account-refresh-label">Refresh</span>
+            </button>
+            {accountRefreshStatus && (
+              <span className="account-refresh-status" role="status">
+                {accountRefreshStatus}
+              </span>
+            )}
+          </div>
+          <div className="account-cards">
+            {[
+              ["bkash", "bKash"],
+              ["bank", "Bank"],
+            ].map(([id, label]) => (
+              <article className="account-card" key={id}>
+                <div className="account-card-copy">
+                  <h3 className="account-card-heading">
+                    <AccountIcon name={id} />
+                    {label}
+                  </h3>
+                  <p className="account-meta">
+                    {accountData.settings.configured
+                      ? `Since ${formatDate(accountData.settings.startDate)}`
+                      : "Starting amount needed"}
+                  </p>
+                </div>
+                <p className="account-balance" aria-live="polite">
+                  {formatCurrency(accountBalances[id])}
+                </p>
+              </article>
+            ))}
+          </div>
+
+          <details className="account-details">
+            <summary>
+              <span className="account-summary-label">
+                <AccountIcon name="wallet" />
+                Set starting balances
+              </span>
+            </summary>
+            <form onSubmit={handleOpeningBalancesSubmit}>
+              <div className="account-form-grid">
+                <div>
+                  <label htmlFor="starting-bkash">bKash (BDT)</label>
+                  <input
+                    id="starting-bkash"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    required
+                    value={startingBalances.bkash}
+                    onChange={(event) =>
+                      setStartingBalances({
+                        ...startingBalances,
+                        bkash: event.target.value,
+                      })
+                    }
+                  />
+                </div>
+                <div>
+                  <label htmlFor="starting-bank">Bank (BDT)</label>
+                  <input
+                    id="starting-bank"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    required
+                    value={startingBalances.bank}
+                    onChange={(event) =>
+                      setStartingBalances({
+                        ...startingBalances,
+                        bank: event.target.value,
+                      })
+                    }
+                  />
+                </div>
+                <div>
+                  <label htmlFor="starting-date">Balances as of</label>
+                  <input
+                    id="starting-date"
+                    type="date"
+                    required
+                    value={startingBalances.date}
+                    onChange={(event) =>
+                      setStartingBalances({
+                        ...startingBalances,
+                        date: event.target.value,
+                      })
+                    }
+                  />
+                </div>
+              </div>
+              <div className="account-form-actions">
+                <button type="submit">Save starting balances</button>
+              </div>
+              <p className="account-form-note">
+                Earlier expenses stay in history and won’t change these starting
+                balances.
+              </p>
+            </form>
+          </details>
+
+          <details className="account-details account-transaction-details">
+            <summary>
+              <span className="account-summary-label">
+                <AccountIcon name="transfer" />
+                Record income, adjustment, or transfer
+              </span>
+            </summary>
+            <form onSubmit={handleAccountTransactionSubmit}>
+              <div className="account-form-grid account-transaction-grid">
+                <div>
+                  <label htmlFor="transaction-type">Activity</label>
+                  <select
+                    id="transaction-type"
+                    value={transactionForm.type}
+                    onChange={(event) =>
+                      setTransactionForm({
+                        ...transactionForm,
+                        type: event.target.value,
+                      })
+                    }
+                  >
+                    <option value="income">Income</option>
+                    <option value="adjustment">Balance adjustment</option>
+                    <option value="transfer">Transfer between accounts</option>
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="transaction-amount">Amount (BDT)</label>
+                  <input
+                    id="transaction-amount"
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    required
+                    value={transactionForm.amount}
+                    onChange={(event) =>
+                      setTransactionForm({
+                        ...transactionForm,
+                        amount: event.target.value,
+                      })
+                    }
+                  />
+                </div>
+                <div>
+                  <label htmlFor="transaction-date">Date</label>
+                  <input
+                    id="transaction-date"
+                    type="date"
+                    required
+                    value={transactionForm.date}
+                    onChange={(event) =>
+                      setTransactionForm({
+                        ...transactionForm,
+                        date: event.target.value,
+                      })
+                    }
+                  />
+                </div>
+                <div className="account-note-field">
+                  <label htmlFor="transaction-note">Note</label>
+                  <input
+                    id="transaction-note"
+                    type="text"
+                    maxLength="80"
+                    placeholder="e.g. Salary, cash deposit"
+                    autoComplete="off"
+                    value={transactionForm.note}
+                    onChange={(event) =>
+                      setTransactionForm({
+                        ...transactionForm,
+                        note: event.target.value,
+                      })
+                    }
+                  />
+                </div>
+                {transactionForm.type !== "transfer" && (
+                  <div>
+                    <label htmlFor="transaction-account">Account</label>
+                    <select
+                      id="transaction-account"
+                      value={transactionForm.account}
+                      onChange={(event) =>
+                        setTransactionForm({
+                          ...transactionForm,
+                          account: event.target.value,
+                        })
+                      }
+                    >
+                      <option value="bkash">bKash</option>
+                      <option value="bank">Bank</option>
+                    </select>
+                  </div>
+                )}
+                {transactionForm.type === "adjustment" && (
+                  <div>
+                    <label htmlFor="adjustment-direction">Correction</label>
+                    <select
+                      id="adjustment-direction"
+                      value={transactionForm.direction}
+                      onChange={(event) =>
+                        setTransactionForm({
+                          ...transactionForm,
+                          direction: event.target.value,
+                        })
+                      }
+                    >
+                      <option value="increase">Increase balance</option>
+                      <option value="decrease">Decrease balance</option>
+                    </select>
+                  </div>
+                )}
+                {transactionForm.type === "transfer" && (
+                  <>
+                    <div>
+                      <label htmlFor="transfer-from">From</label>
+                      <select
+                        id="transfer-from"
+                        value={transactionForm.fromAccount}
+                        onChange={(event) =>
+                          changeTransferAccount(
+                            "fromAccount",
+                            event.target.value,
+                          )
+                        }
+                      >
+                        <option value="bkash">bKash</option>
+                        <option value="bank">Bank</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor="transfer-to">To</label>
+                      <select
+                        id="transfer-to"
+                        value={transactionForm.toAccount}
+                        onChange={(event) =>
+                          changeTransferAccount("toAccount", event.target.value)
+                        }
+                      >
+                        <option value="bank">Bank</option>
+                        <option value="bkash">bKash</option>
+                      </select>
+                    </div>
+                  </>
+                )}
+              </div>
+              <div className="account-form-actions">
+                <button type="submit">Save activity</button>
+              </div>
+            </form>
+          </details>
+
+          <details className="account-details">
+            <summary>
+              <span className="account-summary-label">
+                <AccountIcon name="history" />
+                Recent account activity
+              </span>
+            </summary>
+            {accountActivity.length ? (
+              <ul className="account-activity-list">
+                {accountActivity.map((activity) => {
+                  const label = accountActivityLabel(activity);
+                  return (
+                    <li className="account-activity-row" key={activity.id}>
+                      <div className="account-activity-info">
+                        <div className="account-activity-title">
+                          {activity.description
+                            ? `${label} · ${activity.description}`
+                            : label}
+                        </div>
+                        <div className="account-activity-date">
+                          {formatDate(activity.date)}
+                        </div>
+                      </div>
+                      <span className="account-activity-amount">
+                        {accountActivityPrefix(activity)}
+                        {formatCurrency(activity.amount)}
+                      </span>
+                      <button
+                        className="remove"
+                        type="button"
+                        title="Remove account activity"
+                        aria-label={`Remove ${label}${activity.description ? ` ${activity.description}` : ""}`}
+                        onClick={() => removeAccountActivity(activity)}
+                      >
+                        ×
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="account-activity-empty">
+                Your recent expenses and account activity will appear here.
+              </p>
+            )}
+          </details>
+        </section>
+
+        <section
+          className="panel budget-panel"
+          data-mobile-page="budget"
+          aria-labelledby="budget-title"
+        >
+          <div className="budget-heading">
+            <div>
+              <h2 id="budget-title">Monthly budget</h2>
+              <span className="budget-month">
+                <FaCalendarDays aria-hidden="true" focusable="false" />
+                {formatMonth(selectedMonth)}
+              </span>
+            </div>
+            {monthBudget > 0 && (
+              <button
+                className="budget-edit-toggle"
+                type="button"
+                aria-controls="budget-editor"
+                aria-expanded={budgetEditorOpen}
+                aria-label={
+                  budgetEditorOpen ? "Done editing budget" : "Edit budget"
+                }
+                onClick={() =>
+                  setBudgetEditingMonth(budgetEditorOpen ? null : selectedMonth)
+                }
+              >
+                <FaPenToSquare aria-hidden="true" focusable="false" />
+                <span className="budget-edit-label-full">
+                  {budgetEditorOpen ? "Done" : "Edit budget"}
+                </span>
+                <span className="budget-edit-label-compact">
+                  {budgetEditorOpen ? "Done" : "Edit"}
+                </span>
+              </button>
+            )}
+          </div>
+
+          {monthBudget > 0 ? (
+            <div className="budget-overview">
+              <div className="budget-values">
+                <div className="budget-spent-block">
+                  <span className="budget-caption">Spent this month</span>
+                  <strong className="budget-spent-value">
+                    {formatCurrency(monthlyTotal)}
+                  </strong>
+                </div>
+                <div className="budget-limit-block">
+                  <span className="budget-caption">Monthly limit</span>
+                  <strong className="budget-limit-value">
+                    {formatCurrency(monthBudget)}
+                  </strong>
+                </div>
+                <span
+                  className={`budget-percent${budgetPercentage > 100 ? " is-over" : ""}`}
+                >
+                  {Math.round(budgetPercentage)}% used
+                </span>
+              </div>
+
+              <div
+                className={`budget-progress-track${budgetPercentage > 100 ? " is-over" : ""}`}
+                role="progressbar"
+                aria-label="Monthly budget used"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                aria-valuenow={Math.round(budgetProgress)}
+                aria-valuetext={`${Math.round(budgetPercentage)} percent of budget used`}
+              >
+                <div
+                  className="budget-progress-fill"
+                  style={{ width: `${budgetProgress}%` }}
                 />
               </div>
-              {transactionForm.type !== "transfer" && (
-                <div>
-                  <label htmlFor="transaction-account">Account</label>
-                  <select
-                    id="transaction-account"
-                    value={transactionForm.account}
-                    onChange={(event) =>
-                      setTransactionForm({
-                        ...transactionForm,
-                        account: event.target.value,
-                      })
-                    }
-                  >
-                    <option value="bkash">bKash</option>
-                    <option value="bank">Bank</option>
-                  </select>
-                </div>
-              )}
-              {transactionForm.type === "adjustment" && (
-                <div>
-                  <label htmlFor="adjustment-direction">Correction</label>
-                  <select
-                    id="adjustment-direction"
-                    value={transactionForm.direction}
-                    onChange={(event) =>
-                      setTransactionForm({
-                        ...transactionForm,
-                        direction: event.target.value,
-                      })
-                    }
-                  >
-                    <option value="increase">Increase balance</option>
-                    <option value="decrease">Decrease balance</option>
-                  </select>
-                </div>
-              )}
-              {transactionForm.type === "transfer" && (
+
+              <div className="budget-footer">
+                <strong
+                  className={`budget-balance${budgetPercentage > 100 ? " is-over" : ""}`}
+                >
+                  {monthlyTotal <= monthBudget
+                    ? `${formatCurrency(monthBudget - monthlyTotal)} left`
+                    : `${formatCurrency(monthlyTotal - monthBudget)} over budget`}
+                </strong>
+                <span className="budget-status">
+                  {budgetPercentage > 100
+                    ? "Spending is above your limit"
+                    : "You’re within your limit"}
+                </span>
+              </div>
+            </div>
+          ) : (
+            <p className="budget-empty">
+              Set a monthly limit to keep spending on track.
+            </p>
+          )}
+
+          <form
+            className={`budget-form${monthBudget > 0 ? " has-budget" : " is-new"}`}
+            id="budget-editor"
+            hidden={!budgetEditorOpen}
+            onSubmit={saveBudget}
+          >
+            <div className="budget-field">
+              <label htmlFor="monthly-budget">Monthly limit (BDT)</label>
+              <input
+                id="monthly-budget"
+                type="number"
+                min="0.01"
+                step="0.01"
+                inputMode="decimal"
+                placeholder="e.g. 20000"
+                required
+                value={budgetAmount}
+                onChange={(event) => setBudgetAmount(event.target.value)}
+              />
+            </div>
+            <div className="budget-form-actions">
+              <button type="submit">Save budget</button>
+              {monthBudget > 0 && (
                 <>
-                  <div>
-                    <label htmlFor="transfer-from">From</label>
-                    <select
-                      id="transfer-from"
-                      value={transactionForm.fromAccount}
-                      onChange={(event) =>
-                        changeTransferAccount("fromAccount", event.target.value)
-                      }
-                    >
-                      <option value="bkash">bKash</option>
-                      <option value="bank">Bank</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label htmlFor="transfer-to">To</label>
-                    <select
-                      id="transfer-to"
-                      value={transactionForm.toAccount}
-                      onChange={(event) =>
-                        changeTransferAccount("toAccount", event.target.value)
-                      }
-                    >
-                      <option value="bank">Bank</option>
-                      <option value="bkash">bKash</option>
-                    </select>
-                  </div>
+                  <button
+                    className="clear-budget"
+                    type="button"
+                    onClick={clearBudget}
+                  >
+                    Clear
+                  </button>
+                  <button
+                    className="budget-cancel"
+                    type="button"
+                    onClick={() => setBudgetEditingMonth(null)}
+                  >
+                    Cancel
+                  </button>
                 </>
               )}
             </div>
-            <div className="account-form-actions">
-              <button type="submit">Save activity</button>
-            </div>
           </form>
-        </details>
+        </section>
 
-        <details className="account-details">
-          <summary>
-            <span className="account-summary-label">
-              <AccountIcon name="history" />
-            Recent account activity
-            </span>
-          </summary>
-          {accountActivity.length ? (
-            <ul className="account-activity-list">
-              {accountActivity.map((activity) => {
-                const label = accountActivityLabel(activity);
-                return (
-                  <li className="account-activity-row" key={activity.id}>
-                    <div className="account-activity-info">
-                      <div className="account-activity-title">
-                        {activity.description
-                          ? `${label} · ${activity.description}`
-                          : label}
-                      </div>
-                      <div className="account-activity-date">
-                        {formatDate(activity.date)}
-                      </div>
-                    </div>
-                    <span className="account-activity-amount">
-                      {accountActivityPrefix(activity)}
-                      {formatCurrency(activity.amount)}
-                    </span>
-                    <button
-                      className="remove"
-                      type="button"
-                      title="Remove account activity"
-                      aria-label={`Remove ${label}${activity.description ? ` ${activity.description}` : ""}`}
-                      onClick={() => removeAccountActivity(activity)}
-                    >
-                      ×
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
-            <p className="account-activity-empty">
-              Your recent expenses and account activity will appear here.
-            </p>
-          )}
-        </details>
-      </section>
-
-      <section
-        className="panel budget-panel"
-        data-mobile-page="budget"
-        aria-labelledby="budget-title"
-      >
-        <div className="budget-heading">
-          <div>
-            <h2 id="budget-title">Monthly budget</h2>
-            <span className="budget-month">
-              <FaCalendarDays aria-hidden="true" focusable="false" />
-              {formatMonth(selectedMonth)}
-            </span>
-          </div>
-          {monthBudget > 0 && (
-            <button
-              className="budget-edit-toggle"
-              type="button"
-              aria-controls="budget-editor"
-              aria-expanded={budgetEditorOpen}
-              aria-label={budgetEditorOpen ? "Done editing budget" : "Edit budget"}
-              onClick={() =>
-                setBudgetEditingMonth(
-                  budgetEditorOpen ? null : selectedMonth,
-                )
-              }
-            >
-              <FaPenToSquare aria-hidden="true" focusable="false" />
-              <span className="budget-edit-label-full">
-                {budgetEditorOpen ? "Done" : "Edit budget"}
-              </span>
-              <span className="budget-edit-label-compact">
-                {budgetEditorOpen ? "Done" : "Edit"}
-              </span>
-            </button>
-          )}
-        </div>
-
-        {monthBudget > 0 ? (
-          <div className="budget-overview">
-            <div className="budget-values">
-              <div className="budget-spent-block">
-                <span className="budget-caption">Spent this month</span>
-                <strong className="budget-spent-value">
-                  {formatCurrency(monthlyTotal)}
-                </strong>
-              </div>
-              <div className="budget-limit-block">
-                <span className="budget-caption">Monthly limit</span>
-                <strong className="budget-limit-value">
-                  {formatCurrency(monthBudget)}
-                </strong>
-              </div>
-              <span
-                className={`budget-percent${budgetPercentage > 100 ? " is-over" : ""}`}
-              >
-                {Math.round(budgetPercentage)}% used
-              </span>
-            </div>
-
-            <div
-              className={`budget-progress-track${budgetPercentage > 100 ? " is-over" : ""}`}
-              role="progressbar"
-              aria-label="Monthly budget used"
-              aria-valuemin="0"
-              aria-valuemax="100"
-              aria-valuenow={Math.round(budgetProgress)}
-              aria-valuetext={`${Math.round(budgetPercentage)} percent of budget used`}
-            >
-              <div
-                className="budget-progress-fill"
-                style={{ width: `${budgetProgress}%` }}
-              />
-            </div>
-
-            <div className="budget-footer">
-              <strong
-                className={`budget-balance${budgetPercentage > 100 ? " is-over" : ""}`}
-              >
-                {monthlyTotal <= monthBudget
-                  ? `${formatCurrency(monthBudget - monthlyTotal)} left`
-                  : `${formatCurrency(monthlyTotal - monthBudget)} over budget`}
-              </strong>
-              <span className="budget-status">
-                {budgetPercentage > 100
-                  ? "Spending is above your limit"
-                  : "You’re within your limit"}
-              </span>
-            </div>
-          </div>
-        ) : (
-          <p className="budget-empty">
-            Set a monthly limit to keep spending on track.
-          </p>
-        )}
-
-        <form
-          className={`budget-form${monthBudget > 0 ? " has-budget" : " is-new"}`}
-          id="budget-editor"
-          hidden={!budgetEditorOpen}
-          onSubmit={saveBudget}
+        <section
+          className="panel mobile-appearance-panel"
+          data-mobile-page="more"
+          aria-labelledby="appearance-title"
         >
-          <div className="budget-field">
-            <label htmlFor="monthly-budget">Monthly limit (BDT)</label>
-            <input
-              id="monthly-budget"
-              type="number"
-              min="0.01"
-              step="0.01"
-              inputMode="decimal"
-              placeholder="e.g. 20000"
-              required
-              value={budgetAmount}
-              onChange={(event) => setBudgetAmount(event.target.value)}
-            />
+          <div className="mobile-appearance-heading">
+            <h2 id="appearance-title">Appearance</h2>
+            <p>Choose the look that feels right.</p>
           </div>
-          <div className="budget-form-actions">
-            <button type="submit">Save budget</button>
-            {monthBudget > 0 && (
-              <>
-                <button
-                  className="clear-budget"
-                  type="button"
-                  onClick={clearBudget}
-                >
-                  Clear
-                </button>
-                <button
-                  className="budget-cancel"
-                  type="button"
-                  onClick={() => setBudgetEditingMonth(null)}
-                >
-                  Cancel
-                </button>
-              </>
-            )}
-          </div>
-        </form>
-      </section>
-
-      <section
-        className="panel mobile-appearance-panel"
-        data-mobile-page="more"
-        aria-labelledby="appearance-title"
-      >
-        <div className="mobile-appearance-heading">
-          <h2 id="appearance-title">Appearance</h2>
-          <p>Choose the look that feels right.</p>
-        </div>
-        <button
-          className="mobile-appearance-setting"
-          type="button"
-          role="switch"
-          aria-checked={theme === "dark"}
-          onClick={() =>
-            setTheme((current) => (current === "dark" ? "light" : "dark"))
-          }
-        >
-          <span className="mobile-appearance-icon" aria-hidden="true">
-            {theme === "dark" ? "☾" : "☀"}
-          </span>
-          <span className="mobile-appearance-copy">
-            <strong>Dark mode</strong>
-            <span>{theme === "dark" ? "On" : "Off"}</span>
-          </span>
-          <span className="mobile-appearance-switch" aria-hidden="true">
-            <span />
-          </span>
-        </button>
-      </section>
-
-      <section
-        className="panel mobile-profile-panel"
-        data-mobile-page="profile"
-        aria-labelledby="profile-title"
-      >
-        <div className="mobile-profile-hero">
-          <span className="mobile-profile-avatar" aria-hidden="true">
-            {pushUser
-              ? userInitial(pushUser)
-              : profileInitial(localProfileName || "Local profile")}
-          </span>
-          <div className="mobile-profile-copy">
-            <span className="mobile-profile-eyebrow">
-              {pushUser ? "Spend account" : "Local profile"}
+          <button
+            className="mobile-appearance-setting"
+            type="button"
+            role="switch"
+            aria-checked={theme === "dark"}
+            onClick={() =>
+              setTheme((current) => (current === "dark" ? "light" : "dark"))
+            }
+          >
+            <span className="mobile-appearance-icon" aria-hidden="true">
+              {theme === "dark" ? "☾" : "☀"}
             </span>
-            <h2 id="profile-title">
+            <span className="mobile-appearance-copy">
+              <strong>Dark mode</strong>
+              <span>{theme === "dark" ? "On" : "Off"}</span>
+            </span>
+            <span className="mobile-appearance-switch" aria-hidden="true">
+              <span />
+            </span>
+          </button>
+        </section>
+
+        <section
+          className="panel mobile-profile-panel"
+          data-mobile-page="profile"
+          aria-labelledby="profile-title"
+        >
+          <div className="mobile-profile-hero">
+            <span className="mobile-profile-avatar" aria-hidden="true">
               {pushUser
-                ? userDisplayName(pushUser)
-                : localProfileName || "Local profile"}
-            </h2>
-            <p>
-              {pushUser?.email || "Sign in to add your email and sync your account."}
-            </p>
-          </div>
-          {pushUser && (
-            <button
-              className="mobile-profile-edit"
-              type="button"
-              aria-label="Edit profile name"
-              onClick={openProfileEditor}
-            >
-              <FaPenToSquare aria-hidden="true" focusable="false" />
-            </button>
-          )}
-        </div>
-        <div className="mobile-profile-status">
-          <span>Account status</span>
-          <strong>{pushUser ? "Connected" : "Local only"}</strong>
-        </div>
-        {profileStatus && (
-          <p className="mobile-profile-message" role="status" aria-live="polite">
-            {profileStatus}
-          </p>
-        )}
-        {pushUser ? (
-          <button
-            className="mobile-profile-action"
-            type="button"
-            disabled={authBusy}
-            onClick={signOutOfPush}
-          >
-            Sign out
-          </button>
-        ) : (
-          <button
-            className="mobile-profile-action"
-            type="button"
-            onClick={openSignInModal}
-          >
-            Sign in to edit profile
-          </button>
-        )}
-      </section>
-
-      <section
-        className="panel recurring-panel"
-        data-mobile-page="recurring"
-        aria-labelledby="recurring-title"
-      >
-        <div className="recurring-heading">
-          <h2 id="recurring-title" className="recurring-title">
-            Recurring expenses
-          </h2>
-          <div className="recurring-heading-actions">
-            <a
-              className="recurring-add-button"
-              href="#expense-repeat"
-              aria-label="Add a recurring expense"
-              onClick={(event) => {
-                if (window.matchMedia("(max-width: 800px)").matches) {
-                  event.preventDefault();
-                  navigateMobile("add");
-                }
-              }}
-            >
-              <span aria-hidden="true">＋</span>
-              <span className="recurring-add-label">Add recurring</span>
-            </a>
-            <button
-              className={
-                "recurring-refresh-button" +
-                (recurringRefreshBusy ? " is-busy" : "")
-              }
-              type="button"
-              aria-label="Refresh recurring expenses"
-              title="Refresh recurring expenses"
-              onClick={refreshRecurringSchedules}
-              disabled={recurringRefreshBusy}
-            >
-              <AccountIcon name="repeat" />
-            </button>
-          </div>
-        </div>
-        {recurringRefreshStatus && (
-          <span className="recurring-refresh-status" role="status">
-            {recurringRefreshStatus}
-          </span>
-        )}
-
-        <div className="recurring-overview">
-          <div
-            className="recurring-overview-item recurring-overview-count"
-            role="group"
-            aria-label={activeRecurringCount + " active schedules"}
-          >
-            <strong className="recurring-overview-count-value">
-              {activeRecurringCount}
-            </strong>
-            <span>active</span>
-          </div>
-          <div className="recurring-overview-item recurring-overview-total">
-            <strong>{formatCurrency(monthlyRecurringTotal)}</strong>
-            <span>monthly est.</span>
-          </div>
-          <div className="recurring-overview-item recurring-overview-next">
-            <span className="recurring-overview-label">Next due</span>
-            {nextRecurring ? (
-              <>
-                <strong>{nextRecurring.description}</strong>
-                <span className="recurring-overview-date">
-                  {formatDate(nextRecurring.nextDate)}
-                </span>
-              </>
-            ) : (
-              <strong className="recurring-overview-empty">
-                No upcoming expenses
-              </strong>
-            )}
-          </div>
-        </div>
-
-        {recurringSchedules.length ? (
-          <>
-            <h3 className="recurring-list-title">Your schedules</h3>
-            <ul className="recurring-list">
-            {orderedRecurringSchedules.map((schedule) => {
-              const cadence =
-                schedule.interval === "weekly" ? "Weekly" : "Monthly";
-              return (
-                <li className="recurring-row" key={schedule.id}>
-                  <div className="recurring-info">
-                    <span className="recurring-category-icon" aria-hidden="true">
-                      <CategoryIcon category={schedule.category} />
-                    </span>
-                    <div className="recurring-text">
-                      <div className="recurring-name">{schedule.description}</div>
-                      <div className="recurring-tags">
-                        <span>{schedule.active ? cadence : "Paused"}</span>
-                        <span>{schedule.category}</span>
-                        {isAccountId(schedule.account) && (
-                          <span>{accountName(schedule.account)}</span>
-                        )}
-                      </div>
-                      <div className="recurring-meta">
-                        Next: {formatDate(schedule.nextDate)}
-                      </div>
-                    </div>
-                  </div>
-                  <span className="recurring-amount">
-                    {formatCurrency(schedule.amount)}
-                  </span>
-                  <div className="recurring-actions">
-                    <button
-                      className="recurring-action"
-                      type="button"
-                      aria-label={`${schedule.active ? "Pause" : "Resume"} ${schedule.description}`}
-                      onClick={() => {
-                        setRecurringSchedules((current) =>
-                          current.map((item) => {
-                            if (item.id !== schedule.id) return item;
-                            if (item.active) return { ...item, active: false };
-                            let nextDate = item.nextDate;
-                            let skipped = 0;
-                            while (nextDate <= localDate() && skipped < 240) {
-                              nextDate = nextOccurrenceDate(
-                                nextDate,
-                                item.interval,
-                                item.dayOfMonth,
-                              );
-                              skipped += 1;
-                            }
-                            return { ...item, active: true, nextDate };
-                          }),
-                        );
-                      }}
-                    >
-                      {schedule.active ? "Pause" : "Resume"}
-                    </button>
-                    <button
-                      className="recurring-action"
-                      type="button"
-                      onClick={() => {
-                        if (
-                          !window.confirm(
-                            `Remove the schedule for “${schedule.description}”? Existing expenses will stay in your list.`,
-                          )
-                        )
-                          return;
-                        setRecurringSchedules((current) =>
-                          current.filter((item) => item.id !== schedule.id),
-                        );
-                        setRecordDeleted(
-                          "recurringSchedules",
-                          schedule.id,
-                          true,
-                        );
-                        offerUndo("Recurring expense removed", () => {
-                          setRecordDeleted(
-                            "recurringSchedules",
-                            schedule.id,
-                            false,
-                          );
-                          setRecurringSchedules((current) =>
-                            current.some((item) => item.id === schedule.id)
-                              ? current
-                              : [...current, schedule],
-                          );
-                        });
-                      }}
-                    >
-                      <span>Remove</span>
-                    </button>
-                  </div>
-                </li>
-              );
-            })}
-            </ul>
-          </>
-        ) : (
-          <p className="recurring-empty">
-            No recurring expenses yet. Add one from the expense form above.
-          </p>
-        )}
-        <div className="recurring-settings">
-          <div className="recurring-reminder-leading">
-            <span className="recurring-reminder-icon" aria-hidden="true">
-              <FaClockRotateLeft focusable="false" />
+                ? userInitial(pushUser)
+                : profileInitial(localProfileName || "Local profile")}
             </span>
-            <div className="recurring-reminder-copy">
-              <strong>Payment reminders</strong>
-              <span>
-                {backgroundPushEnabled
-                  ? "On"
-                  : pushBackendConfigured && !pushUser
-                    ? "Sign in required"
-                    : notificationPermission === "denied"
-                      ? "Blocked"
-                      : notificationPermission === "unsupported"
-                        ? "Unavailable"
-                        : notificationPermission === "granted"
-                          ? "Allowed"
-                          : "Off"}
+            <div className="mobile-profile-copy">
+              <span className="mobile-profile-eyebrow">
+                {pushUser ? "Spend account" : "Local profile"}
               </span>
+              <h2 id="profile-title">
+                {pushUser
+                  ? userDisplayName(pushUser)
+                  : localProfileName || "Local profile"}
+              </h2>
+              <p>
+                {pushUser?.email ||
+                  "Sign in to add your email and sync your account."}
+              </p>
             </div>
-          </div>
-          <div className="recurring-settings-controls">
-            {pushBackendConfigured && pushUser && (
-              <div className="reminder-time-setting">
-                <label className="sr-only" htmlFor="reminder-time">
-                  Reminder time
-                </label>
-                <input
-                  id="reminder-time"
-                  type="time"
-                  value={reminderTime}
-                  onChange={(event) => updateReminderTime(event.target.value)}
-                />
-              </div>
-            )}
-            <div className="notification-controls">
-              <label
-                className="notification-toggle-label"
-                title={
-                  notificationPermission === "denied"
-                    ? "Notifications are blocked in browser settings"
-                    : notificationPermission === "unsupported"
-                      ? "Notifications are unavailable in this browser"
-                      : undefined
-                }
+            {pushUser && (
+              <button
+                className="mobile-profile-edit"
+                type="button"
+                aria-label="Edit profile name"
+                onClick={openProfileEditor}
               >
-                <span className="sr-only">Background payment reminders</span>
-                <input
-                  className="notification-toggle"
-                  type="checkbox"
-                  role="switch"
-                  checked={backgroundPushEnabled}
-                  disabled={
-                    !backgroundPushEnabled &&
-                    (notificationPermission === "denied" ||
-                      notificationPermission === "unsupported")
-                  }
-                  aria-label={
-                    backgroundPushEnabled
-                      ? "Disable background reminders"
-                      : notificationPermission === "denied"
-                        ? "Notifications blocked"
-                        : notificationPermission === "unsupported"
-                          ? "Notifications unavailable"
-                          : pushBackendConfigured
-                            ? "Enable background reminders"
-                            : notificationPermission === "granted"
-                              ? "Send a test notification"
-                              : "Enable system notifications"
-                  }
-                  onChange={toggleNotifications}
-                />
-              </label>
-            </div>
+                <FaPenToSquare aria-hidden="true" focusable="false" />
+              </button>
+            )}
           </div>
-        </div>
-        {notificationStatus && (
-          <p
-            className="recurring-notification-status"
-            role="status"
-            aria-live="polite"
-          >
-            {notificationStatus}
-          </p>
-        )}
-        {recurringReminder && (
-          <p className="recurring-reminder" role="status" aria-live="polite">
-            {recurringReminder}
-          </p>
-        )}
-        {cloudSyncStatus &&
-          (cloudSyncStatus.startsWith("Could not") ||
-            cloudSyncStatus.startsWith("Newer cloud") ||
-            cloudSyncStatus.includes("could not clear")) && (
+          <div className="mobile-profile-status">
+            <span>Account status</span>
+            <strong>{pushUser ? "Connected" : "Local only"}</strong>
+          </div>
+          {profileStatus && (
             <p
-              className="recurring-sync-warning"
+              className="mobile-profile-message"
               role="status"
               aria-live="polite"
             >
-              {cloudSyncStatus}
+              {profileStatus}
             </p>
           )}
-      </section>
+          {pushUser ? (
+            <button
+              className="mobile-profile-action"
+              type="button"
+              disabled={authBusy}
+              onClick={signOutOfPush}
+            >
+              Sign out
+            </button>
+          ) : (
+            <button
+              className="mobile-profile-action"
+              type="button"
+              onClick={openSignInModal}
+            >
+              Sign in to edit profile
+            </button>
+          )}
+        </section>
 
-      <section className="list-panel" data-mobile-page="activity" aria-labelledby="list-title">
-        <div className="list-heading">
-          <div className="list-heading-title">
-            <h2 id="list-title">Expenses</h2>
-            <span className="count">{countText}</span>
-          </div>
-          <button
-            className="export-button"
-            type="button"
-            disabled={!visibleExpenses.length}
-            title="Export the selected month and current filters as a CSV file"
-            onClick={exportExpenses}
-          >
-            Export CSV
-          </button>
-        </div>
-        <div className="filters">
-          <input
-            type="search"
-            placeholder="Search expenses"
-            aria-label="Search expenses"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-          <select
-            aria-label="Filter by category"
-            value={categoryFilter}
-            onChange={(event) => setCategoryFilter(event.target.value)}
-          >
-            <option value="">All categories</option>
-            {CATEGORIES.map((category) => (
-              <option key={category}>{category}</option>
-            ))}
-          </select>
-        </div>
-        {visibleExpenses.length ? (
-          <ul id="expense-list" aria-live="polite">
-            {visibleExpenses.map((expense) => (
-              <li
-                className={`expense-row${expense.amount === null && editingExpenseId === expense.id ? " editing-amount" : ""}`}
-                key={expense.id}
-              >
-                <span className="expense-icon" aria-hidden="true">
-                  <CategoryIcon category={expense.category} />
-                </span>
-                <div className="expense-info">
-                  <div className="expense-name">{expense.description}</div>
-                  <div className="expense-date">
-                    {expense.category} · {formatDate(expense.date)}
-                    {isAccountId(expense.account)
-                      ? ` · ${accountName(expense.account)}`
-                      : ""}
-                    {expense.recurringId ? " · Recurring" : ""}
-                  </div>
-                </div>
-                <div className="expense-end">
-                  {expense.amount === null ? (
-                    editingExpenseId === expense.id ? (
-                      <form
-                        className="inline-amount-form"
-                        aria-label={`Add amount for ${expense.description}`}
-                        onSubmit={(event) =>
-                          saveMissingExpenseAmount(event, expense)
-                        }
-                      >
-                        <input
-                          className="inline-amount-input"
-                          type="number"
-                          min="0.01"
-                          step="0.01"
-                          inputMode="decimal"
-                          placeholder="0.00"
-                          aria-label="Amount"
-                          required
-                          autoFocus
-                          value={editingAmount}
-                          onChange={(event) =>
-                            setEditingAmount(event.target.value)
-                          }
-                        />
-                        <button className="inline-save" type="submit">
-                          Save
-                        </button>
-                        <button
-                          className="inline-cancel"
-                          type="button"
-                          onClick={() => {
-                            setEditingExpenseId(null);
-                            setEditingAmount("");
-                          }}
-                        >
-                          Cancel
-                        </button>
-                      </form>
-                    ) : (
-                      <>
-                        <span className="missing-amount">No amount</span>
-                        <button
-                          className="add-amount-button"
-                          type="button"
-                          aria-label={`Add amount for ${expense.description}`}
-                          onClick={() => {
-                            setEditingExpenseId(expense.id);
-                            setEditingAmount("");
-                          }}
-                        >
-                          Add amount
-                        </button>
-                      </>
-                    )
-                  ) : (
-                    <div className="expense-amounts">
-                      <span className="expense-amount">
-                        {formatCurrency(expense.amount)}
-                      </span>
-                      {conversionReady && (
-                        <span className="converted-row">
-                          ≈{" "}
-                          {formatCurrency(
-                            Number(expense.amount) * conversionRate,
-                            targetCurrency,
-                          )}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                  <button
-                    className="remove"
-                    type="button"
-                    aria-label={`Remove ${expense.description}`}
-                    title="Remove expense"
-                    onClick={() => removeExpense(expense)}
-                  >
-                    ×
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <div className="empty-state">
-            {monthExpenses.length === 0
-              ? `No expenses recorded in ${formatMonth(selectedMonth)}. Add your first expense above to start your monthly summary.`
-              : "No expenses match your search and category filter."}
-          </div>
-        )}
-      </section>
-      {undoAction && (
-        <div className="undo-toast" role="status" aria-live="polite">
-          <span>{undoAction.label}</span>
-          <button type="button" onClick={undoLastAction}>
-            Undo
-          </button>
-        </div>
-      )}
-
-      <button
-        className={`mobile-dock-backdrop${isMoreOpen ? " is-visible" : ""}`}
-        type="button"
-        aria-label="Close more menu"
-        aria-hidden={!isMoreOpen}
-        disabled={!isMoreOpen}
-        tabIndex={isMoreOpen ? 0 : -1}
-        onClick={() => setIsMoreOpen(false)}
-      />
-      <nav
-        className={`mobile-dock${isMoreOpen ? " is-more-open" : ""}`}
-        aria-label="Main navigation"
-      >
-        <div
-          className="mobile-dock-menu"
-          id="mobile-more-menu"
-          role="menu"
-          aria-label="More sections"
-          aria-hidden={!isMoreOpen}
-          inert={!isMoreOpen}
+        <section
+          className="panel recurring-panel"
+          data-mobile-page="recurring"
+          aria-labelledby="recurring-title"
         >
-          <div className="mobile-dock-menu-content">
-            <div className="mobile-dock-menu-heading">
-              <span>Options</span>
-              <button
-                type="button"
-                aria-label="Close more menu"
-                onClick={() => setIsMoreOpen(false)}
+          <div className="recurring-heading">
+            <h2 id="recurring-title" className="recurring-title">
+              Recurring expenses
+            </h2>
+            <div className="recurring-heading-actions">
+              <a
+                className="recurring-add-button"
+                href="#expense-repeat"
+                aria-label="Add a recurring expense"
+                onClick={(event) => {
+                  if (window.matchMedia("(max-width: 800px)").matches) {
+                    event.preventDefault();
+                    navigateMobile("add");
+                  }
+                }}
               >
-                <FaCirclePlus aria-hidden="true" focusable="false" />
+                <span aria-hidden="true">＋</span>
+                <span className="recurring-add-label">Add recurring</span>
+              </a>
+              <button
+                className={
+                  "recurring-refresh-button" +
+                  (recurringRefreshBusy ? " is-busy" : "")
+                }
+                type="button"
+                aria-label="Refresh recurring expenses"
+                title="Refresh recurring expenses"
+                onClick={refreshRecurringSchedules}
+                disabled={recurringRefreshBusy}
+              >
+                <AccountIcon name="repeat" />
               </button>
             </div>
-            <button
-              className="mobile-dock-profile"
-              type="button"
-              role="menuitem"
-              onClick={() => navigateMobile("profile")}
+          </div>
+          {recurringRefreshStatus && (
+            <span className="recurring-refresh-status" role="status">
+              {recurringRefreshStatus}
+            </span>
+          )}
+
+          <div className="recurring-overview">
+            <div
+              className="recurring-overview-item recurring-overview-count"
+              role="group"
+              aria-label={activeRecurringCount + " active schedules"}
             >
-              <span className="mobile-dock-profile-avatar" aria-hidden="true">
-                {pushUser
-                  ? userInitial(pushUser)
-                  : profileInitial(localProfileName || "Local profile")}
-              </span>
-              <span className="mobile-dock-profile-copy">
-                <strong>
-                  {pushUser
-                    ? userDisplayName(pushUser)
-                    : localProfileName || "Local profile"}
+              <strong className="recurring-overview-count-value">
+                {activeRecurringCount}
+              </strong>
+              <span>active</span>
+            </div>
+            <div className="recurring-overview-item recurring-overview-total">
+              <strong>{formatCurrency(monthlyRecurringTotal)}</strong>
+              <span>monthly est.</span>
+            </div>
+            <div className="recurring-overview-item recurring-overview-next">
+              <span className="recurring-overview-label">Next due</span>
+              {nextRecurring ? (
+                <>
+                  <strong>{nextRecurring.description}</strong>
+                  <span className="recurring-overview-date">
+                    {formatDate(nextRecurring.nextDate)}
+                  </span>
+                </>
+              ) : (
+                <strong className="recurring-overview-empty">
+                  No upcoming expenses
                 </strong>
-                <small>
-                  {pushUser?.email || "Sign in to sync your account"}
-                </small>
+              )}
+            </div>
+          </div>
+
+          {recurringSchedules.length ? (
+            <>
+              <h3 className="recurring-list-title">Your schedules</h3>
+              <ul className="recurring-list">
+                {orderedRecurringSchedules.map((schedule) => {
+                  const cadence =
+                    schedule.interval === "weekly" ? "Weekly" : "Monthly";
+                  return (
+                    <li className="recurring-row" key={schedule.id}>
+                      <div className="recurring-info">
+                        <span
+                          className="recurring-category-icon"
+                          aria-hidden="true"
+                        >
+                          <CategoryIcon category={schedule.category} />
+                        </span>
+                        <div className="recurring-text">
+                          <div className="recurring-name">
+                            {schedule.description}
+                          </div>
+                          <div className="recurring-tags">
+                            <span>{schedule.active ? cadence : "Paused"}</span>
+                            <span>{schedule.category}</span>
+                            {isAccountId(schedule.account) && (
+                              <span>{accountName(schedule.account)}</span>
+                            )}
+                          </div>
+                          <div className="recurring-meta">
+                            Next: {formatDate(schedule.nextDate)}
+                          </div>
+                        </div>
+                      </div>
+                      <span className="recurring-amount">
+                        {formatCurrency(schedule.amount)}
+                      </span>
+                      <div className="recurring-actions">
+                        <button
+                          className="recurring-action"
+                          type="button"
+                          aria-label={`${schedule.active ? "Pause" : "Resume"} ${schedule.description}`}
+                          onClick={() => {
+                            setRecurringSchedules((current) =>
+                              current.map((item) => {
+                                if (item.id !== schedule.id) return item;
+                                if (item.active)
+                                  return { ...item, active: false };
+                                let nextDate = item.nextDate;
+                                let skipped = 0;
+                                while (
+                                  nextDate <= localDate() &&
+                                  skipped < 240
+                                ) {
+                                  nextDate = nextOccurrenceDate(
+                                    nextDate,
+                                    item.interval,
+                                    item.dayOfMonth,
+                                  );
+                                  skipped += 1;
+                                }
+                                return { ...item, active: true, nextDate };
+                              }),
+                            );
+                          }}
+                        >
+                          {schedule.active ? "Pause" : "Resume"}
+                        </button>
+                        <button
+                          className="recurring-action"
+                          type="button"
+                          onClick={() => {
+                            if (
+                              !window.confirm(
+                                `Remove the schedule for “${schedule.description}”? Existing expenses will stay in your list.`,
+                              )
+                            )
+                              return;
+                            setRecurringSchedules((current) =>
+                              current.filter((item) => item.id !== schedule.id),
+                            );
+                            setRecordDeleted(
+                              "recurringSchedules",
+                              schedule.id,
+                              true,
+                            );
+                            offerUndo("Recurring expense removed", () => {
+                              setRecordDeleted(
+                                "recurringSchedules",
+                                schedule.id,
+                                false,
+                              );
+                              setRecurringSchedules((current) =>
+                                current.some((item) => item.id === schedule.id)
+                                  ? current
+                                  : [...current, schedule],
+                              );
+                            });
+                          }}
+                        >
+                          <span>Remove</span>
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          ) : (
+            <p className="recurring-empty">
+              No recurring expenses yet. Add one from the expense form above.
+            </p>
+          )}
+          <div className="recurring-settings">
+            <div className="recurring-reminder-leading">
+              <span className="recurring-reminder-icon" aria-hidden="true">
+                <FaClockRotateLeft focusable="false" />
               </span>
-              <span className="mobile-dock-profile-chevron" aria-hidden="true">
-                ›
-              </span>
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => navigateMobile("budget")}
+              <div className="recurring-reminder-copy">
+                <strong>Payment reminders</strong>
+                <span>
+                  {backgroundPushEnabled
+                    ? "On"
+                    : pushBackendConfigured && !pushUser
+                      ? "Sign in required"
+                      : notificationPermission === "denied"
+                        ? "Blocked"
+                        : notificationPermission === "unsupported"
+                          ? "Unavailable"
+                          : notificationPermission === "granted"
+                            ? "Allowed"
+                            : "Off"}
+                </span>
+              </div>
+            </div>
+            <div className="recurring-settings-controls">
+              {pushBackendConfigured && pushUser && (
+                <div className="reminder-time-setting">
+                  <label className="sr-only" htmlFor="reminder-time">
+                    Reminder time
+                  </label>
+                  <input
+                    id="reminder-time"
+                    type="time"
+                    value={reminderTime}
+                    onChange={(event) => updateReminderTime(event.target.value)}
+                  />
+                </div>
+              )}
+              <div className="notification-controls">
+                <label
+                  className="notification-toggle-label"
+                  title={
+                    notificationPermission === "denied"
+                      ? "Notifications are blocked in browser settings"
+                      : notificationPermission === "unsupported"
+                        ? "Notifications are unavailable in this browser"
+                        : undefined
+                  }
+                >
+                  <span className="sr-only">Background payment reminders</span>
+                  <input
+                    className="notification-toggle"
+                    type="checkbox"
+                    role="switch"
+                    checked={backgroundPushEnabled}
+                    disabled={
+                      !backgroundPushEnabled &&
+                      (notificationPermission === "denied" ||
+                        notificationPermission === "unsupported")
+                    }
+                    aria-label={
+                      backgroundPushEnabled
+                        ? "Disable background reminders"
+                        : notificationPermission === "denied"
+                          ? "Notifications blocked"
+                          : notificationPermission === "unsupported"
+                            ? "Notifications unavailable"
+                            : pushBackendConfigured
+                              ? "Enable background reminders"
+                              : notificationPermission === "granted"
+                                ? "Send a test notification"
+                                : "Enable system notifications"
+                    }
+                    onChange={toggleNotifications}
+                  />
+                </label>
+              </div>
+            </div>
+          </div>
+          {notificationStatus && (
+            <p
+              className="recurring-notification-status"
+              role="status"
+              aria-live="polite"
             >
-              <FaCalendarDays aria-hidden="true" focusable="false" />
-              <span>Budget</span>
-            </button>
+              {notificationStatus}
+            </p>
+          )}
+          {recurringReminder && (
+            <p className="recurring-reminder" role="status" aria-live="polite">
+              {recurringReminder}
+            </p>
+          )}
+          {cloudSyncStatus &&
+            (cloudSyncStatus.startsWith("Could not") ||
+              cloudSyncStatus.startsWith("Newer cloud") ||
+              cloudSyncStatus.includes("could not clear")) && (
+              <p
+                className="recurring-sync-warning"
+                role="status"
+                aria-live="polite"
+              >
+                {cloudSyncStatus}
+              </p>
+            )}
+        </section>
+
+        <section
+          className="list-panel"
+          data-mobile-page="activity"
+          aria-labelledby="list-title"
+        >
+          <div className="list-heading">
+            <div className="list-heading-title">
+              <h2 id="list-title">Expenses</h2>
+              <span className="count">{countText}</span>
+            </div>
             <button
+              className="export-button"
               type="button"
-              role="menuitem"
-              onClick={() => navigateMobile("recurring")}
+              disabled={!visibleExpenses.length}
+              title="Export the selected month and current filters as a CSV file"
+              onClick={exportExpenses}
             >
-              <FaRepeat aria-hidden="true" focusable="false" />
-              <span>Recurring expenses</span>
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => navigateMobile("more")}
-            >
-              <FaPalette aria-hidden="true" focusable="false" />
-              <span>Appearance</span>
+              Export CSV
             </button>
           </div>
-        </div>
-        <div className="mobile-dock-row">
-          {[
-            { id: "home", label: "Home", Icon: FaHouse },
-            { id: "activity", label: "Activity", Icon: FaClockRotateLeft },
-            { id: "add", label: "Add", Icon: FaCirclePlus },
-            { id: "accounts", label: "Accounts", Icon: FaBuildingColumns },
-          ].map(({ id, label, Icon }) => (
-            <button
-              className={`mobile-dock-item${id === "add" ? " mobile-dock-add" : ""}`}
-              type="button"
-              key={id}
-              aria-current={mobileView === id ? "page" : undefined}
-              onClick={() => navigateMobile(id)}
+          <div className="filters">
+            <input
+              type="search"
+              placeholder="Search expenses"
+              aria-label="Search expenses"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+            <select
+              aria-label="Filter by category"
+              value={categoryFilter}
+              onChange={(event) => setCategoryFilter(event.target.value)}
             >
-              <Icon
+              <option value="">All categories</option>
+              {CATEGORIES.map((category) => (
+                <option key={category}>{category}</option>
+              ))}
+            </select>
+          </div>
+          {visibleExpenses.length ? (
+            <ul id="expense-list" aria-live="polite">
+              {visibleExpenses.map((expense) => (
+                <li
+                  className={`expense-row${expense.amount === null && editingExpenseId === expense.id ? " editing-amount" : ""}`}
+                  key={expense.id}
+                >
+                  <span className="expense-icon" aria-hidden="true">
+                    <CategoryIcon category={expense.category} />
+                  </span>
+                  <div className="expense-info">
+                    <div className="expense-name">{expense.description}</div>
+                    <div className="expense-date">
+                      {expense.category} · {formatDate(expense.date)}
+                      {isAccountId(expense.account)
+                        ? ` · ${accountName(expense.account)}`
+                        : ""}
+                      {expense.recurringId ? " · Recurring" : ""}
+                    </div>
+                  </div>
+                  <div className="expense-end">
+                    {expense.amount === null ? (
+                      editingExpenseId === expense.id ? (
+                        <form
+                          className="inline-amount-form"
+                          aria-label={`Add amount for ${expense.description}`}
+                          onSubmit={(event) =>
+                            saveMissingExpenseAmount(event, expense)
+                          }
+                        >
+                          <input
+                            className="inline-amount-input"
+                            type="number"
+                            min="0.01"
+                            step="0.01"
+                            inputMode="decimal"
+                            placeholder="0.00"
+                            aria-label="Amount"
+                            required
+                            autoFocus
+                            value={editingAmount}
+                            onChange={(event) =>
+                              setEditingAmount(event.target.value)
+                            }
+                          />
+                          <button className="inline-save" type="submit">
+                            Save
+                          </button>
+                          <button
+                            className="inline-cancel"
+                            type="button"
+                            onClick={() => {
+                              setEditingExpenseId(null);
+                              setEditingAmount("");
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </form>
+                      ) : (
+                        <>
+                          <span className="missing-amount">No amount</span>
+                          <button
+                            className="add-amount-button"
+                            type="button"
+                            aria-label={`Add amount for ${expense.description}`}
+                            onClick={() => {
+                              setEditingExpenseId(expense.id);
+                              setEditingAmount("");
+                            }}
+                          >
+                            Add amount
+                          </button>
+                        </>
+                      )
+                    ) : (
+                      <div className="expense-amounts">
+                        <span className="expense-amount">
+                          {formatCurrency(expense.amount)}
+                        </span>
+                        {conversionReady && (
+                          <span className="converted-row">
+                            ≈{" "}
+                            {formatCurrency(
+                              Number(expense.amount) * conversionRate,
+                              targetCurrency,
+                            )}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    <button
+                      className="remove"
+                      type="button"
+                      aria-label={`Remove ${expense.description}`}
+                      title="Remove expense"
+                      onClick={() => removeExpense(expense)}
+                    >
+                      ×
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="empty-state">
+              {monthExpenses.length === 0
+                ? `No expenses recorded in ${formatMonth(selectedMonth)}. Add your first expense above to start your monthly summary.`
+                : "No expenses match your search and category filter."}
+            </div>
+          )}
+        </section>
+        {undoAction && (
+          <div className="undo-toast" role="status" aria-live="polite">
+            <span>{undoAction.label}</span>
+            <button type="button" onClick={undoLastAction}>
+              Undo
+            </button>
+          </div>
+        )}
+
+        <button
+          className={`mobile-dock-backdrop${isMoreOpen ? " is-visible" : ""}`}
+          type="button"
+          aria-label="Close more menu"
+          aria-hidden={!isMoreOpen}
+          disabled={!isMoreOpen}
+          tabIndex={isMoreOpen ? 0 : -1}
+          onClick={() => setIsMoreOpen(false)}
+        />
+        <nav
+          className={`mobile-dock${isMoreOpen ? " is-more-open" : ""}`}
+          aria-label="Main navigation"
+        >
+          <div
+            className="mobile-dock-menu"
+            id="mobile-more-menu"
+            role="menu"
+            aria-label="More sections"
+            aria-hidden={!isMoreOpen}
+            inert={!isMoreOpen}
+          >
+            <div className="mobile-dock-menu-content">
+              <div className="mobile-dock-menu-heading">
+                <span>Options</span>
+                <button
+                  type="button"
+                  aria-label="Close more menu"
+                  onClick={() => setIsMoreOpen(false)}
+                >
+                  <FaCirclePlus aria-hidden="true" focusable="false" />
+                </button>
+              </div>
+              <button
+                className="mobile-dock-profile"
+                type="button"
+                role="menuitem"
+                onClick={() => navigateMobile("profile")}
+              >
+                <span className="mobile-dock-profile-avatar" aria-hidden="true">
+                  {pushUser
+                    ? userInitial(pushUser)
+                    : profileInitial(localProfileName || "Local profile")}
+                </span>
+                <span className="mobile-dock-profile-copy">
+                  <strong>
+                    {pushUser
+                      ? userDisplayName(pushUser)
+                      : localProfileName || "Local profile"}
+                  </strong>
+                  <small>
+                    {pushUser?.email || "Sign in to sync your account"}
+                  </small>
+                </span>
+                <span
+                  className="mobile-dock-profile-chevron"
+                  aria-hidden="true"
+                >
+                  ›
+                </span>
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => navigateMobile("budget")}
+              >
+                <FaCalendarDays aria-hidden="true" focusable="false" />
+                <span>Budget</span>
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => navigateMobile("recurring")}
+              >
+                <FaRepeat aria-hidden="true" focusable="false" />
+                <span>Recurring expenses</span>
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => navigateMobile("more")}
+              >
+                <FaPalette aria-hidden="true" focusable="false" />
+                <span>Appearance</span>
+              </button>
+            </div>
+          </div>
+          <div className="mobile-dock-row">
+            {[
+              { id: "home", label: "Home", Icon: FaHouse },
+              { id: "activity", label: "Activity", Icon: FaClockRotateLeft },
+              { id: "add", label: "Add", Icon: FaCirclePlus },
+              { id: "accounts", label: "Accounts", Icon: FaBuildingColumns },
+            ].map(({ id, label, Icon }) => (
+              <button
+                className={`mobile-dock-item${id === "add" ? " mobile-dock-add" : ""}`}
+                type="button"
+                key={id}
+                aria-current={mobileView === id ? "page" : undefined}
+                onClick={() => navigateMobile(id)}
+              >
+                <Icon
+                  className="mobile-dock-icon"
+                  aria-hidden="true"
+                  focusable="false"
+                />
+                <span className="mobile-dock-label">{label}</span>
+              </button>
+            ))}
+            <button
+              className="mobile-dock-item"
+              type="button"
+              aria-expanded={isMoreOpen}
+              aria-controls="mobile-more-menu"
+              aria-current={
+                ["budget", "more", "profile", "recurring"].includes(mobileView)
+                  ? "page"
+                  : undefined
+              }
+              onClick={() => setIsMoreOpen((open) => !open)}
+            >
+              <FaEllipsis
                 className="mobile-dock-icon"
                 aria-hidden="true"
                 focusable="false"
               />
-              <span className="mobile-dock-label">{label}</span>
+              <span className="mobile-dock-label">More</span>
             </button>
-          ))}
-          <button
-            className="mobile-dock-item"
-            type="button"
-            aria-expanded={isMoreOpen}
-            aria-controls="mobile-more-menu"
-            aria-current={
-              ["budget", "more", "profile", "recurring"].includes(mobileView)
-                ? "page"
-                : undefined
-            }
-            onClick={() => setIsMoreOpen((open) => !open)}
-          >
-            <FaEllipsis
-              className="mobile-dock-icon"
-              aria-hidden="true"
-              focusable="false"
-            />
-            <span className="mobile-dock-label">More</span>
-          </button>
-        </div>
-      </nav>
-
-    </main>
-    <input
-      ref={backupFileInputRef}
-      type="file"
-      accept=".json,application/json"
-      hidden
-      onChange={restoreBackup}
-    />
+          </div>
+        </nav>
+      </main>
+      <input
+        ref={backupFileInputRef}
+        type="file"
+        accept=".json,application/json"
+        hidden
+        onChange={restoreBackup}
+      />
     </>
   );
 }

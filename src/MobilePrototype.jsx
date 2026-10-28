@@ -1,9 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from "react";
-import {
-  FaArrowsRotate,
-  FaCloudArrowUp,
-  FaPenToSquare,
-} from "react-icons/fa6";
+import { FaArrowsRotate, FaCloudArrowUp, FaPenToSquare } from "react-icons/fa6";
 import "./MobilePrototype.css";
 
 /* ───────────── constants ───────────── */
@@ -106,12 +102,18 @@ function CategorySymbol({ category }) {
       </svg>
     );
   }
-  return <span className="category-symbol" aria-hidden="true">{CAT[category]?.[0] || ""}</span>;
+  return (
+    <span className="category-symbol" aria-hidden="true">
+      {CAT[category]?.[0] || ""}
+    </span>
+  );
 }
 
 function greetingFirstName(profile) {
   const firstName = profile?.hasName
-    ? String(profile.name || "").trim().split(/\s+/)[0]
+    ? String(profile.name || "")
+        .trim()
+        .split(/\s+/)[0]
     : "";
   if (!firstName) return "there";
   const characters = Array.from(firstName);
@@ -1021,10 +1023,7 @@ function ProfileSettingsPage({
   const syncLabel = (() => {
     if (!profile?.connected) return "Your data stays on this device.";
     if (!cloudSyncEnabled) return "Cloud sync is paused.";
-    if (
-      cloudSyncActivity === "offline" ||
-      cloudRealtimeStatus === "offline"
-    ) {
+    if (cloudSyncActivity === "offline" || cloudRealtimeStatus === "offline") {
       return "Offline · Changes will sync when online.";
     }
     if (cloudSyncActivity === "error") return "Sync needs attention.";
@@ -1117,14 +1116,10 @@ function ProfileSettingsPage({
               ? " is-offline"
               : cloudSyncReady && !normalizedAccountSync
                 ? " is-setup-needed"
-              : ""
+                : ""
           }`}
           data-sync-state={
-            isLive
-              ? "live"
-              : isSyncing
-                ? "syncing"
-                : cloudRealtimeStatus
+            isLive ? "live" : isSyncing ? "syncing" : cloudRealtimeStatus
           }
           role="status"
           aria-live="polite"
@@ -1136,7 +1131,8 @@ function ProfileSettingsPage({
             <b>{syncLabel}</b>
             {cloudSyncReady && !normalizedAccountSync ? (
               <small>
-                Apply the latest Supabase migration to enable cross-device updates.
+                Apply the latest Supabase migration to enable cross-device
+                updates.
               </small>
             ) : (
               isLive && lastSyncedLabel && <small>{lastSyncedLabel}</small>
@@ -1616,77 +1612,77 @@ export default function MobilePrototype({
           className={`prototype-screen-enter${animateScreen ? ` ${slideDirection === "forward" ? "slides-from-right" : "slides-from-left"}` : ""}`}
         >
           <div className="prototype-screen-content">
-          {profileSettingsOpen ? (
-            <ProfileSettingsPage
-              profile={profile}
-              cloudSyncEnabled={cloudSyncEnabled}
-              cloudSyncReady={cloudSyncReady}
-              normalizedAccountSync={normalizedAccountSync}
-              cloudRealtimeStatus={cloudRealtimeStatus}
-              cloudSyncActivity={cloudSyncActivity}
-              lastSyncedLabel={lastSyncedLabel}
-              accountStatus={accountStatus}
-              profileStatus={profileStatus}
-              authBusy={authBusy}
-              onEditProfile={onEditProfile}
-              onSignIn={signIn}
-              onSignOut={onSignOut}
-            />
-          ) : appSettingsOpen ? (
-            <AppSettingsPage
-              S={S}
-              profile={profile}
-              pushBackendConfigured={pushBackendConfigured}
-              notificationPermission={notificationPermission}
-              notificationStatus={notificationStatus}
-              backgroundPushEnabled={backgroundPushEnabled}
-              backupStatus={backupStatus}
-              onAccounts={() => nav("accounts")}
-              onSignIn={signIn}
-              onReminder={onReminder}
-              onToggleNotifications={onToggleNotifications}
-              onBackupDownload={onBackupDownload}
-              onBackupRestore={onBackupRestore}
-            />
-          ) : (
-            tab === "home" && (
-              <Home
+            {profileSettingsOpen ? (
+              <ProfileSettingsPage
+                profile={profile}
+                cloudSyncEnabled={cloudSyncEnabled}
+                cloudSyncReady={cloudSyncReady}
+                normalizedAccountSync={normalizedAccountSync}
+                cloudRealtimeStatus={cloudRealtimeStatus}
+                cloudSyncActivity={cloudSyncActivity}
+                lastSyncedLabel={lastSyncedLabel}
+                accountStatus={accountStatus}
+                profileStatus={profileStatus}
+                authBusy={authBusy}
+                onEditProfile={onEditProfile}
+                onSignIn={signIn}
+                onSignOut={onSignOut}
+              />
+            ) : appSettingsOpen ? (
+              <AppSettingsPage
                 S={S}
                 profile={profile}
-                onShift={onShift}
-                onTab={nav}
-                onBudget={openBudget}
-                onOpen={openExpense}
+                pushBackendConfigured={pushBackendConfigured}
+                notificationPermission={notificationPermission}
+                notificationStatus={notificationStatus}
+                backgroundPushEnabled={backgroundPushEnabled}
+                backupStatus={backupStatus}
+                onAccounts={() => nav("accounts")}
+                onSignIn={signIn}
+                onReminder={onReminder}
+                onToggleNotifications={onToggleNotifications}
+                onBackupDownload={onBackupDownload}
+                onBackupRestore={onBackupRestore}
               />
-            )
-          )}
-          {!appSettingsOpen && !profileSettingsOpen && tab === "activity" && (
-            <Activity
-              S={S}
-              q={q}
-              setQ={setQ}
-              cf={cf}
-              setCf={setCf}
-              onShift={onShift}
-              onOpen={openExpense}
-              searchRef={activitySearchRef}
-            />
-          )}
-          {!appSettingsOpen && !profileSettingsOpen && tab === "accounts" && (
-            <Accounts S={S} onTx={(t) => setSheet({ type: "tx", t })} />
-          )}
-          {!appSettingsOpen && !profileSettingsOpen && tab === "plans" && (
-            <Plans
-              S={S}
-              plan={plan}
-              setPlan={setPlan}
-              onShift={onShift}
-              onBudget={openBudget}
-              onAddRec={() => setSheet({ type: "add", iv: "monthly" })}
-              onToggleRec={onToggleRec}
-              onRemoveRec={removeRecurring}
-            />
-          )}
+            ) : (
+              tab === "home" && (
+                <Home
+                  S={S}
+                  profile={profile}
+                  onShift={onShift}
+                  onTab={nav}
+                  onBudget={openBudget}
+                  onOpen={openExpense}
+                />
+              )
+            )}
+            {!appSettingsOpen && !profileSettingsOpen && tab === "activity" && (
+              <Activity
+                S={S}
+                q={q}
+                setQ={setQ}
+                cf={cf}
+                setCf={setCf}
+                onShift={onShift}
+                onOpen={openExpense}
+                searchRef={activitySearchRef}
+              />
+            )}
+            {!appSettingsOpen && !profileSettingsOpen && tab === "accounts" && (
+              <Accounts S={S} onTx={(t) => setSheet({ type: "tx", t })} />
+            )}
+            {!appSettingsOpen && !profileSettingsOpen && tab === "plans" && (
+              <Plans
+                S={S}
+                plan={plan}
+                setPlan={setPlan}
+                onShift={onShift}
+                onBudget={openBudget}
+                onAddRec={() => setSheet({ type: "add", iv: "monthly" })}
+                onToggleRec={onToggleRec}
+                onRemoveRec={removeRecurring}
+              />
+            )}
           </div>
         </div>
       </main>
@@ -1778,7 +1774,6 @@ export default function MobilePrototype({
           )}
         </div>
       )}
-
     </div>
   );
 }

@@ -89,9 +89,10 @@ export async function disableBackgroundPush(userId) {
     .eq("user_id", userId)
     .eq("device_id", deviceId);
   if (deviceError) throw deviceError;
-  const registration = "serviceWorker" in navigator
-    ? await navigator.serviceWorker.getRegistration()
-    : null;
+  const registration =
+    "serviceWorker" in navigator
+      ? await navigator.serviceWorker.getRegistration()
+      : null;
   const pushManager = registration?.pushManager;
   const subscription =
     typeof pushManager?.getSubscription === "function"

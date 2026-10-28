@@ -20,11 +20,8 @@
     max-width: 480px;
     min-height: 0;
     margin: 0;
-    padding:
-      env(safe-area-inset-top, 0px)
-      env(safe-area-inset-right, 0px)
-      env(safe-area-inset-bottom, 0px)
-      env(safe-area-inset-left, 0px);
+    padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+      env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
     overflow: hidden;
     overscroll-behavior: none;
     background: var(--bg);
@@ -53,9 +50,7 @@
   --dock-surface: color-mix(in srgb, var(--card) 76%, transparent);
   --dock-border: color-mix(in srgb, var(--line) 72%, #fff 28%);
   --dock-highlight: rgb(255 255 255 / 78%);
-  --dock-shadow:
-    0 12px 32px rgb(32 52 40/14%),
-    0 2px 8px rgb(32 52 40/6%);
+  --dock-shadow: 0 12px 32px rgb(32 52 40/14%), 0 2px 8px rgb(32 52 40/6%);
   box-sizing: border-box;
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -77,9 +72,7 @@
     --dock-surface: color-mix(in srgb, var(--card) 78%, transparent);
     --dock-border: color-mix(in srgb, var(--line) 90%, transparent);
     --dock-highlight: color-mix(in srgb, var(--card) 48%, transparent);
-    --dock-shadow:
-      0 12px 32px rgb(0 0 0/30%),
-      0 2px 8px rgb(0 0 0/18%);
+    --dock-shadow: 0 12px 32px rgb(0 0 0/30%), 0 2px 8px rgb(0 0 0/18%);
     color-scheme: dark;
   }
 }
@@ -98,9 +91,7 @@
   --dock-surface: color-mix(in srgb, var(--card) 78%, transparent);
   --dock-border: color-mix(in srgb, var(--line) 90%, transparent);
   --dock-highlight: color-mix(in srgb, var(--card) 48%, transparent);
-  --dock-shadow:
-    0 12px 32px rgb(0 0 0/30%),
-    0 2px 8px rgb(0 0 0/18%);
+  --dock-shadow: 0 12px 32px rgb(0 0 0/30%), 0 2px 8px rgb(0 0 0/18%);
   color-scheme: dark;
 }
 .mobile-prototype {
@@ -244,10 +235,12 @@
   flex: 1 0 auto;
 }
 .mobile-prototype .prototype-screen-enter.slides-from-right {
-  animation: prototype-screen-from-right 260ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+  animation: prototype-screen-from-right 260ms cubic-bezier(0.2, 0.75, 0.25, 1)
+    both;
 }
 .mobile-prototype .prototype-screen-enter.slides-from-left {
-  animation: prototype-screen-from-left 260ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+  animation: prototype-screen-from-left 260ms cubic-bezier(0.2, 0.75, 0.25, 1)
+    both;
 }
 .mobile-prototype .bar2 > .brand {
   order: 0;
@@ -1294,7 +1287,10 @@
   color: color-mix(in srgb, #c88845 82%, var(--ink));
   animation: profile-sync-setup-glow 2.4s ease-in-out infinite;
 }
-.mobile-prototype .profile-sync-status.is-setup-needed .profile-sync-indicator svg {
+.mobile-prototype
+  .profile-sync-status.is-setup-needed
+  .profile-sync-indicator
+  svg {
   animation: profile-sync-setup-float 1.8s ease-in-out infinite;
 }
 @keyframes profile-sync-breathe {
@@ -1332,8 +1328,13 @@
 @media (prefers-reduced-motion: reduce) {
   .mobile-prototype .profile-sync-status.is-live .profile-sync-indicator,
   .mobile-prototype .profile-sync-status.is-syncing .profile-sync-indicator svg,
-  .mobile-prototype .profile-sync-status.is-setup-needed .profile-sync-indicator,
-  .mobile-prototype .profile-sync-status.is-setup-needed .profile-sync-indicator svg,
+  .mobile-prototype
+    .profile-sync-status.is-setup-needed
+    .profile-sync-indicator,
+  .mobile-prototype
+    .profile-sync-status.is-setup-needed
+    .profile-sync-indicator
+    svg,
   .mobile-prototype .prototype-screen-enter.slides-from-left,
   .mobile-prototype .prototype-screen-enter.slides-from-right,
   .mobile-prototype .prototype-header-actions.animate-in {
@@ -1353,7 +1354,10 @@
   .mobile-prototype .prototype-header-action,
   .mobile-prototype .prototype-header-back,
   .mobile-prototype .tabs nav .fab,
-  .mobile-prototype input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="button"]):not([type="submit"]):not([type="reset"]),
+  .mobile-prototype
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(
+      [type="button"]
+    ):not([type="submit"]):not([type="reset"]),
   .mobile-prototype textarea,
   .mobile-prototype select {
     transition: none;
@@ -1503,14 +1507,20 @@
 .mobile-prototype select {
   caret-color: var(--g);
 }
-.mobile-prototype input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="button"]):not([type="submit"]):not([type="reset"]),
+.mobile-prototype
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(
+    [type="button"]
+  ):not([type="submit"]):not([type="reset"]),
 .mobile-prototype textarea,
 .mobile-prototype select {
   transition:
     border-color 180ms ease,
     background-color 180ms ease;
 }
-.mobile-prototype input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="button"]):not([type="submit"]):not([type="reset"]):focus,
+.mobile-prototype
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(
+    [type="button"]
+  ):not([type="submit"]):not([type="reset"]):focus,
 .mobile-prototype textarea:focus,
 .mobile-prototype select:focus {
   border-color: color-mix(in srgb, var(--g) 38%, var(--line));
