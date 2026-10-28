@@ -210,18 +210,31 @@
   background: var(--card);
   color: var(--ink);
 }
+.mobile-prototype .prototype-header-action,
+.mobile-prototype .prototype-header-back {
+  transition:
+    transform 140ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    background-color 140ms ease,
+    color 140ms ease;
+}
 .mobile-prototype .prototype-header-action svg,
 .mobile-prototype .prototype-header-back svg {
   width: 19px;
   height: 19px;
 }
-.mobile-prototype .prototype-header-action:hover,
-.mobile-prototype .prototype-header-back:hover,
 .mobile-prototype .prototype-header-action:focus-visible,
 .mobile-prototype .prototype-header-back:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--g) 48%, transparent);
+  outline: 2px solid var(--line);
   outline-offset: 2px;
-  color: var(--g);
+}
+.mobile-prototype .prototype-header-action:hover,
+.mobile-prototype .prototype-header-back:hover {
+  background: var(--card);
+  color: var(--ink);
+}
+.mobile-prototype .prototype-header-action:active,
+.mobile-prototype .prototype-header-back:active {
+  transform: scale(0.94);
 }
 .mobile-prototype .prototype-header-avatar {
   border: 0;
@@ -367,18 +380,26 @@
   border: 1px solid var(--line);
   display: grid;
   place-items: center;
+  transition:
+    transform 140ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    background-color 140ms ease,
+    color 140ms ease;
 }
 .mobile-prototype .mn svg {
   width: 18px;
   height: 18px;
 }
-.mobile-prototype .mn button:hover,
+.mobile-prototype .mn button:hover {
+  background: var(--card);
+  color: var(--ink);
+}
 .mobile-prototype .mn button:focus-visible {
-  color: var(--g);
+  outline: 2px solid var(--line);
+  outline-offset: 2px;
 }
 .mobile-prototype .mn button:active {
   background: var(--card);
-  transform: none;
+  transform: scale(0.94);
 }
 .mobile-prototype .av {
   width: 42px;
@@ -422,15 +443,22 @@
   border-radius: 50%;
   display: grid;
   place-items: center;
+  transition:
+    transform 140ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    color 140ms ease;
 }
 .mobile-prototype .mon button:hover,
 .mobile-prototype .mon button:focus-visible {
   background: transparent;
-  color: var(--g);
+  color: var(--ink);
+}
+.mobile-prototype .mon button:focus-visible {
+  outline: 2px solid var(--line);
+  outline-offset: 1px;
 }
 .mobile-prototype .mon button:active {
   background: transparent;
-  transform: none;
+  transform: scale(0.94);
 }
 .mobile-prototype svg {
   width: 22px;
@@ -1032,6 +1060,13 @@
   margin: -22px 6px 0;
   padding: 0;
   box-shadow: 0 6px 18px rgb(47 122 90/45%);
+  transition:
+    transform 140ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 140ms ease;
+}
+.mobile-prototype .tabs nav .fab:active {
+  transform: scale(0.93);
+  box-shadow: 0 4px 12px rgb(47 122 90/34%);
 }
 .mobile-prototype .fab svg {
   width: 24px;
@@ -1055,7 +1090,10 @@
   border-radius: 28px 28px 0 0;
   padding: 10px 20px calc(22px + env(safe-area-inset-bottom, 0px));
   max-height: 92vh;
+  max-height: 92dvh;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   animation: prototype-sheet-up 0.26s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .mobile-prototype .grab {
@@ -1326,6 +1364,22 @@
   .mobile-prototype .prototype-header-title {
     transition: none;
   }
+
+  .mobile-prototype .prototype-header-action,
+  .mobile-prototype .prototype-header-back,
+  .mobile-prototype .mn button,
+  .mobile-prototype .mon button,
+  .mobile-prototype .tabs nav .fab {
+    transition: none;
+  }
+
+  .mobile-prototype .prototype-header-action:active,
+  .mobile-prototype .prototype-header-back:active,
+  .mobile-prototype .mn button:active,
+  .mobile-prototype .mon button:active,
+  .mobile-prototype .tabs nav .fab:active {
+    transform: none;
+  }
 }
 
 @keyframes prototype-screen-from-right {
@@ -1435,12 +1489,16 @@
 .mobile-prototype .amt input {
   font-size: 52px;
   font-weight: 800;
-  width: 70%;
-  border: 0;
-  background: none;
+  width: 74%;
+  min-height: 94px;
+  border: 1.5px solid var(--line);
+  border-radius: 18px;
+  background: var(--bg);
+  padding: 8px 12px;
   outline: 0;
   text-align: center;
   letter-spacing: -0.03em;
+  caret-color: var(--ink);
 }
 .mobile-prototype .in {
   width: 100%;

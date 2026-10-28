@@ -713,6 +713,7 @@ function Plans({
 
 /* ───────────── sheets ───────────── */
 function AddSheet({ iv, onSave, onClose }) {
+  const descriptionRef = useRef(null);
   const [f, setF] = useState({
     amt: "",
     desc: "",
@@ -731,9 +732,18 @@ function AddSheet({ iv, onSave, onClose }) {
         <span>৳</span>
         <input
           inputMode="decimal"
+          autoFocus
+          enterKeyHint="next"
+          aria-label="Expense amount"
           placeholder="0"
           value={f.amt}
           onChange={(e) => set("amt", e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              descriptionRef.current?.focus();
+            }
+          }}
         />
       </div>
       <p className="hint">
@@ -744,6 +754,7 @@ function AddSheet({ iv, onSave, onClose }) {
 
       <span className="lbl">What was it for?</span>
       <input
+        ref={descriptionRef}
         className="in"
         maxLength={80}
         placeholder="e.g. Lunch"
