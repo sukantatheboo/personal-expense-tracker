@@ -1637,6 +1637,8 @@ export default function MobilePrototype({
   const [profileSettingsOpen, setProfileSettingsOpen] = useState(false);
   const [toastMsg, setToastMsg] = useState(null);
   const [isScrolled, setIsScrolled] = useState(false);
+  const [dockMinimized, setDockMinimized] = useState(false);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [slideDirection, setSlideDirection] = useState("forward");
   const [animateScreen, setAnimateScreen] = useState(false);
   const timer = useRef();
@@ -1648,13 +1650,60 @@ export default function MobilePrototype({
   const dockNavRef = useRef(null);
   const dockIndicatorRef = useRef(null);
   const dockTabRefs = useRef({});
+  const dockMinimizedRef = useRef(false);
+  const lastTopRef = useRef(null);
+  const dirAccRef = useRef(0);
+  const baseViewportHeightRef = useRef(0);
 
   const resetScreenScroll = () => {
     if (screenScrollRef.current) screenScrollRef.current.scrollTop = 0;
     setIsScrolled(false);
+    dockMinimizedRef.current = false;
+    setDockMinimized(false);
+    lastTopRef.current = 0;
+    dirAccRef.current = 0;
   };
   const onScreenScroll = (event) => {
-    setIsScrolled(event.currentTarget.scrollTop > 60);
+    const scroller = event.currentTarget;
+    const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+    const rawScrollTop = scroller.scrollTop;
+    // Keep the last dock state during iOS elastic overscroll at either edge.
+    if (rawScrollTop < 0 || rawScrollTop > maxScrollTop) return;
+    const top = Math.min(maxScrollTop, Math.max(0, rawScrollTop));
+    setIsScrolled(top > 60);
+
+    // Short screens and the top edge always keep the full dock available.
+    if (maxScrollTop < 160 || top <= 24) {
+      lastTopRef.current = top;
+      dirAccRef.current = 0;
+      dockMinimizedRef.current = false;
+      setDockMinimized(false);
+      return;
+    }
+
+    // The first valid event establishes a baseline instead of guessing direction.
+    if (lastTopRef.current === null) {
+      lastTopRef.current = top;
+      dirAccRef.current = 0;
+      return;
+    }
+
+    const dy = top - lastTopRef.current;
+    lastTopRef.current = top;
+    if (dy === 0) return;
+
+    const previousDirection = Math.sign(dirAccRef.current);
+    dirAccRef.current =
+      previousDirection === Math.sign(dy) ? dirAccRef.current + dy : dy;
+    dirAccRef.current = Math.max(-11, Math.min(15, dirAccRef.current));
+
+    if (dirAccRef.current > 14 && !dockMinimizedRef.current) {
+      dockMinimizedRef.current = true;
+      setDockMinimized(true);
+    } else if (dirAccRef.current < -10 && dockMinimizedRef.current) {
+      dockMinimizedRef.current = false;
+      setDockMinimized(false);
+    }
   };
 
   const toast = (msg, undo) => {
@@ -1699,18 +1748,60 @@ export default function MobilePrototype({
   useEffect(() => {
     const viewport = window.visualViewport;
     const root = mobileRootRef.current;
-    if (!viewport || !root) return undefined;
+    let frame = 0;
+    baseViewportHeightRef.current = Math.max(
+      window.innerHeight,
+      document.documentElement.clientHeight,
+      viewport?.height || 0,
+    );
 
-    const syncVisibleViewport = () => {
-      root.style.setProperty("--mobile-visible-height", `${viewport.height}px`);
-      root.style.setProperty("--mobile-visible-top", `${viewport.offsetTop}px`);
+    const syncViewport = () => {
+      const visibleHeight = viewport?.height ?? window.innerHeight;
+      const visibleTop = Math.max(0, viewport?.offsetTop ?? 0);
+      const documentHeight = Math.max(
+        baseViewportHeightRef.current,
+        window.innerHeight,
+        document.documentElement.clientHeight,
+      );
+      const activeElement = document.activeElement;
+      const textEntryFocused = Boolean(
+        activeElement?.matches?.(
+          'input:not([type="button"]):not([type="checkbox"]):not([type="radio"]), textarea, select, [contenteditable="true"]',
+        ),
+      );
+      const keyboardHeight = documentHeight - (visibleHeight + visibleTop);
+
+      if (root) {
+        root.style.setProperty("--mobile-visible-height", `${visibleHeight}px`);
+        root.style.setProperty("--mobile-visible-top", `${visibleTop}px`);
+      }
+      setKeyboardOpen(textEntryFocused && keyboardHeight > 120);
+      if (!textEntryFocused || keyboardHeight <= 120) {
+        baseViewportHeightRef.current = Math.max(
+          window.innerHeight,
+          document.documentElement.clientHeight,
+          visibleHeight + visibleTop,
+        );
+      }
     };
-    syncVisibleViewport();
-    viewport.addEventListener("resize", syncVisibleViewport);
-    viewport.addEventListener("scroll", syncVisibleViewport);
+    const scheduleViewportSync = () => {
+      if (frame) window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(syncViewport);
+    };
+
+    syncViewport();
+    viewport?.addEventListener("resize", scheduleViewportSync);
+    viewport?.addEventListener("scroll", scheduleViewportSync);
+    window.addEventListener("resize", scheduleViewportSync);
+    document.addEventListener("focusin", scheduleViewportSync);
+    document.addEventListener("focusout", scheduleViewportSync);
     return () => {
-      viewport.removeEventListener("resize", syncVisibleViewport);
-      viewport.removeEventListener("scroll", syncVisibleViewport);
+      if (frame) window.cancelAnimationFrame(frame);
+      viewport?.removeEventListener("resize", scheduleViewportSync);
+      viewport?.removeEventListener("scroll", scheduleViewportSync);
+      window.removeEventListener("resize", scheduleViewportSync);
+      document.removeEventListener("focusin", scheduleViewportSync);
+      document.removeEventListener("focusout", scheduleViewportSync);
     };
   }, []);
   const close = () => {
@@ -1730,9 +1821,21 @@ export default function MobilePrototype({
     setSheet(nextSheet);
   };
   const nav = (t) => {
+    const currentTop = screenScrollRef.current?.scrollTop ?? 0;
+    dockMinimizedRef.current = false;
+    setDockMinimized(false);
+    dirAccRef.current = 0;
+    lastTopRef.current = currentTop;
     if (t === tab && !appSettingsOpen && !profileSettingsOpen) {
       screenScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
       return;
+    }
+    if (
+      (t !== tab || appSettingsOpen || profileSettingsOpen) &&
+      typeof navigator !== "undefined" &&
+      typeof navigator.vibrate === "function"
+    ) {
+      navigator.vibrate(8);
     }
     const currentIndex = TABS.findIndex(([key]) => key === tab);
     const nextIndex = TABS.findIndex(([key]) => key === t);
@@ -1850,26 +1953,30 @@ export default function MobilePrototype({
     const navNode = dockNavRef.current;
     const indicatorNode = dockIndicatorRef.current;
     const activeTabNode = dockTabRefs.current[tab];
+    if (lastTopRef.current === null && screenScrollRef.current) {
+      lastTopRef.current = screenScrollRef.current.scrollTop;
+    }
     if (!navNode || !indicatorNode || !activeTabNode) return undefined;
 
     const updateIndicator = () => {
-      const navRect = navNode.getBoundingClientRect();
-      const activeRect = activeTabNode.getBoundingClientRect();
-      indicatorNode.style.width = `${activeRect.width}px`;
-      indicatorNode.style.transform = `translate3d(${activeRect.left - navRect.left - navNode.clientLeft}px, 0, 0)`;
+      indicatorNode.style.width = `${activeTabNode.offsetWidth}px`;
+      indicatorNode.style.transform = `translate3d(${activeTabNode.offsetLeft}px, 0, 0)`;
     };
     updateIndicator();
+    const readyFrame = window.requestAnimationFrame(() => {
+      indicatorNode.classList.add("is-ready");
+    });
 
     const resizeObserver =
       typeof ResizeObserver === "undefined"
         ? null
         : new ResizeObserver(updateIndicator);
     resizeObserver?.observe(navNode);
-    resizeObserver?.observe(activeTabNode);
     window.addEventListener("resize", updateIndicator);
     window.visualViewport?.addEventListener("resize", updateIndicator);
 
     return () => {
+      window.cancelAnimationFrame(readyFrame);
       resizeObserver?.disconnect();
       window.removeEventListener("resize", updateIndicator);
       window.visualViewport?.removeEventListener("resize", updateIndicator);
@@ -2056,7 +2163,12 @@ export default function MobilePrototype({
         </div>
       </main>
 
-      <div className="tabs" data-scrolled={isScrolled ? "true" : undefined}>
+      <div
+        className="tabs"
+        data-scrolled={isScrolled ? "true" : undefined}
+        data-minimized={dockMinimized ? "true" : undefined}
+        data-keyboard-open={keyboardOpen ? "true" : undefined}
+      >
         <nav ref={dockNavRef} aria-label="Main navigation">
           <span
             ref={dockIndicatorRef}
@@ -2097,7 +2209,7 @@ export default function MobilePrototype({
                 <span className="tab-icon">
                   <Icon n={t} />
                 </span>
-                <span>{l}</span>
+                <span className="tab-label">{l}</span>
               </button>
             ),
           )}
