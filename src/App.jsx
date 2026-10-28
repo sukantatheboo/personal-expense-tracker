@@ -150,16 +150,6 @@ function userInitial(user) {
   return profileInitial(userDisplayName(user));
 }
 
-function formatLastSynced(value) {
-  if (!value) return "";
-  const elapsed = Math.max(0, Date.now() - value);
-  if (elapsed < 60000) return "Synced just now";
-  const minutes = Math.floor(elapsed / 60000);
-  if (minutes < 60) return `Synced ${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  return `Synced ${hours}h ago`;
-}
-
 function shiftMonth(monthValue, offset) {
   const [year, month] = (monthValue || currentMonth()).split("-").map(Number);
   const shifted = new Date(year, month - 1 + offset, 1);
@@ -821,7 +811,6 @@ export default function App() {
     useState("disconnected");
   const [cloudSyncActivity, setCloudSyncActivity] = useState("idle");
   const [normalizedAccountSync, setNormalizedAccountSync] = useState(false);
-  const [lastSyncedAt, setLastSyncedAt] = useState(null);
   const [undoAction, setUndoAction] = useState(null);
   const [cloudSyncRetry, setCloudSyncRetry] = useState(0);
   const [accountRefreshBusy, setAccountRefreshBusy] = useState(false);
@@ -972,7 +961,6 @@ export default function App() {
               cloudVersionRef.current = savedVersion;
               cloudAccountSettingsRef.current = snapshot.accountData.settings;
               lastSyncedSnapshotRef.current = snapshot;
-              setLastSyncedAt(Date.now());
               setCloudSyncActivity("synced");
               setCloudSyncStatus(
                 "Cloud sync is on. Your data is saved to Supabase.",
@@ -1060,7 +1048,6 @@ export default function App() {
         cloudVersionRef.current = remote.updated_at ?? cloudVersionRef.current;
         cloudAccountSettingsRef.current = remoteSnapshot.accountData.settings;
         lastSyncedSnapshotRef.current = remoteSnapshot;
-        setLastSyncedAt(Date.now());
         setCloudSyncStatus(
           source === "live"
             ? "Cloud data updated live."
@@ -1156,7 +1143,6 @@ export default function App() {
           setAuthModalOpen(true);
         }
         setCloudSyncReady(false);
-        setLastSyncedAt(null);
         setCloudRealtimeStatus(user ? "connecting" : "disconnected");
         setCloudSyncActivity(user ? "syncing" : "idle");
         setNormalizedAccountSync(false);
@@ -1194,7 +1180,6 @@ export default function App() {
       authUserIdRef.current = user?.id ?? null;
       setBackgroundPushEnabled(false);
       setCloudSyncReady(false);
-      setLastSyncedAt(null);
       cloudVersionRef.current = null;
       cloudAccountSettingsRef.current = null;
       lastSyncedSnapshotRef.current = null;
@@ -1298,7 +1283,6 @@ export default function App() {
         adoptLocalDataForUser(pushUser.id);
         applyCloudSnapshot(merged);
         setCloudSyncReady(true);
-        setLastSyncedAt(Date.now());
         setCloudSyncActivity(
           areCloudSnapshotsEqual(merged, lastSyncedSnapshotRef.current)
             ? "synced"
@@ -1927,7 +1911,7 @@ export default function App() {
     };
   }, [conversionOpen, targetCurrency]);
 
-  function saveExpenseData(form) {
+  function saveExpenseData(form, { returnResult = false } = {}) {
     const description = form.description.trim();
     const rawAmount = String(form.amount ?? "").trim();
     const amount = rawAmount === "" ? null : Number(rawAmount);
@@ -1945,21 +1929,21 @@ export default function App() {
       return false;
     }
     setExpenseMessage("");
+    let createdExpenseId = null;
     if (form.interval === "none") {
       const createdAt = Date.now();
-      setExpenses((current) => [
-        ...current,
-        {
-          id: makeId(),
-          createdAt,
-          updatedAt: createdAt,
-          description,
-          amount: amount === null ? null : roundMoney(amount),
-          category: form.category,
-          date: form.date,
-          account: form.account,
-        },
-      ]);
+      const newExpense = {
+        id: makeId(),
+        createdAt,
+        updatedAt: createdAt,
+        description,
+        amount: amount === null ? null : roundMoney(amount),
+        category: form.category,
+        date: form.date,
+        account: form.account,
+      };
+      createdExpenseId = newExpense.id;
+      setExpenses((current) => [...current, newExpense]);
     } else {
       const scheduleId = makeId();
       let nextDate = form.date;
@@ -2002,6 +1986,7 @@ export default function App() {
         },
       ]);
       if (generatedExpenses.length) {
+        createdExpenseId = generatedExpenses[generatedExpenses.length - 1].id;
         setExpenses((current) => [...current, ...generatedExpenses]);
         notifyDueExpenses(
           generatedExpenses.map((expense) => ({
@@ -2013,7 +1998,7 @@ export default function App() {
     }
     setSelectedMonth(form.date.slice(0, 7));
     setExpenseForm(makeExpenseForm());
-    return true;
+    return returnResult ? { success: true, expenseId: createdExpenseId } : true;
   }
 
   function handleExpenseSubmit(event) {
@@ -2022,7 +2007,7 @@ export default function App() {
   }
 
   function saveMobileExpense(form) {
-    return saveExpenseData(form);
+    return saveExpenseData(form, { returnResult: true });
   }
 
   function saveMobileAmount(expenseId, amount) {
@@ -2142,7 +2127,7 @@ export default function App() {
       transactions: [...current.transactions, transaction],
     }));
     setTransactionForm(makeTransactionForm());
-    return true;
+    return { success: true, transactionId: transaction.id };
   }
 
   function toggleMobileRecurring(scheduleId) {
@@ -2980,7 +2965,6 @@ export default function App() {
         normalizedAccountSync={normalizedAccountSync}
         cloudRealtimeStatus={cloudRealtimeStatus}
         cloudSyncActivity={cloudSyncActivity}
-        lastSyncedLabel={lastSyncedAt ? formatLastSynced(lastSyncedAt) : ""}
         pushBackendConfigured={pushBackendConfigured}
         notificationPermission={notificationPermission}
         notificationStatus={notificationStatus}

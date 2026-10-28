@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from "react";
-import { FaArrowsRotate, FaCloudArrowUp, FaPenToSquare } from "react-icons/fa6";
+import { FaPenToSquare } from "react-icons/fa6";
 import "./MobilePrototype.css";
 
 /* ───────────── constants ───────────── */
@@ -219,10 +219,13 @@ const MonthSwitch = ({ m, onShift }) => (
   </div>
 );
 
-function ExpenseRow({ e, onOpen }) {
+function ExpenseRow({ e, onOpen, isNew = false }) {
   const [, c] = CAT[e.cat];
   return (
-    <button className="ri" onClick={() => onOpen(e.id)}>
+    <button
+      className={`ri expense-row${isNew ? " is-new" : ""}`}
+      onClick={() => onOpen(e.id)}
+    >
       <i className="ic" style={{ "--c": c }}>
         <CategorySymbol category={e.cat} />
       </i>
@@ -244,15 +247,81 @@ function ExpenseRow({ e, onOpen }) {
 }
 
 function Sheet({ onClose, children }) {
+  const [dragOffset, setDragOffset] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragRef = useRef(null);
+
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  const startDrag = (event) => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startY: event.clientY,
+      lastY: event.clientY,
+      lastTime: performance.now(),
+      velocity: 0,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setIsDragging(true);
+  };
+  const moveDrag = (event) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const now = performance.now();
+    const elapsed = Math.max(1, now - drag.lastTime);
+    drag.velocity = (event.clientY - drag.lastY) / elapsed;
+    drag.lastY = event.clientY;
+    drag.lastTime = now;
+    setDragOffset(Math.max(0, event.clientY - drag.startY));
+  };
+  const finishDrag = (event) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const distance = Math.max(0, event.clientY - drag.startY);
+    const shouldClose = distance >= 112 || (distance >= 48 && drag.velocity > 0.72);
+    dragRef.current = null;
+    setIsDragging(false);
+    setDragOffset(0);
+    if (shouldClose) onClose();
+  };
+  const cancelDrag = () => {
+    dragRef.current = null;
+    setIsDragging(false);
+    setDragOffset(0);
+  };
+
   return (
     <div
       className="ov"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className="sh">
-        <div className="grab" />
+      <div
+        className="sh"
+        data-dragging={isDragging ? "true" : undefined}
+        style={{ "--sheet-drag-y": `${dragOffset}px` }}
+      >
+        <div
+          className="sheet-drag-zone"
+          aria-hidden="true"
+          onPointerDown={startDrag}
+          onPointerMove={moveDrag}
+          onPointerUp={finishDrag}
+          onPointerCancel={cancelDrag}
+        >
+          <div className="grab" />
+        </div>
         {children}
       </div>
     </div>
@@ -260,7 +329,7 @@ function Sheet({ onClose, children }) {
 }
 
 /* ───────────── screens ───────────── */
-function Home({ S, profile, onShift, onTab, onBudget, onOpen }) {
+function Home({ S, profile, onShift, onTab, onBudget, onOpen, highlightedExpenseId }) {
   const [currentTime, setCurrentTime] = useState(() => new Date());
   const t = tot(S, S.m),
     p = tot(S, shift(S.m, -1)),
@@ -388,7 +457,14 @@ function Home({ S, profile, onShift, onTab, onBudget, onOpen }) {
         {list.length ? (
           list
             .slice(0, 5)
-            .map((e) => <ExpenseRow key={e.id} e={e} onOpen={onOpen} />)
+            .map((e) => (
+              <ExpenseRow
+                key={e.id}
+                e={e}
+                onOpen={onOpen}
+                isNew={highlightedExpenseId === e.id}
+              />
+            ))
         ) : (
           <div className="emp">
             No expenses yet.
@@ -401,7 +477,7 @@ function Home({ S, profile, onShift, onTab, onBudget, onOpen }) {
   );
 }
 
-function Activity({ S, q, setQ, cf, setCf, onShift, onOpen, searchRef }) {
+function Activity({ S, q, setQ, cf, setCf, onShift, onOpen, searchRef, highlightedExpenseId }) {
   const l = monthExp(S).filter(
     (e) =>
       (!cf || e.cat === cf) &&
@@ -454,7 +530,12 @@ function Activity({ S, q, setQ, cf, setCf, onShift, onOpen, searchRef }) {
                   style={{ margin: "6px 0 0", padding: "4px 14px" }}
                 >
                   {g[d].map((e) => (
-                    <ExpenseRow key={e.id} e={e} onOpen={onOpen} />
+                    <ExpenseRow
+                      key={e.id}
+                      e={e}
+                      onOpen={onOpen}
+                      isNew={highlightedExpenseId === e.id}
+                    />
                   ))}
                 </div>
               </Fragment>
@@ -465,7 +546,58 @@ function Activity({ S, q, setQ, cf, setCf, onShift, onOpen, searchRef }) {
   );
 }
 
-function Accounts({ S, onTx }) {
+function AnimatedAmount({ value }) {
+  const [displayValue, setDisplayValue] = useState(value);
+  const [pulse, setPulse] = useState({ key: 0, direction: "" });
+  const displayedRef = useRef(value);
+
+  useEffect(() => {
+    const from = displayedRef.current;
+    const target = Number(value) || 0;
+    if (Math.abs(target - from) < 0.005) return;
+
+    const reduceMotion = window.matchMedia?.(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    if (reduceMotion) {
+      displayedRef.current = target;
+      setDisplayValue(target);
+      return;
+    }
+
+    setPulse((current) => ({
+      key: current.key + 1,
+      direction: target > from ? "up" : "down",
+    }));
+    const startedAt = performance.now();
+    let frameId;
+    const animate = (now) => {
+      const progress = Math.min(1, (now - startedAt) / 300);
+      const eased = 1 - (1 - progress) ** 3;
+      const next = progress === 1 ? target : from + (target - from) * eased;
+      displayedRef.current = next;
+      setDisplayValue(next);
+      if (progress < 1) frameId = requestAnimationFrame(animate);
+    };
+    frameId = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(frameId);
+  }, [value]);
+
+  return (
+    <span className="animated-money" aria-live="off">
+      <span
+        key={pulse.key}
+        className={`animated-money-value${
+          pulse.direction ? ` change-${pulse.direction}` : ""
+        }`}
+      >
+        {M(displayValue)}
+      </span>
+    </span>
+  );
+}
+
+function Accounts({ S, onTx, highlightedExpenseId, highlightedTransactionId }) {
   const b1 = bal(S, "bkash"),
     b2 = bal(S, "bank");
   const act = [
@@ -515,7 +647,7 @@ function Accounts({ S, onTx }) {
       <div className="card" style={{ margin: 0 }}>
         <small className="lbl">Total balance</small>
         <div className="big" style={{ margin: "4px 0 0" }}>
-          {M(b1 + b2)}
+          <AnimatedAmount value={b1 + b2} />
         </div>
       </div>
 
@@ -537,7 +669,9 @@ function Accounts({ S, onTx }) {
               </span>
               <small>{ACC[i][0]}</small>
             </div>
-            <div className="big">{M(v)}</div>
+            <div className="big">
+              <AnimatedAmount value={v} />
+            </div>
           </div>
         ))}
       </div>
@@ -561,7 +695,14 @@ function Accounts({ S, onTx }) {
       <div className="card" style={{ margin: 0, padding: "6px 14px" }}>
         {act.length ? (
           act.map((x) => (
-            <div className="ri" key={x.id}>
+            <div
+              className={`ri account-activity-row${
+                highlightedExpenseId === x.id || highlightedTransactionId === x.id
+                  ? " is-new"
+                  : ""
+              }`}
+              key={x.id}
+            >
               <span className="nm">
                 <b>{x.t}</b>
                 <small>
@@ -706,7 +847,9 @@ function Plans({
               </span>
               <button
                 className={"sw " + (r.on ? "on" : "")}
-                aria-label="Pause or resume"
+                type="button"
+                aria-label={`${r.on ? "Pause" : "Resume"} ${r.desc}`}
+                aria-pressed={r.on}
                 onClick={() => onToggleRec(r.id)}
               />
               <button
@@ -1024,7 +1167,12 @@ function SettingsSheet({
           <Icon n="r" />
         </span>
       </button>
-      <button className="ri" type="button" onClick={onTheme}>
+      <button
+        className="ri"
+        type="button"
+        aria-pressed={dark}
+        onClick={onTheme}
+      >
         <span className="nm">
           <b>Dark mode</b>
           <small>{dark ? "On" : "Off"}</small>
@@ -1051,7 +1199,6 @@ function ProfileSettingsPage({
   normalizedAccountSync,
   cloudRealtimeStatus,
   cloudSyncActivity,
-  lastSyncedLabel,
   accountStatus,
   profileStatus,
   authBusy,
@@ -1059,34 +1206,36 @@ function ProfileSettingsPage({
   onSignIn,
   onSignOut,
 }) {
-  const syncLabel = (() => {
-    if (!profile?.connected) return "Your data stays on this device.";
-    if (!cloudSyncEnabled) return "Cloud sync is paused.";
-    if (cloudSyncActivity === "offline" || cloudRealtimeStatus === "offline") {
-      return "Offline · Changes will sync when online.";
-    }
-    if (cloudSyncActivity === "error") return "Sync needs attention.";
-    if (cloudSyncReady && !normalizedAccountSync)
-      return "Live sync setup required.";
-    if (!cloudSyncReady) return "Syncing your data…";
-    if (cloudSyncActivity === "syncing") return "Syncing changes…";
-    if (cloudRealtimeStatus === "live") return "Live sync is on.";
-    if (cloudRealtimeStatus === "reconnecting")
-      return "Reconnecting live updates…";
-    return "Cloud sync is on.";
-  })();
+  const isOffline =
+    cloudSyncActivity === "offline" || cloudRealtimeStatus === "offline";
+  const hasSyncError = cloudSyncActivity === "error";
+  const needsSyncSetup = cloudSyncReady && !normalizedAccountSync;
   const isSyncing =
     profile?.connected &&
     cloudSyncEnabled &&
-    !["offline", "error"].includes(cloudSyncActivity) &&
+    !isOffline &&
+    !hasSyncError &&
     (cloudSyncActivity === "syncing" || !cloudSyncReady);
   const isLive =
     profile?.connected &&
     cloudSyncEnabled &&
+    cloudSyncReady &&
     normalizedAccountSync &&
     cloudRealtimeStatus === "live" &&
-    !["offline", "error"].includes(cloudSyncActivity);
-  const syncIcon = isSyncing ? <FaArrowsRotate /> : <FaCloudArrowUp />;
+    !isOffline &&
+    !hasSyncError &&
+    cloudSyncActivity !== "syncing";
+  const syncLabel = (() => {
+    if (!profile?.connected) return "Local only";
+    if (!cloudSyncEnabled) return "Sync paused";
+    if (isOffline) return "Offline";
+    if (hasSyncError) return "Sync issue";
+    if (needsSyncSetup) return "Setup required";
+    if (isSyncing) return "Syncing…";
+    if (isLive) return "Synced";
+    if (cloudRealtimeStatus === "reconnecting") return "Reconnecting…";
+    return "Cloud sync on";
+  })();
 
   return (
     <>
@@ -1146,16 +1295,10 @@ function ProfileSettingsPage({
       <section className="card app-settings-card">
         <h2>Sync</h2>
         <div
-          className={`profile-sync-status${
-            isLive ? " is-live" : ""
-          }${isSyncing ? " is-syncing" : ""}${
-            cloudSyncActivity === "error" ? " has-error" : ""
-          }${
-            cloudRealtimeStatus === "offline" || cloudSyncActivity === "offline"
-              ? " is-offline"
-              : cloudSyncReady && !normalizedAccountSync
-                ? " is-setup-needed"
-                : ""
+          className={`profile-sync-status${isLive ? " is-live" : ""}${
+            isSyncing ? " is-syncing" : ""
+          }${hasSyncError ? " has-error" : ""}${isOffline ? " is-offline" : ""}${
+            needsSyncSetup ? " is-setup-needed" : ""
           }`}
           data-sync-state={
             isLive ? "live" : isSyncing ? "syncing" : cloudRealtimeStatus
@@ -1163,20 +1306,8 @@ function ProfileSettingsPage({
           role="status"
           aria-live="polite"
         >
-          <span className="profile-sync-indicator" aria-hidden="true">
-            {syncIcon}
-          </span>
-          <span className="profile-sync-copy">
-            <b>{syncLabel}</b>
-            {cloudSyncReady && !normalizedAccountSync ? (
-              <small>
-                Apply the latest Supabase migration to enable cross-device
-                updates.
-              </small>
-            ) : (
-              isLive && lastSyncedLabel && <small>{lastSyncedLabel}</small>
-            )}
-          </span>
+          <span className="profile-sync-indicator" aria-hidden="true" />
+          <span className="profile-sync-copy">{syncLabel}</span>
         </div>
         {accountStatus && (
           <p className="settings-status" role="status" aria-live="polite">
@@ -1415,7 +1546,6 @@ export default function MobilePrototype({
   normalizedAccountSync,
   cloudRealtimeStatus,
   cloudSyncActivity,
-  lastSyncedLabel,
   pushBackendConfigured,
   notificationPermission,
   notificationStatus,
@@ -1432,6 +1562,9 @@ export default function MobilePrototype({
   const [q, setQ] = useState("");
   const [cf, setCf] = useState("");
   const [sheet, setSheet] = useState(null);
+  const [sheetClosing, setSheetClosing] = useState(false);
+  const [highlightedExpenseId, setHighlightedExpenseId] = useState(null);
+  const [highlightedTransactionId, setHighlightedTransactionId] = useState(null);
   const [appSettingsOpen, setAppSettingsOpen] = useState(false);
   const [profileSettingsOpen, setProfileSettingsOpen] = useState(false);
   const [toastMsg, setToastMsg] = useState(null);
@@ -1439,6 +1572,8 @@ export default function MobilePrototype({
   const [slideDirection, setSlideDirection] = useState("forward");
   const [animateScreen, setAnimateScreen] = useState(false);
   const timer = useRef();
+  const sheetCloseTimer = useRef();
+  const highlightTimer = useRef();
   const screenScrollRef = useRef(null);
   const activitySearchRef = useRef(null);
 
@@ -1455,7 +1590,30 @@ export default function MobilePrototype({
     setToastMsg({ msg, undo });
     timer.current = setTimeout(() => setToastMsg(null), 4200);
   };
-  const close = () => setSheet(null);
+  useEffect(
+    () => () => {
+      clearTimeout(timer.current);
+      clearTimeout(sheetCloseTimer.current);
+      clearTimeout(highlightTimer.current);
+    },
+    [],
+  );
+  const close = () => {
+    if (!sheet || sheetClosing) return;
+    clearTimeout(sheetCloseTimer.current);
+    setSheetClosing(true);
+    sheetCloseTimer.current = setTimeout(() => {
+      setSheet(null);
+      setSheetClosing(false);
+      sheetCloseTimer.current = null;
+    }, 210);
+  };
+  const openSheet = (nextSheet) => {
+    clearTimeout(sheetCloseTimer.current);
+    sheetCloseTimer.current = null;
+    setSheetClosing(false);
+    setSheet(nextSheet);
+  };
   const nav = (t) => {
     if (t === tab && !appSettingsOpen && !profileSettingsOpen) {
       screenScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
@@ -1470,8 +1628,8 @@ export default function MobilePrototype({
     setTab(t);
     resetScreenScroll();
   };
-  const openExpense = (id) => setSheet({ type: "det", id });
-  const openBudget = () => setSheet({ type: "bud" });
+  const openExpense = (id) => openSheet({ type: "det", id });
+  const openBudget = () => openSheet({ type: "bud" });
   const detail =
     sheet?.type === "det" ? S.exp.find((x) => x.id === sheet.id) : null;
 
@@ -1490,6 +1648,15 @@ export default function MobilePrototype({
           ? "Recurring expenses need an amount."
           : "Check the expense details and try again.",
       );
+    if (typeof saved === "object" && saved.expenseId) {
+      clearTimeout(highlightTimer.current);
+      setHighlightedTransactionId(null);
+      setHighlightedExpenseId(saved.expenseId);
+      highlightTimer.current = setTimeout(() => {
+        setHighlightedExpenseId(null);
+        setHighlightedTransactionId(null);
+      }, 1500);
+    }
     close();
     toast("Expense added");
   };
@@ -1518,6 +1685,15 @@ export default function MobilePrototype({
   const saveTransaction = (value) => {
     const saved = onTransactionSave(value);
     if (!saved) return toast("Enter a valid amount.");
+    if (typeof saved === "object" && saved.transactionId) {
+      clearTimeout(highlightTimer.current);
+      setHighlightedExpenseId(null);
+      setHighlightedTransactionId(saved.transactionId);
+      highlightTimer.current = setTimeout(() => {
+        setHighlightedExpenseId(null);
+        setHighlightedTransactionId(null);
+      }, 1500);
+    }
     close();
     toast("Saved");
   };
@@ -1526,14 +1702,14 @@ export default function MobilePrototype({
     toast("Recurring expense removed", undo);
   };
   const advanced = () => {
-    setSheet(null);
+    close();
     setProfileSettingsOpen(false);
     setAppSettingsOpen(true);
     setAnimateScreen(true);
     resetScreenScroll();
   };
   const openProfileSettings = () => {
-    setSheet(null);
+    close();
     setAppSettingsOpen(false);
     setProfileSettingsOpen(true);
     setAnimateScreen(true);
@@ -1542,7 +1718,7 @@ export default function MobilePrototype({
   const backToSettings = () => {
     setProfileSettingsOpen(false);
     setAppSettingsOpen(false);
-    setSheet({ type: "set" });
+    openSheet({ type: "set" });
     setAnimateScreen(true);
     resetScreenScroll();
   };
@@ -1575,7 +1751,11 @@ export default function MobilePrototype({
       : tab;
 
   return (
-    <div className="mobile-prototype" data-theme={S.theme}>
+    <div
+      className="mobile-prototype"
+      data-theme={S.theme}
+      data-sheet-closing={sheetClosing ? "true" : undefined}
+    >
       <header
         className={`prototype-header${isScrolled ? " is-scrolled" : ""}${settingsRoute ? " is-settings-route" : ""}`}
       >
@@ -1602,7 +1782,7 @@ export default function MobilePrototype({
                 className="prototype-header-avatar"
                 type="button"
                 aria-label="Profile and settings"
-                onClick={() => setSheet({ type: "set" })}
+                onClick={() => openSheet({ type: "set" })}
               >
                 {profile?.initial || "A"}
               </button>
@@ -1620,7 +1800,7 @@ export default function MobilePrototype({
                 className="prototype-header-action"
                 type="button"
                 aria-label="Add income"
-                onClick={() => setSheet({ type: "tx", t: "income" })}
+                onClick={() => openSheet({ type: "tx", t: "income" })}
               >
                 <Icon n="plus" />
               </button>
@@ -1657,7 +1837,6 @@ export default function MobilePrototype({
                 normalizedAccountSync={normalizedAccountSync}
                 cloudRealtimeStatus={cloudRealtimeStatus}
                 cloudSyncActivity={cloudSyncActivity}
-                lastSyncedLabel={lastSyncedLabel}
                 accountStatus={accountStatus}
                 profileStatus={profileStatus}
                 authBusy={authBusy}
@@ -1690,6 +1869,7 @@ export default function MobilePrototype({
                   onTab={nav}
                   onBudget={openBudget}
                   onOpen={openExpense}
+                  highlightedExpenseId={highlightedExpenseId}
                 />
               )
             )}
@@ -1703,10 +1883,16 @@ export default function MobilePrototype({
                 onShift={onShift}
                 onOpen={openExpense}
                 searchRef={activitySearchRef}
+                highlightedExpenseId={highlightedExpenseId}
               />
             )}
             {!appSettingsOpen && !profileSettingsOpen && tab === "accounts" && (
-              <Accounts S={S} onTx={(t) => setSheet({ type: "tx", t })} />
+              <Accounts
+                S={S}
+                onTx={(t) => openSheet({ type: "tx", t })}
+                highlightedExpenseId={highlightedExpenseId}
+                highlightedTransactionId={highlightedTransactionId}
+              />
             )}
             {!appSettingsOpen && !profileSettingsOpen && tab === "plans" && (
               <Plans
@@ -1715,7 +1901,7 @@ export default function MobilePrototype({
                 setPlan={setPlan}
                 onShift={onShift}
                 onBudget={openBudget}
-                onAddRec={() => setSheet({ type: "add", iv: "monthly" })}
+                onAddRec={() => openSheet({ type: "add", iv: "monthly" })}
                 onToggleRec={onToggleRec}
                 onRemoveRec={removeRecurring}
               />
@@ -1732,7 +1918,7 @@ export default function MobilePrototype({
                 key={t}
                 className="fab"
                 aria-label="Add expense"
-                onClick={() => setSheet({ type: "add" })}
+                onClick={() => openSheet({ type: "add" })}
               >
                 <Icon n="plus" />
               </button>
@@ -1797,7 +1983,7 @@ export default function MobilePrototype({
       )}
 
       {toastMsg && (
-        <div className="toast">
+        <div className="toast" role="status" aria-live="polite">
           {toastMsg.msg}
           {toastMsg.undo && (
             <button
