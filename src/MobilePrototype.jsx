@@ -41,6 +41,7 @@ const ICONS = {
     </>
   ),
   plus: <path d="M12 5v14M5 12h14" />,
+  x: <path d="m18 6-12 12M6 6l12 12" />,
   l: <path d="m15 18-6-6 6-6" />,
   r: <path d="m9 18 6-6-6-6" />,
   s: (
@@ -312,15 +313,25 @@ function Sheet({ onClose, children }) {
         data-dragging={isDragging ? "true" : undefined}
         style={{ "--sheet-drag-y": `${dragOffset}px` }}
       >
-        <div
-          className="sheet-drag-zone"
-          aria-hidden="true"
-          onPointerDown={startDrag}
-          onPointerMove={moveDrag}
-          onPointerUp={finishDrag}
-          onPointerCancel={cancelDrag}
-        >
-          <div className="grab" />
+        <div className="sheet-topbar">
+          <div
+            className="sheet-drag-zone"
+            aria-hidden="true"
+            onPointerDown={startDrag}
+            onPointerMove={moveDrag}
+            onPointerUp={finishDrag}
+            onPointerCancel={cancelDrag}
+          >
+            <div className="grab" />
+          </div>
+          <button
+            className="sheet-close"
+            type="button"
+            aria-label="Close sheet"
+            onClick={onClose}
+          >
+            <Icon n="x" />
+          </button>
         </div>
         {children}
       </div>
@@ -997,9 +1008,11 @@ function AddSheet({ iv, onSave, onClose }) {
         ]}
       />
 
-      <button className="btn" onClick={() => onSave(f)}>
-        Add expense
-      </button>
+      <div className="sheet-actions">
+        <button className="btn" onClick={() => onSave(f)}>
+          Add expense
+        </button>
+      </div>
     </Sheet>
   );
 }
@@ -1074,9 +1087,11 @@ function TxSheet({ type, onSave, onClose }) {
         value={g.note}
         onChange={(e) => set("note", e.target.value)}
       />
-      <button className="btn" onClick={() => onSave(g)}>
-        Save
-      </button>
+      <div className="sheet-actions">
+        <button className="btn" onClick={() => onSave(g)}>
+          Save
+        </button>
+      </div>
     </Sheet>
   );
 }
@@ -1099,12 +1114,14 @@ function DetailSheet({ e, onSave, onDelete, onClose }) {
           onChange={(x) => setV(x.target.value)}
         />
       </div>
-      <button className="btn" onClick={() => onSave(e.id, parseFloat(v))}>
-        Save amount
-      </button>
-      <button className="btn del" onClick={() => onDelete(e.id)}>
-        Delete expense
-      </button>
+      <div className="sheet-actions is-paired">
+        <button className="btn" onClick={() => onSave(e.id, parseFloat(v))}>
+          Save amount
+        </button>
+        <button className="btn del" onClick={() => onDelete(e.id)}>
+          Delete expense
+        </button>
+      </div>
     </Sheet>
   );
 }
@@ -1126,14 +1143,16 @@ function BudgetSheet({ S, onSave, onClear, onClose }) {
           onChange={(x) => setV(x.target.value)}
         />
       </div>
-      <button className="btn" onClick={() => onSave(parseFloat(v))}>
-        Save budget
-      </button>
-      {S.bud[S.m] ? (
-        <button className="btn del" onClick={onClear}>
-          Clear budget
+      <div className={`sheet-actions${S.bud[S.m] ? " is-paired" : ""}`}>
+        <button className="btn" onClick={() => onSave(parseFloat(v))}>
+          Save budget
         </button>
-      ) : null}
+        {S.bud[S.m] ? (
+          <button className="btn del" onClick={onClear}>
+            Clear budget
+          </button>
+        ) : null}
+      </div>
     </Sheet>
   );
 }
@@ -1574,6 +1593,7 @@ export default function MobilePrototype({
   const timer = useRef();
   const sheetCloseTimer = useRef();
   const highlightTimer = useRef();
+  const mobileRootRef = useRef(null);
   const screenScrollRef = useRef(null);
   const activitySearchRef = useRef(null);
 
@@ -1598,6 +1618,23 @@ export default function MobilePrototype({
     },
     [],
   );
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    const root = mobileRootRef.current;
+    if (!viewport || !root) return undefined;
+
+    const syncVisibleViewport = () => {
+      root.style.setProperty("--mobile-visible-height", `${viewport.height}px`);
+      root.style.setProperty("--mobile-visible-top", `${viewport.offsetTop}px`);
+    };
+    syncVisibleViewport();
+    viewport.addEventListener("resize", syncVisibleViewport);
+    viewport.addEventListener("scroll", syncVisibleViewport);
+    return () => {
+      viewport.removeEventListener("resize", syncVisibleViewport);
+      viewport.removeEventListener("scroll", syncVisibleViewport);
+    };
+  }, []);
   const close = () => {
     if (!sheet || sheetClosing) return;
     clearTimeout(sheetCloseTimer.current);
@@ -1752,6 +1789,7 @@ export default function MobilePrototype({
 
   return (
     <div
+      ref={mobileRootRef}
       className="mobile-prototype"
       data-theme={S.theme}
       data-sheet-closing={sheetClosing ? "true" : undefined}
