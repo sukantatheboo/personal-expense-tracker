@@ -9,6 +9,7 @@ import {
 import { Capacitor } from "@capacitor/core";
 import { Haptics, ImpactStyle } from "@capacitor/haptics";
 import { FaPenToSquare } from "react-icons/fa6";
+import { ACCOUNT_OPTIONS } from "./data.js";
 import "./MobilePrototype.css";
 
 /* ───────────── constants ───────────── */
@@ -24,7 +25,11 @@ const CAT = {
   Savings: ["🐖", "#2f9a6b"],
   Other: ["", "#7d8a82"],
 };
-const ACC = { bkash: ["bKash", "#e2136e"], bank: ["Bank", "#2563a8"] };
+const ACC = {
+  bkash: ["bKash", "#e2136e"],
+  bank: ["Bank", "#2563a8"],
+  savings: ["Savings", "#43866a"],
+};
 const TABS = [
   ["home", "Home"],
   ["activity", "Activity"],
@@ -61,7 +66,7 @@ const ICONS = {
       <path d="m20 20-3.5-3.5" />
     </>
   ),
-  inc: <path d="M12 19V5M5 12l7-7 7 7" />,
+  inc: <path d="M12 5v14m-7-7 7 7 7-7" />,
   tr: <path d="M7 7h13l-4-4M17 17H4l4 4" />,
   adj: (
     <>
@@ -194,6 +199,13 @@ const fD = (d) => {
   });
 };
 const dayMonth = (d) => fD(d).split(" ").slice(1).join(" ");
+const capitalizeFirstLetter = (value) => {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  const characters = Array.from(text);
+  characters[0] = characters[0].toLocaleUpperCase();
+  return characters.join("");
+};
 const activityTime = (item) => {
   const parse = (value) => {
     if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -216,16 +228,15 @@ const monthExp = (S) =>
     .sort((a, b) => b.date.localeCompare(a.date));
 function bal(S, id) {
   let b = S.start[id];
-  for (const e of S.exp)
-    if (
-      e.acct === id &&
-      e.amt != null &&
-      e.date >= S.start.date &&
-      e.date <= ld()
-    )
-      b -= e.amt;
+  for (const e of S.exp) {
+    if (e.amt == null || e.date < S.start.date || e.date > ld()) continue;
+    if (e.cat === "Savings") {
+      if (id === "savings" && e.acct !== "savings" && ACC[e.acct]) b += e.amt;
+      else if (e.acct === id && id !== "savings") b -= e.amt;
+    } else if (e.acct === id) b -= e.amt;
+  }
   for (const t of S.tx) {
-    if (t.date < S.start.date) continue;
+    if (t.date < S.start.date || t.date > ld()) continue;
     if (t.type === "income" && t.acct === id) b += t.amt;
     if (t.type === "adjust" && t.acct === id)
       b += t.dir === "up" ? t.amt : -t.amt;
@@ -271,9 +282,9 @@ const MonthSwitch = ({ m, onShift }) => (
 function suggestedCategory(description, expenses = []) {
   const title = String(description || "").trim().toLocaleLowerCase();
   if (!title) return "";
-  const exactCategory = Object.keys(CAT).find(
-    (category) => category.toLocaleLowerCase() === title,
-  );
+  const exactCategory = Object.keys(CAT)
+    .filter((category) => category !== "Savings")
+    .find((category) => category.toLocaleLowerCase() === title);
   if (exactCategory) return exactCategory;
   const rules = [
     [
@@ -297,10 +308,6 @@ function suggestedCategory(description, expenses = []) {
       /\b(health|doctor|medical|medicine|pharmacy|clinic|hospital|dental|dentist|checkup|treatment|lab test)\b/,
     ],
     [
-      "Savings",
-      /\b(saving|savings|deposit|dps|fdr|investment|investing|transfer to savings)\b/,
-    ],
-    [
       "Bills",
       /\b(bill|electricity|water|gas|internet|phone bill|mobile recharge|phone recharge|utility|subscription|wifi)\b/,
     ],
@@ -321,6 +328,7 @@ function suggestedCategory(description, expenses = []) {
   );
   let best = { score: 0, category: "" };
   for (const expense of expenses) {
+    if (expense.cat === "Savings") continue;
     const pastWords = new Set(
       String(expense.desc || "")
         .toLocaleLowerCase()
@@ -332,7 +340,7 @@ function suggestedCategory(description, expenses = []) {
     if (overlap && score > best.score)
       best = { score, category: expense.cat };
   }
-  return best.score >= 0.5 ? best.category : "";
+  return best.score >= 0.5 && best.category !== "Savings" ? best.category : "";
 }
 
 function ExpenseRow({
@@ -1153,80 +1161,176 @@ function AnimatedAmount({ value }) {
 }
 
 function Accounts({ S, onTx, highlightedExpenseId, highlightedTransactionId }) {
-  const b1 = bal(S, "bkash"),
-    b2 = bal(S, "bank");
-  const act = [
+  const accountIds = Object.keys(ACC);
+  const balances = Object.fromEntries(accountIds.map((id) => [id, bal(S, id)]));
+  const totalBalance = Object.values(balances).reduce(
+    (sum, amount) => sum + amount,
+    0,
+  );
+  const [selectedAccount, setSelectedAccount] = useState("");
+  const chooseAccount = (accountId) => {
+    triggerHaptic(8);
+    setSelectedAccount((current) => (current === accountId ? "" : accountId));
+  };
+
+  const events = [
     ...S.exp
-      .filter((e) => e.acct && e.amt != null)
-      .map((e) => ({
-        id: e.id,
-        createdAt: e.createdAt,
-        updatedAt: e.updatedAt,
-        d: e.date,
-        t: e.desc,
-        a: -e.amt,
-        k: ACC[e.acct][0],
+      .filter(
+        (expense) =>
+          expense.acct &&
+          ACC[expense.acct] &&
+          expense.amt != null &&
+          expense.date >= S.start.date &&
+          expense.date <= ld(),
+      )
+      .map((expense) => {
+        const isSavingsTransfer = expense.cat === "Savings";
+        return {
+          id: expense.id,
+          createdAt: expense.createdAt,
+          updatedAt: expense.updatedAt,
+          d: expense.date,
+          title:
+            capitalizeFirstLetter(expense.desc) ||
+            (isSavingsTransfer ? "Transfer to Savings" : expense.cat),
+          type: isSavingsTransfer ? "transfer" : "expense",
+          amount: expense.amt,
+          account: expense.acct,
+          from: isSavingsTransfer ? expense.acct : "",
+          to: isSavingsTransfer ? "savings" : "",
+        };
+      }),
+    ...S.tx
+      .filter(
+        (transaction) =>
+          transaction.date >= S.start.date && transaction.date <= ld(),
+      )
+      .map((transaction) => ({
+        id: transaction.id,
+        createdAt: transaction.createdAt,
+        updatedAt: transaction.updatedAt,
+        d: transaction.date,
+        title:
+          capitalizeFirstLetter(transaction.note) ||
+          { income: "Income", transfer: "Transfer", adjust: "Adjustment" }[
+            transaction.type
+          ],
+        type: transaction.type,
+        amount: transaction.amt,
+        account: transaction.acct,
+        from: transaction.acct,
+        to: transaction.to,
+        direction: transaction.dir,
       })),
-    ...S.tx.map((t) => ({
-      id: t.id,
-      createdAt: t.createdAt,
-      updatedAt: t.updatedAt,
-      d: t.date,
-      t:
-        t.note ||
-        { income: "Income", transfer: "Transfer", adjust: "Adjustment" }[
-          t.type
-        ],
-      a:
-        t.type === "transfer"
-          ? t.amt
-          : t.type === "adjust" && t.dir === "down"
-            ? -t.amt
-            : t.amt,
-      k:
-        t.type === "transfer"
-          ? ACC[t.acct][0] + " → " + ACC[t.to][0]
-          : ACC[t.acct][0],
-    })),
-  ]
+  ];
+
+  const ascendingEvents = [...events].sort(
+    (left, right) =>
+      left.d.localeCompare(right.d) ||
+      activityTime(left) - activityTime(right) ||
+      left.id.localeCompare(right.id),
+  );
+  const runningBalances = { ...S.start };
+  const adjustmentBalances = new Map();
+  for (const event of ascendingEvents) {
+    const changes = {};
+    if (event.type === "expense") changes[event.account] = -event.amount;
+    else if (event.type === "income") changes[event.account] = event.amount;
+    else if (event.type === "adjust") {
+      changes[event.account] =
+        event.direction === "up" ? event.amount : -event.amount;
+    }
+    else if (event.type === "transfer") {
+      changes[event.from] = (changes[event.from] || 0) - event.amount;
+      changes[event.to] = (changes[event.to] || 0) + event.amount;
+    }
+
+    if (event.type === "adjust") {
+      const before = runningBalances[event.account] || 0;
+      adjustmentBalances.set(event.id, {
+        before,
+        after: before + changes[event.account],
+      });
+    }
+    for (const [accountId, change] of Object.entries(changes))
+      runningBalances[accountId] = (runningBalances[accountId] || 0) + change;
+  }
+
+  const visibleEvents = events
+    .filter((event) => {
+      if (!selectedAccount) return true;
+      if (event.type === "transfer")
+        return event.from === selectedAccount || event.to === selectedAccount;
+      return event.account === selectedAccount;
+    })
     .sort(
-      (a, b) =>
-        b.d.localeCompare(a.d) ||
-        activityTime(b) - activityTime(a),
+      (left, right) =>
+        right.d.localeCompare(left.d) ||
+        activityTime(right) - activityTime(left) ||
+        right.id.localeCompare(left.id),
     )
     .slice(0, 8);
 
+  const displayDate = (date) =>
+    date === ld() ? "Today" : date === ago(1) ? "Yesterday" : fD(date);
+  const displayAmount = (event) => {
+    if (event.type === "expense") return { value: -event.amount, signed: true };
+    if (event.type === "income") return { value: event.amount, signed: true };
+    if (event.type === "adjust")
+      return {
+        value: event.direction === "up" ? event.amount : -event.amount,
+        signed: true,
+      };
+    if (selectedAccount) {
+      const value = event.from === selectedAccount ? -event.amount : event.amount;
+      return { value, signed: true };
+    }
+    return { value: event.amount, signed: false };
+  };
+
   return (
     <>
-      <div className="card" style={{ margin: 0 }}>
+      <section className="card account-total-card">
         <small className="lbl">Total balance</small>
-        <div className="big" style={{ margin: "4px 0 0" }}>
-          <AnimatedAmount value={b1 + b2} />
+        <div className="account-total-value">
+          <AnimatedAmount value={totalBalance} />
         </div>
-      </div>
+        <span className="account-total-context">
+          Across {accountIds.length} accounts
+        </span>
+      </section>
 
-      <div className="two">
-        {[
-          ["bkash", b1],
-          ["bank", b2],
-        ].map(([i, v]) => (
-          <div
-            key={i}
-            className="acc"
-            style={{
-              background: `linear-gradient(145deg,${ACC[i][1]},color-mix(in srgb,${ACC[i][1]} 75%,#000))`,
-            }}
+      <div
+        className="account-cards"
+        aria-label="Accounts"
+        data-dock-scroll-lock
+      >
+        {accountIds.map((id) => (
+          <button
+            key={id}
+            type="button"
+            className={`acc${selectedAccount === id ? " is-selected" : ""}`}
+            style={{ "--account-accent": ACC[id][1] }}
+            aria-label={`Filter account activity by ${ACC[id][0]}, ${M(balances[id])}`}
+            aria-pressed={selectedAccount === id}
+            onClick={() => chooseAccount(id)}
           >
-            <div className="al">
-              <span className={"lg " + i}>
-                {i === "bkash" ? <img src={BK} alt="" /> : <Icon n="bank" />}
+            <span className="al">
+              <span className={`lg ${id}`}>
+                {id === "bkash" ? (
+                  <img src={BK} alt="" />
+                ) : id === "bank" ? (
+                  <Icon n="bank" />
+                ) : (
+                  <CategorySymbol category="Savings" />
+                )}
               </span>
-              <small>{ACC[i][0]}</small>
-            </div>
-            <div className="big">
-              <AnimatedAmount value={v} />
-            </div>
-          </div>
+              <small>{ACC[id][0]}</small>
+            </span>
+            <span className="big">
+              <AnimatedAmount value={balances[id]} />
+            </span>
+          </button>
         ))}
       </div>
 
@@ -1235,53 +1339,68 @@ function Accounts({ S, onTx, highlightedExpenseId, highlightedTransactionId }) {
           ["income", "inc", "Income"],
           ["transfer", "tr", "Transfer"],
           ["adjust", "adj", "Adjust"],
-        ].map(([t, i, l]) => (
-          <button key={t} onClick={() => onTx(t)}>
-            <Icon n={i} />
-            {l}
+        ].map(([type, icon, label]) => (
+          <button key={type} onClick={() => onTx(type)}>
+            <Icon n={icon} />
+            {label}
           </button>
         ))}
       </div>
 
-      <div className="sec">
-        <h2>Account activity</h2>
+      <div className="sec account-activity-heading">
+        <h2>{selectedAccount ? `${ACC[selectedAccount][0]} activity` : "Account activity"}</h2>
+        {selectedAccount && (
+          <button type="button" onClick={() => setSelectedAccount("")}>
+            Show all
+          </button>
+        )}
       </div>
-      <div className="card" style={{ margin: 0, padding: "6px 14px" }}>
-        {act.length ? (
-          act.map((x) => (
-            <div
-              className={`ri account-activity-row${
-                highlightedExpenseId === x.id || highlightedTransactionId === x.id
-                  ? " is-new"
-                  : ""
-              }`}
-              key={x.id}
-            >
-              <span className="nm">
-                <b>{x.t}</b>
-                <small>
-                  {x.k} · {fD(x.d)}
-                </small>
-              </span>
-              <b
-                className="am"
-                style={{ color: x.a > 0 ? "var(--g)" : "inherit" }}
+      <div className="card account-activity-card">
+        {visibleEvents.length ? (
+          visibleEvents.map((event) => {
+            const amount = displayAmount(event);
+            const adjustment = adjustmentBalances.get(event.id);
+            const subtitle =
+              event.type === "transfer"
+                ? `${ACC[event.from]?.[0] || "Cash"} → ${ACC[event.to]?.[0] || "Cash"} · ${displayDate(event.d)}`
+                : event.type === "adjust"
+                  ? `${ACC[event.account]?.[0]} · ${displayDate(event.d)}`
+                  : `${ACC[event.account]?.[0]} · ${displayDate(event.d)}`;
+            return (
+              <div
+                className={`ri account-activity-row${
+                  highlightedExpenseId === event.id || highlightedTransactionId === event.id
+                    ? " is-new"
+                    : ""
+                }`}
+                key={event.id}
               >
-                {x.a > 0 ? "+" : "−"}
-                {M(Math.abs(x.a))}
-              </b>
-            </div>
-          ))
+                <span className="nm">
+                  <b>{event.title}</b>
+                  <small>{subtitle}</small>
+                  {adjustment && (
+                    <small className="account-balance-change">
+                      {M(adjustment.before)} → {M(adjustment.after)}
+                    </small>
+                  )}
+                </span>
+                <b
+                  className={`am${amount.value > 0 ? " is-positive" : ""}${!amount.signed ? " is-neutral" : ""}`}
+                >
+                  {amount.signed ? (amount.value > 0 ? "+" : "−") : ""}
+                  {M(Math.abs(amount.value))}
+                </b>
+              </div>
+            );
+          })
         ) : (
           <div className="account-activity-empty" role="status">
             <span className="account-activity-empty-icon">
               <Icon n="activity" />
             </span>
             <span>
-              <b>No account activity yet</b>
-              <small>
-                Income, transfers, and balance adjustments will show up here.
-              </small>
+              <b>{selectedAccount ? `No ${ACC[selectedAccount][0]} activity yet` : "No account activity yet"}</b>
+              <small>Income, transfers, expenses, and adjustments will show up here.</small>
             </span>
           </div>
         )}
@@ -1300,12 +1419,17 @@ function Plans({
   onToggleRec,
   onRemoveRec,
 }) {
+  const savingsThisMonth = monthExp(S)
+    .filter((expense) => expense.cat === "Savings" && expense.amt != null)
+    .reduce((sum, expense) => sum + expense.amt, 0);
   const b = S.bud[S.m] || 0,
-    t = tot(S, S.m),
+    t = Math.max(0, tot(S, S.m) - savingsThisMonth),
     pc = b ? t / b : 0,
     C = 2 * Math.PI * 62;
   const act = S.rec.filter((r) => r.on);
-  const est = act.reduce((a, r) => a + r.amt * (r.iv === "weekly" ? 4 : 1), 0);
+  const est = act
+    .filter((schedule) => schedule.cat !== "Savings")
+    .reduce((a, r) => a + r.amt * (r.iv === "weekly" ? 4 : 1), 0);
 
   const budget = (
     <>
@@ -1454,7 +1578,7 @@ function AddSheet({ iv, categoryOrder, expenses, onSave, onClose }) {
   const [f, setF] = useState({
     amt: "",
     desc: "",
-    cat: categoryOrder[0] || "Food",
+    cat: categoryOrder.find((category) => category !== "Savings") || "Food",
     date: ld(),
     acct: "",
     iv: iv || "none",
@@ -1497,7 +1621,7 @@ function AddSheet({ iv, categoryOrder, expenses, onSave, onClose }) {
 
       <span className="lbl">Category</span>
       <div className="cg">
-        {categoryOrder.map((c) => (
+        {categoryOrder.filter((category) => category !== "Savings").map((c) => (
           <button
             key={c}
             className={f.cat === c ? "on" : ""}
@@ -1592,6 +1716,8 @@ function TxSheet({ type, onSave, onClose }) {
     acct: "bank",
     dir: "up",
     note: "",
+    fromAccount: "bkash",
+    toAccount: "savings",
   });
   const set = (k, v) => setG((x) => ({ ...x, [k]: v }));
   const tr = g.type === "transfer";
@@ -1608,7 +1734,9 @@ function TxSheet({ type, onSave, onClose }) {
       <h3 id="sheet-title">Account activity</h3>
       <Seg
         value={g.type}
-        onPick={(v) => set("type", v)}
+        onPick={(v) =>
+          setG((current) => ({ ...current, type: v, note: "" }))
+        }
         options={[
           ["income", "Income"],
           ["transfer", "Transfer"],
@@ -1628,24 +1756,46 @@ function TxSheet({ type, onSave, onClose }) {
         />
       </div>
 
-      <span className="lbl">{tr ? "From" : "Account"}</span>
-      <Seg
-        value={g.acct}
-        onPick={(v) => set("acct", v)}
-        options={[
-          ["bkash", "bKash"],
-          ["bank", "Bank"],
-        ]}
-      />
       {tr && (
-        <p className="hint" style={{ marginTop: 10 }}>
-          → to {g.acct === "bank" ? "bKash" : "Bank"}
-        </p>
+        <>
+          <span className="lbl">From</span>
+          <Seg
+            value={g.fromAccount}
+            onPick={(value) => {
+              setG((current) => ({
+                ...current,
+                fromAccount: value,
+                toAccount:
+                  current.toAccount === value
+                    ? ACCOUNT_OPTIONS.find(([id]) => id !== value)?.[0]
+                    : current.toAccount,
+              }));
+            }}
+            options={ACCOUNT_OPTIONS}
+          />
+          <span className="lbl">To</span>
+          <Seg
+            value={g.toAccount}
+            onPick={(value) => set("toAccount", value)}
+            options={ACCOUNT_OPTIONS.filter(([id]) => id !== g.fromAccount)}
+          />
+        </>
+      )}
+
+      {!tr && (
+        <>
+          <span className="lbl">Account</span>
+          <Seg
+            value={g.acct}
+            onPick={(v) => set("acct", v)}
+            options={ACCOUNT_OPTIONS}
+          />
+        </>
       )}
 
       {g.type === "adjust" && (
         <>
-          <span className="lbl">Correction</span>
+          <span className="lbl">Direction</span>
           <Seg
             value={g.dir}
             onPick={(v) => set("dir", v)}
@@ -1657,15 +1807,35 @@ function TxSheet({ type, onSave, onClose }) {
         </>
       )}
 
-      <span className="lbl">Note</span>
-      <input
-        className="in"
-        maxLength={80}
-        aria-label="Transaction note"
-        placeholder="e.g. Salary, cash deposit"
-        value={g.note}
-        onChange={(e) => set("note", e.target.value)}
-      />
+      {g.type === "adjust" ? (
+        <>
+          <span className="lbl">Reason (optional)</span>
+          <select
+            className="in"
+            aria-label="Adjustment reason (optional)"
+            value={g.note}
+            onChange={(event) => set("note", event.target.value)}
+          >
+            <option value="">No reason</option>
+            <option value="Fee">Fee</option>
+            <option value="Cash withdrawn">Cash withdrawn</option>
+            <option value="Correction">Correction</option>
+          </select>
+        </>
+      ) : (
+        <>
+          <span className="lbl">Note (optional)</span>
+          <input
+            className="in"
+            maxLength={80}
+            aria-label="Transaction note"
+            autoCapitalize="sentences"
+            placeholder={g.type === "income" ? "e.g. Salary, cash in" : "Optional note"}
+            value={g.note}
+            onChange={(e) => set("note", e.target.value)}
+          />
+        </>
+      )}
     </Sheet>
   );
 }
@@ -2923,7 +3093,7 @@ export default function MobilePrototype({
       <main
         id="app"
         ref={screenScrollRef}
-        className={`prototype-screen-scroll${tab === "activity" ? " is-activity" : ""}`}
+        className={`prototype-screen-scroll${tab === "activity" ? " is-activity" : ""}${tab === "accounts" ? " is-accounts" : ""}`}
         onScroll={onScreenScroll}
         onPointerDownCapture={onScreenPointerDownCapture}
       >

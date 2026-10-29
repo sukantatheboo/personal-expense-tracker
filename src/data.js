@@ -40,6 +40,12 @@ export const CURRENCIES = [
   ["THB", "Thai Baht"],
 ];
 
+export const ACCOUNT_OPTIONS = [
+  ["bkash", "bKash"],
+  ["bank", "Bank"],
+  ["savings", "Savings"],
+];
+
 export const PRIMARY_CURRENCY = "BDT";
 
 export function localDate(date = new Date()) {
@@ -122,7 +128,7 @@ export function loadBudgets(saved = readStorage(STORAGE_KEYS.budgets, {})) {
 }
 
 export function isAccountId(value) {
-  return value === "bkash" || value === "bank";
+  return ACCOUNT_OPTIONS.some(([id]) => id === value);
 }
 
 function isValidRecurringSchedule(schedule) {
@@ -160,7 +166,7 @@ export function emptyAccountData() {
   return {
     settings: {
       startDate: localDate(),
-      balances: { bkash: 0, bank: 0 },
+      balances: { bkash: 0, bank: 0, savings: 0 },
       configured: false,
       updatedAt: 0,
     },
@@ -212,6 +218,7 @@ export function loadAccountData(
       balances: {
         bkash: cleanBalance(balances.bkash),
         bank: cleanBalance(balances.bank),
+        savings: cleanBalance(balances.savings),
       },
       configured: settings.configured === true,
       updatedAt:
@@ -303,12 +310,22 @@ export function calculateAccountBalance(accountId, expenses, accountData) {
 
   for (const expense of expenses) {
     if (
-      expense.account === accountId &&
       expense.amount !== null &&
       expense.date >= startDate &&
       expense.date <= today
     ) {
-      balance -= Number(expense.amount);
+      if (expense.category === "Savings") {
+        if (
+          accountId === "savings" &&
+          expense.account !== "savings" &&
+          isAccountId(expense.account)
+        )
+          balance += Number(expense.amount);
+        else if (expense.account === accountId && accountId !== "savings")
+          balance -= Number(expense.amount);
+      } else if (expense.account === accountId) {
+        balance -= Number(expense.amount);
+      }
     }
   }
 

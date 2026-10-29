@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import MobilePrototype from "./MobilePrototype";
 import {
+  ACCOUNT_OPTIONS,
   CATEGORIES,
   CURRENCIES,
   emptyAccountData,
@@ -104,7 +105,7 @@ function capitalizeFirst(value) {
 }
 
 function accountName(accountId) {
-  return accountId === "bkash" ? "bKash" : "Bank";
+  return ACCOUNT_OPTIONS.find(([id]) => id === accountId)?.[1] || "Account";
 }
 
 function userDisplayName(user) {
@@ -194,7 +195,7 @@ function makeTransactionForm() {
     account: "bkash",
     direction: "increase",
     fromAccount: "bkash",
-    toAccount: "bank",
+    toAccount: "savings",
   };
 }
 
@@ -422,6 +423,7 @@ function hasMeaningfulLocalData(data) {
     data.accountData.settings.configured ||
     data.accountData.settings.balances.bkash !== 0 ||
     data.accountData.settings.balances.bank !== 0 ||
+    data.accountData.settings.balances.savings !== 0 ||
     Object.values(normalizeDeletedRecords(data.deletedRecords)).some(
       (changes) => Object.keys(changes).length > 0,
     ) ||
@@ -433,7 +435,8 @@ function hasMeaningfulAccountSettings(settings) {
   return (
     settings.configured ||
     settings.balances.bkash !== 0 ||
-    settings.balances.bank !== 0
+    settings.balances.bank !== 0 ||
+    settings.balances.savings !== 0
   );
 }
 
@@ -444,6 +447,7 @@ function areAccountSettingsEqual(left, right) {
     left.startDate === right.startDate &&
     left.balances.bkash === right.balances.bkash &&
     left.balances.bank === right.balances.bank &&
+    left.balances.savings === right.balances.savings &&
     left.configured === right.configured,
   );
 }
@@ -825,6 +829,7 @@ export default function App() {
     return {
       bkash: String(settings.balances.bkash),
       bank: String(settings.balances.bank),
+      savings: String(settings.balances.savings),
       date: settings.startDate,
     };
   });
@@ -967,6 +972,7 @@ export default function App() {
       setStartingBalances({
         bkash: String(snapshot.accountData.settings.balances.bkash),
         bank: String(snapshot.accountData.settings.balances.bank),
+        savings: String(snapshot.accountData.settings.balances.savings),
         date: snapshot.accountData.settings.startDate,
       });
     } else {
@@ -1584,6 +1590,7 @@ export default function App() {
     setStartingBalances({
       bkash: String(settings.balances.bkash),
       bank: String(settings.balances.bank),
+      savings: String(settings.balances.savings),
       date: settings.startDate,
     });
   }, [accountData.settings]);
@@ -1707,6 +1714,7 @@ export default function App() {
     () => ({
       bkash: calculateAccountBalance("bkash", expenses, accountData),
       bank: calculateAccountBalance("bank", expenses, accountData),
+      savings: calculateAccountBalance("savings", expenses, accountData),
     }),
     [expenses, accountData],
   );
@@ -2113,11 +2121,14 @@ export default function App() {
     event.preventDefault();
     const bkash = Number(startingBalances.bkash);
     const bank = Number(startingBalances.bank);
+    const savings = Number(startingBalances.savings);
     if (
       !Number.isFinite(bkash) ||
       bkash < 0 ||
       !Number.isFinite(bank) ||
       bank < 0 ||
+      !Number.isFinite(savings) ||
+      savings < 0 ||
       !isValidDateString(startingBalances.date)
     )
       return;
@@ -2126,7 +2137,11 @@ export default function App() {
       settings: {
         startDate: startingBalances.date,
         updatedAt: Date.now(),
-        balances: { bkash: roundMoney(bkash), bank: roundMoney(bank) },
+        balances: {
+          bkash: roundMoney(bkash),
+          bank: roundMoney(bank),
+          savings: roundMoney(savings),
+        },
         configured: true,
       },
     }));
@@ -2149,7 +2164,7 @@ export default function App() {
       type: transactionForm.type,
       amount: roundMoney(amount),
       date: transactionForm.date,
-      description: transactionForm.note.trim(),
+      description: capitalizeFirst(transactionForm.note),
     };
     if (transactionForm.type === "income") {
       transaction.account = transactionForm.account;
@@ -2174,9 +2189,9 @@ export default function App() {
     setTransactionForm((current) => {
       const updated = { ...current, [field]: value };
       if (updated.fromAccount === updated.toAccount) {
-        if (field === "fromAccount")
-          updated.toAccount = value === "bkash" ? "bank" : "bkash";
-        else updated.fromAccount = value === "bkash" ? "bank" : "bkash";
+        const fallback = ACCOUNT_OPTIONS.find(([id]) => id !== value)?.[0];
+        if (field === "fromAccount") updated.toAccount = fallback;
+        else updated.fromAccount = fallback;
       }
       return updated;
     });
@@ -2194,7 +2209,7 @@ export default function App() {
       type,
       amount: roundMoney(amount),
       date: localDate(),
-      description: String(form.note ?? "").trim(),
+      description: capitalizeFirst(form.note ?? ""),
     };
     if (type === "income") {
       transaction.account = form.acct;
@@ -2202,8 +2217,13 @@ export default function App() {
       transaction.account = form.acct;
       transaction.direction = form.dir === "up" ? "increase" : "decrease";
     } else if (type === "transfer") {
-      transaction.fromAccount = form.acct;
-      transaction.toAccount = form.acct === "bank" ? "bkash" : "bank";
+      transaction.fromAccount = form.fromAccount;
+      transaction.toAccount = form.toAccount;
+      if (
+        !isAccountId(transaction.fromAccount) ||
+        !isAccountId(transaction.toAccount) ||
+        transaction.fromAccount === transaction.toAccount
+      ) return false;
     } else {
       return false;
     }
@@ -2639,6 +2659,7 @@ export default function App() {
         setStartingBalances({
           bkash: String(localAccountData.settings.balances.bkash),
           bank: String(localAccountData.settings.balances.bank),
+          savings: String(localAccountData.settings.balances.savings),
           date: localAccountData.settings.startDate,
         });
       }
