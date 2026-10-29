@@ -1,4 +1,11 @@
-import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  Fragment,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { FaPenToSquare } from "react-icons/fa6";
 import "./MobilePrototype.css";
 
@@ -85,6 +92,12 @@ const ICONS = {
       <path d="M12 8v4l3 2" />
     </>
   ),
+  csv: (
+    <>
+      <path d="M6 3h8l4 4v14H6z" />
+      <path d="M14 3v5h4M9 12h6M9 16h6" />
+    </>
+  ),
 };
 const Icon = ({ n }) => <svg viewBox="0 0 24 24">{ICONS[n]}</svg>;
 
@@ -130,8 +143,10 @@ const ld = (d = new Date()) =>
   "-" +
   String(d.getDate()).padStart(2, "0");
 const ago = (n) => ld(new Date(Date.now() - n * 864e5));
-const M = (n) =>
-  "৳" + Number(n).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+const amountFormatter = new Intl.NumberFormat("en-IN", {
+  maximumFractionDigits: 2,
+});
+const M = (n) => "৳" + amountFormatter.format(Number(n) || 0);
 const shift = (m, o) => {
   const [y, mo] = m.split("-").map(Number);
   return ld(new Date(y, mo - 1 + o, 1)).slice(0, 7);
@@ -212,11 +227,15 @@ const Seg = ({ value, options, onPick }) => (
 
 const MonthSwitch = ({ m, onShift }) => (
   <div className="mon">
-    <button onClick={() => onShift(-1)}>
+    <button aria-label="Previous month" onClick={() => onShift(-1)}>
       <Icon n="l" />
     </button>
     <b>{fM(m)}</b>
-    <button onClick={() => onShift(1)}>
+    <button
+      aria-label="Next month"
+      disabled={m >= ld().slice(0, 7)}
+      onClick={() => onShift(1)}
+    >
       <Icon n="r" />
     </button>
   </div>
@@ -417,22 +436,44 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
 }
 
 /* ───────────── screens ───────────── */
-function Home({ S, profile, onShift, onTab, onBudget, onOpen, highlightedExpenseId }) {
+function Home({
+  S,
+  profile,
+  onShift,
+  onTab,
+  onCategory,
+  onBudget,
+  onOpen,
+  highlightedExpenseId,
+}) {
   const [currentTime, setCurrentTime] = useState(() => new Date());
-  const t = tot(S, S.m),
-    p = tot(S, shift(S.m, -1)),
-    b = S.bud[S.m] || 0,
-    d = t - p;
+  const [highlightedCategory, setHighlightedCategory] = useState("");
+  const total = tot(S, S.m);
+  const saved = monthExp(S)
+    .filter((expense) => expense.cat === "Savings" && expense.amt != null)
+    .reduce((sum, expense) => sum + expense.amt, 0);
+  const t = total - saved;
+  const previousMonth = shift(S.m, -1);
+  const previousSaved = monthExp({ ...S, m: previousMonth })
+    .filter((expense) => expense.cat === "Savings" && expense.amt != null)
+    .reduce((sum, expense) => sum + expense.amt, 0);
+  const p = tot(S, previousMonth) - previousSaved;
+  const b = S.bud[S.m] || 0;
+  const d = t - p;
+  const overBudget = b > 0 && t > b;
+  const overflowShare = overBudget ? ((t - b) / t) * 100 : 0;
   const list = monthExp(S);
   const by = {};
   list.forEach((e) => {
     if (e.amt != null) by[e.cat] = (by[e.cat] || 0) + e.amt;
   });
   const cs = Object.entries(by).sort((x, y) => y[1] - x[1]);
+  const topCategory = cs.find(([category]) => category !== "Savings");
   const nx = S.rec
     .filter((r) => r.on)
     .sort((x, y) => x.next.localeCompare(y.next))[0];
   const h = currentTime.getHours();
+  useEffect(() => setHighlightedCategory(""), [S.m]);
   useEffect(() => {
     const timer = window.setInterval(() => setCurrentTime(new Date()), 60_000);
     return () => window.clearInterval(timer);
@@ -460,13 +501,17 @@ function Home({ S, profile, onShift, onTab, onBudget, onOpen, highlightedExpense
           <button aria-label="Previous month" onClick={() => onShift(-1)}>
             <Icon n="l" />
           </button>
-          <button aria-label="Next month" onClick={() => onShift(1)}>
+          <button
+            aria-label="Next month"
+            disabled={S.m >= ld().slice(0, 7)}
+            onClick={() => onShift(1)}
+          >
             <Icon n="r" />
           </button>
         </div>
       </div>
 
-      <section className="hero">
+      <section className={`hero${overBudget ? " is-over-budget" : ""}`}>
         <div className="row">
           <span>Spent this month</span>
           {p ? (
@@ -476,14 +521,30 @@ function Home({ S, profile, onShift, onTab, onBudget, onOpen, highlightedExpense
           ) : null}
         </div>
         <div className="big">{M(t)}</div>
+        {saved > 0 && (
+          <div className="hero-saved">
+            <span>Saved</span>
+            <b>{M(saved)}</b>
+          </div>
+        )}
         {b ? (
           <>
             <div className="bar">
-              <i style={{ width: Math.min(100, (t / b) * 100) + "%" }} />
+              <i
+                style={{
+                  width: Math.min(100, (t / b) * 100) + "%",
+                  "--overflow-share": `${overflowShare}%`,
+                }}
+              />
             </div>
             <div className="row">
-              <span>
-                {t <= b ? M(b - t) + " left" : M(t - b) + " over budget"}
+              <span
+                className={`budget-pill${overBudget ? " is-over" : ""}`}
+                role="status"
+              >
+                {overBudget
+                  ? `${M(t - b)} over budget`
+                  : `${M(b - t)} left`}
               </span>
               <span>of {M(b)}</span>
             </div>
@@ -499,40 +560,69 @@ function Home({ S, profile, onShift, onTab, onBudget, onOpen, highlightedExpense
         <div className="card">
           <small>Top category</small>
           <b className="top-category-value">
-            {cs[0] ? (
+            {topCategory ? (
               <>
-                <CategorySymbol category={cs[0][0]} />
-                <span>{cs[0][0]}</span>
+                <CategorySymbol category={topCategory[0]} />
+                <span>{topCategory[0]}</span>
               </>
             ) : (
               "—"
             )}
           </b>
+          <span className="mini-caption">
+            {topCategory
+              ? `${M(topCategory[1])} this month`
+              : "No spending yet"}
+          </span>
         </div>
         <div className="card">
           <small>Next recurring</small>
-          <b>{nx ? nx.desc + " · " + dayMonth(nx.next) : "Nothing due"}</b>
+          <b className="mini-next-value">
+            {nx ? nx.desc : "Nothing due"}
+          </b>
+          <span className="mini-caption">
+            {nx ? `Due ${dayMonth(nx.next)}` : "You’re all caught up"}
+          </span>
         </div>
       </div>
 
       {cs.length > 0 && (
         <div className="card">
-          <h2>Where it went</h2>
-          <div className="stack">
+          <div className="category-card-heading">
+            <div>
+              <h2>Where it went</h2>
+              {saved > 0 && <small>Includes saved money</small>}
+            </div>
+            <span>{M(total)}</span>
+          </div>
+          <div className="stack" role="group" aria-label="Spending by category">
             {cs.map(([c, v]) => (
-              <i
+              <button
                 key={c}
-                style={{ width: (v / t) * 100 + "%", background: CAT[c][1] }}
+                type="button"
+                className={`stack-segment${highlightedCategory === c ? " is-highlighted" : ""}`}
+                aria-label={`${c}: ${M(v)}`}
+                aria-pressed={highlightedCategory === c}
+                onClick={() =>
+                  setHighlightedCategory((current) => (current === c ? "" : c))
+                }
+                style={{ width: (v / total) * 100 + "%", background: CAT[c][1] }}
               />
             ))}
           </div>
-          {cs.slice(0, 4).map(([c, v]) => (
-            <div className="leg" key={c}>
+          {cs.map(([c, v]) => (
+            <button
+              className={`leg${highlightedCategory === c ? " is-highlighted" : ""}`}
+              key={c}
+              type="button"
+              aria-label={`View ${c} activity, ${M(v)}`}
+              onClick={() => onCategory(c)}
+            >
               <span className="dot" style={{ "--c": CAT[c][1] }} />
               <span>{c}</span>
               <b>{M(v)}</b>
-              <em>{Math.round((v / t) * 100)}%</em>
-            </div>
+              <em>{Math.round((v / total) * 100)}%</em>
+            </button>
           ))}
         </div>
       )}
@@ -983,11 +1073,11 @@ function Plans({
 }
 
 /* ───────────── sheets ───────────── */
-function AddSheet({ iv, onSave, onClose }) {
+function AddSheet({ iv, categoryOrder, onSave, onClose }) {
   const [f, setF] = useState({
     amt: "",
     desc: "",
-    cat: "Food",
+    cat: categoryOrder[0] || "Food",
     date: ld(),
     acct: "",
     iv: iv || "none",
@@ -1024,19 +1114,9 @@ function AddSheet({ iv, onSave, onClose }) {
           : "Recurring expenses need an amount."}
       </p>
 
-      <span className="lbl">What was it for?</span>
-      <input
-        className="in"
-        maxLength={80}
-        aria-label="Expense description"
-        placeholder="e.g. Lunch"
-        value={f.desc}
-        onChange={(e) => set("desc", e.target.value)}
-      />
-
       <span className="lbl">Category</span>
       <div className="cg">
-        {Object.keys(CAT).map((c) => (
+        {categoryOrder.map((c) => (
           <button
             key={c}
             className={f.cat === c ? "on" : ""}
@@ -1046,6 +1126,16 @@ function AddSheet({ iv, onSave, onClose }) {
           </button>
         ))}
       </div>
+
+      <span className="lbl">What was it for?</span>
+      <input
+        className="in"
+        maxLength={80}
+        aria-label="Expense description"
+        placeholder="e.g. Lunch"
+        value={f.desc}
+        onChange={(e) => set("desc", e.target.value)}
+      />
 
       <span className="lbl">Date</span>
       <div className="seg">
@@ -1264,6 +1354,11 @@ function SettingsSheet({
   onTheme,
   onAdvanced,
   onProfileSettings,
+  backupStatus,
+  lastBackupAt,
+  onBackupDownload,
+  onExpensesCsv,
+  onBackupRestore,
   onClose,
 }) {
   const dark = S.theme === "dark";
@@ -1302,12 +1397,79 @@ function SettingsSheet({
       <button className="ri" type="button" onClick={onAdvanced}>
         <span className="nm">
           <b>App settings</b>
-          <small>Accounts, reminders, and backups</small>
+          <small>Accounts and reminders</small>
         </span>
         <span className="settings-chevron" aria-hidden="true">
           <Icon n="r" />
         </span>
       </button>
+      <div className="settings-menu-section">
+        <h4>Data &amp; backups</h4>
+        <button
+          className="ri settings-action"
+          type="button"
+          onClick={onBackupDownload}
+        >
+          <i className="ic" style={{ "--c": "#5b73d9" }}>
+            <Icon n="backup" />
+          </i>
+          <span className="nm">
+            <b>Export JSON backup</b>
+            <small>All expenses, budgets, and settings</small>
+          </span>
+          <span className="settings-chevron" aria-hidden="true">
+            <Icon n="r" />
+          </span>
+        </button>
+        <button
+          className="ri settings-action"
+          type="button"
+          onClick={onExpensesCsv}
+        >
+          <i className="ic" style={{ "--c": "#2f9a6b" }}>
+            <Icon n="csv" />
+          </i>
+          <span className="nm">
+            <b>Export expenses CSV</b>
+            <small>Full history for a spreadsheet</small>
+          </span>
+          <span className="settings-chevron" aria-hidden="true">
+            <Icon n="r" />
+          </span>
+        </button>
+        <button
+          className="ri settings-action"
+          type="button"
+          onClick={onBackupRestore}
+        >
+          <i className="ic" style={{ "--c": "#8a6fd1" }}>
+            <Icon n="restore" />
+          </i>
+          <span className="nm">
+            <b>Restore from backup</b>
+            <small>Choose a Spend backup file</small>
+          </span>
+          <span className="settings-chevron" aria-hidden="true">
+            <Icon n="r" />
+          </span>
+        </button>
+        <p className="settings-note">
+          Restoring replaces current data. Spend will ask you to confirm first.
+        </p>
+        <p className="settings-note backup-reminder">
+          {lastBackupAt
+            ? `Last backed up ${new Date(lastBackupAt).toLocaleString(undefined, {
+                dateStyle: "medium",
+                timeStyle: "short",
+              })}. Consider downloading a fresh copy from time to time.`
+            : "No backup yet. Download a JSON backup to keep a copy off this device."}
+        </p>
+        {backupStatus && (
+          <p className="settings-status" role="status" aria-live="polite">
+            {backupStatus}
+          </p>
+        )}
+      </div>
     </Sheet>
   );
 }
@@ -1458,13 +1620,10 @@ function AppSettingsPage({
   notificationPermission,
   notificationStatus,
   backgroundPushEnabled,
-  backupStatus,
   onAccounts,
   onSignIn,
   onReminder,
   onToggleNotifications,
-  onBackupDownload,
-  onBackupRestore,
 }) {
   const notificationUnavailable = notificationPermission === "unsupported";
   const notificationBlocked = notificationPermission === "denied";
@@ -1484,7 +1643,7 @@ function AppSettingsPage({
   return (
     <>
       <p className="settings-page-intro">
-        Manage accounts, reminders, and data backups.
+        Manage accounts and reminders.
       </p>
 
       <section className="card app-settings-card">
@@ -1593,50 +1752,6 @@ function AppSettingsPage({
         </p>
       </section>
 
-      <section className="card app-settings-card">
-        <h2>Data &amp; backups</h2>
-        <button
-          className="ri settings-action"
-          type="button"
-          onClick={onBackupDownload}
-        >
-          <i className="ic" style={{ "--c": "#5b73d9" }}>
-            <Icon n="backup" />
-          </i>
-          <span className="nm">
-            <b>Download backup</b>
-            <small>Save expenses, budgets, and settings as a file</small>
-          </span>
-          <span className="settings-chevron" aria-hidden="true">
-            <Icon n="r" />
-          </span>
-        </button>
-        <button
-          className="ri settings-action"
-          type="button"
-          onClick={onBackupRestore}
-        >
-          <i className="ic" style={{ "--c": "#8a6fd1" }}>
-            <Icon n="restore" />
-          </i>
-          <span className="nm">
-            <b>Restore from backup</b>
-            <small>Choose a Spend backup file</small>
-          </span>
-          <span className="settings-chevron" aria-hidden="true">
-            <Icon n="r" />
-          </span>
-        </button>
-        <p className="settings-note">
-          Restoring replaces current app data. Spend will ask you to confirm
-          before applying a backup.
-        </p>
-        {backupStatus && (
-          <p className="settings-status" role="status" aria-live="polite">
-            {backupStatus}
-          </p>
-        )}
-      </section>
     </>
   );
 }
@@ -1672,7 +1787,9 @@ export default function MobilePrototype({
   backgroundPushEnabled,
   onToggleNotifications,
   backupStatus,
+  lastBackupAt,
   onBackupDownload,
+  onExpensesCsv,
   onBackupRestore,
   accountStatus,
   authBusy,
@@ -1712,6 +1829,28 @@ export default function MobilePrototype({
   const dockPointerActiveRef = useRef(false);
   const nestedScrollPointerRef = useRef(false);
   const baseViewportHeightRef = useRef(0);
+  const categoryOrder = useMemo(() => {
+    const categoryCounts = new Map();
+    for (const expense of S.exp) {
+      categoryCounts.set(
+        expense.cat,
+        (categoryCounts.get(expense.cat) || 0) + 1,
+      );
+    }
+    return Object.keys(CAT).sort(
+      (left, right) =>
+        (categoryCounts.get(right) || 0) - (categoryCounts.get(left) || 0),
+    );
+  }, [S.exp]);
+
+  useLayoutEffect(() => {
+    const activeTheme = S.theme === "dark" ? "dark" : "light";
+    document.documentElement.dataset.theme = activeTheme;
+    const themeColor = activeTheme === "dark" ? "#0e1411" : "#f4f3ee";
+    document
+      .querySelectorAll('meta[name="theme-color"]')
+      .forEach((meta) => meta.setAttribute("content", themeColor));
+  }, [S.theme]);
 
   const resetDockDirectionTimer = () => {
     clearTimeout(dockDirectionResetTimerRef.current);
@@ -2286,13 +2425,10 @@ export default function MobilePrototype({
                 notificationPermission={notificationPermission}
                 notificationStatus={notificationStatus}
                 backgroundPushEnabled={backgroundPushEnabled}
-                backupStatus={backupStatus}
                 onAccounts={() => nav("accounts")}
                 onSignIn={signIn}
                 onReminder={onReminder}
                 onToggleNotifications={onToggleNotifications}
-                onBackupDownload={onBackupDownload}
-                onBackupRestore={onBackupRestore}
               />
             ) : (
               tab === "home" && (
@@ -2301,6 +2437,11 @@ export default function MobilePrototype({
                   profile={profile}
                   onShift={onShift}
                   onTab={nav}
+                  onCategory={(category) => {
+                    setCf(category);
+                    setQ("");
+                    nav("activity");
+                  }}
                   onBudget={openBudget}
                   onOpen={openExpense}
                   highlightedExpenseId={highlightedExpenseId}
@@ -2403,7 +2544,12 @@ export default function MobilePrototype({
       </div>
 
       {sheet?.type === "add" && (
-        <AddSheet iv={sheet.iv} onSave={saveExpense} onClose={close} />
+        <AddSheet
+          iv={sheet.iv}
+          categoryOrder={categoryOrder}
+          onSave={saveExpense}
+          onClose={close}
+        />
       )}
       {sheet?.type === "tx" && (
         <TxSheet type={sheet.t} onSave={saveTransaction} onClose={close} />
@@ -2432,6 +2578,11 @@ export default function MobilePrototype({
           onTheme={onTheme}
           onAdvanced={advanced}
           onProfileSettings={openProfileSettings}
+          backupStatus={backupStatus}
+          lastBackupAt={lastBackupAt}
+          onBackupDownload={onBackupDownload}
+          onExpensesCsv={onExpensesCsv}
+          onBackupRestore={onBackupRestore}
         />
       )}
 

@@ -44,6 +44,7 @@ const CURRENCY_API = "https://api.frankfurter.dev/v2";
 const LOCAL_DATA_OWNER_KEY = "spend-local-data-owner-v1";
 const LOCAL_USER_SNAPSHOTS_KEY = "spend-local-user-snapshots-v1";
 const BUDGET_UPDATED_AT_KEY = STORAGE_KEYS.budgetUpdatedAt;
+const LAST_BACKUP_AT_KEY = "spend-last-backup-at-v1";
 
 function loadTheme() {
   try {
@@ -74,6 +75,15 @@ function loadReminderTime() {
     return isValidReminderTime(saved) ? saved : "09:00";
   } catch {
     return "09:00";
+  }
+}
+
+function loadLastBackupAt() {
+  try {
+    const value = localStorage.getItem(LAST_BACKUP_AT_KEY);
+    return value && Number.isFinite(Date.parse(value)) ? value : "";
+  } catch {
+    return "";
   }
 }
 
@@ -818,6 +828,7 @@ export default function App() {
   const [recurringRefreshBusy, setRecurringRefreshBusy] = useState(false);
   const [recurringRefreshStatus, setRecurringRefreshStatus] = useState("");
   const [backupStatus, setBackupStatus] = useState("");
+  const [lastBackupAt, setLastBackupAt] = useState(loadLastBackupAt);
   const authModalRef = useRef(null);
   const authTriggerRef = useRef(null);
   const profileEditorTriggerRef = useRef(null);
@@ -2354,10 +2365,11 @@ export default function App() {
   }
 
   function downloadBackup() {
+    const exportedAt = new Date().toISOString();
     const backup = {
       format: "spend-backup",
       version: 1,
-      exportedAt: new Date().toISOString(),
+      exportedAt,
       data: {
         expenses,
         budgets,
@@ -2382,7 +2394,52 @@ export default function App() {
     link.click();
     link.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setLastBackupAt(exportedAt);
+    try {
+      localStorage.setItem(LAST_BACKUP_AT_KEY, exportedAt);
+    } catch {
+      // Keep the updated reminder for this visit if browser storage is unavailable.
+    }
     setBackupStatus("Backup downloaded. Keep it somewhere safe.");
+  }
+
+  function exportAllExpensesCsv() {
+    const data = [
+      [
+        "Date",
+        "Description",
+        "Category",
+        "Amount (BDT)",
+        "Payment account",
+        "Type",
+      ],
+      ...[...expenses]
+        .sort((left, right) => right.date.localeCompare(left.date))
+        .map((expense) => [
+          expense.date,
+          expense.description,
+          expense.category,
+          expense.amount === null ? "" : expense.amount,
+          isAccountId(expense.account)
+            ? accountName(expense.account)
+            : "Cash / Other",
+          expense.recurringId ? "Recurring" : "One-time",
+        ]),
+    ];
+    const csv = `\uFEFF${data
+      .map((row) => row.map(csvCell).join(","))
+      .join("\r\n")}`;
+    const url = URL.createObjectURL(
+      new Blob([csv], { type: "text/csv;charset=utf-8" }),
+    );
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `spend-expenses-${localDate()}.csv`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setBackupStatus("Expenses exported as CSV.");
   }
 
   async function restoreBackup(event) {
@@ -2975,7 +3032,9 @@ export default function App() {
         backgroundPushEnabled={backgroundPushEnabled}
         onToggleNotifications={toggleNotifications}
         backupStatus={backupStatus}
+        lastBackupAt={lastBackupAt}
         onBackupDownload={downloadBackup}
+        onExpensesCsv={exportAllExpensesCsv}
         onBackupRestore={() => backupFileInputRef.current?.click()}
         onSignOut={signOutOfPush}
         accountStatus={authStatus}
