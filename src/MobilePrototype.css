@@ -339,18 +339,22 @@ textarea {
   --bad: #c0483a;
   --on: #fff;
   --shadow: 0 6px 24px rgb(30 50 38/8%);
-  --dock-surface: color-mix(in srgb, var(--card) 68%, transparent);
-  --dock-border: color-mix(in srgb, var(--line) 76%, #fff 24%);
-  --dock-highlight: rgb(255 255 255 / 76%);
+  --dock-surface: rgb(255 255 255 / 56%);
+  --dock-scrolled-surface: rgb(255 255 255 / 66%);
+  --dock-border: rgb(255 255 255 / 74%);
+  --dock-highlight: rgb(255 255 255 / 78%);
+  --dock-tab: #59675f;
+  --dock-tab-active: var(--g);
+  --dock-active-wash: rgb(47 122 90 / 13%);
   --dock-glass-sheen: linear-gradient(
     180deg,
-    rgb(255 255 255 / 42%),
-    rgb(255 255 255 / 13%) 52%,
-    rgb(255 255 255 / 3%)
+    rgb(255 255 255 / 20%),
+    rgb(255 255 255 / 7%) 52%,
+    rgb(255 255 255 / 2%)
   );
-  --dock-shadow: 0 14px 34px rgb(32 52 40/16%), 0 2px 9px rgb(32 52 40/7%);
-  --dock-scrolled-shadow: 0 18px 42px rgb(32 52 40 / 21%), 0 3px 10px rgb(32 52 40 / 10%);
-  --dock-minimized-shadow: 0 8px 22px rgb(32 52 40 / 12%), 0 2px 6px rgb(32 52 40 / 5%);
+  --dock-shadow: 0 10px 30px rgb(20 30 25 / 12%), 0 2px 8px rgb(20 30 25 / 6%);
+  --dock-scrolled-shadow: 0 14px 34px rgb(20 30 25 / 16%), 0 3px 10px rgb(20 30 25 / 8%);
+  --dock-minimized-shadow: 0 8px 22px rgb(20 30 25 / 10%), 0 2px 6px rgb(20 30 25 / 5%);
   box-sizing: border-box;
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -369,18 +373,21 @@ textarea {
     --bad: #ee8b7d;
     --on: #0c1a12;
     --shadow: 0 6px 24px rgb(0 0 0/30%);
-    --dock-surface: color-mix(in srgb, var(--card) 72%, transparent);
-    --dock-border: color-mix(in srgb, var(--line) 82%, transparent);
-    --dock-highlight: rgb(255 255 255 / 13%);
+    --dock-surface: rgb(30 40 35 / 62%);
+    --dock-scrolled-surface: rgb(30 40 35 / 70%);
+    --dock-border: rgb(255 255 255 / 10%);
+    --dock-highlight: rgb(255 255 255 / 10%);
+    --dock-tab: #9db0a5;
+    --dock-active-wash: rgb(111 211 160 / 16%);
     --dock-glass-sheen: linear-gradient(
       180deg,
       rgb(255 255 255 / 10%),
       rgb(255 255 255 / 3%) 54%,
       transparent
     );
-    --dock-shadow: 0 14px 34px rgb(0 0 0/34%), 0 2px 9px rgb(0 0 0/20%);
-    --dock-scrolled-shadow: 0 18px 42px rgb(0 0 0 / 46%), 0 3px 10px rgb(0 0 0 / 24%);
-    --dock-minimized-shadow: 0 8px 22px rgb(0 0 0 / 34%), 0 2px 6px rgb(0 0 0 / 18%);
+    --dock-shadow: 0 10px 30px rgb(0 0 0 / 45%), 0 2px 8px rgb(0 0 0 / 30%);
+    --dock-scrolled-shadow: 0 14px 34px rgb(0 0 0 / 52%), 0 3px 10px rgb(0 0 0 / 34%);
+    --dock-minimized-shadow: 0 8px 22px rgb(0 0 0 / 38%), 0 2px 6px rgb(0 0 0 / 22%);
     color-scheme: dark;
   }
 }
@@ -396,18 +403,21 @@ textarea {
   --bad: #ee8b7d;
   --on: #0c1a12;
   --shadow: 0 6px 24px rgb(0 0 0/30%);
-  --dock-surface: color-mix(in srgb, var(--card) 72%, transparent);
-  --dock-border: color-mix(in srgb, var(--line) 82%, transparent);
-  --dock-highlight: rgb(255 255 255 / 13%);
+  --dock-surface: rgb(30 40 35 / 62%);
+  --dock-scrolled-surface: rgb(30 40 35 / 70%);
+  --dock-border: rgb(255 255 255 / 10%);
+  --dock-highlight: rgb(255 255 255 / 10%);
+  --dock-tab: #9db0a5;
+  --dock-active-wash: rgb(111 211 160 / 16%);
   --dock-glass-sheen: linear-gradient(
     180deg,
     rgb(255 255 255 / 10%),
     rgb(255 255 255 / 3%) 54%,
     transparent
   );
-  --dock-shadow: 0 14px 34px rgb(0 0 0/34%), 0 2px 9px rgb(0 0 0/20%);
-  --dock-scrolled-shadow: 0 18px 42px rgb(0 0 0 / 46%), 0 3px 10px rgb(0 0 0 / 24%);
-  --dock-minimized-shadow: 0 8px 22px rgb(0 0 0 / 34%), 0 2px 6px rgb(0 0 0 / 18%);
+  --dock-shadow: 0 10px 30px rgb(0 0 0 / 45%), 0 2px 8px rgb(0 0 0 / 30%);
+  --dock-scrolled-shadow: 0 14px 34px rgb(0 0 0 / 52%), 0 3px 10px rgb(0 0 0 / 34%);
+  --dock-minimized-shadow: 0 8px 22px rgb(0 0 0 / 38%), 0 2px 6px rgb(0 0 0 / 22%);
   color-scheme: dark;
 }
 .mobile-prototype {
@@ -536,23 +546,48 @@ textarea {
 .mobile-prototype .prototype-header-action,
 .mobile-prototype .prototype-header-back {
   transition:
-    transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1.22),
+    transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1.12),
     background-color 160ms ease,
     border-color 160ms ease,
     box-shadow 160ms ease;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
-.mobile-prototype .prototype-header-action:hover,
+.mobile-prototype .prototype-header-action svg,
+.mobile-prototype .prototype-header-back svg {
+  transition: transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@media (hover: hover) and (pointer: fine) {
+  .mobile-prototype .prototype-header-action:hover,
+  .mobile-prototype .prototype-header-back:hover {
+    border-color: color-mix(in srgb, var(--g) 28%, var(--line));
+    background: color-mix(in srgb, var(--card) 91%, var(--g) 9%);
+    box-shadow: 0 3px 10px color-mix(in srgb, var(--g) 12%, transparent);
+  }
+}
 .mobile-prototype .prototype-header-action:focus-visible,
-.mobile-prototype .prototype-header-back:hover,
 .mobile-prototype .prototype-header-back:focus-visible {
   border-color: color-mix(in srgb, var(--g) 28%, var(--line));
   background: color-mix(in srgb, var(--card) 91%, var(--g) 9%);
+  outline: 2px solid color-mix(in srgb, var(--g) 55%, transparent);
+  outline-offset: 3px;
+}
+.mobile-prototype .prototype-header-action:focus:not(:focus-visible),
+.mobile-prototype .prototype-header-back:focus:not(:focus-visible) {
+  outline: none;
 }
 .mobile-prototype .prototype-header-action:active,
 .mobile-prototype .prototype-header-back:active {
-  transform: scale(0.92);
+  transform: scale(0.94);
   border-color: color-mix(in srgb, var(--g) 38%, var(--line));
   background: color-mix(in srgb, var(--card) 86%, var(--g) 14%);
+  box-shadow: inset 0 2px 5px color-mix(in srgb, var(--ink) 10%, transparent);
+  transition-duration: 90ms;
+}
+.mobile-prototype .prototype-header-action:active svg,
+.mobile-prototype .prototype-header-back:active svg {
+  transform: scale(0.96);
+  transition-duration: 90ms;
 }
 .mobile-prototype .prototype-header-avatar {
   border: 0;
@@ -752,16 +787,12 @@ textarea {
 }
 .mobile-prototype .mn button:focus-visible,
 .mobile-prototype .mon button:focus-visible,
-.mobile-prototype .prototype-header-action:focus-visible,
-.mobile-prototype .prototype-header-back:focus-visible,
 .mobile-prototype .tabs nav .fab:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--mut) 45%, transparent);
   outline-offset: 2px;
 }
 .mobile-prototype .mn button:active,
 .mobile-prototype .mon button:active,
-.mobile-prototype .prototype-header-action:active,
-.mobile-prototype .prototype-header-back:active,
 .mobile-prototype .tabs nav .fab:active {
   transform: scale(0.93);
 }
@@ -1486,9 +1517,8 @@ textarea {
     visibility 0s linear 220ms;
 }
 .mobile-prototype .tabs nav {
-  --dock-blur: 14px;
-  --dock-saturate: 1.4;
   position: relative;
+  isolation: isolate;
   display: flex;
   align-items: center;
   justify-content: space-around;
@@ -1502,24 +1532,28 @@ textarea {
   border: 1px solid var(--dock-border);
   box-shadow:
     inset 0 1px 0 var(--dock-highlight),
-    inset 0 0 0 1px color-mix(in srgb, var(--line) 18%, transparent),
     var(--dock-shadow);
-  -webkit-backdrop-filter: blur(var(--dock-blur)) saturate(var(--dock-saturate));
-  backdrop-filter: blur(var(--dock-blur)) saturate(var(--dock-saturate));
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+  transform: translateZ(0);
   transition:
     height 450ms var(--dock-spring),
     background-color 300ms ease,
     border-color 300ms ease,
     box-shadow 300ms ease,
-    -webkit-backdrop-filter 300ms ease,
-    backdrop-filter 300ms ease,
     transform 280ms cubic-bezier(0.2, 0.82, 0.24, 1.08);
 }
+@supports not (
+  (-webkit-backdrop-filter: blur(1px)) or
+    (backdrop-filter: blur(1px))
+) {
+  .mobile-prototype .tabs nav {
+    background: var(--bg);
+    background-image: none;
+  }
+}
 .mobile-prototype .tabs[data-scrolled="true"] nav {
-  --dock-blur: 22px;
-  --dock-saturate: 1.6;
-  --dock-surface: color-mix(in srgb, var(--card) 84%, transparent);
-  --dock-border: color-mix(in srgb, var(--line) 92%, transparent);
+  --dock-surface: var(--dock-scrolled-surface);
   --dock-shadow: var(--dock-scrolled-shadow);
   transform: translate3d(0, -3px, 0) scale(0.99);
 }
@@ -1531,8 +1565,6 @@ textarea {
     background-color 300ms ease,
     border-color 300ms ease,
     box-shadow 300ms ease,
-    -webkit-backdrop-filter 300ms ease,
-    backdrop-filter 300ms ease,
     transform 280ms cubic-bezier(0.2, 0.82, 0.24, 1.08);
 }
 .mobile-prototype .dock-active-indicator {
@@ -1544,15 +1576,13 @@ textarea {
   width: 0;
   border: 1px solid color-mix(in srgb, var(--g) 13%, transparent);
   border-radius: 18px;
-  background: color-mix(in srgb, var(--g) 9%, var(--dock-surface));
+  background: var(--dock-active-wash);
   box-shadow: inset 0 1px 0 var(--dock-highlight);
   opacity: 1;
   pointer-events: none;
   transform: translate3d(0, 0, 0);
   transition: opacity 160ms ease;
   will-change: transform;
-  -webkit-backdrop-filter: blur(14px) saturate(150%);
-  backdrop-filter: blur(14px) saturate(150%);
 }
 .mobile-prototype .dock-active-indicator.is-ready {
   transition:
@@ -1574,7 +1604,7 @@ textarea {
   gap: 1px;
   padding: 4px 6px;
   border-radius: 14px;
-  color: var(--mut);
+  color: var(--dock-tab);
   font-size: 10.5px;
   font-weight: 700;
   line-height: 1;
@@ -1651,7 +1681,7 @@ textarea {
 }
 .mobile-prototype .tabs nav .t.on {
   background: transparent;
-  color: var(--g);
+  color: var(--dock-tab-active);
   font-weight: 800;
 }
 .mobile-prototype .tabs nav .t.on .tab-icon {
@@ -2055,6 +2085,10 @@ textarea {
   .mobile-prototype button:not(:disabled):active {
     transform: none !important;
   }
+  .mobile-prototype .prototype-header-action:active svg,
+  .mobile-prototype .prototype-header-back:active svg {
+    transform: none;
+  }
 
   .mobile-prototype .profile-sync-status.is-live .profile-sync-indicator::after,
   .mobile-prototype .tabs nav .t.on .tab-icon,
@@ -2073,6 +2107,8 @@ textarea {
   }
 
   .mobile-prototype .prototype-header-title,
+  .mobile-prototype .prototype-header-action svg,
+  .mobile-prototype .prototype-header-back svg,
   .mobile-prototype .tabs nav .t,
   .mobile-prototype .tabs nav .t .tab-icon,
   .mobile-prototype button.ri,

@@ -1076,7 +1076,7 @@ function TxSheet({ type, onSave, onClose }) {
         <span>৳</span>
         <input
           inputMode="decimal"
-          autoFocus={type === "income"}
+          autoFocus
           placeholder="0"
           value={g.amt}
           onChange={(e) => set("amt", e.target.value)}
