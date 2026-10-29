@@ -1139,7 +1139,7 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    const browserChromeColor = theme === "dark" ? "#0e1411" : "#f4f3ee";
+    const browserChromeColor = theme === "dark" ? "#101315" : "#f5f7f5";
     document
       .querySelectorAll('meta[name="theme-color"]')
       .forEach((meta) => meta.setAttribute("content", browserChromeColor));

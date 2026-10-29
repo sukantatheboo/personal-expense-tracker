@@ -28,6 +28,44 @@
     <link rel="icon" type="image/svg+xml" href="%BASE_URL%favicon.svg" />
     <link rel="apple-touch-icon" href="%BASE_URL%icons/icon-180.png" />
     <title>Spend — Expense tracker</title>
+    <style>
+      html {
+        background: #f5f7f5;
+        color-scheme: light;
+      }
+      @media (prefers-color-scheme: dark) {
+        html:not([data-theme="light"]) {
+          background: #101315;
+          color-scheme: dark;
+        }
+      }
+      html[data-theme="dark"] {
+        background: #101315;
+        color-scheme: dark;
+      }
+      html[data-theme="light"] {
+        background: #f5f7f5;
+        color-scheme: light;
+      }
+    </style>
+    <script>
+      try {
+        var savedTheme = localStorage.getItem("spend-theme-v1");
+        if (savedTheme === "dark") {
+          document.documentElement.dataset.theme = "dark";
+        } else if (savedTheme === "light") {
+          document.documentElement.dataset.theme = "light";
+        }
+        if (savedTheme) {
+          var color = savedTheme === "dark" ? "#101315" : "#f5f7f5";
+          document
+            .querySelectorAll('meta[name="theme-color"]')
+            .forEach(function (meta) {
+              meta.setAttribute("content", color);
+            });
+        }
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>
