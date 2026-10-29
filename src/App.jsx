@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import MobilePrototype from "./MobilePrototype";
 import {
@@ -748,6 +748,46 @@ function saveLocalUserSnapshot(userId, snapshot) {
   }
 }
 
+function usePopupPresence() {
+  const [isOpen, setIsOpen] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
+  const openRef = useRef(false);
+  const closingRef = useRef(false);
+  const closeTimerRef = useRef(null);
+
+  const open = useCallback(() => {
+    window.clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = null;
+    openRef.current = true;
+    closingRef.current = false;
+    setIsClosing(false);
+    setIsOpen(true);
+  }, []);
+
+  const close = useCallback(() => {
+    if (!openRef.current || closingRef.current) return;
+    closingRef.current = true;
+    setIsClosing(true);
+    const prefersReducedMotion =
+      window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
+    const duration = prefersReducedMotion ? 160 : 240;
+    closeTimerRef.current = window.setTimeout(() => {
+      openRef.current = false;
+      closingRef.current = false;
+      closeTimerRef.current = null;
+      setIsOpen(false);
+      setIsClosing(false);
+    }, duration);
+  }, []);
+
+  useEffect(
+    () => () => window.clearTimeout(closeTimerRef.current),
+    [],
+  );
+
+  return { isOpen, isClosing, open, close };
+}
+
 export default function App() {
   const [expenses, setExpenses] = useState(loadExpenses);
   const [budgets, setBudgets] = useState(loadBudgets);
@@ -765,7 +805,12 @@ export default function App() {
   const [targetCurrency, setTargetCurrency] = useState(loadCurrency);
   const [reminderTime, setReminderTime] = useState(loadReminderTime);
   const [localProfileName] = useState(loadLocalProfileName);
-  const [profileEditorOpen, setProfileEditorOpen] = useState(false);
+  const {
+    isOpen: profileEditorOpen,
+    isClosing: profileEditorClosing,
+    open: showProfileEditor,
+    close: hideProfileEditor,
+  } = usePopupPresence();
   const [profileDraft, setProfileDraft] = useState("");
   const [profileStatus, setProfileStatus] = useState("");
   const [profileSaving, setProfileSaving] = useState(false);
@@ -812,7 +857,12 @@ export default function App() {
   const [showAuthPassword, setShowAuthPassword] = useState(false);
   const [authStatus, setAuthStatus] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
-  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const {
+    isOpen: authModalOpen,
+    isClosing: authModalClosing,
+    open: showAuthModal,
+    close: hideAuthModal,
+  } = usePopupPresence();
   const [backgroundPushEnabled, setBackgroundPushEnabled] = useState(false);
   const [cloudSyncEnabled, setCloudSyncEnabled] = useState(false);
   const [cloudSyncReady, setCloudSyncReady] = useState(false);
@@ -831,6 +881,7 @@ export default function App() {
   const [lastBackupAt, setLastBackupAt] = useState(loadLastBackupAt);
   const authModalRef = useRef(null);
   const authTriggerRef = useRef(null);
+  const authReturnFocusRef = useRef(null);
   const profileEditorTriggerRef = useRef(null);
   const backupFileInputRef = useRef(null);
   const pendingDueRef = useRef([]);
@@ -1155,7 +1206,7 @@ export default function App() {
         setPushUser(user);
         if (window.location.hash.includes("type=recovery")) {
           setAuthMode("update-password");
-          setAuthModalOpen(true);
+          showAuthDialog();
         }
         setCloudSyncReady(false);
         setCloudRealtimeStatus(user ? "connecting" : "disconnected");
@@ -1174,7 +1225,7 @@ export default function App() {
       if (event === "PASSWORD_RECOVERY") {
         setAuthMode("update-password");
         setAuthStatus("");
-        setAuthModalOpen(true);
+        showAuthDialog();
       }
       if (
         authUserIdRef.current === user?.id &&
@@ -1437,19 +1488,23 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!authModalOpen) return undefined;
+    if (!authModalOpen || authModalClosing) return undefined;
     const closeOnEscape = (event) => {
-      if (event.key === "Escape" && !authBusy) setAuthModalOpen(false);
+      if (event.key === "Escape" && !authBusy) hideAuthModal();
     };
-    const previousFocus = document.activeElement;
     window.addEventListener("keydown", closeOnEscape);
-    return () => {
-      window.removeEventListener("keydown", closeOnEscape);
-      if (pushUser) return;
-      if (authTriggerRef.current?.isConnected) authTriggerRef.current.focus();
-      else if (previousFocus?.isConnected) previousFocus.focus();
-    };
-  }, [authBusy, authModalOpen, pushUser]);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [authBusy, authModalClosing, authModalOpen, hideAuthModal]);
+
+  useEffect(() => {
+    if (authModalOpen || pushUser) return;
+    const returnFocus =
+      (authTriggerRef.current?.isConnected && authTriggerRef.current) ||
+      (authReturnFocusRef.current?.isConnected && authReturnFocusRef.current);
+    if (returnFocus) returnFocus.focus();
+    authTriggerRef.current = null;
+    authReturnFocusRef.current = null;
+  }, [authModalOpen, pushUser]);
 
   useEffect(() => {
     if (profileEditorOpen) return undefined;
@@ -2678,7 +2733,7 @@ export default function App() {
             ? "Account created. You can now enable background reminders."
             : "Signed in. Your recurring reminder schedule is syncing.",
         );
-        setAuthModalOpen(false);
+        hideAuthModal();
       }
       setAuthPassword("");
     } catch (error) {
@@ -2709,7 +2764,19 @@ export default function App() {
         : null;
     setProfileDraft(userDisplayName(pushUser));
     setProfileStatus("");
-    setProfileEditorOpen(true);
+    showProfileEditor();
+  }
+
+  function showAuthDialog() {
+    const activeElement = document.activeElement;
+    if (
+      activeElement instanceof HTMLElement &&
+      activeElement !== document.body &&
+      !activeElement.closest('[role="dialog"]')
+    ) {
+      authReturnFocusRef.current = activeElement;
+    }
+    showAuthModal();
   }
 
   function openSignInModal() {
@@ -2717,11 +2784,12 @@ export default function App() {
       document.activeElement instanceof HTMLElement
         ? document.activeElement
         : null;
+    authReturnFocusRef.current = authTriggerRef.current;
     setAuthMode("sign-in");
     setAuthStatus("");
     setAuthPassword("");
     setShowAuthPassword(false);
-    setAuthModalOpen(true);
+    showAuthDialog();
   }
 
   async function saveProfileName(value) {
@@ -2833,7 +2901,7 @@ export default function App() {
     }
     if (!pushUser) {
       setNotificationStatus("Sign in first to enable background reminders.");
-      setAuthModalOpen(true);
+      showAuthDialog();
       return;
     }
     const isIos =
@@ -3057,19 +3125,19 @@ export default function App() {
         onSignIn={openSignInModal}
       />
       {authModalOpen &&
-        (!pushUser || authMode === "update-password") &&
+        (!pushUser || authMode === "update-password" || authModalClosing) &&
         createPortal(
           <div
-            className="auth-modal-backdrop"
+            className={`auth-modal-backdrop${authModalClosing ? " is-closing" : ""}`}
             onMouseDown={(event) => {
               if (event.target === event.currentTarget && !authBusy) {
-                setAuthModalOpen(false);
+                hideAuthModal();
                 setShowAuthPassword(false);
               }
             }}
           >
             <section
-              className="auth-modal"
+              className={`auth-modal${authModalClosing ? " is-closing" : ""}`}
               ref={authModalRef}
               role="dialog"
               aria-modal="true"
@@ -3103,7 +3171,7 @@ export default function App() {
                   aria-label="Close sign-in dialog"
                   disabled={authBusy}
                   onClick={() => {
-                    setAuthModalOpen(false);
+                    hideAuthModal();
                     setShowAuthPassword(false);
                   }}
                 >
@@ -3247,20 +3315,20 @@ export default function App() {
       {profileEditorOpen &&
         createPortal(
           <div
-            className="profile-editor-backdrop"
+            className={`profile-editor-backdrop${profileEditorClosing ? " is-closing" : ""}`}
             onMouseDown={(event) => {
               if (event.target === event.currentTarget && !profileSaving)
-                setProfileEditorOpen(false);
+                hideProfileEditor();
             }}
           >
             <section
-              className="profile-editor"
+              className={`profile-editor${profileEditorClosing ? " is-closing" : ""}`}
               role="dialog"
               aria-modal="true"
               aria-labelledby="profile-editor-title"
               onKeyDown={(event) => {
                 if (event.key === "Escape" && !profileSaving) {
-                  setProfileEditorOpen(false);
+                  hideProfileEditor();
                   return;
                 }
                 if (event.key !== "Tab") return;
@@ -3289,7 +3357,7 @@ export default function App() {
                   type="button"
                   aria-label="Close profile editor"
                   disabled={profileSaving}
-                  onClick={() => setProfileEditorOpen(false)}
+                  onClick={hideProfileEditor}
                 >
                   ×
                 </button>
@@ -3298,7 +3366,7 @@ export default function App() {
                 onSubmit={async (event) => {
                   event.preventDefault();
                   if (await saveProfileName(profileDraft))
-                    setProfileEditorOpen(false);
+                    hideProfileEditor();
                 }}
               >
                 <label htmlFor="profile-display-name">Display name</label>
@@ -3335,7 +3403,7 @@ export default function App() {
                     className="profile-editor-cancel"
                     type="button"
                     disabled={profileSaving}
-                    onClick={() => setProfileEditorOpen(false)}
+                    onClick={hideProfileEditor}
                   >
                     Cancel
                   </button>

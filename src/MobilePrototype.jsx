@@ -30,7 +30,7 @@ const TABS = [
   ["accounts", "Accounts"],
   ["plans", "Plans"],
 ];
-const SHEET_EXIT_MS = 320;
+const SHEET_EXIT_MS = 360;
 const SHEET_REDUCED_EXIT_MS = 180;
 
 const BK =
@@ -2362,7 +2362,7 @@ export default function MobilePrototype({
       document.removeEventListener("focusout", scheduleViewportSync);
     };
   }, []);
-  const close = (exit = null) => {
+  const close = (exit = null, afterClose = null) => {
     if (!sheet || sheetClosing) return;
     clearTimeout(sheetCloseTimer.current);
     setSheetClosing(true);
@@ -2404,6 +2404,7 @@ export default function MobilePrototype({
         setSheetExitFromTransform("translate3d(0, 0, 0)");
         setSheetExitFromOpacity("1");
         sheetCloseTimer.current = null;
+        afterClose?.();
         if (returnFocus) {
           window.requestAnimationFrame(() => {
             if (
@@ -2582,18 +2583,20 @@ export default function MobilePrototype({
     toast("Recurring expense removed", undo);
   };
   const advanced = () => {
-    close();
-    setProfileSettingsOpen(false);
-    setAppSettingsOpen(true);
-    setAnimateScreen(true);
-    resetScreenScroll();
+    close(null, () => {
+      setProfileSettingsOpen(false);
+      setAppSettingsOpen(true);
+      setAnimateScreen(true);
+      resetScreenScroll();
+    });
   };
   const openProfileSettings = () => {
-    close();
-    setAppSettingsOpen(false);
-    setProfileSettingsOpen(true);
-    setAnimateScreen(true);
-    resetScreenScroll();
+    close(null, () => {
+      setAppSettingsOpen(false);
+      setProfileSettingsOpen(true);
+      setAnimateScreen(true);
+      resetScreenScroll();
+    });
   };
   const backToSettings = () => {
     setProfileSettingsOpen(false);
