@@ -241,12 +241,123 @@ const MonthSwitch = ({ m, onShift }) => (
   </div>
 );
 
-function ExpenseRow({ e, onOpen, isNew = false }) {
+function suggestedCategory(description, expenses = []) {
+  const title = String(description || "").trim().toLocaleLowerCase();
+  if (!title) return "";
+  const rules = [
+    [
+      "Shopping",
+      /\b(shop(?:ping)?|diy|market|clothes?|dress|shoes?|supermarket|online order)\b/,
+    ],
+    [
+      "Food",
+      /\b(food|lunch|dinner|breakfast|snack|coffee|tea|restaurant|meal|grocery|groceries)\b/,
+    ],
+    [
+      "Transport",
+      /\b(transport|bus|train|uber|pathao|rickshaw|ride|fuel|petrol|cng|taxi)\b/,
+    ],
+    ["Home", /\b(home|rent|electricity|water bill|internet|gas bill|repair|cleaning)\b/],
+    ["Health", /\b(health|doctor|medicine|pharmacy|clinic|hospital)\b/],
+    ["Bills", /\b(bill|mobile recharge|phone recharge|subscription|utility)\b/],
+    ["Savings", /\b(saving|savings|deposit|transfer to savings)\b/],
+  ];
+  const keywordMatch = rules.find(([, pattern]) => pattern.test(title));
+  if (keywordMatch) return keywordMatch[0];
+
+  const words = new Set(
+    title.split(/[^\p{L}\p{N}]+/u).filter((word) => word.length > 2),
+  );
+  let best = { score: 0, category: "" };
+  for (const expense of expenses) {
+    const pastWords = new Set(
+      String(expense.desc || "")
+        .toLocaleLowerCase()
+        .split(/[^\p{L}\p{N}]+/u)
+        .filter((word) => word.length > 2),
+    );
+    const overlap = [...words].filter((word) => pastWords.has(word)).length;
+    const score = overlap / Math.max(words.size, pastWords.size, 1);
+    if (overlap && score > best.score)
+      best = { score, category: expense.cat };
+  }
+  return best.score >= 0.5 ? best.category : "";
+}
+
+function ExpenseRow({ e, onOpen, onDelete, onDuplicate, isNew = false }) {
   const [, c] = CAT[e.cat];
+  const pointerRef = useRef(null);
+  const holdTimerRef = useRef();
+  const suppressClickRef = useRef(false);
+  const clearHoldTimer = () => {
+    clearTimeout(holdTimerRef.current);
+    holdTimerRef.current = undefined;
+  };
+  useEffect(() => () => clearTimeout(holdTimerRef.current), []);
+  const startGesture = (event) => {
+    if (!onDelete && !onDuplicate) return;
+    if (event.pointerType !== "touch") return;
+    if (event.button != null && event.button !== 0) return;
+    clearHoldTimer();
+    pointerRef.current = { x: event.clientX, y: event.clientY, moved: false };
+    suppressClickRef.current = false;
+    holdTimerRef.current = setTimeout(() => {
+      if (!pointerRef.current?.moved) {
+        suppressClickRef.current = true;
+        onDuplicate(e);
+      }
+    }, 560);
+  };
+  const moveGesture = (event) => {
+    if (!pointerRef.current) return;
+    const dx = event.clientX - pointerRef.current.x;
+    const dy = event.clientY - pointerRef.current.y;
+    if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+      pointerRef.current.moved = true;
+      clearHoldTimer();
+    }
+  };
+  const endGesture = (event) => {
+    clearHoldTimer();
+    if (pointerRef.current && event.type !== "pointercancel") {
+      const dx = event.clientX - pointerRef.current.x;
+      const dy = event.clientY - pointerRef.current.y;
+      if (dx <= -72 && Math.abs(dy) < 48) {
+        suppressClickRef.current = true;
+        onDelete(e.id);
+      }
+    }
+    pointerRef.current = null;
+  };
+  const isPositive =
+    e.type === "income" || e.type === "refund" || Boolean(e.refund);
+  const amountClass = isPositive
+    ? "am is-positive"
+    : e.cat === "Savings"
+      ? "am is-neutral"
+      : "am";
+  const amountPrefix = isPositive ? "+" : "";
+  const gestureHint =
+    onDelete && onDuplicate
+      ? "Tap to edit, swipe left to delete, or press and hold to duplicate."
+      : "Tap to edit.";
   return (
     <button
       className={`ri expense-row${isNew ? " is-new" : ""}`}
-      onClick={() => onOpen(e.id)}
+      type="button"
+      aria-label={`${e.desc}, ${M(e.amt || 0)}${e.cat === "Savings" ? ", savings transfer" : ""}. ${gestureHint}`}
+      onPointerDown={startGesture}
+      onPointerMove={moveGesture}
+      onPointerUp={endGesture}
+      onPointerCancel={endGesture}
+      onContextMenu={(event) => event.preventDefault()}
+      onClick={() => {
+        if (suppressClickRef.current) {
+          suppressClickRef.current = false;
+          return;
+        }
+        onOpen(e.id);
+      }}
     >
       <i className="ic" style={{ "--c": c }}>
         <CategorySymbol category={e.cat} />
@@ -262,7 +373,7 @@ function ExpenseRow({ e, onOpen, isNew = false }) {
       {e.amt == null ? (
         <em className="na">Add amount</em>
       ) : (
-        <b className="am">−{M(e.amt)}</b>
+        <b className={amountClass}>{amountPrefix}{M(e.amt)}</b>
       )}
     </button>
   );
@@ -655,7 +766,18 @@ function Home({
   );
 }
 
-function Activity({ S, q, setQ, cf, setCf, onShift, onOpen, searchRef, highlightedExpenseId }) {
+function Activity({
+  S,
+  q,
+  setQ,
+  cf,
+  setCf,
+  onOpen,
+  onDelete,
+  onDuplicate,
+  searchRef,
+  highlightedExpenseId,
+}) {
   const l = monthExp(S).filter(
     (e) =>
       (!cf || e.cat === cf) &&
@@ -666,7 +788,6 @@ function Activity({ S, q, setQ, cf, setCf, onShift, onOpen, searchRef, highlight
 
   return (
     <>
-      <MonthSwitch m={S.m} onShift={onShift} />
       <label className="srch">
         <Icon n="s" />
         <input
@@ -690,6 +811,19 @@ function Activity({ S, q, setQ, cf, setCf, onShift, onOpen, searchRef, highlight
           </button>
         ))}
       </div>
+      {cf && (
+        <div className="activity-filter-summary" role="status">
+          <b>{cf}</b>
+          <span>·</span>
+          <strong>
+            {M(l.reduce((sum, expense) => sum + (expense.amt || 0), 0))}
+          </strong>
+          <span>·</span>
+          <span>
+            {l.length} {l.length === 1 ? "item" : "items"}
+          </span>
+        </div>
+      )}
       <div>
         {!l.length ? (
           <div className="emp">Nothing matches.</div>
@@ -700,18 +834,21 @@ function Activity({ S, q, setQ, cf, setCf, onShift, onOpen, searchRef, highlight
             .map((d) => (
               <Fragment key={d}>
                 <div className="day">
-                  <span>{d === ld() ? "Today" : fD(d)}</span>
-                  <span>{M(g[d].reduce((a, e) => a + (e.amt || 0), 0))}</span>
+                  <span>
+                    {d === ld() ? "Today" : d === ago(1) ? "Yesterday" : fD(d)}
+                  </span>
+                  {g[d].length >= 2 && (
+                    <span>{M(g[d].reduce((a, e) => a + (e.amt || 0), 0))}</span>
+                  )}
                 </div>
-                <div
-                  className="card"
-                  style={{ margin: "6px 0 0", padding: "4px 14px" }}
-                >
+                <div className="card expense-day-card">
                   {g[d].map((e) => (
                     <ExpenseRow
                       key={e.id}
                       e={e}
                       onOpen={onOpen}
+                      onDelete={onDelete}
+                      onDuplicate={onDuplicate}
                       isNew={highlightedExpenseId === e.id}
                     />
                   ))}
@@ -1073,7 +1210,7 @@ function Plans({
 }
 
 /* ───────────── sheets ───────────── */
-function AddSheet({ iv, categoryOrder, onSave, onClose }) {
+function AddSheet({ iv, categoryOrder, expenses, onSave, onClose }) {
   const [f, setF] = useState({
     amt: "",
     desc: "",
@@ -1082,6 +1219,7 @@ function AddSheet({ iv, categoryOrder, onSave, onClose }) {
     acct: "",
     iv: iv || "none",
   });
+  const [categoryTouched, setCategoryTouched] = useState(false);
   const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
   const custom = f.date !== ld() && f.date !== ago(1);
 
@@ -1120,7 +1258,10 @@ function AddSheet({ iv, categoryOrder, onSave, onClose }) {
           <button
             key={c}
             className={f.cat === c ? "on" : ""}
-            onClick={() => set("cat", c)}
+            onClick={() => {
+              setCategoryTouched(true);
+              set("cat", c);
+            }}
           >
             <CategorySymbol category={c} /> {c}
           </button>
@@ -1134,7 +1275,14 @@ function AddSheet({ iv, categoryOrder, onSave, onClose }) {
         aria-label="Expense description"
         placeholder="e.g. Lunch"
         value={f.desc}
-        onChange={(e) => set("desc", e.target.value)}
+        onChange={(event) => {
+          const description = event.target.value;
+          set("desc", description);
+          if (!categoryTouched) {
+            const suggestion = suggestedCategory(description, expenses);
+            if (suggestion) set("cat", suggestion);
+          }
+        }}
       />
 
       <span className="lbl">Date</span>
@@ -1274,15 +1422,22 @@ function TxSheet({ type, onSave, onClose }) {
 }
 
 function DetailSheet({ e, onSave, onDelete, onClose }) {
-  const [v, setV] = useState(e.amt ?? "");
+  const [f, setF] = useState({
+    desc: e.desc,
+    amt: e.amt ?? "",
+    cat: e.cat,
+    date: e.date,
+    acct: e.acct || "",
+  });
+  const set = (key, value) => setF((current) => ({ ...current, [key]: value }));
   return (
     <Sheet
       onClose={onClose}
       actionsClassName="is-paired"
       actions={
         <>
-          <button className="btn" onClick={() => onSave(e.id, parseFloat(v))}>
-            Save amount
+          <button className="btn" onClick={() => onSave(e.id, f)}>
+            Save changes
           </button>
           <button className="btn del" onClick={() => onDelete(e.id)}>
             Delete expense
@@ -1290,21 +1445,57 @@ function DetailSheet({ e, onSave, onDelete, onClose }) {
         </>
       }
     >
-      <h3 id="sheet-title">{e.desc}</h3>
-      <p className="hint" style={{ textAlign: "left" }}>
-        {e.cat} · {fD(e.date)}
-        {e.acct ? " · " + ACC[e.acct][0] : ""}
-      </p>
+      <h3 id="sheet-title">Edit expense</h3>
       <div className="amt">
         <span>৳</span>
         <input
           inputMode="decimal"
-          aria-label={`${e.desc} amount in taka`}
+          aria-label="Expense amount in taka"
           placeholder="0"
-          value={v}
-          onChange={(x) => setV(x.target.value)}
+          value={f.amt}
+          onChange={(event) => set("amt", event.target.value)}
         />
       </div>
+      <span className="lbl">What was it for?</span>
+      <input
+        className="in"
+        maxLength={80}
+        aria-label="Expense description"
+        value={f.desc}
+        onChange={(event) => set("desc", event.target.value)}
+      />
+      <span className="lbl">Category</span>
+      <div className="cg">
+        {Object.keys(CAT).map((category) => (
+          <button
+            key={category}
+            className={f.cat === category ? "on" : ""}
+            onClick={() => set("cat", category)}
+          >
+            <CategorySymbol category={category} /> {category}
+          </button>
+        ))}
+      </div>
+      <span className="lbl">Date</span>
+      {e.rec && (
+        <p className="hint recurring-date-note">
+          This recurring expense stays on its scheduled date.
+        </p>
+      )}
+      <input
+        className="in"
+        type="date"
+        aria-label="Expense date"
+        value={f.date}
+        disabled={e.rec}
+        onChange={(event) => set("date", event.target.value)}
+      />
+      <span className="lbl">Paid from</span>
+      <Seg
+        value={f.acct}
+        onPick={(value) => set("acct", value)}
+        options={[["", "Cash"], ["bkash", "bKash"], ["bank", "Bank"]]}
+      />
     </Sheet>
   );
 }
@@ -1762,7 +1953,7 @@ export default function MobilePrototype({
   S,
   onShift,
   onExpenseSave,
-  onAmountSave,
+  onExpenseUpdate,
   onExpenseDelete,
   onBudgetSave,
   onBudgetClear,
@@ -2196,15 +2387,48 @@ export default function MobilePrototype({
     close();
     toast("Expense added");
   };
-  const saveAmount = (id, value) => {
-    if (Number.isFinite(value) && value > 0) onAmountSave(id, value);
-    close();
-  };
   const deleteExpense = (id) => {
     const expense = S.exp.find((item) => item.id === id);
     const undo = expense ? onExpenseDelete(expense) : undefined;
     close();
     toast("Expense removed", undo);
+  };
+  const duplicateExpense = (expense) => {
+    const saved = onExpenseSave({
+      description: expense.desc,
+      amount: expense.amt,
+      category: expense.cat,
+      date: ld(),
+      account: expense.acct,
+      interval: "none",
+    });
+    if (!saved) return toast("Could not duplicate this expense.");
+    if (typeof saved === "object" && saved.expenseId) {
+      clearTimeout(highlightTimer.current);
+      setHighlightedExpenseId(saved.expenseId);
+      highlightTimer.current = setTimeout(() => setHighlightedExpenseId(null), 1500);
+    }
+    toast("Expense duplicated");
+  };
+  const updateExpense = (id, form) => {
+    const amountText = String(form.amt ?? "").trim();
+    const amount = amountText ? Number(amountText) : null;
+    if (
+      !form.desc.trim() ||
+      !form.date ||
+      (amount !== null && (!Number.isFinite(amount) || amount <= 0))
+    ) {
+      return toast("Check the description, amount, and date.");
+    }
+    if (!onExpenseUpdate(id, {
+      description: form.desc.trim(),
+      amount,
+      category: form.cat,
+      date: form.date,
+      account: form.acct,
+    })) return toast("Could not update this expense.");
+    close();
+    toast("Expense updated");
   };
   const saveBudget = (value) => {
     if (!Number.isFinite(value) || value <= 0)
@@ -2257,12 +2481,6 @@ export default function MobilePrototype({
     openSheet({ type: "set" });
     setAnimateScreen(true);
     resetScreenScroll();
-  };
-  const focusActivitySearch = () => {
-    screenScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
-    window.requestAnimationFrame(() =>
-      activitySearchRef.current?.focus({ preventScroll: true }),
-    );
   };
   const signIn = () => onSignIn?.();
 
@@ -2359,14 +2577,7 @@ export default function MobilePrototype({
                 {profile?.initial || "A"}
               </button>
             ) : tab === "activity" ? (
-              <button
-                className="prototype-header-action"
-                type="button"
-                aria-label="Search activity"
-                onClick={focusActivitySearch}
-              >
-                <Icon n="s" />
-              </button>
+              <MonthSwitch m={S.m} onShift={onShift} />
             ) : tab === "accounts" ? (
               <button
                 className="prototype-header-action"
@@ -2393,7 +2604,7 @@ export default function MobilePrototype({
       <main
         id="app"
         ref={screenScrollRef}
-        className="prototype-screen-scroll"
+        className={`prototype-screen-scroll${tab === "activity" ? " is-activity" : ""}`}
         onScroll={onScreenScroll}
         onPointerDownCapture={onScreenPointerDownCapture}
       >
@@ -2455,8 +2666,9 @@ export default function MobilePrototype({
                 setQ={setQ}
                 cf={cf}
                 setCf={setCf}
-                onShift={onShift}
                 onOpen={openExpense}
+                onDelete={deleteExpense}
+                onDuplicate={duplicateExpense}
                 searchRef={activitySearchRef}
                 highlightedExpenseId={highlightedExpenseId}
               />
@@ -2547,6 +2759,7 @@ export default function MobilePrototype({
         <AddSheet
           iv={sheet.iv}
           categoryOrder={categoryOrder}
+          expenses={S.exp}
           onSave={saveExpense}
           onClose={close}
         />
@@ -2557,7 +2770,7 @@ export default function MobilePrototype({
       {detail && (
         <DetailSheet
           e={detail}
-          onSave={saveAmount}
+          onSave={updateExpense}
           onDelete={deleteExpense}
           onClose={close}
         />

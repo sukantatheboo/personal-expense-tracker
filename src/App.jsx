@@ -2025,17 +2025,32 @@ export default function App() {
     return saveExpenseData(form, { returnResult: true });
   }
 
-  function saveMobileAmount(expenseId, amount) {
-    if (!Number.isFinite(amount) || amount <= 0) return false;
+  function saveMobileExpenseUpdate(expenseId, form) {
+    const rawAmount = String(form.amount ?? "").trim();
+    const amount = rawAmount === "" ? null : Number(rawAmount);
+    const existingExpense = expenses.find((expense) => expense.id === expenseId);
+    const date = existingExpense?.recurringId ? existingExpense.date : form.date;
+    if (
+      !form.description.trim() ||
+      !isValidDateString(date) ||
+      (amount !== null && (!Number.isFinite(amount) || amount <= 0))
+    ) return false;
     setExpenses((current) =>
       current.map((expense) =>
         expense.id === expenseId
-          ? { ...expense, amount: roundMoney(amount), updatedAt: Date.now() }
+          ? {
+              ...expense,
+              description: form.description.trim(),
+              amount: amount === null ? null : roundMoney(amount),
+              category: form.category,
+              date: expense.recurringId ? expense.date : form.date,
+              account: form.account,
+              updatedAt: Date.now(),
+            }
           : expense,
       ),
     );
-    setEditingExpenseId(null);
-    setEditingAmount("");
+    setSelectedMonth(date.slice(0, 7));
     return true;
   }
 
@@ -2985,7 +3000,7 @@ export default function App() {
         S={mobilePrototypeData}
         onShift={addMonth}
         onExpenseSave={saveMobileExpense}
-        onAmountSave={saveMobileAmount}
+        onExpenseUpdate={saveMobileExpenseUpdate}
         onExpenseDelete={removeExpense}
         onBudgetSave={(amount) => {
           setRecordDeleted("budgets", selectedMonth, false);
