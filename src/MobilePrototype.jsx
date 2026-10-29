@@ -543,12 +543,13 @@ function ExpenseRow({
   if (!onDelete) return row;
   return (
     <div
-      className={`expense-swipe-shell${swipe.phase === "collapsing" ? " is-collapsing" : ""}`}
+      className={`expense-swipe-shell${swipe.phase === "dragging" ? " is-dragging" : ""}${swipe.phase === "revealed" ? " is-revealed" : ""}${["deleting", "collapsing"].includes(swipe.phase) ? " is-deleting" : ""}${swipe.phase === "collapsing" ? " is-collapsing" : ""}`}
     >
       <button
         className="expense-swipe-delete"
         type="button"
         aria-label={`Delete ${e.desc}`}
+        aria-hidden={swipe.phase !== "revealed"}
         disabled={swipe.phase !== "revealed"}
         tabIndex={swipe.phase === "revealed" ? 0 : -1}
         onClick={beginDelete}

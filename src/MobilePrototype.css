@@ -1197,7 +1197,8 @@ button:active {
   transition: opacity 160ms ease;
 }
 .mobile-prototype .expense-swipe-delete:disabled {
-  opacity: 0;
+  opacity: 1;
+  cursor: default;
   pointer-events: none;
 }
 .mobile-prototype .expense-swipe-delete svg {
@@ -1208,6 +1209,17 @@ button:active {
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 2;
+  opacity: 0;
+  transform: translateX(-9px) scale(0.86);
+  transition:
+    opacity 150ms ease-out,
+    transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.mobile-prototype .expense-swipe-shell.is-dragging .expense-swipe-delete svg,
+.mobile-prototype .expense-swipe-shell.is-revealed .expense-swipe-delete svg,
+.mobile-prototype .expense-swipe-shell.is-deleting .expense-swipe-delete svg {
+  opacity: 1;
+  transform: translateX(0) scale(1);
 }
 .mobile-prototype .expense-day-card .expense-row {
   position: relative;
@@ -1368,6 +1380,10 @@ button:active {
 .mobile-prototype button.ri:active {
   background: transparent;
   transform: scale(0.99);
+}
+.mobile-prototype .expense-day-card button.expense-row:active {
+  background: var(--card);
+  transform: translate3d(var(--swipe-x, 0px), 0, 0);
 }
 .mobile-prototype button.ri:active .sw {
   transform: scale(0.95);
@@ -2476,6 +2492,7 @@ button:active {
   }
   .mobile-prototype .expense-swipe-shell,
   .mobile-prototype .expense-swipe-delete,
+  .mobile-prototype .expense-swipe-delete svg,
   .mobile-prototype .expense-day-card .expense-row {
     transition: none !important;
   }
