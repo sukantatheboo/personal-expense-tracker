@@ -1179,7 +1179,7 @@ button:active {
 .mobile-prototype .expense-swipe-shell + .expense-swipe-shell {
   border-top: 1px solid var(--line);
 }
-.mobile-prototype .expense-swipe-shell.is-deleting {
+.mobile-prototype .expense-swipe-shell.is-collapsing {
   height: 0;
   opacity: 0;
 }
@@ -1223,21 +1223,23 @@ button:active {
   -webkit-touch-callout: none;
   transform: translate3d(var(--swipe-x, 0px), 0, 0);
   transition: transform 260ms cubic-bezier(0.22, 0.8, 0.2, 1);
-  will-change: transform;
 }
 .mobile-prototype .expense-day-card .expense-row.is-swipe-dragging {
   animation: none;
   transition: none;
+  will-change: transform;
 }
 .mobile-prototype .expense-day-card .expense-row.is-swipe-revealed {
   animation: none;
   transition: transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  will-change: transform;
 }
 .mobile-prototype .expense-day-card .expense-row.is-swipe-deleting {
   animation: none;
   transition: transform 220ms cubic-bezier(0.22, 0.8, 0.2, 1);
+  will-change: transform;
 }
-.mobile-prototype .expense-day-card .expense-swipe-shell.is-deleting + .expense-swipe-shell {
+.mobile-prototype .expense-day-card .expense-swipe-shell.is-collapsing + .expense-swipe-shell {
   border-top-color: transparent;
 }
 .mobile-prototype .expense-day-card .expense-row .ic {

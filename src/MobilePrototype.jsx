@@ -332,6 +332,7 @@ function ExpenseRow({
   const rowRef = useRef(null);
   const holdTimerRef = useRef();
   const swipeTimerRef = useRef();
+  const collapseTimerRef = useRef();
   const suppressClickTimerRef = useRef();
   const suppressClickRef = useRef(false);
   const [swipe, setSwipe] = useState({ offset: 0, phase: "idle" });
@@ -352,16 +353,26 @@ function ExpenseRow({
     }, 500);
   };
   const beginDelete = () => {
-    if (!onDelete || swipeRef.current.phase === "deleting") return;
+    if (
+      !onDelete ||
+      swipeRef.current.phase === "deleting" ||
+      swipeRef.current.phase === "collapsing"
+    )
+      return;
     clearTimeout(swipeTimerRef.current);
-    const width = rowRef.current?.offsetWidth || 320;
+    clearTimeout(collapseTimerRef.current);
+    const width = pointerRef.current?.width || rowRef.current?.offsetWidth || 320;
     updateSwipe({ offset: -width, phase: "deleting" });
-    swipeTimerRef.current = setTimeout(() => onDelete(e.id), 245);
+    collapseTimerRef.current = setTimeout(() => {
+      updateSwipe({ offset: -width, phase: "collapsing" });
+    }, 220);
+    swipeTimerRef.current = setTimeout(() => onDelete(e.id), 460);
   };
   useEffect(
     () => () => {
       clearTimeout(holdTimerRef.current);
       clearTimeout(swipeTimerRef.current);
+      clearTimeout(collapseTimerRef.current);
       clearTimeout(suppressClickTimerRef.current);
     },
     [],
@@ -369,15 +380,17 @@ function ExpenseRow({
   const startGesture = (event) => {
     if (!onDelete && !onDuplicate) return;
     if (event.button != null && event.button !== 0) return;
-    if (swipeRef.current.phase === "deleting") return;
+    if (["deleting", "collapsing"].includes(swipeRef.current.phase)) return;
     clearHoldTimer();
     clearTimeout(swipeTimerRef.current);
     pointerRef.current = {
       x: event.clientX,
       y: event.clientY,
       startedAt: performance.now(),
+      width: rowRef.current?.offsetWidth || 320,
       moved: false,
       horizontal: false,
+      draggingStateApplied: false,
       initialOffset: swipeRef.current.offset,
       pointerId: event.pointerId,
       pointerType: event.pointerType,
@@ -408,6 +421,7 @@ function ExpenseRow({
     ) {
       pointerRef.current.horizontal = true;
       suppressNextClick();
+      rowRef.current?.classList.add("is-swipe-dragging");
       try {
         event.currentTarget.setPointerCapture(pointerRef.current.pointerId);
       } catch {
@@ -415,12 +429,17 @@ function ExpenseRow({
       }
     }
     if (pointerRef.current.horizontal) {
-      const width = rowRef.current?.offsetWidth || 320;
       const offset = Math.max(
-        -width,
+        -pointerRef.current.width,
         Math.min(0, pointerRef.current.initialOffset + dx),
       );
-      updateSwipe({ offset, phase: "dragging" });
+      const nextSwipe = { offset, phase: "dragging" };
+      swipeRef.current = nextSwipe;
+      rowRef.current?.style.setProperty("--swipe-x", `${offset}px`);
+      if (!pointerRef.current.draggingStateApplied) {
+        pointerRef.current.draggingStateApplied = true;
+        setSwipe(nextSwipe);
+      }
     }
   };
   const endGesture = (event) => {
@@ -432,13 +451,12 @@ function ExpenseRow({
       const dx = event.clientX - gesture.x;
       const dy = event.clientY - gesture.y;
       if (gesture.horizontal && onDelete && Math.abs(dy) < 72) {
-        const width = rowRef.current?.offsetWidth || 320;
         const offset = Math.min(0, gesture.initialOffset + dx);
         const elapsed = Math.max(1, performance.now() - gesture.startedAt);
         const velocity = dx / elapsed;
         suppressNextClick();
         if (
-          offset <= -Math.max(118, width * 0.42) ||
+          offset <= -Math.max(118, gesture.width * 0.42) ||
           (dx < -54 && velocity < -0.72)
         ) {
           beginDelete();
@@ -469,7 +487,7 @@ function ExpenseRow({
     isNew && "is-new",
     swipe.phase === "dragging" && "is-swipe-dragging",
     swipe.phase === "revealed" && "is-swipe-revealed",
-    swipe.phase === "deleting" && "is-swipe-deleting",
+    ["deleting", "collapsing"].includes(swipe.phase) && "is-swipe-deleting",
   ]
     .filter(Boolean)
     .join(" ");
@@ -525,7 +543,7 @@ function ExpenseRow({
   if (!onDelete) return row;
   return (
     <div
-      className={`expense-swipe-shell${swipe.phase === "deleting" ? " is-deleting" : ""}`}
+      className={`expense-swipe-shell${swipe.phase === "collapsing" ? " is-collapsing" : ""}`}
     >
       <button
         className="expense-swipe-delete"
@@ -3054,6 +3072,8 @@ export default function MobilePrototype({
           {toastMsg.msg}
           {toastMsg.undo && (
             <button
+              type="button"
+              aria-label={`Undo ${toastMsg.msg.toLocaleLowerCase()}`}
               onClick={() => {
                 toastMsg.undo();
                 setToastMsg(null);

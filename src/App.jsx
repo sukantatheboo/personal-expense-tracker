@@ -2308,7 +2308,14 @@ export default function App() {
     );
   }
 
-  function removeExpense(expense) {
+  function removeExpense(expenseOrId) {
+    // MobilePrototype passes its display model (desc/amt/cat), while the
+    // canonical expense record uses description/amount/category. Always retain
+    // the canonical object so Undo cannot restore a display-only projection.
+    const expenseId =
+      typeof expenseOrId === "object" ? expenseOrId?.id : expenseOrId;
+    const expense = expenses.find((item) => item.id === expenseId);
+    if (!expense) return undefined;
     setExpenses((current) => current.filter((item) => item.id !== expense.id));
     setExpenseDeleted(expense, true);
     const restore = () => restoreExpense(expense);
