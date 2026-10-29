@@ -255,9 +255,21 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
   const dragRef = useRef(null);
   const sheetRef = useRef(null);
 
+  useLayoutEffect(() => {
+    const sheetNode = sheetRef.current;
+    if (!sheetNode) return;
+    const initialFocus = sheetNode.querySelector("[data-sheet-autofocus]");
+    if (initialFocus instanceof HTMLElement) {
+      if (document.activeElement !== initialFocus)
+        initialFocus.focus({ preventScroll: true });
+    } else {
+      sheetNode.focus({ preventScroll: true });
+    }
+  }, []);
+
   useEffect(() => {
     const sheetNode = sheetRef.current;
-    const initialFocus = sheetNode?.querySelector("[autofocus]");
+    const initialFocus = sheetNode?.querySelector("[data-sheet-autofocus]");
     const scrollNode = sheetNode?.querySelector(".sheet-content");
     if (!scrollNode || !initialFocus) return undefined;
 
@@ -280,13 +292,50 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
 
   useEffect(() => {
     const handleKeyDown = (event) => {
+      const sheetNode = sheetRef.current;
+      if (!sheetNode) return;
+      const dialogs = document.querySelectorAll('[role="dialog"][aria-modal="true"]');
+      if (dialogs[dialogs.length - 1] !== sheetNode) return;
+
       if (event.key === "Escape") {
         event.preventDefault();
+        event.stopPropagation();
         onClose();
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const focusable = Array.from(
+        sheetNode.querySelectorAll(
+          'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((node) => !node.closest('[aria-hidden="true"]'));
+      if (!focusable.length) {
+        event.preventDefault();
+        sheetNode.focus({ preventScroll: true });
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const activeElement = document.activeElement;
+      const focusIsInside = sheetNode.contains(activeElement);
+      if (
+        event.shiftKey &&
+        (!focusIsInside || activeElement === sheetNode || activeElement === first)
+      ) {
+        event.preventDefault();
+        last.focus();
+      } else if (
+        !event.shiftKey &&
+        (!focusIsInside || activeElement === sheetNode || activeElement === last)
+      ) {
+        event.preventDefault();
+        first.focus();
       }
     };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
   }, [onClose]);
 
   const startDrag = (event) => {
@@ -337,6 +386,10 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
       <div
         ref={sheetRef}
         className="sh"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="sheet-title"
+        tabIndex={-1}
         data-dragging={isDragging ? "true" : undefined}
         style={{ "--sheet-drag-y": `${dragOffset}px` }}
       >
@@ -951,12 +1004,13 @@ function AddSheet({ iv, onSave, onClose }) {
         </button>
       }
     >
-      <h3>New expense</h3>
+      <h3 id="sheet-title">New expense</h3>
       <div className="amt">
         <span>৳</span>
         <input
           inputMode="decimal"
           autoFocus
+          data-sheet-autofocus
           enterKeyHint="next"
           aria-label="Expense amount"
           placeholder="0"
@@ -974,6 +1028,7 @@ function AddSheet({ iv, onSave, onClose }) {
       <input
         className="in"
         maxLength={80}
+        aria-label="Expense description"
         placeholder="e.g. Lunch"
         value={f.desc}
         onChange={(e) => set("desc", e.target.value)}
@@ -1009,6 +1064,7 @@ function AddSheet({ iv, onSave, onClose }) {
         <input
           type="date"
           className={custom ? "on" : ""}
+          aria-label="Expense date"
           value={f.date}
           onChange={(e) => {
             if (e.target.value) set("date", e.target.value);
@@ -1062,7 +1118,7 @@ function TxSheet({ type, onSave, onClose }) {
         </button>
       }
     >
-      <h3>Account activity</h3>
+      <h3 id="sheet-title">Account activity</h3>
       <Seg
         value={g.type}
         onPick={(v) => set("type", v)}
@@ -1077,6 +1133,8 @@ function TxSheet({ type, onSave, onClose }) {
         <input
           inputMode="decimal"
           autoFocus
+          data-sheet-autofocus
+          aria-label={`${g.type === "adjust" ? "Adjustment" : g.type === "transfer" ? "Transfer" : "Income"} amount in taka`}
           placeholder="0"
           value={g.amt}
           onChange={(e) => set("amt", e.target.value)}
@@ -1116,6 +1174,7 @@ function TxSheet({ type, onSave, onClose }) {
       <input
         className="in"
         maxLength={80}
+        aria-label="Transaction note"
         placeholder="e.g. Salary, cash deposit"
         value={g.note}
         onChange={(e) => set("note", e.target.value)}
@@ -1141,7 +1200,7 @@ function DetailSheet({ e, onSave, onDelete, onClose }) {
         </>
       }
     >
-      <h3>{e.desc}</h3>
+      <h3 id="sheet-title">{e.desc}</h3>
       <p className="hint" style={{ textAlign: "left" }}>
         {e.cat} · {fD(e.date)}
         {e.acct ? " · " + ACC[e.acct][0] : ""}
@@ -1150,6 +1209,7 @@ function DetailSheet({ e, onSave, onDelete, onClose }) {
         <span>৳</span>
         <input
           inputMode="decimal"
+          aria-label={`${e.desc} amount in taka`}
           placeholder="0"
           value={v}
           onChange={(x) => setV(x.target.value)}
@@ -1178,7 +1238,7 @@ function BudgetSheet({ S, onSave, onClear, onClose }) {
         </>
       }
     >
-      <h3>Monthly budget</h3>
+      <h3 id="sheet-title">Monthly budget</h3>
       <p className="hint" style={{ textAlign: "left" }}>
         {fM(S.m)}
       </p>
@@ -1187,6 +1247,8 @@ function BudgetSheet({ S, onSave, onClear, onClose }) {
         <input
           inputMode="decimal"
           autoFocus
+          data-sheet-autofocus
+          aria-label="Monthly budget amount in taka"
           placeholder="20000"
           value={v}
           onChange={(x) => setV(x.target.value)}
@@ -1207,7 +1269,7 @@ function SettingsSheet({
   const dark = S.theme === "dark";
   return (
     <Sheet onClose={onClose}>
-      <h3>Settings</h3>
+      <h3 id="sheet-title">Settings</h3>
       <button
         className="ri settings-profile-row"
         type="button"
@@ -1636,6 +1698,8 @@ export default function MobilePrototype({
   const highlightTimer = useRef();
   const mobileRootRef = useRef(null);
   const screenScrollRef = useRef(null);
+  const sheetTriggerCandidateRef = useRef(null);
+  const sheetReturnFocusRef = useRef(null);
   const activitySearchRef = useRef(null);
   const dockNavRef = useRef(null);
   const dockIndicatorRef = useRef(null);
@@ -1890,14 +1954,42 @@ export default function MobilePrototype({
     clearTimeout(sheetCloseTimer.current);
     setSheetClosing(true);
     sheetCloseTimer.current = setTimeout(() => {
+      const returnFocus = sheetReturnFocusRef.current;
+      sheetReturnFocusRef.current = null;
       setSheet(null);
       setSheetClosing(false);
       sheetCloseTimer.current = null;
+      if (returnFocus) {
+        window.requestAnimationFrame(() => {
+          if (
+            returnFocus.isConnected &&
+            !document.querySelector('[role="dialog"][aria-modal="true"]')
+          ) {
+            returnFocus.focus({ preventScroll: true });
+          }
+        });
+      }
     }, 210);
+  };
+  const captureSheetTrigger = (event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    const button = target?.closest("button");
+    sheetTriggerCandidateRef.current = button && !button.closest(".sh") ? button : null;
   };
   const openSheet = (nextSheet) => {
     clearTimeout(sheetCloseTimer.current);
     sheetCloseTimer.current = null;
+    const candidate = sheetTriggerCandidateRef.current;
+    const activeElement = document.activeElement;
+    sheetReturnFocusRef.current =
+      candidate?.isConnected
+        ? candidate
+        : activeElement instanceof HTMLElement &&
+            activeElement !== document.body &&
+            !activeElement.closest(".sh")
+          ? activeElement
+          : null;
+    sheetTriggerCandidateRef.current = null;
     resetDockDirectionTimer();
     dockMinimizedRef.current = false;
     setDockMinimized(false);
@@ -2092,6 +2184,7 @@ export default function MobilePrototype({
     <div
       ref={mobileRootRef}
       className="mobile-prototype"
+      onClickCapture={captureSheetTrigger}
       data-theme={S.theme}
       data-sheet-open={sheet ? "true" : undefined}
       data-sheet-closing={sheetClosing ? "true" : undefined}
