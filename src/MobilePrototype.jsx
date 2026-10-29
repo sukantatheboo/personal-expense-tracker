@@ -244,23 +244,47 @@ const MonthSwitch = ({ m, onShift }) => (
 function suggestedCategory(description, expenses = []) {
   const title = String(description || "").trim().toLocaleLowerCase();
   if (!title) return "";
+  const exactCategory = Object.keys(CAT).find(
+    (category) => category.toLocaleLowerCase() === title,
+  );
+  if (exactCategory) return exactCategory;
   const rules = [
     [
-      "Shopping",
-      /\b(shop(?:ping)?|diy|market|clothes?|dress|shoes?|supermarket|online order)\b/,
-    ],
-    [
       "Food",
-      /\b(food|lunch|dinner|breakfast|snack|coffee|tea|restaurant|meal|grocery|groceries)\b/,
+      /\b(food|lunch|dinner|breakfast|snack|coffee|tea|restaurant|meal|grocery|groceries|takeaway|takeout|cafe|bakery|fruit|vegetables?)\b/,
     ],
     [
       "Transport",
-      /\b(transport|bus|train|uber|pathao|rickshaw|ride|fuel|petrol|cng|taxi)\b/,
+      /\b(transport|bus|train|uber|pathao|rickshaw|ride|fuel|petrol|cng|taxi|fare|metro|launch|parking|toll)\b/,
     ],
-    ["Home", /\b(home|rent|electricity|water bill|internet|gas bill|repair|cleaning)\b/],
-    ["Health", /\b(health|doctor|medicine|pharmacy|clinic|hospital)\b/],
-    ["Bills", /\b(bill|mobile recharge|phone recharge|subscription|utility)\b/],
-    ["Savings", /\b(saving|savings|deposit|transfer to savings)\b/],
+    [
+      "Entertainment",
+      /\b(entertainment|movie|cinema|concert|game|gaming|music|spotify|netflix|youtube premium|disney\+?|streaming|theatre|theater|hobby|event ticket)\b/,
+    ],
+    [
+      "Education",
+      /\b(education|school|tuition|class|course|university|college|exam|lesson|textbook|stationery|coaching|learning)\b/,
+    ],
+    [
+      "Health",
+      /\b(health|doctor|medical|medicine|pharmacy|clinic|hospital|dental|dentist|checkup|treatment|lab test)\b/,
+    ],
+    [
+      "Savings",
+      /\b(saving|savings|deposit|dps|fdr|investment|investing|transfer to savings)\b/,
+    ],
+    [
+      "Bills",
+      /\b(bill|electricity|water|gas|internet|phone bill|mobile recharge|phone recharge|utility|subscription|wifi)\b/,
+    ],
+    [
+      "Home",
+      /\b(home|rent|furniture|household|home repair|repair|cleaning|decor|appliance|plumbing)\b/,
+    ],
+    [
+      "Shopping",
+      /\b(shop(?:ping)?|diy|market|clothes?|clothing|dress|shoes?|supermarket|online order|purchase|bought|buy|electronics|gadget)\b/,
+    ],
   ];
   const keywordMatch = rules.find(([, pattern]) => pattern.test(title));
   if (keywordMatch) return keywordMatch[0];
@@ -377,7 +401,8 @@ function ExpenseRow({
           {e.rec ? " · Recurring" : ""}
           {suggestion && suggestion !== e.cat ? (
             <span className="category-suggestion-inline">
-              {` · Suggested: ${suggestion}`}
+              {" · Suggested: "}
+              <CategorySymbol category={suggestion} /> {suggestion}
             </span>
           ) : null}
         </small>
@@ -865,7 +890,10 @@ function Activity({
                       onOpen={onOpen}
                       onDelete={onDelete}
                       onDuplicate={onDuplicate}
-                      suggestion={suggestedCategory(e.desc, S.exp)}
+                      suggestion={suggestedCategory(
+                        e.desc,
+                        S.exp.filter((pastExpense) => pastExpense.id !== e.id),
+                      )}
                       isNew={highlightedExpenseId === e.id}
                     />
                   ))}
@@ -2804,7 +2832,10 @@ export default function MobilePrototype({
       {detail && (
         <DetailSheet
           e={detail}
-          suggestion={suggestedCategory(detail.desc, S.exp)}
+          suggestion={suggestedCategory(
+            detail.desc,
+            S.exp.filter((pastExpense) => pastExpense.id !== detail.id),
+          )}
           onSave={updateExpense}
           onDelete={deleteExpense}
           onClose={close}

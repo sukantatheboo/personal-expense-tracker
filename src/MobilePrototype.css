@@ -1176,6 +1176,9 @@ button:active {
 .mobile-prototype .expense-day-card .expense-row .nm small {
   margin-top: 2px;
   font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .mobile-prototype .expense-day-card .expense-row .am,
 .mobile-prototype .expense-day-card .expense-row .na {
@@ -1189,8 +1192,17 @@ button:active {
   color: var(--mut);
 }
 .mobile-prototype .category-suggestion-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
   color: var(--g);
   font-weight: 750;
+}
+.mobile-prototype .category-suggestion-inline .category-symbol {
+  width: 1em;
+  height: 1em;
+  vertical-align: 0;
 }
 .mobile-prototype button.ri {
   border-radius: 14px;
