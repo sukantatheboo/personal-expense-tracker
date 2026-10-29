@@ -12,18 +12,22 @@ function isSnapshotRpcUnavailable(error) {
 }
 
 async function loadLegacyCloudData(userId) {
-  const [snapshotResult, settingsResult, transactionsResult] =
+  let settingsQuery = supabase
+    .from("spend_account_settings")
+    .select(
+      "start_date, bkash_balance, bank_balance, savings_balance, configured, updated_at",
+    )
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  const [snapshotResult, initialSettingsResult, transactionsResult] =
     await Promise.all([
       supabase
         .from("spend_user_data")
         .select("data, updated_at")
         .eq("user_id", userId)
         .maybeSingle(),
-      supabase
-        .from("spend_account_settings")
-        .select("start_date, bkash_balance, bank_balance, configured, updated_at")
-        .eq("user_id", userId)
-        .maybeSingle(),
+      settingsQuery,
       supabase
         .from("spend_account_transactions")
         .select(
@@ -33,6 +37,20 @@ async function loadLegacyCloudData(userId) {
         .is("deleted_at", null)
         .order("created_at", { ascending: true }),
     ]);
+
+  let settingsResult = initialSettingsResult;
+  if (
+    settingsResult.error &&
+    (settingsResult.error.code === "PGRST204" ||
+      settingsResult.error.code === "42703" ||
+      settingsResult.error.message?.includes("savings_balance"))
+  ) {
+    settingsResult = await supabase
+      .from("spend_account_settings")
+      .select("start_date, bkash_balance, bank_balance, configured, updated_at")
+      .eq("user_id", userId)
+      .maybeSingle();
+  }
 
   if (snapshotResult.error) throw snapshotResult.error;
 
@@ -73,6 +91,7 @@ async function loadLegacyCloudData(userId) {
           balances: {
             bkash: settingsResult.data.bkash_balance,
             bank: settingsResult.data.bank_balance,
+            savings: settingsResult.data.savings_balance ?? 0,
           },
           configured: settingsResult.data.configured,
           updatedAt: Date.parse(settingsResult.data.updated_at) || 0,

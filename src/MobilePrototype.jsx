@@ -2151,6 +2151,7 @@ function ProfileSettingsPage({
   onEditProfile,
   onSignIn,
   onSignOut,
+  onResumeSync,
 }) {
   const isOffline =
     cloudSyncActivity === "offline" || cloudRealtimeStatus === "offline";
@@ -2259,6 +2260,17 @@ function ProfileSettingsPage({
           <p className="settings-status" role="status" aria-live="polite">
             {accountStatus}
           </p>
+        )}
+        {profile?.connected && !cloudSyncEnabled && (
+          <button
+            className="btn settings-account-action"
+            type="button"
+            disabled={authBusy}
+            onClick={onResumeSync}
+            style={{ marginBottom: "10px" }}
+          >
+            Resume sync
+          </button>
         )}
         <button
           className="btn settings-account-action"
@@ -2457,6 +2469,7 @@ export default function MobilePrototype({
   onBackupRestore,
   accountStatus,
   authBusy,
+  onResumeSync,
 }) {
   const [tab, setTab] = useState("home");
   const [plan, setPlan] = useState("budget");
@@ -3177,6 +3190,7 @@ export default function MobilePrototype({
                 onEditProfile={onEditProfile}
                 onSignIn={signIn}
                 onSignOut={onSignOut}
+                onResumeSync={onResumeSync}
               />
             ) : appSettingsOpen ? (
               <AppSettingsPage

@@ -940,6 +940,7 @@ export default function App() {
     setStartingBalances({
       bkash: "0",
       bank: "0",
+      savings: "0",
       date: empty.settings.startDate,
     });
     setExpenseForm(makeExpenseForm());
@@ -2854,6 +2855,13 @@ export default function App() {
     }
   }
 
+  function handleResumeSync() {
+    if (!pushUser) return;
+    setCloudSyncStatus("Starting cloud sync…");
+    setCloudSyncActivity("syncing");
+    setCloudSyncEnabled(true);
+  }
+
   async function signOutOfPush() {
     if (!supabase || !pushUser) return;
     setAuthBusy(true);
@@ -3148,6 +3156,7 @@ export default function App() {
         onExpensesCsv={exportAllExpensesCsv}
         onBackupRestore={() => backupFileInputRef.current?.click()}
         onSignOut={signOutOfPush}
+        onResumeSync={handleResumeSync}
         accountStatus={authStatus}
         authBusy={authBusy}
         onSignIn={openSignInModal}
