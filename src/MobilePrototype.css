@@ -71,9 +71,8 @@ a,
 .tab {
   touch-action: manipulation;
 }
-button:active,
-.card:active {
-  transform: scale(0.98);
+button:active {
+  transform: scale(0.99);
   transition: transform 100ms ease;
 }
 .auth-modal-backdrop,
@@ -235,9 +234,10 @@ button:active,
   color: var(--muted);
   cursor: pointer;
 }
-.auth-password-toggle:hover {
-  background: color-mix(in srgb, var(--green) 10%, transparent);
-  color: var(--green);
+@media (hover: hover) and (pointer: fine) {
+  .auth-password-toggle:hover {
+    color: var(--green);
+  }
 }
 .auth-password-toggle:focus-visible {
   outline: 2px solid var(--green);
@@ -454,7 +454,7 @@ button:active,
 }
 .mobile-prototype button:not(:disabled) {
   touch-action: manipulation;
-  transition: transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1.18);
+  transition: transform 140ms ease-out;
 }
 .mobile-prototype button:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--g) 55%, transparent);
@@ -464,7 +464,7 @@ button:active,
   outline: none;
 }
 .mobile-prototype button:not(:disabled):active {
-  transform: scale(0.98);
+  transform: scale(0.99);
   transition: transform 100ms ease;
 }
 .mobile-prototype input {
@@ -609,14 +609,12 @@ button:active,
   .mobile-prototype .prototype-header-action:hover,
   .mobile-prototype .prototype-header-back:hover {
     border-color: color-mix(in srgb, var(--g) 28%, var(--line));
-    background: color-mix(in srgb, var(--card) 91%, var(--g) 9%);
-    box-shadow: 0 3px 10px color-mix(in srgb, var(--g) 12%, transparent);
+    color: var(--g);
   }
 }
 .mobile-prototype .prototype-header-action:focus-visible,
 .mobile-prototype .prototype-header-back:focus-visible {
   border-color: color-mix(in srgb, var(--g) 28%, var(--line));
-  background: color-mix(in srgb, var(--card) 91%, var(--g) 9%);
   outline: 2px solid color-mix(in srgb, var(--g) 55%, transparent);
   outline-offset: 3px;
 }
@@ -626,10 +624,8 @@ button:active,
 }
 .mobile-prototype .prototype-header-action:active,
 .mobile-prototype .prototype-header-back:active {
-  transform: scale(0.94);
-  border-color: color-mix(in srgb, var(--g) 38%, var(--line));
-  background: color-mix(in srgb, var(--card) 86%, var(--g) 14%);
-  box-shadow: inset 0 2px 5px color-mix(in srgb, var(--ink) 10%, transparent);
+  transform: scale(0.97);
+  border-color: var(--line);
   transition-duration: 90ms;
 }
 .mobile-prototype .prototype-header-action:active svg,
@@ -849,7 +845,7 @@ button:active,
 .mobile-prototype .mn button:active,
 .mobile-prototype .mon button:active,
 .mobile-prototype .tabs nav .fab:active {
-  transform: scale(0.93);
+  transform: scale(0.97);
 }
 .mobile-prototype .mn button:disabled,
 .mobile-prototype .mon button:disabled {
@@ -991,7 +987,7 @@ button:active,
 }
 .mobile-prototype .sec button:active {
   background: transparent;
-  transform: scale(0.97);
+  transform: scale(0.99);
 }
 .mobile-prototype .stack {
   display: flex;
@@ -1057,9 +1053,13 @@ button:active,
     background-color 140ms ease,
     transform 100ms ease;
 }
-.mobile-prototype .leg:hover span:nth-child(2),
 .mobile-prototype .leg.is-highlighted span:nth-child(2) {
   color: var(--g);
+}
+@media (hover: hover) and (pointer: fine) {
+  .mobile-prototype .leg:hover span:nth-child(2) {
+    color: var(--g);
+  }
 }
 .mobile-prototype .leg.is-highlighted span:nth-child(2) {
   font-weight: 800;
@@ -1253,17 +1253,14 @@ button:active,
   font-weight: 600;
   line-height: 1.5;
 }
-.mobile-prototype button.ri:hover {
-  background: color-mix(in srgb, var(--g) 5%, transparent);
-}
 .mobile-prototype button.ri:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--g) 48%, transparent);
-  outline-offset: 2px;
-  background: color-mix(in srgb, var(--g) 7%, transparent);
+  outline-offset: -2px;
+  background: transparent;
 }
 .mobile-prototype button.ri:active {
-  background: color-mix(in srgb, var(--g) 9%, transparent);
-  transform: scale(0.985);
+  background: transparent;
+  transform: scale(0.99);
 }
 .mobile-prototype button.ri:active .sw {
   transform: scale(0.95);
@@ -1354,14 +1351,19 @@ button:active,
   line-height: 1;
   flex: none;
 }
-.mobile-prototype .remove-rec:hover,
 .mobile-prototype .remove-rec:focus-visible {
   background: transparent;
   color: var(--bad);
 }
 .mobile-prototype .remove-rec:active {
   background: transparent;
-  transform: scale(0.9);
+  transform: scale(0.96);
+}
+@media (hover: hover) and (pointer: fine) {
+  .mobile-prototype .remove-rec:hover {
+    background: transparent;
+    color: var(--bad);
+  }
 }
 .mobile-prototype .day {
   display: flex;
@@ -1447,7 +1449,7 @@ button:active,
 }
 .mobile-prototype .chips button:active,
 .mobile-prototype .cg button:active {
-  transform: scale(0.96);
+  transform: scale(0.99);
 }
 .mobile-prototype .chips button {
   display: inline-flex;
@@ -1505,7 +1507,7 @@ button:active,
   touch-action: manipulation;
 }
 .mobile-prototype .seg button:active {
-  transform: scale(0.97);
+  transform: scale(0.99);
 }
 .mobile-prototype .seg .on {
   background: var(--card);
@@ -1588,9 +1590,9 @@ button:active,
   touch-action: manipulation;
 }
 .mobile-prototype .acts button:active {
-  transform: scale(0.96);
-  background: color-mix(in srgb, var(--card) 92%, var(--g) 8%);
-  box-shadow: 0 2px 8px rgb(32 52 40 / 8%);
+  transform: scale(0.985);
+  background: var(--card);
+  box-shadow: var(--shadow);
 }
 .mobile-prototype .acts svg {
   display: block;
@@ -1691,12 +1693,9 @@ button:active,
 .mobile-prototype .sw.on::after {
   transform: translateX(18px) scale(1);
 }
-.mobile-prototype .sw:hover {
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--g) 9%, transparent);
-}
 .mobile-prototype .sw:active {
-  transform: scale(0.92);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--g) 14%, transparent);
+  transform: scale(0.97);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--g) 9%, transparent);
 }
 .mobile-prototype .sw:active::after {
   transform: translateX(0) scale(0.88);
@@ -1707,6 +1706,11 @@ button:active,
 .mobile-prototype .sw:focus-visible {
   outline: 3px solid color-mix(in srgb, var(--g) 48%, transparent);
   outline-offset: 3px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .mobile-prototype .sw:hover {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--g) 8%, transparent);
+  }
 }
 .mobile-prototype .tabs {
   --dock-spring: cubic-bezier(0.34, 1.2, 0.64, 1);
@@ -1908,12 +1912,9 @@ button:active,
 .mobile-prototype .tabs[data-minimized="true"] nav .t {
   min-height: 44px;
 }
-.mobile-prototype .tabs nav .t:hover {
-  background: color-mix(in srgb, var(--g) 7%, transparent);
-}
 .mobile-prototype .tabs nav .t:active {
-  transform: scale(0.94);
-  background: color-mix(in srgb, var(--g) 12%, transparent);
+  transform: scale(0.985);
+  background: transparent;
 }
 .mobile-prototype .tabs nav .t:active .tab-icon {
   transform: scale(0.9);
@@ -1923,7 +1924,12 @@ button:active,
 .mobile-prototype .tabs nav .t:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--g) 55%, transparent);
   outline-offset: 2px;
-  background: color-mix(in srgb, var(--g) 9%, transparent);
+  background: transparent;
+}
+@media (hover: hover) and (pointer: fine) {
+  .mobile-prototype .tabs nav .t:hover {
+    color: var(--dock-tab-active);
+  }
 }
 .mobile-prototype .tabs nav .t.on {
   background: transparent;
@@ -1981,14 +1987,14 @@ button:active,
     box-shadow 160ms ease;
 }
 .mobile-prototype .tabs nav .fab:active {
-  --fab-s: 0.94;
+  --fab-s: 0.97;
   box-shadow: 0 3px 10px rgb(47 122 90/32%);
   transition:
     transform 110ms ease-out,
     box-shadow 110ms ease-out;
 }
 .mobile-prototype .tabs[data-minimized="true"] nav .fab:active {
-  --fab-s: 0.83;
+  --fab-s: 0.96;
 }
 .mobile-prototype .fab svg {
   width: 24px;
@@ -2139,13 +2145,16 @@ button:active,
   background: var(--card);
   color: var(--ink);
 }
-.mobile-prototype .settings-page-back:hover,
 .mobile-prototype .settings-page-back:focus-visible {
-  background: var(--card);
   color: var(--g);
 }
 .mobile-prototype .settings-page-back:active {
-  transform: scale(0.92);
+  transform: scale(0.97);
+}
+@media (hover: hover) and (pointer: fine) {
+  .mobile-prototype .settings-page-back:hover {
+    color: var(--g);
+  }
 }
 .mobile-prototype .settings-page-back svg {
   width: 18px;
@@ -2179,13 +2188,12 @@ button:active,
 .mobile-prototype button.settings-profile-row {
   border-radius: 14px;
 }
-.mobile-prototype button.settings-profile-row:hover,
 .mobile-prototype button.settings-profile-row:focus-visible {
-  background: color-mix(in srgb, var(--g) 7%, transparent);
+  background: transparent;
 }
 .mobile-prototype button.settings-profile-row:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--g) 55%, transparent);
-  outline-offset: 2px;
+  outline: 2px solid color-mix(in srgb, var(--g) 48%, transparent);
+  outline-offset: -2px;
 }
 .mobile-prototype .settings-profile-guest .nm small {
   color: var(--g);
@@ -2235,11 +2243,9 @@ button:active,
   color: var(--g);
   cursor: pointer;
 }
-.mobile-prototype .settings-profile-edit:hover,
 .mobile-prototype .settings-profile-edit:focus-visible {
-  background: color-mix(in srgb, var(--g) 22%, var(--card));
   outline: 2px solid color-mix(in srgb, var(--g) 45%, transparent);
-  outline-offset: 2px;
+  outline-offset: 3px;
 }
 .mobile-prototype .settings-profile-edit svg {
   display: block;
@@ -2471,7 +2477,7 @@ button:active,
     transform: none;
   }
   .mobile-prototype .tabs nav .t.on {
-    background: color-mix(in srgb, var(--g) 9%, transparent);
+    background: transparent;
   }
   .mobile-prototype .tabs nav .t.on .tab-label {
     animation: none;
