@@ -1695,41 +1695,54 @@ a:active,
   display: block;
   flex: 0 0 calc(50% - 6px);
   min-width: 0;
-  border-radius: 24px;
+  min-height: 128px;
+  border-radius: 26px;
   padding: 18px;
-  color: var(--ink);
+  color: #fff;
   text-align: left;
-  background: color-mix(in srgb, var(--account-accent) 10%, var(--card));
-  border: 1px solid color-mix(in srgb, var(--account-accent) 18%, var(--line));
-  box-shadow: 0 5px 16px rgb(0 0 0 / 4%);
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--account-accent) 95%, #fff 5%),
+    color-mix(in srgb, var(--account-accent) 82%, #111 18%)
+  );
+  border: 1px solid color-mix(in srgb, #fff 26%, var(--account-accent));
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--account-accent) 18%, transparent);
   scroll-snap-align: start;
   transition:
-    transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1.12),
+    transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1.12),
+    filter 160ms ease,
     border-color 160ms ease,
-    box-shadow 160ms ease;
+    box-shadow 180ms ease;
   touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 .mobile-prototype button.acc:not(:disabled):active {
   transform: scale(0.975);
+  filter: brightness(0.96) saturate(1.04);
+  transition-duration: 90ms;
 }
 .mobile-prototype .acc.is-selected {
-  border-color: color-mix(in srgb, var(--account-accent) 58%, var(--line));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--account-accent) 24%, transparent),
-    0 6px 18px rgb(0 0 0 / 5%);
+  border-color: rgb(255 255 255 / 88%);
+  box-shadow:
+    inset 0 0 0 2px rgb(255 255 255 / 78%),
+    0 12px 26px color-mix(in srgb, var(--account-accent) 24%, transparent);
 }
-.mobile-prototype[data-theme="dark"] .acc {
-  background: color-mix(in srgb, var(--account-accent) 13%, var(--card));
-  border-color: color-mix(in srgb, var(--account-accent) 17%, var(--line));
-  box-shadow: 0 6px 18px rgb(0 0 0 / 10%);
+@media (hover: hover) and (pointer: fine) {
+  .mobile-prototype .acc:hover {
+    filter: brightness(1.04) saturate(1.03);
+    box-shadow: 0 13px 28px color-mix(in srgb, var(--account-accent) 24%, transparent);
+  }
 }
 .mobile-prototype .account-cards {
   display: flex;
   gap: 12px;
-  margin: 14px -18px 0;
-  padding: 0 18px 2px;
+  width: 100%;
+  margin: 14px 0 0;
+  padding: 0 0 4px;
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scroll-snap-type: x mandatory;
+  scroll-padding-inline: 0;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
 }
@@ -1739,8 +1752,9 @@ a:active,
 .mobile-prototype .account-total-card {
   margin: 0;
   padding: 20px;
-  background: color-mix(in srgb, var(--card) 90%, var(--g));
-  border-color: color-mix(in srgb, var(--g) 14%, var(--line));
+  background: var(--card);
+  border-color: var(--line);
+  box-shadow: var(--shadow);
 }
 .mobile-prototype .account-total-value {
   margin-top: 4px;
@@ -1780,9 +1794,9 @@ a:active,
   border-radius: 14px;
   display: grid;
   place-items: center;
-  background: color-mix(in srgb, var(--account-accent) 13%, var(--card));
-  border: 1px solid color-mix(in srgb, var(--account-accent) 17%, var(--line));
-  color: color-mix(in srgb, var(--account-accent) 78%, var(--ink));
+  background: rgb(255 255 255 / 94%);
+  border: 1px solid rgb(255 255 255 / 82%);
+  color: color-mix(in srgb, var(--account-accent) 84%, #15201a);
 }
 .mobile-prototype .lg.bkash {
   background: #fff;
