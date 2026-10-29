@@ -576,8 +576,12 @@ function Home({
   const list = monthExp(S);
   const by = {};
   list.forEach((e) => {
-    if (e.amt != null) by[e.cat] = (by[e.cat] || 0) + e.amt;
+    if (e.amt == null || e.cat === "Other" || !CAT[e.cat]) return;
+    by[e.cat] = (by[e.cat] || 0) + e.amt;
   });
+  const namedCategoryTotal = Object.values(by).reduce((sum, value) => sum + value, 0);
+  const otherTotal = Math.max(0, Number((total - namedCategoryTotal).toFixed(2)));
+  if (otherTotal > 0) by.Other = otherTotal;
   const cs = Object.entries(by).sort((x, y) => y[1] - x[1]);
   const topCategory = cs.find(([category]) => category !== "Savings");
   const nx = S.rec
