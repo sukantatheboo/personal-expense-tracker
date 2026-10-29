@@ -1194,15 +1194,28 @@ button:active {
 .mobile-prototype .category-suggestion-inline {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 6px;
+  margin-left: 3px;
   white-space: nowrap;
   color: var(--g);
   font-weight: 750;
 }
-.mobile-prototype .category-suggestion-inline .category-symbol {
-  width: 1em;
-  height: 1em;
-  vertical-align: 0;
+.mobile-prototype .category-suggestion-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 2px;
+  line-height: 1.15;
+  vertical-align: middle;
+}
+.mobile-prototype .category-suggestion-value .category-symbol {
+  display: inline-grid;
+  width: 1.15em;
+  height: 1.15em;
+  flex: 0 0 1.15em;
+  place-items: center;
+  line-height: 1;
+  vertical-align: middle;
 }
 .mobile-prototype button.ri {
   border-radius: 14px;
@@ -2748,12 +2761,17 @@ button:active {
   gap: 8px;
 }
 .mobile-prototype .category-suggestion-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin: -3px 0 8px;
   color: var(--mut);
   font-size: 12px;
   font-weight: 650;
 }
 .mobile-prototype .category-suggestion-hint b {
+  display: inline-flex;
+  align-items: center;
   color: var(--g);
   font-weight: 800;
 }

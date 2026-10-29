@@ -123,6 +123,15 @@ function CategorySymbol({ category }) {
   );
 }
 
+function CategorySuggestionValue({ category }) {
+  return (
+    <span className="category-suggestion-value">
+      <CategorySymbol category={category} />
+      <span>{category}</span>
+    </span>
+  );
+}
+
 function greetingFirstName(profile) {
   const firstName = profile?.hasName
     ? String(profile.name || "")
@@ -401,8 +410,8 @@ function ExpenseRow({
           {e.rec ? " · Recurring" : ""}
           {suggestion && suggestion !== e.cat ? (
             <span className="category-suggestion-inline">
-              {" · Suggested: "}
-              <CategorySymbol category={suggestion} /> {suggestion}
+              <span> · Suggested:</span>
+              <CategorySuggestionValue category={suggestion} />
             </span>
           ) : null}
         </small>
@@ -1334,7 +1343,8 @@ function AddSheet({ iv, categoryOrder, expenses, onSave, onClose }) {
       />
       {categorySuggestion && (
         <p className="category-suggestion-hint" role="status" aria-live="polite">
-          Suggested category: <b><CategorySymbol category={categorySuggestion} /> {categorySuggestion}</b>
+          <span>Suggested category:</span>
+          <b><CategorySuggestionValue category={categorySuggestion} /></b>
         </p>
       )}
 
@@ -1524,7 +1534,7 @@ function DetailSheet({ e, suggestion, onSave, onDelete, onClose }) {
           type="button"
           onClick={() => set("cat", suggestion)}
         >
-          Use suggestion: <CategorySymbol category={suggestion} /> {suggestion}
+          Use suggestion: <CategorySuggestionValue category={suggestion} />
         </button>
       )}
       <div className="cg">
