@@ -1186,9 +1186,12 @@ button:active {
 .mobile-prototype .expense-swipe-delete {
   position: absolute;
   inset: 5px 5px 5px auto;
-  display: grid;
+  display: flex;
   width: 64px;
-  place-items: center;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
   border: 0;
   border-radius: 14px;
   background: color-mix(in srgb, var(--danger) 12%, var(--card));
@@ -1196,14 +1199,18 @@ button:active {
   cursor: pointer;
   transition: opacity 160ms ease;
 }
+.mobile-prototype .expense-swipe-delete.is-skip {
+  background: color-mix(in srgb, var(--g) 12%, var(--card));
+  color: var(--g);
+}
 .mobile-prototype .expense-swipe-delete:disabled {
   opacity: 1;
   cursor: default;
   pointer-events: none;
 }
 .mobile-prototype .expense-swipe-delete svg {
-  width: 23px;
-  height: 23px;
+  width: 20px;
+  height: 20px;
   fill: none;
   stroke: currentColor;
   stroke-linecap: round;
@@ -1214,6 +1221,11 @@ button:active {
   transition:
     opacity 150ms ease-out,
     transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.mobile-prototype .expense-swipe-delete span {
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
 }
 .mobile-prototype .expense-swipe-shell.is-dragging .expense-swipe-delete svg,
 .mobile-prototype .expense-swipe-shell.is-revealed .expense-swipe-delete svg,
@@ -1250,6 +1262,10 @@ button:active {
   animation: none;
   transition: transform 220ms cubic-bezier(0.22, 0.8, 0.2, 1);
   will-change: transform;
+}
+.mobile-prototype .expense-day-card .expense-row.is-duplicate-feedback {
+  background: color-mix(in srgb, var(--g) 9%, var(--card));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--g) 38%, transparent);
 }
 .mobile-prototype .expense-day-card .expense-swipe-shell.is-collapsing + .expense-swipe-shell {
   border-top-color: transparent;

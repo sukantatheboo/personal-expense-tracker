@@ -103,6 +103,16 @@ const ICONS = {
 };
 const Icon = ({ n }) => <svg viewBox="0 0 24 24">{ICONS[n]}</svg>;
 
+function triggerHaptic(duration = 12) {
+  if (typeof navigator === "undefined" || typeof navigator.vibrate !== "function")
+    return false;
+  try {
+    return navigator.vibrate(duration);
+  } catch {
+    return false;
+  }
+}
+
 function CategorySymbol({ category }) {
   if (category === "Other") {
     return (
@@ -323,6 +333,7 @@ function ExpenseRow({
   e,
   onOpen,
   onDelete,
+  onSkip,
   onDuplicate,
   suggestion = "",
   isNew = false,
@@ -333,9 +344,11 @@ function ExpenseRow({
   const holdTimerRef = useRef();
   const swipeTimerRef = useRef();
   const collapseTimerRef = useRef();
+  const duplicateFeedbackTimerRef = useRef();
   const suppressClickTimerRef = useRef();
   const suppressClickRef = useRef(false);
   const [swipe, setSwipe] = useState({ offset: 0, phase: "idle" });
+  const [duplicateFeedback, setDuplicateFeedback] = useState(false);
   const swipeRef = useRef(swipe);
   const updateSwipe = (next) => {
     swipeRef.current = next;
@@ -352,9 +365,9 @@ function ExpenseRow({
       suppressClickRef.current = false;
     }, 500);
   };
-  const beginDelete = () => {
+  const beginDelete = (commit = onDelete) => {
     if (
-      !onDelete ||
+      !commit ||
       swipeRef.current.phase === "deleting" ||
       swipeRef.current.phase === "collapsing"
     )
@@ -366,13 +379,14 @@ function ExpenseRow({
     collapseTimerRef.current = setTimeout(() => {
       updateSwipe({ offset: -width, phase: "collapsing" });
     }, 220);
-    swipeTimerRef.current = setTimeout(() => onDelete(e.id), 460);
+    swipeTimerRef.current = setTimeout(() => commit(e.id), 460);
   };
   useEffect(
     () => () => {
       clearTimeout(holdTimerRef.current);
       clearTimeout(swipeTimerRef.current);
       clearTimeout(collapseTimerRef.current);
+      clearTimeout(duplicateFeedbackTimerRef.current);
       clearTimeout(suppressClickTimerRef.current);
     },
     [],
@@ -400,6 +414,13 @@ function ExpenseRow({
       holdTimerRef.current = setTimeout(() => {
         if (!pointerRef.current?.moved) {
           suppressNextClick();
+          triggerHaptic(12);
+          setDuplicateFeedback(true);
+          clearTimeout(duplicateFeedbackTimerRef.current);
+          duplicateFeedbackTimerRef.current = setTimeout(
+            () => setDuplicateFeedback(false),
+            520,
+          );
           onDuplicate(e);
         }
       }, 560);
@@ -459,7 +480,7 @@ function ExpenseRow({
           offset <= -Math.max(118, gesture.width * 0.42) ||
           (dx < -54 && velocity < -0.72)
         ) {
-          beginDelete();
+          beginDelete(e.rec && onSkip ? onSkip : onDelete);
         } else if (offset <= -52) {
           updateSwipe({ offset: -78, phase: "revealed" });
         } else {
@@ -479,12 +500,15 @@ function ExpenseRow({
   const amountPrefix = isPositive ? "+" : "";
   const gestureHint =
     onDelete && onDuplicate
-      ? "Tap to edit, swipe left to delete, or press and hold to duplicate."
+      ? e.rec
+        ? "Tap to edit, swipe left to skip this occurrence, or press and hold to duplicate."
+        : "Tap to edit, swipe left to delete, or press and hold to duplicate."
       : "Tap to edit.";
   const rowClasses = [
     "ri",
     "expense-row",
     isNew && "is-new",
+    duplicateFeedback && "is-duplicate-feedback",
     swipe.phase === "dragging" && "is-swipe-dragging",
     swipe.phase === "revealed" && "is-swipe-revealed",
     ["deleting", "collapsing"].includes(swipe.phase) && "is-swipe-deleting",
@@ -546,17 +570,24 @@ function ExpenseRow({
       className={`expense-swipe-shell${swipe.phase === "dragging" ? " is-dragging" : ""}${swipe.phase === "revealed" ? " is-revealed" : ""}${["deleting", "collapsing"].includes(swipe.phase) ? " is-deleting" : ""}${swipe.phase === "collapsing" ? " is-collapsing" : ""}`}
     >
       <button
-        className="expense-swipe-delete"
+        className={`expense-swipe-delete${e.rec ? " is-skip" : ""}`}
         type="button"
-        aria-label={`Delete ${e.desc}`}
+        aria-label={
+          e.rec ? `Skip ${e.desc} for this occurrence` : `Delete ${e.desc}`
+        }
         aria-hidden={swipe.phase !== "revealed"}
         disabled={swipe.phase !== "revealed"}
         tabIndex={swipe.phase === "revealed" ? 0 : -1}
-        onClick={beginDelete}
+        onClick={() => beginDelete(e.rec && onSkip ? onSkip : onDelete)}
       >
         <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 3v6m4-6v6" />
+          {e.rec ? (
+            <path d="M4 5h16v15H4zM8 3v4m8-4v4M4 10h16m-8 3v4m-2-2h4" />
+          ) : (
+            <path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 3v6m4-6v6" />
+          )}
         </svg>
+        <span>{e.rec ? "Skip" : "Delete"}</span>
       </button>
       {row}
     </div>
@@ -966,6 +997,7 @@ function Activity({
   setCf,
   onOpen,
   onDelete,
+  onSkip,
   onDuplicate,
   searchRef,
   highlightedExpenseId,
@@ -1040,6 +1072,7 @@ function Activity({
                       e={e}
                       onOpen={onOpen}
                       onDelete={onDelete}
+                      onSkip={onSkip}
                       onDuplicate={onDuplicate}
                       suggestion={suggestedCategory(
                         e.desc,
@@ -2598,10 +2631,9 @@ export default function MobilePrototype({
     }
     if (
       (t !== tab || appSettingsOpen || profileSettingsOpen) &&
-      typeof navigator !== "undefined" &&
-      typeof navigator.vibrate === "function"
+      typeof navigator !== "undefined"
     ) {
-      navigator.vibrate(8);
+      triggerHaptic(8);
     }
     const currentIndex = TABS.findIndex(([key]) => key === tab);
     const nextIndex = TABS.findIndex(([key]) => key === t);
@@ -2649,6 +2681,13 @@ export default function MobilePrototype({
     const undo = expense ? onExpenseDelete(expense) : undefined;
     close();
     toast("Expense removed", undo);
+  };
+  const skipRecurringExpense = (id) => {
+    const expense = S.exp.find((item) => item.id === id);
+    if (!expense?.rec) return deleteExpense(id);
+    const undo = onExpenseDelete(expense);
+    close();
+    toast("Skipped this recurring occurrence", undo);
   };
   const duplicateExpense = (expense) => {
     const saved = onExpenseSave({
@@ -2933,6 +2972,7 @@ export default function MobilePrototype({
                 setCf={setCf}
                 onOpen={openExpense}
                 onDelete={deleteExpense}
+                onSkip={skipRecurringExpense}
                 onDuplicate={duplicateExpense}
                 searchRef={activitySearchRef}
                 highlightedExpenseId={highlightedExpenseId}
