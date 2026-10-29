@@ -284,7 +284,14 @@ function suggestedCategory(description, expenses = []) {
   return best.score >= 0.5 ? best.category : "";
 }
 
-function ExpenseRow({ e, onOpen, onDelete, onDuplicate, isNew = false }) {
+function ExpenseRow({
+  e,
+  onOpen,
+  onDelete,
+  onDuplicate,
+  suggestion = "",
+  isNew = false,
+}) {
   const [, c] = CAT[e.cat];
   const pointerRef = useRef(null);
   const holdTimerRef = useRef();
@@ -368,6 +375,11 @@ function ExpenseRow({ e, onOpen, onDelete, onDuplicate, isNew = false }) {
           {e.cat}
           {e.acct ? " · " + ACC[e.acct][0] : ""}
           {e.rec ? " · Recurring" : ""}
+          {suggestion && suggestion !== e.cat ? (
+            <span className="category-suggestion-inline">
+              {` · Suggested: ${suggestion}`}
+            </span>
+          ) : null}
         </small>
       </span>
       {e.amt == null ? (
@@ -853,6 +865,7 @@ function Activity({
                       onOpen={onOpen}
                       onDelete={onDelete}
                       onDuplicate={onDuplicate}
+                      suggestion={suggestedCategory(e.desc, S.exp)}
                       isNew={highlightedExpenseId === e.id}
                     />
                   ))}
@@ -1226,6 +1239,9 @@ function AddSheet({ iv, categoryOrder, expenses, onSave, onClose }) {
   const [categoryTouched, setCategoryTouched] = useState(false);
   const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
   const custom = f.date !== ld() && f.date !== ago(1);
+  const categorySuggestion = categoryTouched
+    ? ""
+    : suggestedCategory(f.desc, expenses);
 
   return (
     <Sheet
@@ -1288,6 +1304,11 @@ function AddSheet({ iv, categoryOrder, expenses, onSave, onClose }) {
           }
         }}
       />
+      {categorySuggestion && (
+        <p className="category-suggestion-hint" role="status" aria-live="polite">
+          Suggested category: <b><CategorySymbol category={categorySuggestion} /> {categorySuggestion}</b>
+        </p>
+      )}
 
       <span className="lbl">Date</span>
       <div className="seg">
@@ -1425,7 +1446,7 @@ function TxSheet({ type, onSave, onClose }) {
   );
 }
 
-function DetailSheet({ e, onSave, onDelete, onClose }) {
+function DetailSheet({ e, suggestion, onSave, onDelete, onClose }) {
   const [f, setF] = useState({
     desc: e.desc,
     amt: e.amt ?? "",
@@ -1469,6 +1490,15 @@ function DetailSheet({ e, onSave, onDelete, onClose }) {
         onChange={(event) => set("desc", event.target.value)}
       />
       <span className="lbl">Category</span>
+      {suggestion && suggestion !== e.cat && (
+        <button
+          className="category-suggestion-action"
+          type="button"
+          onClick={() => set("cat", suggestion)}
+        >
+          Use suggestion: <CategorySymbol category={suggestion} /> {suggestion}
+        </button>
+      )}
       <div className="cg">
         {Object.keys(CAT).map((category) => (
           <button
@@ -2774,6 +2804,7 @@ export default function MobilePrototype({
       {detail && (
         <DetailSheet
           e={detail}
+          suggestion={suggestedCategory(detail.desc, S.exp)}
           onSave={updateExpense}
           onDelete={deleteExpense}
           onClose={close}

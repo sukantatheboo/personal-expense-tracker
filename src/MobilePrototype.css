@@ -1188,6 +1188,10 @@ button:active {
 .mobile-prototype .expense-day-card .expense-row .am.is-neutral {
   color: var(--mut);
 }
+.mobile-prototype .category-suggestion-inline {
+  color: var(--g);
+  font-weight: 750;
+}
 .mobile-prototype button.ri {
   border-radius: 14px;
   transition:
@@ -2730,6 +2734,34 @@ button:active {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+.mobile-prototype .category-suggestion-hint {
+  margin: -3px 0 8px;
+  color: var(--mut);
+  font-size: 12px;
+  font-weight: 650;
+}
+.mobile-prototype .category-suggestion-hint b {
+  color: var(--g);
+  font-weight: 800;
+}
+.mobile-prototype .category-suggestion-action {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 5px;
+  margin: -3px 0 9px;
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--g) 30%, var(--line));
+  border-radius: 999px;
+  background: transparent;
+  color: var(--g);
+  font-size: 12px;
+  font-weight: 750;
+}
+.mobile-prototype .category-suggestion-action:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--g) 50%, transparent);
+  outline-offset: 2px;
 }
 .mobile-prototype .hint {
   color: var(--mut);
