@@ -1167,17 +1167,78 @@ button:active {
   padding: 3px 14px;
   overflow: hidden;
 }
+.mobile-prototype .expense-swipe-shell {
+  position: relative;
+  height: 56px;
+  overflow: hidden;
+  isolation: isolate;
+  transition:
+    height 240ms cubic-bezier(0.22, 0.8, 0.2, 1),
+    opacity 180ms ease-out;
+}
+.mobile-prototype .expense-swipe-shell + .expense-swipe-shell {
+  border-top: 1px solid var(--line);
+}
+.mobile-prototype .expense-swipe-shell.is-deleting {
+  height: 0;
+  opacity: 0;
+}
+.mobile-prototype .expense-swipe-delete {
+  position: absolute;
+  inset: 5px 5px 5px auto;
+  display: grid;
+  width: 64px;
+  place-items: center;
+  border: 0;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--danger) 12%, var(--card));
+  color: var(--danger);
+  cursor: pointer;
+  transition: opacity 160ms ease;
+}
+.mobile-prototype .expense-swipe-delete:disabled {
+  opacity: 0;
+  pointer-events: none;
+}
+.mobile-prototype .expense-swipe-delete svg {
+  width: 23px;
+  height: 23px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
 .mobile-prototype .expense-day-card .expense-row {
+  position: relative;
+  z-index: 1;
+  height: 100%;
   min-height: 56px;
   gap: 10px;
   padding: 5px 2px;
   border: 0;
   border-radius: 0;
+  background: var(--card);
   touch-action: pan-y;
   -webkit-touch-callout: none;
+  transform: translate3d(var(--swipe-x, 0px), 0, 0);
+  transition: transform 260ms cubic-bezier(0.22, 0.8, 0.2, 1);
+  will-change: transform;
 }
-.mobile-prototype .expense-day-card .expense-row + .expense-row {
-  border-top: 1px solid var(--line);
+.mobile-prototype .expense-day-card .expense-row.is-swipe-dragging {
+  animation: none;
+  transition: none;
+}
+.mobile-prototype .expense-day-card .expense-row.is-swipe-revealed {
+  animation: none;
+  transition: transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.mobile-prototype .expense-day-card .expense-row.is-swipe-deleting {
+  animation: none;
+  transition: transform 220ms cubic-bezier(0.22, 0.8, 0.2, 1);
+}
+.mobile-prototype .expense-day-card .expense-swipe-shell.is-deleting + .expense-swipe-shell {
+  border-top-color: transparent;
 }
 .mobile-prototype .expense-day-card .expense-row .ic {
   width: 34px;
@@ -2409,6 +2470,11 @@ button:active {
 }
 @media (prefers-reduced-motion: reduce) {
   .mobile-prototype button:not(:disabled) {
+    transition: none !important;
+  }
+  .mobile-prototype .expense-swipe-shell,
+  .mobile-prototype .expense-swipe-delete,
+  .mobile-prototype .expense-day-card .expense-row {
     transition: none !important;
   }
   .mobile-prototype button:not(:disabled):active {

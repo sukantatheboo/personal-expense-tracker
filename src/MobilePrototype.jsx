@@ -329,26 +329,68 @@ function ExpenseRow({
 }) {
   const [, c] = CAT[e.cat];
   const pointerRef = useRef(null);
+  const rowRef = useRef(null);
   const holdTimerRef = useRef();
+  const swipeTimerRef = useRef();
+  const suppressClickTimerRef = useRef();
   const suppressClickRef = useRef(false);
+  const [swipe, setSwipe] = useState({ offset: 0, phase: "idle" });
+  const swipeRef = useRef(swipe);
+  const updateSwipe = (next) => {
+    swipeRef.current = next;
+    setSwipe(next);
+  };
   const clearHoldTimer = () => {
     clearTimeout(holdTimerRef.current);
     holdTimerRef.current = undefined;
   };
-  useEffect(() => () => clearTimeout(holdTimerRef.current), []);
+  const suppressNextClick = () => {
+    suppressClickRef.current = true;
+    clearTimeout(suppressClickTimerRef.current);
+    suppressClickTimerRef.current = setTimeout(() => {
+      suppressClickRef.current = false;
+    }, 500);
+  };
+  const beginDelete = () => {
+    if (!onDelete || swipeRef.current.phase === "deleting") return;
+    clearTimeout(swipeTimerRef.current);
+    const width = rowRef.current?.offsetWidth || 320;
+    updateSwipe({ offset: -width, phase: "deleting" });
+    swipeTimerRef.current = setTimeout(() => onDelete(e.id), 245);
+  };
+  useEffect(
+    () => () => {
+      clearTimeout(holdTimerRef.current);
+      clearTimeout(swipeTimerRef.current);
+      clearTimeout(suppressClickTimerRef.current);
+    },
+    [],
+  );
   const startGesture = (event) => {
     if (!onDelete && !onDuplicate) return;
-    if (event.pointerType !== "touch") return;
     if (event.button != null && event.button !== 0) return;
+    if (swipeRef.current.phase === "deleting") return;
     clearHoldTimer();
-    pointerRef.current = { x: event.clientX, y: event.clientY, moved: false };
+    clearTimeout(swipeTimerRef.current);
+    pointerRef.current = {
+      x: event.clientX,
+      y: event.clientY,
+      startedAt: performance.now(),
+      moved: false,
+      horizontal: false,
+      initialOffset: swipeRef.current.offset,
+      pointerId: event.pointerId,
+      pointerType: event.pointerType,
+    };
     suppressClickRef.current = false;
-    holdTimerRef.current = setTimeout(() => {
-      if (!pointerRef.current?.moved) {
-        suppressClickRef.current = true;
-        onDuplicate(e);
-      }
-    }, 560);
+    if (event.pointerType === "touch" && onDuplicate) {
+      holdTimerRef.current = setTimeout(() => {
+        if (!pointerRef.current?.moved) {
+          suppressNextClick();
+          onDuplicate(e);
+        }
+      }, 560);
+    }
   };
   const moveGesture = (event) => {
     if (!pointerRef.current) return;
@@ -358,15 +400,53 @@ function ExpenseRow({
       pointerRef.current.moved = true;
       clearHoldTimer();
     }
+    if (
+      onDelete &&
+      !pointerRef.current.horizontal &&
+      (dx < -8 || (pointerRef.current.initialOffset < 0 && dx > 8)) &&
+      Math.abs(dx) > Math.abs(dy) * 1.15
+    ) {
+      pointerRef.current.horizontal = true;
+      suppressNextClick();
+      try {
+        event.currentTarget.setPointerCapture(pointerRef.current.pointerId);
+      } catch {
+        // Pointer capture is an enhancement; dragging still works without it.
+      }
+    }
+    if (pointerRef.current.horizontal) {
+      const width = rowRef.current?.offsetWidth || 320;
+      const offset = Math.max(
+        -width,
+        Math.min(0, pointerRef.current.initialOffset + dx),
+      );
+      updateSwipe({ offset, phase: "dragging" });
+    }
   };
   const endGesture = (event) => {
     clearHoldTimer();
-    if (pointerRef.current && event.type !== "pointercancel") {
-      const dx = event.clientX - pointerRef.current.x;
-      const dy = event.clientY - pointerRef.current.y;
-      if (dx <= -72 && Math.abs(dy) < 48) {
-        suppressClickRef.current = true;
-        onDelete(e.id);
+    const gesture = pointerRef.current;
+    if (gesture && event.type === "pointercancel") {
+      updateSwipe({ offset: 0, phase: "idle" });
+    } else if (gesture) {
+      const dx = event.clientX - gesture.x;
+      const dy = event.clientY - gesture.y;
+      if (gesture.horizontal && onDelete && Math.abs(dy) < 72) {
+        const width = rowRef.current?.offsetWidth || 320;
+        const offset = Math.min(0, gesture.initialOffset + dx);
+        const elapsed = Math.max(1, performance.now() - gesture.startedAt);
+        const velocity = dx / elapsed;
+        suppressNextClick();
+        if (
+          offset <= -Math.max(118, width * 0.42) ||
+          (dx < -54 && velocity < -0.72)
+        ) {
+          beginDelete();
+        } else if (offset <= -52) {
+          updateSwipe({ offset: -78, phase: "revealed" });
+        } else {
+          updateSwipe({ offset: 0, phase: "idle" });
+        }
       }
     }
     pointerRef.current = null;
@@ -383,10 +463,22 @@ function ExpenseRow({
     onDelete && onDuplicate
       ? "Tap to edit, swipe left to delete, or press and hold to duplicate."
       : "Tap to edit.";
-  return (
+  const rowClasses = [
+    "ri",
+    "expense-row",
+    isNew && "is-new",
+    swipe.phase === "dragging" && "is-swipe-dragging",
+    swipe.phase === "revealed" && "is-swipe-revealed",
+    swipe.phase === "deleting" && "is-swipe-deleting",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const row = (
     <button
-      className={`ri expense-row${isNew ? " is-new" : ""}`}
+      ref={rowRef}
+      className={rowClasses}
       type="button"
+      style={onDelete ? { "--swipe-x": `${swipe.offset}px` } : undefined}
       aria-label={`${e.desc}, ${M(e.amt || 0)}${e.cat === "Savings" ? ", savings transfer" : ""}. ${gestureHint}`}
       onPointerDown={startGesture}
       onPointerMove={moveGesture}
@@ -396,6 +488,11 @@ function ExpenseRow({
       onClick={() => {
         if (suppressClickRef.current) {
           suppressClickRef.current = false;
+          clearTimeout(suppressClickTimerRef.current);
+          return;
+        }
+        if (swipeRef.current.phase === "revealed") {
+          updateSwipe({ offset: 0, phase: "idle" });
           return;
         }
         onOpen(e.id);
@@ -424,6 +521,26 @@ function ExpenseRow({
         <b className={amountClass}>{amountPrefix}{M(e.amt)}</b>
       )}
     </button>
+  );
+  if (!onDelete) return row;
+  return (
+    <div
+      className={`expense-swipe-shell${swipe.phase === "deleting" ? " is-deleting" : ""}`}
+    >
+      <button
+        className="expense-swipe-delete"
+        type="button"
+        aria-label={`Delete ${e.desc}`}
+        disabled={swipe.phase !== "revealed"}
+        tabIndex={swipe.phase === "revealed" ? 0 : -1}
+        onClick={beginDelete}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 3v6m4-6v6" />
+        </svg>
+      </button>
+      {row}
+    </div>
   );
 }
 
