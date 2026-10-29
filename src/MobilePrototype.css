@@ -1745,6 +1745,7 @@ a:active,
   width: 100%;
   margin: 14px 0 0;
   padding: 0 0 4px;
+  background: var(--bg);
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scroll-snap-type: x mandatory;
@@ -1807,6 +1808,40 @@ a:active,
 .mobile-prototype .lg.bkash {
   background: #fff;
   border-color: #fff;
+}
+.mobile-prototype .lg.savings {
+  background: #fff3eb;
+  border-color: #ffe1d4;
+  color: var(--account-accent);
+}
+.mobile-prototype .account-savings-mark {
+  position: relative;
+  display: grid;
+  width: 27px;
+  height: 27px;
+  place-items: center;
+}
+.mobile-prototype .lg.savings .account-savings-mark svg {
+  width: 25px;
+  height: 25px;
+  fill: currentColor;
+  stroke: none;
+}
+.mobile-prototype .account-savings-coin {
+  position: absolute;
+  top: -3px;
+  right: -4px;
+  display: grid;
+  width: 13px;
+  height: 13px;
+  place-items: center;
+  border: 1.5px solid #fff3eb;
+  border-radius: 50%;
+  background: #f5bd4f;
+  color: #553b1d;
+  font-size: 7px;
+  font-weight: 800;
+  line-height: 1;
 }
 .mobile-prototype .lg img {
   width: 28px;

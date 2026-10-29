@@ -8,7 +8,7 @@ import {
 } from "react";
 import { Capacitor } from "@capacitor/core";
 import { Haptics, ImpactStyle } from "@capacitor/haptics";
-import { FaPenToSquare } from "react-icons/fa6";
+import { FaPenToSquare, FaPiggyBank } from "react-icons/fa6";
 import { ACCOUNT_OPTIONS } from "./data.js";
 import "./MobilePrototype.css";
 
@@ -28,7 +28,7 @@ const CAT = {
 const ACC = {
   bkash: ["bKash", "#e2136e"],
   bank: ["Bank", "#2563a8"],
-  savings: ["Savings", "#43866a"],
+  savings: ["Savings", "#b6404b"],
 };
 const TABS = [
   ["home", "Home"],
@@ -1322,7 +1322,10 @@ function Accounts({ S, onTx, highlightedExpenseId, highlightedTransactionId }) {
                 ) : id === "bank" ? (
                   <Icon n="bank" />
                 ) : (
-                  <CategorySymbol category="Savings" />
+                  <span className="account-savings-mark" aria-hidden="true">
+                    <FaPiggyBank focusable="false" />
+                    <span className="account-savings-coin">৳</span>
+                  </span>
                 )}
               </span>
               <small>{ACC[id][0]}</small>
