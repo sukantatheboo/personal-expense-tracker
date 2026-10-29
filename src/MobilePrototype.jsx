@@ -7,7 +7,7 @@ import {
   useState,
 } from "react";
 import { Capacitor } from "@capacitor/core";
-import { Haptics, ImpactStyle } from "@capacitor/haptics";
+import { Haptics, ImpactStyle, NotificationType } from "@capacitor/haptics";
 import { FaPenToSquare, FaPiggyBank } from "react-icons/fa6";
 import { ACCOUNT_OPTIONS } from "./data.js";
 import "./MobilePrototype.css";
@@ -119,18 +119,50 @@ function SavingsMark({ className }) {
   );
 }
 
-function triggerHaptic(duration = 12) {
+function triggerHaptic(type = "light") {
   if (Capacitor.isNativePlatform()) {
-    void Haptics.impact({ style: ImpactStyle.Light }).catch(() => {});
-    return true;
+    try {
+      if (type === "medium" || (typeof type === "number" && type > 10)) {
+        void Haptics.impact({ style: ImpactStyle.Medium }).catch(() => {});
+      } else if (type === "heavy") {
+        void Haptics.impact({ style: ImpactStyle.Heavy }).catch(() => {});
+      } else if (type === "success") {
+        void Haptics.notification({ type: NotificationType.Success }).catch(() => {});
+      } else if (type === "warning" || type === "delete") {
+        void Haptics.notification({ type: NotificationType.Warning }).catch(() => {});
+      } else if (type === "selection") {
+        void Haptics.selectionChanged().catch(() => {});
+      } else {
+        void Haptics.impact({ style: ImpactStyle.Light }).catch(() => {});
+      }
+      return true;
+    } catch {
+      return false;
+    }
   }
-  if (typeof navigator === "undefined" || typeof navigator.vibrate !== "function")
-    return false;
-  try {
-    return navigator.vibrate(duration);
-  } catch {
-    return false;
+
+  // Web / PWA fallback tuned for Android vibration motors
+  if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+    try {
+      const patterns = {
+        selection: 15,
+        light: 22,
+        medium: 40,
+        heavy: 60,
+        success: [25, 45, 30],
+        warning: [35, 40, 20],
+        delete: [35, 40, 20],
+      };
+      const pattern =
+        typeof type === "number"
+          ? Math.max(15, type)
+          : patterns[type] || 22;
+      return navigator.vibrate(pattern);
+    } catch {
+      return false;
+    }
   }
+  return false;
 }
 
 function CategorySymbol({ category }) {
@@ -277,14 +309,23 @@ const Seg = ({ value, options, onPick }) => (
 
 const MonthSwitch = ({ m, onShift }) => (
   <div className="mon">
-    <button aria-label="Previous month" onClick={() => onShift(-1)}>
+    <button
+      aria-label="Previous month"
+      onClick={() => {
+        triggerHaptic("selection");
+        onShift(-1);
+      }}
+    >
       <Icon n="l" />
     </button>
     <b>{fM(m)}</b>
     <button
       aria-label="Next month"
       disabled={m >= ld().slice(0, 7)}
-      onClick={() => onShift(1)}
+      onClick={() => {
+        triggerHaptic("selection");
+        onShift(1);
+      }}
     >
       <Icon n="r" />
     </button>
@@ -398,6 +439,7 @@ function ExpenseRow({
       swipeRef.current.phase === "collapsing"
     )
       return;
+    triggerHaptic("delete");
     clearTimeout(swipeTimerRef.current);
     clearTimeout(collapseTimerRef.current);
     const width = pointerRef.current?.width || rowRef.current?.offsetWidth || 320;
@@ -446,7 +488,7 @@ function ExpenseRow({
         clearTimeout(suppressClickTimerRef.current);
         const duplicated = onDuplicate(e);
         if (duplicated === false) return;
-        triggerHaptic(12);
+        triggerHaptic("medium");
         setDuplicatePress(true);
         clearTimeout(duplicatePressTimerRef.current);
         duplicatePressTimerRef.current = setTimeout(
@@ -1181,7 +1223,7 @@ function Accounts({ S, onTx, highlightedExpenseId, highlightedTransactionId }) {
   );
   const [selectedAccount, setSelectedAccount] = useState("");
   const chooseAccount = (accountId) => {
-    triggerHaptic(8);
+    triggerHaptic("selection");
     setSelectedAccount((current) => (current === accountId ? "" : accountId));
   };
 
@@ -2868,11 +2910,8 @@ export default function MobilePrototype({
       screenScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
-    if (
-      (t !== tab || appSettingsOpen || profileSettingsOpen) &&
-      typeof navigator !== "undefined"
-    ) {
-      triggerHaptic(8);
+    if (t !== tab || appSettingsOpen || profileSettingsOpen) {
+      triggerHaptic("selection");
     }
     const currentIndex = TABS.findIndex(([key]) => key === tab);
     const nextIndex = TABS.findIndex(([key]) => key === t);
@@ -2921,6 +2960,7 @@ export default function MobilePrototype({
       }, 1500);
     }
     close();
+    triggerHaptic("success");
     toast(
       isSavingsTransfer
         ? isRecurring
@@ -2935,6 +2975,7 @@ export default function MobilePrototype({
     const expense = S.exp.find((item) => item.id === id);
     const undo = expense ? onExpenseDelete(expense) : undefined;
     close();
+    triggerHaptic("delete");
     toast("Expense removed", undo);
   };
   const skipRecurringExpense = (id) => {
@@ -2942,6 +2983,7 @@ export default function MobilePrototype({
     if (!expense?.rec) return deleteExpense(id);
     const undo = onExpenseDelete(expense);
     close();
+    triggerHaptic("warning");
     toast("Skipped this recurring occurrence", undo);
   };
   const duplicateExpense = (expense) => {
@@ -2962,6 +3004,7 @@ export default function MobilePrototype({
       setHighlightedExpenseId(saved.expenseId);
       highlightTimer.current = setTimeout(() => setHighlightedExpenseId(null), 1500);
     }
+    triggerHaptic("success");
     toast("Expense duplicated");
     return true;
   };
@@ -2983,6 +3026,7 @@ export default function MobilePrototype({
       account: form.acct,
     })) return toast("Could not update this expense.");
     close();
+    triggerHaptic("success");
     toast("Expense updated");
   };
   const saveBudget = (value) => {
@@ -2990,11 +3034,13 @@ export default function MobilePrototype({
       return toast("Enter a monthly budget.");
     onBudgetSave(value);
     close();
+    triggerHaptic("success");
     toast("Budget saved");
   };
   const clearBudget = () => {
     const undo = onBudgetClear();
     close();
+    triggerHaptic("delete");
     toast("Budget cleared", undo);
   };
   const saveTransaction = (value) => {
@@ -3010,6 +3056,7 @@ export default function MobilePrototype({
       }, 1500);
     }
     close();
+    triggerHaptic("success");
     toast("Saved");
   };
   const removeRecurring = (id) => {
@@ -3285,7 +3332,10 @@ export default function MobilePrototype({
                 key={t}
                 className="fab"
                 aria-label="Add expense"
-                onClick={() => openSheet({ type: "add" })}
+                onClick={() => {
+                  triggerHaptic("light");
+                  openSheet({ type: "add" });
+                }}
               >
                 <Icon n="plus" />
               </button>
