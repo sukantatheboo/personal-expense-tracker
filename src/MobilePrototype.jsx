@@ -1846,7 +1846,7 @@ export default function MobilePrototype({
   useLayoutEffect(() => {
     const activeTheme = S.theme === "dark" ? "dark" : "light";
     document.documentElement.dataset.theme = activeTheme;
-    const themeColor = activeTheme === "dark" ? "#0e1411" : "#f4f3ee";
+    const themeColor = activeTheme === "dark" ? "#101315" : "#f5f7f5";
     document
       .querySelectorAll('meta[name="theme-color"]')
       .forEach((meta) => meta.setAttribute("content", themeColor));
