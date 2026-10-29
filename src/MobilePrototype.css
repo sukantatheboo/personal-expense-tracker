@@ -79,21 +79,25 @@ select {
 }
 button,
 a,
+[role="button"],
 .tab {
   touch-action: manipulation;
 }
 button,
 a,
 .tab,
-.card {
-  transition: transform 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
+[role="button"] {
+  transition:
+    transform 190ms cubic-bezier(0.2, 0.8, 0.25, 1.24),
+    filter 140ms ease;
 }
 button:active,
 a:active,
 .tab:active,
-.card:active {
-  transform: scale(0.98);
-  transition-duration: 100ms;
+[role="button"]:active {
+  transform: scale(0.96);
+  filter: brightness(0.96);
+  transition-duration: 85ms;
 }
 .auth-modal-backdrop,
 .profile-editor-backdrop {
@@ -489,7 +493,9 @@ a:active,
 }
 .mobile-prototype button:not(:disabled) {
   touch-action: manipulation;
-  transition: transform 140ms ease-out;
+  transition:
+    transform 190ms cubic-bezier(0.2, 0.8, 0.25, 1.24),
+    filter 140ms ease;
 }
 .mobile-prototype button:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--g) 55%, transparent);
@@ -499,8 +505,9 @@ a:active,
   outline: none;
 }
 .mobile-prototype button:not(:disabled):active {
-  transform: scale(0.98);
-  transition: transform 100ms ease;
+  transform: scale(0.96);
+  filter: brightness(0.96);
+  transition-duration: 85ms;
 }
 .mobile-prototype input {
   font: inherit;
@@ -663,7 +670,7 @@ a:active,
 }
 .mobile-prototype .prototype-header-action:active,
 .mobile-prototype .prototype-header-back:active {
-  transform: scale(0.97);
+  transform: scale(0.96);
   border-color: var(--line);
   transition-duration: 90ms;
 }
@@ -882,9 +889,8 @@ a:active,
   outline-offset: 2px;
 }
 .mobile-prototype .mn button:active,
-.mobile-prototype .mon button:active,
-.mobile-prototype .tabs nav .fab:active {
-  transform: scale(0.97);
+.mobile-prototype .mon button:active {
+  transform: scale(0.96);
 }
 .mobile-prototype .mn button:disabled,
 .mobile-prototype .mon button:disabled {
@@ -1026,7 +1032,7 @@ a:active,
 }
 .mobile-prototype .sec button:active {
   background: transparent;
-  transform: scale(0.98);
+  transform: scale(0.96);
 }
 .mobile-prototype .stack {
   display: flex;
@@ -1422,7 +1428,7 @@ a:active,
 }
 .mobile-prototype button.ri:active {
   background: transparent;
-  transform: scale(0.98);
+  transform: scale(0.96);
 }
 .mobile-prototype .expense-day-card button.expense-row:active {
   background: var(--card);
@@ -1619,7 +1625,7 @@ a:active,
 }
 .mobile-prototype .chips button:active,
 .mobile-prototype .cg button:active {
-  transform: scale(0.98);
+  transform: scale(0.96);
 }
 .mobile-prototype .chips button {
   display: inline-flex;
@@ -1677,7 +1683,7 @@ a:active,
   touch-action: manipulation;
 }
 .mobile-prototype .seg button:active {
-  transform: scale(0.98);
+  transform: scale(0.96);
 }
 .mobile-prototype .seg .on {
   background: var(--card);
@@ -1717,7 +1723,7 @@ a:active,
   -webkit-tap-highlight-color: transparent;
 }
 .mobile-prototype button.acc:not(:disabled):active {
-  transform: scale(0.975);
+  transform: scale(0.96);
   filter: brightness(0.96) saturate(1.04);
   transition-duration: 90ms;
 }
@@ -1836,9 +1842,7 @@ a:active,
   touch-action: manipulation;
 }
 .mobile-prototype .acts button:active {
-  transform: scale(0.98);
-  background: var(--card);
-  box-shadow: var(--shadow);
+  transform: scale(0.96);
 }
 .mobile-prototype .acts svg {
   display: block;
@@ -1908,7 +1912,7 @@ a:active,
   touch-action: manipulation;
 }
 .mobile-prototype .btn:active {
-  transform: scale(0.98);
+  transform: scale(0.96);
   filter: brightness(0.96);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 12%);
 }
@@ -2184,7 +2188,7 @@ a:active,
   min-height: 44px;
 }
 .mobile-prototype .tabs nav .t:active {
-  transform: scale(0.985);
+  transform: scale(0.96);
   background: transparent;
 }
 .mobile-prototype .tabs nav .t:active .tab-icon {
@@ -2258,14 +2262,14 @@ a:active,
     box-shadow 160ms ease;
 }
 .mobile-prototype .tabs nav .fab:active {
-  --fab-s: 0.97;
+  --fab-s: 0.94;
   box-shadow: 0 3px 10px rgb(47 122 90/32%);
   transition:
     transform 110ms ease-out,
     box-shadow 110ms ease-out;
 }
 .mobile-prototype .tabs[data-minimized="true"] nav .fab:active {
-  --fab-s: 0.96;
+  --fab-s: 0.94;
 }
 .mobile-prototype .fab svg {
   width: 24px;
@@ -2422,7 +2426,7 @@ a:active,
   color: var(--g);
 }
 .mobile-prototype .settings-page-back:active {
-  transform: scale(0.97);
+  transform: scale(0.96);
 }
 @media (hover: hover) and (pointer: fine) {
   .mobile-prototype .settings-page-back:hover {
@@ -2900,7 +2904,7 @@ a:active,
   margin-top: 12px;
 }
 .mobile-prototype .settings-account-action:active {
-  transform: none;
+  transform: scale(0.96);
 }
 .mobile-prototype .settings-action {
   width: 100%;
