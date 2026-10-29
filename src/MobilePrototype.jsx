@@ -22,7 +22,7 @@ const CAT = {
   Health: ["💊", "#e0594f"],
   Entertainment: ["🎧", "#20a4a4"],
   Education: ["📚", "#5b73d9"],
-  Savings: ["🐖", "#2f9a6b"],
+  Savings: ["", "#b6404b"],
   Other: ["", "#7d8a82"],
 };
 const ACC = {
@@ -110,6 +110,15 @@ const ICONS = {
 };
 const Icon = ({ n }) => <svg viewBox="0 0 24 24">{ICONS[n]}</svg>;
 
+function SavingsMark({ className }) {
+  return (
+    <span className={`savings-mark ${className}`} aria-hidden="true">
+      <FaPiggyBank focusable="false" />
+      <span className="savings-mark-coin">৳</span>
+    </span>
+  );
+}
+
 function triggerHaptic(duration = 12) {
   if (Capacitor.isNativePlatform()) {
     void Haptics.impact({ style: ImpactStyle.Light }).catch(() => {});
@@ -138,6 +147,9 @@ function CategorySymbol({ category }) {
         <circle cx="20" cy="12" r="2.1" />
       </svg>
     );
+  }
+  if (category === "Savings") {
+    return <SavingsMark className="category-symbol category-symbol-savings" />;
   }
   return (
     <span className="category-symbol" aria-hidden="true">
@@ -1322,10 +1334,7 @@ function Accounts({ S, onTx, highlightedExpenseId, highlightedTransactionId }) {
                 ) : id === "bank" ? (
                   <Icon n="bank" />
                 ) : (
-                  <span className="account-savings-mark" aria-hidden="true">
-                    <FaPiggyBank focusable="false" />
-                    <span className="account-savings-coin">৳</span>
-                  </span>
+                  <SavingsMark className="account-savings-mark" />
                 )}
               </span>
               <small>{ACC[id][0]}</small>
@@ -1598,11 +1607,19 @@ function AddSheet({ iv, categoryOrder, expenses, onSave, onClose }) {
       onClose={onClose}
       actions={
         <button className="btn" onClick={() => onSave(f)}>
-          Add expense
+          {f.cat === "Savings"
+            ? f.iv === "none"
+              ? "Save to Savings"
+              : "Schedule savings transfer"
+            : f.iv === "none"
+              ? "Add expense"
+              : "Schedule expense"}
         </button>
       }
     >
-      <h3 id="sheet-title">New expense</h3>
+      <h3 id="sheet-title">
+        {f.cat === "Savings" ? "Savings transfer" : "New expense"}
+      </h3>
       <div className="amt">
         <span>৳</span>
         <input
@@ -1610,40 +1627,56 @@ function AddSheet({ iv, categoryOrder, expenses, onSave, onClose }) {
           autoFocus
           data-sheet-autofocus
           enterKeyHint="next"
-          aria-label="Expense amount"
+          aria-label={f.cat === "Savings" ? "Savings transfer amount" : "Expense amount"}
           placeholder="0"
           value={f.amt}
           onChange={(e) => set("amt", e.target.value)}
         />
       </div>
       <p className="hint">
-        {f.iv === "none"
-          ? "Leave the amount blank to fill it in later."
-          : "Recurring expenses need an amount."}
+        {f.cat === "Savings" && f.iv === "none"
+          ? "Enter an amount to record a savings transfer."
+          : f.iv === "none"
+            ? "Leave the amount blank to fill it in later."
+            : f.cat === "Savings"
+              ? "Recurring savings need an amount."
+              : "Recurring expenses need an amount."}
       </p>
 
       <span className="lbl">Category</span>
       <div className="cg">
-        {categoryOrder.filter((category) => category !== "Savings").map((c) => (
+        {categoryOrder.map((c) => (
           <button
             key={c}
             className={f.cat === c ? "on" : ""}
             onClick={() => {
               setCategoryTouched(true);
-              set("cat", c);
+              setF((current) => ({
+                ...current,
+                cat: c,
+                ...(c === "Savings" && !current.acct
+                  ? { acct: "bkash" }
+                  : {}),
+              }));
             }}
           >
             <CategorySymbol category={c} /> {c}
           </button>
         ))}
       </div>
+      {f.cat === "Savings" && (
+        <p className="hint savings-transfer-note">
+          Moves money from the selected account into Savings. It is not counted
+          as spending or against your budget.
+        </p>
+      )}
 
       <span className="lbl">What was it for?</span>
       <input
         className="in"
         maxLength={80}
         aria-label="Expense description"
-        placeholder="e.g. Lunch"
+        placeholder={f.cat === "Savings" ? "e.g. Monthly savings" : "e.g. Lunch"}
         value={f.desc}
         onChange={(event) => {
           const description = event.target.value;
@@ -1686,15 +1719,24 @@ function AddSheet({ iv, categoryOrder, expenses, onSave, onClose }) {
         />
       </div>
 
-      <span className="lbl">Paid from</span>
+      <span className="lbl">
+        {f.cat === "Savings" ? "Transfer from" : "Paid from"}
+      </span>
       <Seg
         value={f.acct}
         onPick={(v) => set("acct", v)}
-        options={[
-          ["", "Cash"],
-          ["bkash", "bKash"],
-          ["bank", "Bank"],
-        ]}
+        options={
+          f.cat === "Savings"
+            ? [
+                ["bkash", "bKash"],
+                ["bank", "Bank"],
+              ]
+            : [
+                ["", "Cash"],
+                ["bkash", "bKash"],
+                ["bank", "Bank"],
+              ]
+        }
       />
 
       <span className="lbl">Repeat</span>
@@ -2834,20 +2876,28 @@ export default function MobilePrototype({
     sheet?.type === "det" ? S.exp.find((x) => x.id === sheet.id) : null;
 
   const saveExpense = (f) => {
+    const isSavingsTransfer = f.cat === "Savings";
+    const isRecurring = f.iv !== "none";
+    if (isSavingsTransfer && !String(f.amt ?? "").trim())
+      return toast("Enter an amount for this savings transfer.");
     const saved = onExpenseSave({
-      description: f.desc.trim() || f.cat,
+      description:
+        f.desc.trim() || (isSavingsTransfer ? "Savings transfer" : f.cat),
       amount: f.amt,
       category: f.cat,
       date: f.date,
       account: f.acct,
       interval: f.iv,
     });
-    if (!saved)
-      return toast(
-        f.iv !== "none" && !f.amt
-          ? "Recurring expenses need an amount."
-          : "Check the expense details and try again.",
-      );
+    if (!saved) {
+      if (!f.amt && (isRecurring || isSavingsTransfer))
+        return toast(
+          isSavingsTransfer
+            ? "Enter an amount for this savings transfer."
+            : "Recurring expenses need an amount.",
+        );
+      return toast("Check the expense details and try again.");
+    }
     if (typeof saved === "object" && saved.expenseId) {
       clearTimeout(highlightTimer.current);
       setHighlightedTransactionId(null);
@@ -2858,7 +2908,15 @@ export default function MobilePrototype({
       }, 1500);
     }
     close();
-    toast("Expense added");
+    toast(
+      isSavingsTransfer
+        ? isRecurring
+          ? "Recurring savings scheduled"
+          : "Savings transfer added"
+        : isRecurring
+          ? "Recurring expense scheduled"
+          : "Expense added",
+    );
   };
   const deleteExpense = (id) => {
     const expense = S.exp.find((item) => item.id === id);

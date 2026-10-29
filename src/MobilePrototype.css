@@ -1480,6 +1480,25 @@ a:active,
   fill: currentColor;
   stroke: none;
 }
+.mobile-prototype .category-symbol-savings {
+  width: 1.35em;
+  height: 1.35em;
+  color: #b6404b;
+}
+.mobile-prototype .category-symbol-savings > svg {
+  width: 1.05em;
+  height: 1.05em;
+  fill: currentColor;
+  stroke: none;
+}
+.mobile-prototype .category-symbol-savings .savings-mark-coin {
+  top: -0.08em;
+  right: -0.1em;
+  width: 0.55em;
+  height: 0.55em;
+  border-width: 1px;
+  font-size: 0.34em;
+}
 .mobile-prototype .ic .category-symbol {
   width: 22px;
   height: 22px;
@@ -1814,20 +1833,24 @@ a:active,
   border-color: #ffe1d4;
   color: var(--account-accent);
 }
-.mobile-prototype .account-savings-mark {
+.mobile-prototype .savings-mark {
   position: relative;
-  display: grid;
-  width: 27px;
-  height: 27px;
+  display: inline-grid;
   place-items: center;
 }
-.mobile-prototype .lg.savings .account-savings-mark svg {
-  width: 25px;
-  height: 25px;
+.mobile-prototype .savings-mark > svg {
   fill: currentColor;
   stroke: none;
 }
-.mobile-prototype .account-savings-coin {
+.mobile-prototype .account-savings-mark {
+  width: 27px;
+  height: 27px;
+}
+.mobile-prototype .lg.savings .account-savings-mark > svg {
+  width: 25px;
+  height: 25px;
+}
+.mobile-prototype .savings-mark-coin {
   position: absolute;
   top: -3px;
   right: -4px;
@@ -3035,6 +3058,26 @@ a:active,
   border-color: color-mix(in srgb, var(--g) 38%, var(--line));
   background-color: color-mix(in srgb, var(--bg) 96%, var(--g) 4%);
 }
+.mobile-prototype select.in {
+  min-height: 50px;
+  padding-right: 42px;
+  appearance: none;
+  -webkit-appearance: none;
+  background-color: var(--bg);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--mut) 50%),
+    linear-gradient(135deg, var(--mut) 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) 50%,
+    calc(100% - 12px) 50%;
+  background-repeat: no-repeat;
+  background-size: 6px 6px;
+  cursor: pointer;
+}
+.mobile-prototype select.in option {
+  background: var(--card);
+  color: var(--ink);
+}
 .mobile-prototype .in,
 .mobile-prototype textarea,
 .mobile-prototype select {
@@ -3107,6 +3150,15 @@ a:active,
   font-size: 12.5px;
   text-align: center;
   margin: 4px 0 0;
+}
+.mobile-prototype .savings-transfer-note {
+  margin: 8px 0 10px;
+  padding: 9px 11px;
+  border: 1px solid color-mix(in srgb, #b6404b 18%, var(--line));
+  border-radius: 12px;
+  background: color-mix(in srgb, #b6404b 7%, var(--card));
+  text-align: left;
+  line-height: 1.45;
 }
 .mobile-prototype .recurring-date-note {
   margin: -4px 0 8px;
