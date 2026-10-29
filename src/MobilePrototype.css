@@ -1246,11 +1246,14 @@ button:active {
   touch-action: pan-y;
   -webkit-touch-callout: none;
   transform: translate3d(var(--swipe-x, 0px), 0, 0);
-  transition: transform 260ms cubic-bezier(0.22, 0.8, 0.2, 1);
+  transition:
+    transform 260ms cubic-bezier(0.22, 0.8, 0.2, 1),
+    scale 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .mobile-prototype .expense-day-card .expense-row.is-swipe-dragging {
   animation: none;
   transition: none;
+  scale: 1;
   will-change: transform;
 }
 .mobile-prototype .expense-day-card .expense-row.is-swipe-revealed {
@@ -1263,9 +1266,9 @@ button:active {
   transition: transform 220ms cubic-bezier(0.22, 0.8, 0.2, 1);
   will-change: transform;
 }
-.mobile-prototype .expense-day-card .expense-row.is-duplicate-feedback {
-  background: color-mix(in srgb, var(--g) 9%, var(--card));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--g) 38%, transparent);
+.mobile-prototype .expense-day-card .expense-row.is-duplicate-press {
+  animation: expense-duplicate-press 360ms cubic-bezier(0.2, 0.8, 0.2, 1.12) both;
+  transform-origin: center;
 }
 .mobile-prototype .expense-day-card .expense-swipe-shell.is-collapsing + .expense-swipe-shell {
   border-top-color: transparent;
@@ -1400,6 +1403,10 @@ button:active {
 .mobile-prototype .expense-day-card button.expense-row:active {
   background: var(--card);
   transform: translate3d(var(--swipe-x, 0px), 0, 0);
+  scale: 0.985;
+}
+.mobile-prototype .expense-day-card button.expense-row.is-swipe-dragging:active {
+  scale: 1;
 }
 .mobile-prototype button.ri:active .sw {
   transform: scale(0.95);
@@ -2515,6 +2522,11 @@ button:active {
   .mobile-prototype button:not(:disabled):active {
     transform: none !important;
   }
+  .mobile-prototype .expense-day-card button.expense-row:active {
+    background: var(--card);
+    transform: translate3d(var(--swipe-x, 0px), 0, 0) !important;
+    scale: 1 !important;
+  }
   .mobile-prototype .prototype-header-action:active svg,
   .mobile-prototype .prototype-header-back:active svg {
     transform: none;
@@ -2532,6 +2544,7 @@ button:active {
   .mobile-prototype .sh,
   .mobile-prototype .toast,
   .mobile-prototype .expense-row.is-new,
+  .mobile-prototype .expense-row.is-duplicate-press,
   .mobile-prototype .animated-money-value {
     animation: none;
   }
@@ -2678,6 +2691,20 @@ button:active {
     opacity: 1;
     transform: translateY(0) scale(1);
     background: transparent;
+  }
+}
+@keyframes expense-duplicate-press {
+  0% {
+    scale: 1;
+  }
+  22% {
+    scale: 0.976;
+  }
+  62% {
+    scale: 1.012;
+  }
+  100% {
+    scale: 1;
   }
 }
 @keyframes account-amount-up {

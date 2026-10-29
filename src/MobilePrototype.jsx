@@ -350,11 +350,11 @@ function ExpenseRow({
   const holdTimerRef = useRef();
   const swipeTimerRef = useRef();
   const collapseTimerRef = useRef();
-  const duplicateFeedbackTimerRef = useRef();
+  const duplicatePressTimerRef = useRef();
   const suppressClickTimerRef = useRef();
   const suppressClickRef = useRef(false);
   const [swipe, setSwipe] = useState({ offset: 0, phase: "idle" });
-  const [duplicateFeedback, setDuplicateFeedback] = useState(false);
+  const [duplicatePress, setDuplicatePress] = useState(false);
   const swipeRef = useRef(swipe);
   const updateSwipe = (next) => {
     swipeRef.current = next;
@@ -392,7 +392,7 @@ function ExpenseRow({
       clearTimeout(holdTimerRef.current);
       clearTimeout(swipeTimerRef.current);
       clearTimeout(collapseTimerRef.current);
-      clearTimeout(duplicateFeedbackTimerRef.current);
+      clearTimeout(duplicatePressTimerRef.current);
       clearTimeout(suppressClickTimerRef.current);
     },
     [],
@@ -427,10 +427,10 @@ function ExpenseRow({
         const duplicated = onDuplicate(e);
         if (duplicated === false) return;
         triggerHaptic(12);
-        setDuplicateFeedback(true);
-        clearTimeout(duplicateFeedbackTimerRef.current);
-        duplicateFeedbackTimerRef.current = setTimeout(
-          () => setDuplicateFeedback(false),
+        setDuplicatePress(true);
+        clearTimeout(duplicatePressTimerRef.current);
+        duplicatePressTimerRef.current = setTimeout(
+          () => setDuplicatePress(false),
           520,
         );
       }, 560);
@@ -519,7 +519,7 @@ function ExpenseRow({
     "ri",
     "expense-row",
     isNew && "is-new",
-    duplicateFeedback && "is-duplicate-feedback",
+    duplicatePress && "is-duplicate-press",
     swipe.phase === "dragging" && "is-swipe-dragging",
     swipe.phase === "revealed" && "is-swipe-revealed",
     ["deleting", "collapsing"].includes(swipe.phase) && "is-swipe-deleting",
