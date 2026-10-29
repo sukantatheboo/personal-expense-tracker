@@ -1070,6 +1070,10 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
+    const browserChromeColor = theme === "dark" ? "#0e1411" : "#f4f3ee";
+    document
+      .querySelectorAll('meta[name="theme-color"]')
+      .forEach((meta) => meta.setAttribute("content", browserChromeColor));
     try {
       localStorage.setItem(STORAGE_KEYS.theme, theme);
     } catch {
