@@ -6,6 +6,8 @@ import {
   useRef,
   useState,
 } from "react";
+import { Capacitor } from "@capacitor/core";
+import { Haptics, ImpactStyle } from "@capacitor/haptics";
 import { FaPenToSquare } from "react-icons/fa6";
 import "./MobilePrototype.css";
 
@@ -104,6 +106,10 @@ const ICONS = {
 const Icon = ({ n }) => <svg viewBox="0 0 24 24">{ICONS[n]}</svg>;
 
 function triggerHaptic(duration = 12) {
+  if (Capacitor.isNativePlatform()) {
+    void Haptics.impact({ style: ImpactStyle.Light }).catch(() => {});
+    return true;
+  }
   if (typeof navigator === "undefined" || typeof navigator.vibrate !== "function")
     return false;
   try {
@@ -403,6 +409,7 @@ function ExpenseRow({
       startedAt: performance.now(),
       width: rowRef.current?.offsetWidth || 320,
       moved: false,
+      longPressTriggered: false,
       horizontal: false,
       draggingStateApplied: false,
       initialOffset: swipeRef.current.offset,
@@ -412,22 +419,26 @@ function ExpenseRow({
     suppressClickRef.current = false;
     if (event.pointerType === "touch" && onDuplicate) {
       holdTimerRef.current = setTimeout(() => {
-        if (!pointerRef.current?.moved) {
-          suppressNextClick();
-          triggerHaptic(12);
-          setDuplicateFeedback(true);
-          clearTimeout(duplicateFeedbackTimerRef.current);
-          duplicateFeedbackTimerRef.current = setTimeout(
-            () => setDuplicateFeedback(false),
-            520,
-          );
-          onDuplicate(e);
-        }
+        const gesture = pointerRef.current;
+        if (!gesture || gesture.moved) return;
+        gesture.longPressTriggered = true;
+        suppressClickRef.current = true;
+        clearTimeout(suppressClickTimerRef.current);
+        const duplicated = onDuplicate(e);
+        if (duplicated === false) return;
+        triggerHaptic(12);
+        setDuplicateFeedback(true);
+        clearTimeout(duplicateFeedbackTimerRef.current);
+        duplicateFeedbackTimerRef.current = setTimeout(
+          () => setDuplicateFeedback(false),
+          520,
+        );
       }, 560);
     }
   };
   const moveGesture = (event) => {
     if (!pointerRef.current) return;
+    if (pointerRef.current.longPressTriggered) return;
     const dx = event.clientX - pointerRef.current.x;
     const dy = event.clientY - pointerRef.current.y;
     if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
@@ -2698,13 +2709,17 @@ export default function MobilePrototype({
       account: expense.acct,
       interval: "none",
     });
-    if (!saved) return toast("Could not duplicate this expense.");
+    if (!saved) {
+      toast("Could not duplicate this expense.");
+      return false;
+    }
     if (typeof saved === "object" && saved.expenseId) {
       clearTimeout(highlightTimer.current);
       setHighlightedExpenseId(saved.expenseId);
       highlightTimer.current = setTimeout(() => setHighlightedExpenseId(null), 1500);
     }
     toast("Expense duplicated");
+    return true;
   };
   const updateExpense = (id, form) => {
     const amountText = String(form.amt ?? "").trim();

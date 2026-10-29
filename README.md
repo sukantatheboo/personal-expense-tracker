@@ -31,6 +31,20 @@ Create a production build with:
 npm run build
 ```
 
+## 📱 Native iOS app
+
+Spend uses Capacitor Haptics for native iPhone feedback. To sync and open the iOS
+project on a Mac with Xcode installed:
+
+```sh
+npm ci
+npm run open:ios
+```
+
+The native app has its own on-device browser storage. Existing data in Safari or
+the installed web app does not move automatically; export a JSON backup there,
+then restore it from Settings in the native app if needed.
+
 The app is deployed to [GitHub Pages](https://sukantatheboo.github.io/personal-expense-tracker/) when `main` is updated.
 
 ## 🔐 Data and privacy
