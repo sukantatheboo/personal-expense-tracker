@@ -2680,17 +2680,14 @@ button:active {
   0% {
     opacity: 0.45;
     transform: translateY(-7px) scale(0.99);
-    background: color-mix(in srgb, var(--g) 18%, var(--card));
   }
   58% {
     opacity: 1;
     transform: translateY(1px) scale(1);
-    background: color-mix(in srgb, var(--g) 11%, var(--card));
   }
   100% {
     opacity: 1;
     transform: translateY(0) scale(1);
-    background: transparent;
   }
 }
 @keyframes expense-duplicate-press {
