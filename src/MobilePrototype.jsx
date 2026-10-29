@@ -30,6 +30,8 @@ const TABS = [
   ["accounts", "Accounts"],
   ["plans", "Plans"],
 ];
+const SHEET_EXIT_MS = 320;
+const SHEET_REDUCED_EXIT_MS = 180;
 
 const BK =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 128 122'%3E%3Cg fill='none'%3E%3Cpath fill='%23D12053' d='M96.58 62.45l-53.03-8.31 7.03 31.6z'/%3E%3Cpath fill='%23E2136E' d='M96.58 62.45L56.62 6.93 43.56 54.15z'/%3E%3Cpath fill='%23D12053' d='M42.32 53.51L.45 0l54.83 6.55z'/%3E%3Cpath fill='%239E1638' d='M23.25 31.15L0 9.24h6.12z'/%3E%3Cpath fill='%23D12053' d='M107.89 35.46l-9.84 26.69L82.1 40.09z'/%3E%3Cpath fill='%23E2136E' d='M56.77 84.14l38.61-15.51L97 63.7z'/%3E%3Cpath fill='%239E1638' d='M25.89 113.41l16.54-58.02 8.39 37.75z'/%3E%3Cpath fill='%23E2136E' d='M109.43 35.67l-4.06 11.02 14.64-.24z'/%3E%3C/g%3E%3C/svg%3E";
@@ -543,8 +545,12 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
     const shouldClose = distance >= 112 || (distance >= 48 && drag.velocity > 0.72);
     dragRef.current = null;
     setIsDragging(false);
-    setDragOffset(0);
-    if (shouldClose) onClose();
+    if (shouldClose) {
+      setDragOffset(distance);
+      onClose({ kind: "drag", distance, velocity: drag.velocity });
+    } else {
+      setDragOffset(0);
+    }
   };
   const cancelDrag = () => {
     dragRef.current = null;
@@ -2063,6 +2069,11 @@ export default function MobilePrototype({
   const [cf, setCf] = useState("");
   const [sheet, setSheet] = useState(null);
   const [sheetClosing, setSheetClosing] = useState(false);
+  const [sheetExitDuration, setSheetExitDuration] = useState(SHEET_EXIT_MS);
+  const [sheetExitFromTransform, setSheetExitFromTransform] = useState(
+    "translate3d(0, 0, 0)",
+  );
+  const [sheetExitFromOpacity, setSheetExitFromOpacity] = useState("1");
   const [highlightedExpenseId, setHighlightedExpenseId] = useState(null);
   const [highlightedTransactionId, setHighlightedTransactionId] = useState(null);
   const [appSettingsOpen, setAppSettingsOpen] = useState(false);
@@ -2351,27 +2362,61 @@ export default function MobilePrototype({
       document.removeEventListener("focusout", scheduleViewportSync);
     };
   }, []);
-  const close = () => {
+  const close = (exit = null) => {
     if (!sheet || sheetClosing) return;
     clearTimeout(sheetCloseTimer.current);
     setSheetClosing(true);
-    sheetCloseTimer.current = setTimeout(() => {
-      const returnFocus = sheetReturnFocusRef.current;
-      sheetReturnFocusRef.current = null;
-      setSheet(null);
-      setSheetClosing(false);
-      sheetCloseTimer.current = null;
-      if (returnFocus) {
-        window.requestAnimationFrame(() => {
-          if (
-            returnFocus.isConnected &&
-            !document.querySelector('[role="dialog"][aria-modal="true"]')
-          ) {
-            returnFocus.focus({ preventScroll: true });
-          }
-        });
-      }
-    }, 210);
+    const prefersReducedMotion =
+      window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
+    const sheetNode = mobileRootRef.current?.querySelector(".sh");
+    const sheetStyle = sheetNode ? window.getComputedStyle(sheetNode) : null;
+    const sheetHeight = sheetNode?.getBoundingClientRect().height ?? 0;
+    setSheetExitFromTransform(
+      exit?.kind === "drag"
+        ? `translate3d(0, ${exit.distance}px, 0)`
+        : sheetStyle?.transform || "translate3d(0, 0, 0)",
+    );
+    setSheetExitFromOpacity(sheetStyle?.opacity || "1");
+    const remaining =
+      exit?.kind === "drag" && sheetHeight > 0
+        ? Math.max(0.08, 1 - exit.distance / sheetHeight)
+        : 1;
+    const velocity =
+      exit?.kind === "drag" ? Math.max(0, Math.min(exit.velocity || 0, 2.4)) : 0;
+    const exitDuration = prefersReducedMotion
+      ? SHEET_REDUCED_EXIT_MS
+      : exit?.kind === "drag"
+        ? Math.max(
+            150,
+            Math.round(
+              SHEET_EXIT_MS * Math.sqrt(remaining) / (1 + velocity * 0.12),
+            ),
+          )
+        : SHEET_EXIT_MS;
+    setSheetExitDuration(exitDuration);
+    sheetCloseTimer.current = window.setTimeout(
+      () => {
+        const returnFocus = sheetReturnFocusRef.current;
+        sheetReturnFocusRef.current = null;
+        setSheet(null);
+        setSheetClosing(false);
+        setSheetExitDuration(SHEET_EXIT_MS);
+        setSheetExitFromTransform("translate3d(0, 0, 0)");
+        setSheetExitFromOpacity("1");
+        sheetCloseTimer.current = null;
+        if (returnFocus) {
+          window.requestAnimationFrame(() => {
+            if (
+              returnFocus.isConnected &&
+              !document.querySelector('[role="dialog"][aria-modal="true"]')
+            ) {
+              returnFocus.focus({ preventScroll: true });
+            }
+          });
+        }
+      },
+      exitDuration,
+    );
   };
   const captureSheetTrigger = (event) => {
     const target = event.target instanceof Element ? event.target : null;
@@ -2398,6 +2443,9 @@ export default function MobilePrototype({
     dirAccRef.current = 0;
     lastTopRef.current = screenScrollRef.current?.scrollTop ?? 0;
     setSheetClosing(false);
+    setSheetExitDuration(SHEET_EXIT_MS);
+    setSheetExitFromTransform("translate3d(0, 0, 0)");
+    setSheetExitFromOpacity("1");
     setSheet(nextSheet);
   };
   const nav = (t) => {
@@ -2617,6 +2665,12 @@ export default function MobilePrototype({
       data-theme={S.theme}
       data-sheet-open={sheet ? "true" : undefined}
       data-sheet-closing={sheetClosing ? "true" : undefined}
+      style={{
+        "--sheet-exit-duration": `${sheetExitDuration}ms`,
+        "--sheet-fade-duration": `${Math.round(sheetExitDuration * 0.88)}ms`,
+        "--sheet-exit-from-transform": sheetExitFromTransform,
+        "--sheet-exit-from-opacity": sheetExitFromOpacity,
+      }}
     >
       <header
         className={`prototype-header${isScrolled ? " is-scrolled" : ""}${settingsRoute ? " is-settings-route" : ""}`}

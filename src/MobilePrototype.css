@@ -1861,7 +1861,7 @@ button:active {
   pointer-events: none;
   transform: translate3d(0, 0, 0);
   transition: opacity 160ms ease;
-  will-change: transform;
+  will-change: transform, opacity;
 }
 .mobile-prototype .dock-active-indicator.is-ready {
   transition:
@@ -2055,8 +2055,8 @@ button:active {
   transform: translate3d(0, var(--sheet-drag-y, 0px), 0);
   transform-origin: center bottom;
   will-change: transform;
-  animation: prototype-sheet-up 330ms cubic-bezier(0.18, 0.89, 0.32, 1.12) both;
-  transition: transform 270ms cubic-bezier(0.2, 0.85, 0.35, 1.15);
+  animation: prototype-sheet-up 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .mobile-prototype .sh[data-dragging="true"] {
   transition: none;
@@ -2111,10 +2111,12 @@ button:active {
   background: var(--line);
 }
 .mobile-prototype[data-sheet-closing="true"] .ov {
-  animation: prototype-fade-out 210ms ease both;
+  animation: prototype-fade-out var(--sheet-fade-duration, 280ms)
+    cubic-bezier(0.4, 0, 0.8, 1) both;
 }
 .mobile-prototype[data-sheet-closing="true"] .sh {
-  animation: prototype-sheet-down 210ms cubic-bezier(0.4, 0, 0.8, 0.2) both;
+  animation: prototype-sheet-down var(--sheet-exit-duration, 320ms)
+    cubic-bezier(0.4, 0, 0.8, 1) both;
   pointer-events: none;
 }
 .mobile-prototype .sheet-actions {
@@ -2515,12 +2517,20 @@ button:active {
 
 @keyframes prototype-sheet-down {
   from {
-    opacity: 1;
-    transform: translate3d(0, 0, 0) scale(1);
+    opacity: var(--sheet-exit-from-opacity, 1);
+    transform: var(--sheet-exit-from-transform, translate3d(0, 0, 0));
+  }
+  72% {
+    opacity: var(--sheet-exit-from-opacity, 1);
   }
   to {
-    opacity: 0.88;
-    transform: translate3d(0, 105%, 0) scale(0.985);
+    opacity: 0;
+    transform: translate3d(
+        0,
+        calc(105% + 24px),
+        0
+      )
+      scale(0.985);
   }
 }
 @keyframes prototype-fade-out {
@@ -2837,7 +2847,7 @@ button:active {
 }
 @keyframes prototype-sheet-up {
   from {
-    transform: translateY(52px) scale(0.985);
+    transform: translateY(24px) scale(0.99);
     opacity: 0;
   }
   to {
@@ -2853,8 +2863,6 @@ button:active {
 
 
 @media (prefers-reduced-motion: reduce) {
-  .mobile-prototype .ov,
-  .mobile-prototype .sh,
   .mobile-prototype .toast,
   .mobile-prototype .expense-row.is-new,
   .mobile-prototype .account-activity-row.is-new,
@@ -2864,5 +2872,36 @@ button:active {
 
   .mobile-prototype .sh {
     transition: none !important;
+  }
+
+  .mobile-prototype[data-sheet-closing="true"] .ov {
+    animation: prototype-fade-out 180ms ease-out both !important;
+  }
+
+  .mobile-prototype[data-sheet-closing="true"] .sh {
+    animation: prototype-sheet-down-reduced 180ms ease-out both !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mobile-prototype:not([data-sheet-closing="true"]) .ov,
+  .mobile-prototype:not([data-sheet-closing="true"]) .sh {
+    animation: none !important;
+  }
+}
+
+@keyframes prototype-sheet-down-reduced {
+  from {
+    opacity: var(--sheet-exit-from-opacity, 1);
+    transform: var(--sheet-exit-from-transform, translate3d(0, 0, 0));
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(
+        0,
+        calc(var(--sheet-drag-y, 0px) + 20px),
+        0
+      )
+      scale(0.995);
   }
 }
