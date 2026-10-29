@@ -39,6 +39,7 @@ html {
   min-height: 100%;
   -webkit-tap-highlight-color: transparent;
   -webkit-touch-callout: none;
+  overscroll-behavior: none;
 }
 body {
   min-height: 100vh;
@@ -65,15 +66,34 @@ input,
 textarea,
 select {
   font-size: 16px;
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+.am,
+.animated-money,
+.copyable-amount {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
 }
 button,
 a,
 .tab {
   touch-action: manipulation;
 }
-button:active {
-  transform: scale(0.99);
-  transition: transform 100ms ease;
+button,
+a,
+.tab,
+.card {
+  transition: transform 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+button:active,
+a:active,
+.tab:active,
+.card:active {
+  transform: scale(0.98);
+  transition-duration: 100ms;
 }
 .auth-modal-backdrop,
 .profile-editor-backdrop {
@@ -479,7 +499,7 @@ button:active {
   outline: none;
 }
 .mobile-prototype button:not(:disabled):active {
-  transform: scale(0.99);
+  transform: scale(0.98);
   transition: transform 100ms ease;
 }
 .mobile-prototype input {
@@ -493,6 +513,7 @@ button:active {
 .mobile-prototype .animated-money {
   -webkit-user-select: text;
   user-select: text;
+  -webkit-touch-callout: default;
 }
 .mobile-prototype textarea,
 .mobile-prototype select {
@@ -1005,7 +1026,7 @@ button:active {
 }
 .mobile-prototype .sec button:active {
   background: transparent;
-  transform: scale(0.99);
+  transform: scale(0.98);
 }
 .mobile-prototype .stack {
   display: flex;
@@ -1401,7 +1422,7 @@ button:active {
 }
 .mobile-prototype button.ri:active {
   background: transparent;
-  transform: scale(0.99);
+  transform: scale(0.98);
 }
 .mobile-prototype .expense-day-card button.expense-row:active {
   background: var(--card);
@@ -1598,7 +1619,7 @@ button:active {
 }
 .mobile-prototype .chips button:active,
 .mobile-prototype .cg button:active {
-  transform: scale(0.99);
+  transform: scale(0.98);
 }
 .mobile-prototype .chips button {
   display: inline-flex;
@@ -1656,7 +1677,7 @@ button:active {
   touch-action: manipulation;
 }
 .mobile-prototype .seg button:active {
-  transform: scale(0.99);
+  transform: scale(0.98);
 }
 .mobile-prototype .seg .on {
   background: var(--card);
@@ -1801,7 +1822,7 @@ button:active {
   touch-action: manipulation;
 }
 .mobile-prototype .acts button:active {
-  transform: scale(0.985);
+  transform: scale(0.98);
   background: var(--card);
   box-shadow: var(--shadow);
 }
@@ -1873,7 +1894,7 @@ button:active {
   touch-action: manipulation;
 }
 .mobile-prototype .btn:active {
-  transform: scale(0.985);
+  transform: scale(0.98);
   filter: brightness(0.96);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 12%);
 }
