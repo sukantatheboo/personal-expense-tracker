@@ -1,5 +1,5 @@
 -- Run this in your Supabase SQL Editor (Dashboard > SQL Editor)
--- 1. Unschedule the old 1-minute job that was returning 401
+-- 1. Unschedule old jobs
 do $$
 begin
   if exists (select 1 from cron.job where jobname = 'spend-send-due-reminders') then
@@ -13,7 +13,9 @@ end $$;
 create extension if not exists pg_cron;
 create extension if not exists pg_net;
 
--- 2. Save Vault secrets
+-- 2. Clear old secrets to prevent duplicate key error, then create fresh
+delete from vault.secrets where name in ('project_url', 'cron_secret');
+
 select vault.create_secret('https://eipexdfsblfyegycbigd.supabase.co', 'project_url');
 select vault.create_secret('f7d31ee2709925a1c089abe0605ec1b2d66e38f1e5bdd5380afff5a170aa8069', 'cron_secret');
 
