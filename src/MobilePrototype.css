@@ -1265,64 +1265,49 @@ a:active,
 }
 
 /* Real-app message-style delete action box */
+.mobile-prototype .expense-swipe-shell {
+  background: #dc2626;
+  border-radius: 14px;
+}
+:root[data-theme="dark"] .mobile-prototype .expense-swipe-shell {
+  background: #e53935;
+}
+.mobile-prototype .expense-swipe-shell.is-skip-shell {
+  background: var(--g, #327a58);
+}
+
 .mobile-prototype .expense-swipe-delete {
   position: absolute;
-  top: 3px;
-  bottom: 3px;
+  top: 0;
+  bottom: 0;
   z-index: 1;
   display: flex;
+  width: 76px;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 2px;
   border: 0;
   border-radius: 14px;
-  background: #dc2626;
+  background: transparent;
   color: #ffffff;
   cursor: pointer;
-  opacity: 1;
   user-select: none;
   -webkit-user-select: none;
   touch-action: manipulation;
   overflow: hidden;
-  box-shadow: 0 1px 3px rgb(0 0 0 / 12%);
-  transition:
-    background-color 160ms ease,
-    opacity 160ms ease;
-}
-
-:root[data-theme="dark"] .mobile-prototype .expense-swipe-delete {
-  background: #e53935;
-}
-
-.mobile-prototype .expense-swipe-delete.is-skip {
-  background: var(--g, #327a58);
 }
 
 /* Right delete box: always ready on the right behind the card */
 .mobile-prototype .expense-swipe-delete.is-right {
   right: 0;
   left: auto;
-  width: calc(max(74px, -1 * var(--swipe-x, 0px)));
-  min-width: 74px;
 }
 
 /* Left delete box: revealed when swiping right */
 .mobile-prototype .expense-swipe-delete.is-left {
   left: 0;
   right: auto;
-  width: calc(max(74px, var(--swipe-x, 0px)));
-  min-width: 74px;
-  display: none;
-}
-
-.mobile-prototype .expense-swipe-shell[data-swipe-dir="right"] .expense-swipe-delete.is-left,
-.mobile-prototype .expense-swipe-shell.is-swipe-right .expense-swipe-delete.is-left {
-  display: flex;
-}
-.mobile-prototype .expense-swipe-shell[data-swipe-dir="right"] .expense-swipe-delete.is-right,
-.mobile-prototype .expense-swipe-shell.is-swipe-right .expense-swipe-delete.is-right {
-  display: none;
 }
 
 .mobile-prototype .expense-swipe-delete:disabled {
@@ -1378,7 +1363,7 @@ a:active,
   background: var(--card);
   touch-action: pan-y;
   -webkit-touch-callout: none;
-  transform: translate3d(var(--swipe-x, 0px), 0, 0);
+  transform: translate3d(0, 0, 0);
   transition:
     transform 280ms cubic-bezier(0.2, 0.9, 0.28, 1),
     scale 140ms ease;
@@ -1541,7 +1526,6 @@ a:active,
 }
 .mobile-prototype .expense-day-card button.expense-row:active {
   background: var(--card);
-  transform: translate3d(var(--swipe-x, 0px), 0, 0);
   scale: 0.985;
 }
 .mobile-prototype
@@ -2459,8 +2443,9 @@ a:active,
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  background: rgb(10 20 14/50%);
+  background: rgb(10 20 14 / 0.5);
   animation: prototype-fade-in 180ms ease-out both;
+  will-change: opacity;
 }
 .mobile-prototype .sh {
   display: flex;
@@ -2474,19 +2459,21 @@ a:active,
   border-radius: 28px 28px 0 0;
   outline: none;
   background: var(--card);
-  transform: translate3d(0, var(--sheet-drag-y, 0px), 0);
+  transform: translate3d(0, 0, 0);
   transform-origin: center bottom;
-  will-change: transform, opacity;
-  animation: prototype-sheet-up 300ms cubic-bezier(0.22, 0.8, 0.2, 1) both;
-  transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+  animation: prototype-sheet-up 300ms cubic-bezier(0.22, 0.8, 0.2, 1);
+  transition: transform 280ms cubic-bezier(0.2, 0.9, 0.28, 1);
 }
 .mobile-prototype .sh[data-dragging="true"] {
-  transition: none;
+  animation: none !important;
+  transition: none !important;
   user-select: none;
+  -webkit-user-select: none;
 }
 .mobile-prototype .sheet-drag-zone {
   position: relative;
-  z-index: 5;
+  z-index: 10;
   display: flex;
   flex: 0 0 44px;
   width: 100%;
@@ -2496,7 +2483,7 @@ a:active,
   margin: 0;
   padding: 0 20px;
   background: var(--card);
-  touch-action: none;
+  touch-action: none !important;
   cursor: grab;
   user-select: none;
   -webkit-user-select: none;
@@ -2521,16 +2508,22 @@ a:active,
   z-index: 3;
   padding: 4px 0 8px;
   background: var(--card);
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none !important;
+  cursor: grab;
 }
-.mobile-prototype .sh[data-dragging="true"] .sheet-drag-zone {
+.mobile-prototype .sh[data-dragging="true"] .sheet-drag-zone,
+.mobile-prototype .sh[data-dragging="true"] .sheet-content > h3:first-child {
   cursor: grabbing;
 }
 .mobile-prototype .grab {
-  width: 42px;
+  width: 44px;
   height: 5px;
   margin: 0 auto;
   border-radius: 9px;
   background: var(--line);
+  opacity: 0.9;
 }
 .mobile-prototype[data-sheet-closing="true"] .ov {
   animation: prototype-fade-out var(--sheet-fade-duration, 280ms)
@@ -2829,7 +2822,6 @@ a:active,
   }
   .mobile-prototype .expense-day-card button.expense-row:active {
     background: var(--card);
-    transform: translate3d(var(--swipe-x, 0px), 0, 0) !important;
     scale: 1 !important;
   }
   .mobile-prototype .prototype-header-action:active svg,
@@ -3402,7 +3394,7 @@ a:active,
   }
   to {
     opacity: 0;
-    transform: translate3d(0, calc(var(--sheet-drag-y, 0px) + 20px), 0);
+    transform: translate3d(0, 20px, 0);
   }
 }
 

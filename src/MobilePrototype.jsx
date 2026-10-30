@@ -421,6 +421,9 @@ function ExpenseRow({
   const duplicatePressTimerRef = useRef();
   const suppressClickTimerRef = useRef();
   const suppressClickRef = useRef(false);
+  const dragFrameRef = useRef(null);
+  const pendingOffsetRef = useRef(0);
+  const wasPastThresholdRef = useRef(false);
   const [swipe, setSwipe] = useState({ offset: 0, phase: "idle" });
   const [duplicatePress, setDuplicatePress] = useState(false);
   const swipeRef = useRef(swipe);
@@ -450,6 +453,10 @@ function ExpenseRow({
       swipeRef.current.phase === "collapsing"
     )
       return;
+    if (dragFrameRef.current) {
+      cancelAnimationFrame(dragFrameRef.current);
+      dragFrameRef.current = null;
+    }
     triggerHaptic("delete");
     clearTimeout(swipeTimerRef.current);
     clearTimeout(collapseTimerRef.current);
@@ -459,9 +466,9 @@ function ExpenseRow({
 
     rowRef.current?.classList.remove("is-swipe-dragging");
     shellRef.current?.classList.remove("is-swipe-dragging");
-    rowRef.current?.style.setProperty("--swipe-x", `${targetOffset}px`);
-    shellRef.current?.style.setProperty("--swipe-x", `${targetOffset}px`);
-    shellRef.current?.setAttribute("data-swipe-dir", direction);
+    if (rowRef.current) {
+      rowRef.current.style.transform = `translate3d(${targetOffset}px, 0, 0)`;
+    }
     updateSwipe({ offset: targetOffset, phase: "deleting" });
 
     collapseTimerRef.current = setTimeout(() => {
@@ -472,11 +479,14 @@ function ExpenseRow({
 
   useEffect(
     () => () => {
-      clearTimeout(holdTimerRef.current);
+      clearHoldTimer();
       clearTimeout(swipeTimerRef.current);
       clearTimeout(collapseTimerRef.current);
       clearTimeout(duplicatePressTimerRef.current);
       clearTimeout(suppressClickTimerRef.current);
+      if (dragFrameRef.current) {
+        cancelAnimationFrame(dragFrameRef.current);
+      }
     },
     [],
   );
@@ -491,9 +501,9 @@ function ExpenseRow({
         (!shellRef.current || !shellRef.current.contains(event.target))
       ) {
         updateSwipe({ offset: 0, phase: "idle" });
-        rowRef.current.style.setProperty("--swipe-x", "0px");
-        shellRef.current?.style.setProperty("--swipe-x", "0px");
-        shellRef.current?.removeAttribute("data-swipe-dir");
+        if (rowRef.current) {
+          rowRef.current.style.transform = "translate3d(0, 0, 0)";
+        }
       }
     };
     window.addEventListener("pointerdown", handleOutside, true);
@@ -507,6 +517,10 @@ function ExpenseRow({
     clearHoldTimer();
     clearTimeout(swipeTimerRef.current);
     clearTimeout(collapseTimerRef.current);
+    if (dragFrameRef.current) {
+      cancelAnimationFrame(dragFrameRef.current);
+      dragFrameRef.current = null;
+    }
 
     const initialOffset = swipeRef.current.offset;
     const width = rowRef.current?.offsetWidth || 320;
@@ -612,20 +626,36 @@ function ExpenseRow({
         gesture.passedHaptic = false;
       }
 
-      swipeRef.current = { offset: targetOffset, phase: "dragging" };
-      rowRef.current?.style.setProperty("--swipe-x", `${targetOffset}px`);
-      shellRef.current?.style.setProperty("--swipe-x", `${targetOffset}px`);
-      shellRef.current?.setAttribute("data-swipe-dir", targetOffset < 0 ? "left" : "right");
-      if (isPastThreshold) {
-        shellRef.current?.setAttribute("data-threshold", "true");
-      } else {
-        shellRef.current?.removeAttribute("data-threshold");
+      swipeRef.current.offset = targetOffset;
+      pendingOffsetRef.current = targetOffset;
+
+      if (!dragFrameRef.current) {
+        dragFrameRef.current = requestAnimationFrame(() => {
+          dragFrameRef.current = null;
+          const offset = pendingOffsetRef.current;
+          if (rowRef.current) {
+            rowRef.current.style.transform = `translate3d(${offset}px, 0, 0)`;
+          }
+          const past = Math.abs(offset) >= deleteThreshold;
+          if (past !== wasPastThresholdRef.current) {
+            wasPastThresholdRef.current = past;
+            if (past) {
+              shellRef.current?.setAttribute("data-threshold", "true");
+            } else {
+              shellRef.current?.removeAttribute("data-threshold");
+            }
+          }
+        });
       }
     }
   };
 
   const endGesture = (event) => {
     clearHoldTimer();
+    if (dragFrameRef.current) {
+      cancelAnimationFrame(dragFrameRef.current);
+      dragFrameRef.current = null;
+    }
     const gesture = pointerRef.current;
     pointerRef.current = null;
 
@@ -642,16 +672,13 @@ function ExpenseRow({
     rowRef.current?.classList.remove("is-swipe-dragging");
     shellRef.current?.classList.remove("is-swipe-dragging");
     shellRef.current?.removeAttribute("data-threshold");
+    wasPastThresholdRef.current = false;
 
     if (event?.type === "pointercancel") {
       const resetOffset = Math.abs(gesture.initialOffset) === 76 ? gesture.initialOffset : 0;
       updateSwipe({ offset: resetOffset, phase: resetOffset === 0 ? "idle" : "revealed" });
-      rowRef.current?.style.setProperty("--swipe-x", `${resetOffset}px`);
-      shellRef.current?.style.setProperty("--swipe-x", `${resetOffset}px`);
-      if (resetOffset === 0) {
-        shellRef.current?.removeAttribute("data-swipe-dir");
-      } else {
-        shellRef.current?.setAttribute("data-swipe-dir", resetOffset < 0 ? "left" : "right");
+      if (rowRef.current) {
+        rowRef.current.style.transform = `translate3d(${resetOffset}px, 0, 0)`;
       }
       return;
     }
@@ -677,19 +704,19 @@ function ExpenseRow({
         beginDelete(e.rec && onSkip ? onSkip : onDelete, "left");
       } else if (currentOffset >= revealThreshold) {
         updateSwipe({ offset: 76, phase: "revealed" });
-        rowRef.current?.style.setProperty("--swipe-x", "76px");
-        shellRef.current?.style.setProperty("--swipe-x", "76px");
-        shellRef.current?.setAttribute("data-swipe-dir", "right");
+        if (rowRef.current) {
+          rowRef.current.style.transform = "translate3d(76px, 0, 0)";
+        }
       } else if (currentOffset <= -revealThreshold) {
         updateSwipe({ offset: -76, phase: "revealed" });
-        rowRef.current?.style.setProperty("--swipe-x", "-76px");
-        shellRef.current?.style.setProperty("--swipe-x", "-76px");
-        shellRef.current?.setAttribute("data-swipe-dir", "left");
+        if (rowRef.current) {
+          rowRef.current.style.transform = "translate3d(-76px, 0, 0)";
+        }
       } else {
         updateSwipe({ offset: 0, phase: "idle" });
-        rowRef.current?.style.setProperty("--swipe-x", "0px");
-        shellRef.current?.style.setProperty("--swipe-x", "0px");
-        shellRef.current?.removeAttribute("data-swipe-dir");
+        if (rowRef.current) {
+          rowRef.current.style.transform = "translate3d(0, 0, 0)";
+        }
       }
     }
   };
@@ -725,7 +752,7 @@ function ExpenseRow({
       ref={rowRef}
       className={rowClasses}
       type="button"
-      style={onDelete ? { "--swipe-x": `${swipe.offset}px` } : undefined}
+      style={onDelete && swipe.offset !== 0 ? { transform: `translate3d(${swipe.offset}px, 0, 0)` } : undefined}
       aria-label={`${e.desc}, ${M(e.amt || 0)}${e.cat === "Savings" ? ", savings transfer" : ""}. ${gestureHint}`}
       onPointerDown={startGesture}
       onPointerMove={moveGesture}
@@ -741,9 +768,9 @@ function ExpenseRow({
         }
         if (swipeRef.current.phase === "revealed") {
           updateSwipe({ offset: 0, phase: "idle" });
-          rowRef.current?.style.setProperty("--swipe-x", "0px");
-          shellRef.current?.style.setProperty("--swipe-x", "0px");
-          shellRef.current?.removeAttribute("data-swipe-dir");
+          if (rowRef.current) {
+            rowRef.current.style.transform = "translate3d(0, 0, 0)";
+          }
           return;
         }
         onOpen(e.id);
@@ -785,9 +812,7 @@ function ExpenseRow({
   return (
     <div
       ref={shellRef}
-      className={`expense-swipe-shell${swipe.phase === "dragging" ? " is-dragging" : ""}${swipe.phase === "revealed" ? " is-revealed" : ""}${["deleting", "collapsing"].includes(swipe.phase) ? " is-deleting" : ""}${swipe.phase === "collapsing" ? " is-collapsing" : ""}${isSwipeRight ? " is-swipe-right" : isSwipeLeft ? " is-swipe-left" : ""}`}
-      style={{ "--swipe-x": `${swipe.offset}px` }}
-      data-swipe-dir={isSwipeRight ? "right" : isSwipeLeft ? "left" : undefined}
+      className={`expense-swipe-shell${swipe.phase === "dragging" ? " is-dragging" : ""}${swipe.phase === "revealed" ? " is-revealed" : ""}${["deleting", "collapsing"].includes(swipe.phase) ? " is-deleting" : ""}${swipe.phase === "collapsing" ? " is-collapsing" : ""}${isSwipeRight ? " is-swipe-right" : isSwipeLeft ? " is-swipe-left" : ""}${e.rec ? " is-skip-shell" : ""}`}
     >
       {/* Revealed when swiping left-to-right (button on the left) */}
       <button
@@ -839,10 +864,20 @@ function ExpenseRow({
 }
 
 function Sheet({ onClose, children, actions, actionsClassName = "" }) {
-  const [dragOffset, setDragOffset] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
   const dragRef = useRef(null);
   const sheetRef = useRef(null);
+  const overlayRef = useRef(null);
+  const scrollRef = useRef(null);
+  const rAFRef = useRef(null);
+  const pendingDyRef = useRef(0);
+
+  useEffect(() => {
+    return () => {
+      if (rAFRef.current) {
+        cancelAnimationFrame(rAFRef.current);
+      }
+    };
+  }, []);
 
   useLayoutEffect(() => {
     const sheetNode = sheetRef.current;
@@ -859,7 +894,8 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
   useEffect(() => {
     const sheetNode = sheetRef.current;
     const initialFocus = sheetNode?.querySelector("[data-sheet-autofocus]");
-    const scrollNode = sheetNode?.querySelector(".sheet-content");
+    const scrollNode =
+      scrollRef.current || sheetNode?.querySelector(".sheet-content");
     if (!scrollNode || !initialFocus) return undefined;
 
     const resetInitialFocusScroll = () => {
@@ -933,51 +969,301 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
     return () => window.removeEventListener("keydown", handleKeyDown, true);
   }, [onClose]);
 
-  const startDrag = (event) => {
-    if (event.pointerType === "mouse" && event.button !== 0) return;
-    dragRef.current = {
-      pointerId: event.pointerId,
-      startY: event.clientY,
-      lastY: event.clientY,
-      lastTime: performance.now(),
-      velocity: 0,
-    };
-    event.currentTarget.setPointerCapture(event.pointerId);
-    setIsDragging(true);
-  };
-  const moveDrag = (event) => {
+  const applyDragFrame = () => {
+    rAFRef.current = null;
     const drag = dragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    const now = performance.now();
-    const elapsed = Math.max(1, now - drag.lastTime);
-    drag.velocity = (event.clientY - drag.lastY) / elapsed;
-    drag.lastY = event.clientY;
-    drag.lastTime = now;
-    setDragOffset(Math.max(0, event.clientY - drag.startY));
-  };
-  const finishDrag = (event) => {
-    const drag = dragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    const distance = Math.max(0, event.clientY - drag.startY);
-    const shouldClose =
-      distance >= 112 || (distance >= 48 && drag.velocity > 0.72);
-    dragRef.current = null;
-    setIsDragging(false);
-    if (shouldClose) {
-      setDragOffset(distance);
-      onClose({ kind: "drag", distance, velocity: drag.velocity });
-    } else {
-      setDragOffset(0);
+    if (!drag || !drag.active) return;
+
+    let offset = pendingDyRef.current;
+    if (offset < 0) {
+      // Elastic rubber-band resistance when pulling up
+      offset = offset * 0.2;
+    }
+    drag.currentOffset = offset;
+
+    // DIRECT DOM TRANSFORM: Sheet dynamically follows your finger 1:1 in real time
+    if (sheetRef.current) {
+      sheetRef.current.style.transform = `translate3d(0, ${offset}px, 0)`;
+    }
+
+    // Dynamic backdrop opacity fading on GPU compositor layer
+    if (overlayRef.current) {
+      const progress = Math.max(
+        0,
+        Math.min(1, 1 - offset / (drag.sheetHeight * 0.85)),
+      );
+      overlayRef.current.style.opacity = progress.toFixed(3);
     }
   };
-  const cancelDrag = () => {
-    dragRef.current = null;
-    setIsDragging(false);
-    setDragOffset(0);
+
+  const updateDragPosition = (rawDy) => {
+    pendingDyRef.current = rawDy;
+    if (!rAFRef.current) {
+      rAFRef.current = requestAnimationFrame(applyDragFrame);
+    }
   };
+
+  const onDragStart = (event) => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+
+    const target = event.target;
+    // Don't drag if tapping interactive elements
+    if (
+      target.closest(
+        'input, textarea, select, button, a, [role="button"], [role="switch"]',
+      )
+    ) {
+      return;
+    }
+
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // ignore
+    }
+
+    if (rAFRef.current) {
+      cancelAnimationFrame(rAFRef.current);
+      rAFRef.current = null;
+    }
+
+    const sheetHeight = sheetRef.current?.offsetHeight || 440;
+
+    dragRef.current = {
+      pointerId: event.pointerId,
+      target: event.currentTarget,
+      startY: event.clientY,
+      currentOffset: 0,
+      recentPoints: [{ y: event.clientY, t: performance.now() }],
+      sheetHeight,
+      active: true,
+    };
+
+    if (sheetRef.current) {
+      sheetRef.current.setAttribute("data-dragging", "true");
+      sheetRef.current.style.animation = "none";
+      sheetRef.current.style.transition = "none";
+    }
+    if (overlayRef.current) {
+      overlayRef.current.style.transition = "none";
+    }
+  };
+
+  const onDragMove = (event) => {
+    const drag = dragRef.current;
+    if (!drag || !drag.active) return;
+    if (event.pointerId !== drag.pointerId) return;
+
+    const now = performance.now();
+    drag.recentPoints.push({ y: event.clientY, t: now });
+    if (drag.recentPoints.length > 5) {
+      drag.recentPoints.shift();
+    }
+
+    const dy = event.clientY - drag.startY;
+    updateDragPosition(dy);
+  };
+
+  const onDragEnd = () => {
+    if (rAFRef.current) {
+      cancelAnimationFrame(rAFRef.current);
+      rAFRef.current = null;
+    }
+    const drag = dragRef.current;
+    dragRef.current = null;
+    if (!drag || !drag.active) return;
+
+    try {
+      if (drag.target?.hasPointerCapture?.(drag.pointerId)) {
+        drag.target.releasePointerCapture(drag.pointerId);
+      }
+    } catch {
+      // ignore
+    }
+
+    let velocity = 0;
+    if (drag.recentPoints.length >= 2) {
+      const oldest = drag.recentPoints[0];
+      const newest = drag.recentPoints[drag.recentPoints.length - 1];
+      const dt = Math.max(1, newest.t - oldest.t);
+      velocity = (newest.y - oldest.y) / dt;
+    }
+
+    const distance = drag.currentOffset;
+    const sheetHeight = drag.sheetHeight;
+
+    // Real-app dismissal conditions:
+    // User must deliberately pull down past 95px (or 22% of sheet height),
+    // or flick down with positive distance and downward velocity!
+    const shouldClose =
+      distance >= 95 ||
+      distance >= sheetHeight * 0.22 ||
+      (distance >= 45 && velocity > 0.45);
+
+    if (shouldClose) {
+      // Smooth animated dismissal gliding off the screen
+      if (sheetRef.current) {
+        sheetRef.current.removeAttribute("data-dragging");
+        sheetRef.current.style.transition =
+          "transform 260ms cubic-bezier(0.2, 0.9, 0.28, 1)";
+        sheetRef.current.style.transform = "translate3d(0, 105%, 0)";
+      }
+      if (overlayRef.current) {
+        overlayRef.current.style.transition = "opacity 240ms cubic-bezier(0.2, 0.9, 0.28, 1)";
+        overlayRef.current.style.opacity = "0";
+      }
+
+      window.setTimeout(() => {
+        onClose({ kind: "drag", distance, velocity });
+      }, 250);
+    } else {
+      // Spring back up to top (0px)
+      if (sheetRef.current) {
+        sheetRef.current.removeAttribute("data-dragging");
+        sheetRef.current.style.transition =
+          "transform 280ms cubic-bezier(0.2, 0.9, 0.28, 1)";
+        sheetRef.current.style.transform = "translate3d(0, 0, 0)";
+      }
+      if (overlayRef.current) {
+        overlayRef.current.style.transition = "opacity 260ms cubic-bezier(0.2, 0.9, 0.28, 1)";
+        overlayRef.current.style.opacity = "1";
+      }
+
+      window.setTimeout(() => {
+        if (sheetRef.current && !dragRef.current?.active) {
+          sheetRef.current.style.transition = "";
+          sheetRef.current.style.transform = "";
+        }
+        if (overlayRef.current && !dragRef.current?.active) {
+          overlayRef.current.style.transition = "";
+          overlayRef.current.style.opacity = "";
+        }
+      }, 290);
+    }
+  };
+
+  // Wire header title drag
+  useEffect(() => {
+    const sheetNode = sheetRef.current;
+    if (!sheetNode) return undefined;
+    const titleNode = sheetNode.querySelector("#sheet-title");
+    if (!titleNode) return undefined;
+
+    titleNode.style.touchAction = "none";
+    titleNode.style.cursor = "grab";
+
+    titleNode.addEventListener("pointerdown", onDragStart);
+    titleNode.addEventListener("pointermove", onDragMove);
+    titleNode.addEventListener("pointerup", onDragEnd);
+    titleNode.addEventListener("pointercancel", onDragEnd);
+
+    return () => {
+      titleNode.removeEventListener("pointerdown", onDragStart);
+      titleNode.removeEventListener("pointermove", onDragMove);
+      titleNode.removeEventListener("pointerup", onDragEnd);
+      titleNode.removeEventListener("pointercancel", onDragEnd);
+    };
+  }, []);
+
+  // Support pull-down from top of scrollable content when at scrollTop <= 0
+  useEffect(() => {
+    const scrollNode = scrollRef.current;
+    if (!scrollNode) return undefined;
+
+    let touchStartY = 0;
+    let isPulling = false;
+
+    const onTouchStart = (e) => {
+      if (e.touches.length !== 1) return;
+      const target = e.target;
+      if (
+        target.closest(
+          'input, textarea, select, button, a, [role="button"], [role="switch"]',
+        )
+      ) {
+        return;
+      }
+      touchStartY = e.touches[0].clientY;
+      isPulling = false;
+    };
+
+    const onTouchMove = (e) => {
+      if (e.touches.length !== 1) return;
+      const clientY = e.touches[0].clientY;
+      const dy = clientY - touchStartY;
+
+      if (scrollNode.scrollTop <= 1 && dy > 0) {
+        if (!isPulling && dy > 6) {
+          isPulling = true;
+          if (document.activeElement instanceof HTMLElement) {
+            document.activeElement.blur();
+          }
+          if (rAFRef.current) {
+            cancelAnimationFrame(rAFRef.current);
+            rAFRef.current = null;
+          }
+          const sheetHeight = sheetRef.current?.offsetHeight || 440;
+          dragRef.current = {
+            pointerId: -1,
+            target: null,
+            startY: touchStartY,
+            currentOffset: 0,
+            recentPoints: [{ y: clientY, t: performance.now() }],
+            sheetHeight,
+            active: true,
+          };
+          if (sheetRef.current) {
+            sheetRef.current.setAttribute("data-dragging", "true");
+            sheetRef.current.style.animation = "none";
+            sheetRef.current.style.transition = "none";
+          }
+          if (overlayRef.current) {
+            overlayRef.current.style.transition = "none";
+          }
+        }
+        if (isPulling) {
+          e.preventDefault();
+          const now = performance.now();
+          if (dragRef.current) {
+            dragRef.current.recentPoints.push({ y: clientY, t: now });
+            if (dragRef.current.recentPoints.length > 5) {
+              dragRef.current.recentPoints.shift();
+            }
+          }
+          updateDragPosition(dy);
+        }
+      } else {
+        isPulling = false;
+      }
+    };
+
+    const onTouchEnd = () => {
+      if (isPulling) {
+        isPulling = false;
+        onDragEnd();
+      }
+    };
+
+    scrollNode.addEventListener("touchstart", onTouchStart, { passive: true });
+    scrollNode.addEventListener("touchmove", onTouchMove, { passive: false });
+    scrollNode.addEventListener("touchend", onTouchEnd, { passive: true });
+    scrollNode.addEventListener("touchcancel", onTouchEnd, { passive: true });
+
+    return () => {
+      scrollNode.removeEventListener("touchstart", onTouchStart);
+      scrollNode.removeEventListener("touchmove", onTouchMove);
+      scrollNode.removeEventListener("touchend", onTouchEnd);
+      scrollNode.removeEventListener("touchcancel", onTouchEnd);
+    };
+  }, []);
 
   return (
     <div
+      ref={overlayRef}
       className="ov"
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
@@ -990,20 +1276,20 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
         aria-modal="true"
         aria-labelledby="sheet-title"
         tabIndex={-1}
-        data-dragging={isDragging ? "true" : undefined}
-        style={{ "--sheet-drag-y": `${dragOffset}px` }}
       >
         <div
           className="sheet-drag-zone"
           aria-hidden="true"
-          onPointerDown={startDrag}
-          onPointerMove={moveDrag}
-          onPointerUp={finishDrag}
-          onPointerCancel={cancelDrag}
+          onPointerDown={onDragStart}
+          onPointerMove={onDragMove}
+          onPointerUp={onDragEnd}
+          onPointerCancel={onDragEnd}
         >
           <div className="grab" />
         </div>
-        <div className="sheet-content">{children}</div>
+        <div ref={scrollRef} className="sheet-content">
+          {children}
+        </div>
         {actions && (
           <div
             className={`sheet-actions${actionsClassName ? ` ${actionsClassName}` : ""}`}
@@ -3089,6 +3375,30 @@ export default function MobilePrototype({
   const close = (exit = null, afterClose = null) => {
     if (!sheet || sheetClosing) return;
     clearTimeout(sheetCloseTimer.current);
+
+    if (exit?.kind === "drag") {
+      const returnFocus = sheetReturnFocusRef.current;
+      sheetReturnFocusRef.current = null;
+      setSheet(null);
+      setSheetClosing(false);
+      setSheetExitDuration(SHEET_EXIT_MS);
+      setSheetExitFromTransform("translate3d(0, 0, 0)");
+      setSheetExitFromOpacity("1");
+      sheetCloseTimer.current = null;
+      afterClose?.();
+      if (returnFocus) {
+        window.requestAnimationFrame(() => {
+          if (
+            returnFocus.isConnected &&
+            !document.querySelector('[role="dialog"][aria-modal="true"]')
+          ) {
+            returnFocus.focus({ preventScroll: true });
+          }
+        });
+      }
+      return;
+    }
+
     setSheetClosing(true);
     const prefersReducedMotion =
       window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
