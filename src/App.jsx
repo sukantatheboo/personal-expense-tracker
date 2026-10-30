@@ -1804,11 +1804,27 @@ export default function App() {
           : `${dueExpenses[0].description} was overdue and was added to your expenses.`
         : `Recurring expenses due today or earlier were added: ${details}.`,
     );
-    if (notificationPermission === "granted")
+
+    // If the user has the app open in the foreground, do NOT show an OS system notification.
+    // The in-app banner above and activity feed handle foreground presentation.
+    if (
+      typeof document !== "undefined" &&
+      document.visibilityState === "hidden" &&
+      notificationPermission === "granted" &&
+      !backgroundPushEnabled
+    ) {
       sendSystemNotification(dueExpenses);
+    }
   }
 
   function sendSystemNotification(dueExpenses) {
+    if (
+      typeof document !== "undefined" &&
+      document.visibilityState === "visible"
+    ) {
+      // Suppress OS-level system banners when app is active in foreground
+      return;
+    }
     if (
       !("Notification" in window) ||
       window.Notification.permission !== "granted"
@@ -1821,7 +1837,11 @@ export default function App() {
       dueExpenses.length === 1
         ? "Recurring expense due"
         : "Recurring expenses due";
-    const options = { body: details };
+    const options = {
+      body: details,
+      icon: new URL("./icons/icon-192.png", window.location.origin).href,
+      badge: new URL("./icons/icon-180.png", window.location.origin).href,
+    };
     const displayNotification =
       "serviceWorker" in navigator
         ? navigator.serviceWorker
@@ -2917,25 +2937,9 @@ export default function App() {
         );
         return;
       }
-      try {
-        if ("serviceWorker" in navigator) {
-          const registration = await navigator.serviceWorker.ready;
-          await registration.showNotification("Spend notifications enabled", {
-            body: "Notifications can appear while this app is open. Background push needs backend setup.",
-          });
-        } else {
-          new window.Notification("Spend notifications enabled", {
-            body: "Notifications can appear while this app is open.",
-          });
-        }
-        setNotificationStatus(
-          "Notifications are allowed. Background reminders need backend setup.",
-        );
-      } catch (error) {
-        setNotificationStatus(
-          `Could not show a system notification: ${error.message}`,
-        );
-      }
+      setNotificationStatus(
+        "Notifications are allowed. Background reminders need backend setup.",
+      );
       return;
     }
     if (!pushUser) {
@@ -3001,20 +3005,11 @@ export default function App() {
       return;
     }
     try {
-      const { registration } = await enableBackgroundPush(pushUser.id);
+      await enableBackgroundPush(pushUser.id);
       setBackgroundPushEnabled(true);
       setNotificationStatus(
         "Background reminders are enabled. You’ll get a push when a recurring expense is due.",
       );
-      try {
-        await registration.showNotification("Spend notifications enabled", {
-          body: "Background reminders are working on this device.",
-        });
-      } catch (error) {
-        setNotificationStatus(
-          `Background reminders are enabled, but the test notification could not be shown: ${error.message}`,
-        );
-      }
     } catch (error) {
       setNotificationStatus(
         `Could not enable background reminders: ${error.message}`,
@@ -3023,10 +3018,16 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (notificationPermission === "granted" && pendingDueRef.current.length) {
+    if (
+      typeof document !== "undefined" &&
+      document.visibilityState === "hidden" &&
+      notificationPermission === "granted" &&
+      pendingDueRef.current.length &&
+      !backgroundPushEnabled
+    ) {
       sendSystemNotification([...pendingDueRef.current]);
     }
-  }, [notificationPermission]);
+  }, [notificationPermission, backgroundPushEnabled]);
 
   useEffect(() => {
     if (notificationPermission === "unsupported") {
