@@ -2,7 +2,7 @@
 
 :root {
   color-scheme: light;
-  --page-bg: #f5f7f5;
+  --page-bg: #f4f3ee;
   --card: #ffffff;
   --ink: #18201b;
   --muted: #626e66;
@@ -15,7 +15,7 @@
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --page-bg: #101315;
+  --page-bg: #0e1411;
   --card: #1a1e21;
   --ink: #f0f3f1;
   --muted: #aab4ae;
@@ -412,7 +412,7 @@ a:active,
   color: var(--ink);
 }
 .mobile-prototype {
-  --bg: #f5f7f5;
+  --bg: #f4f3ee;
   --card: #fff;
   --ink: #18201b;
   --mut: #626e66;
@@ -442,7 +442,7 @@ a:active,
 }
 @media (prefers-color-scheme: dark) {
   .mobile-prototype:not([data-theme="light"]) {
-    --bg: #101315;
+    --bg: #0e1411;
     --card: #1a1e21;
     --ink: #f0f3f1;
     --mut: #aab4ae;
@@ -467,7 +467,7 @@ a:active,
   }
 }
 .mobile-prototype[data-theme="dark"] {
-  --bg: #101315;
+  --bg: #0e1411;
   --card: #1a1e21;
   --ink: #f0f3f1;
   --mut: #aab4ae;

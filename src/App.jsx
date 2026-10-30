@@ -49,7 +49,10 @@ const LAST_BACKUP_AT_KEY = "spend-last-backup-at-v1";
 
 function loadTheme() {
   try {
-    return localStorage.getItem(STORAGE_KEYS.theme) === "dark"
+    const saved = localStorage.getItem(STORAGE_KEYS.theme);
+    if (saved === "dark" || saved === "light") return saved;
+    return typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-color-scheme: dark)").matches
       ? "dark"
       : "light";
   } catch {
@@ -1139,7 +1142,7 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    const browserChromeColor = theme === "dark" ? "#101315" : "#f5f7f5";
+    const browserChromeColor = theme === "dark" ? "#0e1411" : "#f4f3ee";
     document
       .querySelectorAll('meta[name="theme-color"]')
       .forEach((meta) => meta.setAttribute("content", browserChromeColor));

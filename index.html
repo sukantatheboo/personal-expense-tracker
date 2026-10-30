@@ -8,12 +8,12 @@
     />
     <meta
       name="theme-color"
-      content="#f5f7f5"
+      content="#f4f3ee"
       media="(prefers-color-scheme: light)"
     />
     <meta
       name="theme-color"
-      content="#101315"
+      content="#0e1411"
       media="(prefers-color-scheme: dark)"
     />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -29,46 +29,98 @@
     <link rel="apple-touch-icon" href="%BASE_URL%icons/icon-180.png" />
     <title>Spend — Expense tracker</title>
     <style>
-      html {
-        background: #f5f7f5;
+      :root {
+        --bg: #f4f3ee;
+        --sk: #e6e4dc;
         color-scheme: light;
       }
       @media (prefers-color-scheme: dark) {
         html:not([data-theme="light"]) {
-          background: #101315;
+          --bg: #0e1411;
+          --sk: #26322c;
           color-scheme: dark;
         }
       }
       html[data-theme="dark"] {
-        background: #101315;
+        --bg: #0e1411;
+        --sk: #26322c;
         color-scheme: dark;
       }
       html[data-theme="light"] {
-        background: #f5f7f5;
+        --bg: #f4f3ee;
+        --sk: #e6e4dc;
         color-scheme: light;
+      }
+      html,
+      body {
+        margin: 0;
+        background: var(--bg);
+      }
+      .boot {
+        min-height: 100dvh;
+        box-sizing: border-box;
+        padding: calc(env(safe-area-inset-top) + 18px) 16px 0;
+        max-width: 480px;
+        margin: 0 auto;
+      }
+      .sk {
+        background: var(--sk);
+        border-radius: 12px;
+        animation: pulse 1.4s ease-in-out infinite;
+      }
+      @keyframes pulse {
+        50% {
+          opacity: 0.5;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .sk {
+          animation: none;
+        }
       }
     </style>
     <script>
       try {
         var savedTheme = localStorage.getItem("spend-theme-v1");
-        if (savedTheme === "dark") {
-          document.documentElement.dataset.theme = "dark";
-        } else if (savedTheme === "light") {
-          document.documentElement.dataset.theme = "light";
-        }
-        if (savedTheme) {
-          var color = savedTheme === "dark" ? "#101315" : "#f5f7f5";
-          document
-            .querySelectorAll('meta[name="theme-color"]')
-            .forEach(function (meta) {
-              meta.setAttribute("content", color);
-            });
-        }
+        var isDark =
+          savedTheme === "dark" ||
+          (!savedTheme &&
+            window.matchMedia &&
+            window.matchMedia("(prefers-color-scheme: dark)").matches);
+        document.documentElement.dataset.theme = isDark ? "dark" : "light";
+        var color = isDark ? "#0e1411" : "#f4f3ee";
+        document
+          .querySelectorAll('meta[name="theme-color"]')
+          .forEach(function (meta) {
+            meta.setAttribute("content", color);
+          });
       } catch (e) {}
     </script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="boot" aria-hidden="true">
+        <div class="sk" style="width: 120px; height: 28px"></div>
+        <div
+          class="sk"
+          style="height: 150px; border-radius: 24px; margin-top: 20px"
+        ></div>
+        <div style="display: flex; gap: 12px; margin-top: 12px">
+          <div
+            class="sk"
+            style="flex: 1; height: 84px; border-radius: 20px"
+          ></div>
+          <div
+            class="sk"
+            style="flex: 1; height: 84px; border-radius: 20px"
+          ></div>
+        </div>
+        <div
+          class="sk"
+          style="height: 200px; border-radius: 24px; margin-top: 12px"
+        ></div>
+      </div>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

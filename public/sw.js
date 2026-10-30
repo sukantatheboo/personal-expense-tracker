@@ -1,4 +1,4 @@
-const CACHE_NAME = "spend-app-v3";
+const CACHE_NAME = "spend-app-v5";
 const APP_FILES = [
   "./",
   "./manifest.webmanifest",
@@ -6,6 +6,7 @@ const APP_FILES = [
   "./icons/icon-180.png",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
+  "./icons/icon-maskable-512.png",
 ];
 
 self.addEventListener("install", (event) => {
@@ -85,26 +86,58 @@ self.addEventListener("fetch", (event) => {
   )
     return;
 
-  event.respondWith(
-    fetch(request)
-      .then((response) => {
-        if (response.ok && response.type === "basic") {
-          const copy = response.clone();
-          return caches
-            .open(CACHE_NAME)
-            .then((cache) => cache.put(request, copy))
-            .then(() => response);
-        }
-        return response;
-      })
-      .catch(async () => {
-        const cached = await caches.match(request);
+  // 1. Immutable hashed assets: Cache-First for instant 0ms launch from device storage
+  if (url.pathname.includes("/assets/")) {
+    event.respondWith(
+      caches.match(request).then((cached) => {
         if (cached) return cached;
-        if (request.mode === "navigate") {
-          const appShell = await caches.match("./");
-          if (appShell) return appShell;
-        }
-        throw new Error(`No cached response available for ${request.url}`);
+        return fetch(request).then((response) => {
+          if (response.ok && response.type === "basic") {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+          }
+          return response;
+        });
       }),
+    );
+    return;
+  }
+
+  // 2. Navigation / App Shell: Stale-While-Revalidate
+  // Serves cached shell immediately to minimize splash display time, updates in background
+  if (request.mode === "navigate") {
+    event.respondWith(
+      caches.match("./").then((cached) => {
+        const networkFetch = fetch(request)
+          .then((response) => {
+            if (response.ok && response.type === "basic") {
+              const copy = response.clone();
+              caches.open(CACHE_NAME).then((cache) => cache.put("./", copy));
+            }
+            return response;
+          })
+          .catch(() => cached);
+
+        return cached || networkFetch;
+      }),
+    );
+    return;
+  }
+
+  // 3. Static shell metadata and icons: Stale-While-Revalidate
+  event.respondWith(
+    caches.match(request).then((cached) => {
+      const networkFetch = fetch(request)
+        .then((response) => {
+          if (response.ok && response.type === "basic") {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+          }
+          return response;
+        })
+        .catch(() => cached);
+
+      return cached || networkFetch;
+    }),
   );
 });
