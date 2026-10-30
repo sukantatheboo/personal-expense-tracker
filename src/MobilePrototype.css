@@ -429,23 +429,23 @@ a:active,
   --over: #f0a067;
   --on: #fff;
   --shadow: 0 8px 24px rgb(28 44 34 / 6%);
-  --dock-surface: rgb(38 44 41 / 76%);
-  --dock-scrolled-surface: rgb(30 35 33 / 88%);
-  --dock-border: rgb(255 255 255 / 15%);
-  --dock-highlight: rgb(255 255 255 / 24%);
-  --dock-tab: rgb(240 245 242 / 78%);
-  --dock-tab-active: #6fd0a0;
-  --dock-active-wash: rgb(255 255 255 / 14%);
+  --dock-surface: rgb(255 255 255 / 78%);
+  --dock-scrolled-surface: rgb(255 255 255 / 90%);
+  --dock-border: rgb(255 255 255 / 76%);
+  --dock-highlight: rgb(255 255 255 / 80%);
+  --dock-tab: #59675f;
+  --dock-tab-active: var(--g);
+  --dock-active-wash: rgb(47 122 90 / 13%);
   --dock-glass-sheen: linear-gradient(
     180deg,
-    rgb(255 255 255 / 14%),
-    rgb(255 255 255 / 2%)
+    rgb(255 255 255 / 46%),
+    rgb(255 255 255 / 12%)
   );
-  --dock-shadow: 0 12px 32px rgb(0 0 0 / 26%), 0 3px 8px rgb(0 0 0 / 12%);
+  --dock-shadow: 0 10px 24px rgb(28 44 34 / 10%), 0 2px 6px rgb(28 44 34 / 4%);
   --dock-scrolled-shadow:
-    0 16px 38px rgb(0 0 0 / 32%), 0 4px 10px rgb(0 0 0 / 16%);
+    0 12px 24px rgb(28 44 34 / 12%), 0 3px 8px rgb(28 44 34 / 5%);
   --dock-minimized-shadow:
-    0 8px 22px rgb(0 0 0 / 22%), 0 2px 6px rgb(0 0 0 / 10%);
+    0 8px 18px rgb(28 44 34 / 8%), 0 2px 5px rgb(28 44 34 / 4%);
   box-sizing: border-box;
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
