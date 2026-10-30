@@ -414,6 +414,7 @@ function ExpenseRow({
   const [, c] = CAT[e.cat];
   const pointerRef = useRef(null);
   const rowRef = useRef(null);
+  const shellRef = useRef(null);
   const holdTimerRef = useRef();
   const swipeTimerRef = useRef();
   const collapseTimerRef = useRef();
@@ -423,14 +424,17 @@ function ExpenseRow({
   const [swipe, setSwipe] = useState({ offset: 0, phase: "idle" });
   const [duplicatePress, setDuplicatePress] = useState(false);
   const swipeRef = useRef(swipe);
+
   const updateSwipe = (next) => {
     swipeRef.current = next;
     setSwipe(next);
   };
+
   const clearHoldTimer = () => {
     clearTimeout(holdTimerRef.current);
     holdTimerRef.current = undefined;
   };
+
   const suppressNextClick = () => {
     suppressClickRef.current = true;
     clearTimeout(suppressClickTimerRef.current);
@@ -438,7 +442,8 @@ function ExpenseRow({
       suppressClickRef.current = false;
     }, 500);
   };
-  const beginDelete = (commit = onDelete) => {
+
+  const beginDelete = (commit = onDelete, direction = "left") => {
     if (
       !commit ||
       swipeRef.current.phase === "deleting" ||
@@ -450,12 +455,21 @@ function ExpenseRow({
     clearTimeout(collapseTimerRef.current);
     const width =
       pointerRef.current?.width || rowRef.current?.offsetWidth || 320;
-    updateSwipe({ offset: -width, phase: "deleting" });
+    const targetOffset = direction === "right" ? width + 24 : -(width + 24);
+
+    rowRef.current?.classList.remove("is-swipe-dragging");
+    shellRef.current?.classList.remove("is-swipe-dragging");
+    rowRef.current?.style.setProperty("--swipe-x", `${targetOffset}px`);
+    shellRef.current?.style.setProperty("--swipe-x", `${targetOffset}px`);
+    shellRef.current?.setAttribute("data-swipe-dir", direction);
+    updateSwipe({ offset: targetOffset, phase: "deleting" });
+
     collapseTimerRef.current = setTimeout(() => {
-      updateSwipe({ offset: -width, phase: "collapsing" });
+      updateSwipe({ offset: targetOffset, phase: "collapsing" });
     }, 220);
     swipeTimerRef.current = setTimeout(() => commit(e.id), 460);
   };
+
   useEffect(
     () => () => {
       clearTimeout(holdTimerRef.current);
@@ -466,26 +480,55 @@ function ExpenseRow({
     },
     [],
   );
+
+  // Automatically reset to idle when tapping anywhere outside if revealed
+  useEffect(() => {
+    if (swipe.phase !== "revealed") return undefined;
+    const handleOutside = (event) => {
+      if (
+        rowRef.current &&
+        !rowRef.current.contains(event.target) &&
+        (!shellRef.current || !shellRef.current.contains(event.target))
+      ) {
+        updateSwipe({ offset: 0, phase: "idle" });
+        rowRef.current.style.setProperty("--swipe-x", "0px");
+        shellRef.current?.style.setProperty("--swipe-x", "0px");
+        shellRef.current?.removeAttribute("data-swipe-dir");
+      }
+    };
+    window.addEventListener("pointerdown", handleOutside, true);
+    return () => window.removeEventListener("pointerdown", handleOutside, true);
+  }, [swipe.phase]);
+
   const startGesture = (event) => {
     if (!onDelete && !onDuplicate) return;
     if (event.button != null && event.button !== 0) return;
     if (["deleting", "collapsing"].includes(swipeRef.current.phase)) return;
     clearHoldTimer();
     clearTimeout(swipeTimerRef.current);
+    clearTimeout(collapseTimerRef.current);
+
+    const initialOffset = swipeRef.current.offset;
+    const width = rowRef.current?.offsetWidth || 320;
+
     pointerRef.current = {
-      x: event.clientX,
-      y: event.clientY,
+      startX: event.clientX,
+      startY: event.clientY,
+      lastX: event.clientX,
+      lastY: event.clientY,
       startedAt: performance.now(),
-      width: rowRef.current?.offsetWidth || 320,
+      width,
       moved: false,
       longPressTriggered: false,
       horizontal: false,
       draggingStateApplied: false,
-      initialOffset: swipeRef.current.offset,
+      initialOffset,
       pointerId: event.pointerId,
       pointerType: event.pointerType,
+      passedHaptic: false,
     };
     suppressClickRef.current = false;
+
     if (event.pointerType === "touch" && onDuplicate) {
       holdTimerRef.current = setTimeout(() => {
         const gesture = pointerRef.current;
@@ -505,71 +548,152 @@ function ExpenseRow({
       }, 560);
     }
   };
+
   const moveGesture = (event) => {
-    if (!pointerRef.current) return;
-    if (pointerRef.current.longPressTriggered) return;
-    const dx = event.clientX - pointerRef.current.x;
-    const dy = event.clientY - pointerRef.current.y;
-    if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
-      pointerRef.current.moved = true;
+    const gesture = pointerRef.current;
+    if (!gesture || gesture.longPressTriggered) return;
+    if (gesture.pointerId !== event.pointerId) return;
+
+    const dx = event.clientX - gesture.startX;
+    const dy = event.clientY - gesture.startY;
+    const absDx = Math.abs(dx);
+    const absDy = Math.abs(dy);
+
+    if (absDx > 6 || absDy > 6) {
+      gesture.moved = true;
       clearHoldTimer();
     }
-    if (
-      onDelete &&
-      !pointerRef.current.horizontal &&
-      (dx < -8 || (pointerRef.current.initialOffset < 0 && dx > 8)) &&
-      Math.abs(dx) > Math.abs(dy) * 1.15
-    ) {
-      pointerRef.current.horizontal = true;
-      suppressNextClick();
-      rowRef.current?.classList.add("is-swipe-dragging");
-      try {
-        event.currentTarget.setPointerCapture(pointerRef.current.pointerId);
-      } catch {
-        // Pointer capture is an enhancement; dragging still works without it.
-      }
-    }
-    if (pointerRef.current.horizontal) {
-      const offset = Math.max(
-        -pointerRef.current.width,
-        Math.min(0, pointerRef.current.initialOffset + dx),
-      );
-      const nextSwipe = { offset, phase: "dragging" };
-      swipeRef.current = nextSwipe;
-      rowRef.current?.style.setProperty("--swipe-x", `${offset}px`);
-      if (!pointerRef.current.draggingStateApplied) {
-        pointerRef.current.draggingStateApplied = true;
-        setSwipe(nextSwipe);
-      }
-    }
-  };
-  const endGesture = (event) => {
-    clearHoldTimer();
-    const gesture = pointerRef.current;
-    if (gesture && event.type === "pointercancel") {
-      updateSwipe({ offset: 0, phase: "idle" });
-    } else if (gesture) {
-      const dx = event.clientX - gesture.x;
-      const dy = event.clientY - gesture.y;
-      if (gesture.horizontal && onDelete && Math.abs(dy) < 72) {
-        const offset = Math.min(0, gesture.initialOffset + dx);
-        const elapsed = Math.max(1, performance.now() - gesture.startedAt);
-        const velocity = dx / elapsed;
+
+    if (!gesture.horizontal && onDelete) {
+      // Support swiping left (dx < -6) or right (dx > 6)
+      const isHorizontalIntent =
+        (absDx > 6 && absDx > absDy * 1.05) ||
+        (gesture.initialOffset !== 0 && absDx > 5);
+
+      if (isHorizontalIntent) {
+        gesture.horizontal = true;
         suppressNextClick();
-        if (
-          offset <= -Math.max(118, gesture.width * 0.42) ||
-          (dx < -54 && velocity < -0.72)
-        ) {
-          beginDelete(e.rec && onSkip ? onSkip : onDelete);
-        } else if (offset <= -52) {
-          updateSwipe({ offset: -78, phase: "revealed" });
-        } else {
-          updateSwipe({ offset: 0, phase: "idle" });
+        rowRef.current?.classList.add("is-swipe-dragging");
+        shellRef.current?.classList.add("is-swipe-dragging");
+        try {
+          event.currentTarget.setPointerCapture(gesture.pointerId);
+        } catch {
+          // Pointer capture is an enhancement
+        }
+        if (!gesture.draggingStateApplied) {
+          gesture.draggingStateApplied = true;
+          swipeRef.current = { offset: gesture.initialOffset, phase: "dragging" };
+          setSwipe((prev) => ({ ...prev, phase: "dragging" }));
         }
       }
     }
-    pointerRef.current = null;
+
+    if (gesture.horizontal) {
+      gesture.lastX = event.clientX;
+      gesture.lastY = event.clientY;
+
+      let targetOffset = gesture.initialOffset + dx;
+
+      // Soft rubber-band resistance when dragging beyond width bounds
+      const maxDrag = gesture.width * 0.8;
+      if (targetOffset > maxDrag) {
+        targetOffset = maxDrag + (targetOffset - maxDrag) * 0.2;
+      } else if (targetOffset < -maxDrag) {
+        targetOffset = -maxDrag + (targetOffset - -maxDrag) * 0.2;
+      }
+
+      // Check deletion threshold for haptic cue
+      const deleteThreshold = Math.max(110, gesture.width * 0.38);
+      const isPastThreshold = Math.abs(targetOffset) >= deleteThreshold;
+      if (isPastThreshold && !gesture.passedHaptic) {
+        gesture.passedHaptic = true;
+        triggerHaptic("selection");
+      } else if (!isPastThreshold && gesture.passedHaptic) {
+        gesture.passedHaptic = false;
+      }
+
+      swipeRef.current = { offset: targetOffset, phase: "dragging" };
+      rowRef.current?.style.setProperty("--swipe-x", `${targetOffset}px`);
+      shellRef.current?.style.setProperty("--swipe-x", `${targetOffset}px`);
+      shellRef.current?.setAttribute("data-swipe-dir", targetOffset < 0 ? "left" : "right");
+      if (isPastThreshold) {
+        shellRef.current?.setAttribute("data-threshold", "true");
+      } else {
+        shellRef.current?.removeAttribute("data-threshold");
+      }
+    }
   };
+
+  const endGesture = (event) => {
+    clearHoldTimer();
+    const gesture = pointerRef.current;
+    pointerRef.current = null;
+
+    if (!gesture) return;
+
+    try {
+      if (event?.currentTarget?.hasPointerCapture?.(gesture.pointerId)) {
+        event.currentTarget.releasePointerCapture(gesture.pointerId);
+      }
+    } catch {
+      // ignore
+    }
+
+    rowRef.current?.classList.remove("is-swipe-dragging");
+    shellRef.current?.classList.remove("is-swipe-dragging");
+    shellRef.current?.removeAttribute("data-threshold");
+
+    if (event?.type === "pointercancel") {
+      const resetOffset = Math.abs(gesture.initialOffset) === 76 ? gesture.initialOffset : 0;
+      updateSwipe({ offset: resetOffset, phase: resetOffset === 0 ? "idle" : "revealed" });
+      rowRef.current?.style.setProperty("--swipe-x", `${resetOffset}px`);
+      shellRef.current?.style.setProperty("--swipe-x", `${resetOffset}px`);
+      if (resetOffset === 0) {
+        shellRef.current?.removeAttribute("data-swipe-dir");
+      } else {
+        shellRef.current?.setAttribute("data-swipe-dir", resetOffset < 0 ? "left" : "right");
+      }
+      return;
+    }
+
+    if (gesture.horizontal && onDelete) {
+      const dx = (event?.clientX ?? gesture.lastX) - gesture.startX;
+      const currentOffset = swipeRef.current.offset;
+      const elapsed = Math.max(1, performance.now() - gesture.startedAt);
+      const velocity = dx / elapsed;
+      const deleteThreshold = Math.max(110, gesture.width * 0.38);
+      const revealThreshold = 48;
+
+      suppressNextClick();
+
+      const shouldDeleteRight =
+        currentOffset >= deleteThreshold || (dx > 45 && velocity > 0.55);
+      const shouldDeleteLeft =
+        currentOffset <= -deleteThreshold || (dx < -45 && velocity < -0.55);
+
+      if (shouldDeleteRight) {
+        beginDelete(e.rec && onSkip ? onSkip : onDelete, "right");
+      } else if (shouldDeleteLeft) {
+        beginDelete(e.rec && onSkip ? onSkip : onDelete, "left");
+      } else if (currentOffset >= revealThreshold) {
+        updateSwipe({ offset: 76, phase: "revealed" });
+        rowRef.current?.style.setProperty("--swipe-x", "76px");
+        shellRef.current?.style.setProperty("--swipe-x", "76px");
+        shellRef.current?.setAttribute("data-swipe-dir", "right");
+      } else if (currentOffset <= -revealThreshold) {
+        updateSwipe({ offset: -76, phase: "revealed" });
+        rowRef.current?.style.setProperty("--swipe-x", "-76px");
+        shellRef.current?.style.setProperty("--swipe-x", "-76px");
+        shellRef.current?.setAttribute("data-swipe-dir", "left");
+      } else {
+        updateSwipe({ offset: 0, phase: "idle" });
+        rowRef.current?.style.setProperty("--swipe-x", "0px");
+        shellRef.current?.style.setProperty("--swipe-x", "0px");
+        shellRef.current?.removeAttribute("data-swipe-dir");
+      }
+    }
+  };
+
   const isPositive =
     e.type === "income" || e.type === "refund" || Boolean(e.refund);
   const amountClass = isPositive
@@ -581,8 +705,8 @@ function ExpenseRow({
   const gestureHint =
     onDelete && onDuplicate
       ? e.rec
-        ? "Tap to edit, swipe left to skip this occurrence, or press and hold to duplicate."
-        : "Tap to edit, swipe left to delete, or press and hold to duplicate."
+        ? "Tap to edit, swipe left or right to skip this occurrence, or press and hold to duplicate."
+        : "Tap to edit, swipe left or right to delete, or press and hold to duplicate."
       : "Tap to edit.";
   const rowClasses = [
     "ri",
@@ -595,6 +719,7 @@ function ExpenseRow({
   ]
     .filter(Boolean)
     .join(" ");
+
   const row = (
     <button
       ref={rowRef}
@@ -606,6 +731,7 @@ function ExpenseRow({
       onPointerMove={moveGesture}
       onPointerUp={endGesture}
       onPointerCancel={endGesture}
+      onLostPointerCapture={endGesture}
       onContextMenu={(event) => event.preventDefault()}
       onClick={() => {
         if (suppressClickRef.current) {
@@ -615,6 +741,9 @@ function ExpenseRow({
         }
         if (swipeRef.current.phase === "revealed") {
           updateSwipe({ offset: 0, phase: "idle" });
+          rowRef.current?.style.setProperty("--swipe-x", "0px");
+          shellRef.current?.style.setProperty("--swipe-x", "0px");
+          shellRef.current?.removeAttribute("data-swipe-dir");
           return;
         }
         onOpen(e.id);
@@ -647,21 +776,30 @@ function ExpenseRow({
       )}
     </button>
   );
+
   if (!onDelete) return row;
+
+  const isSwipeRight = swipe.offset > 0;
+  const isSwipeLeft = swipe.offset < 0;
+
   return (
     <div
-      className={`expense-swipe-shell${swipe.phase === "dragging" ? " is-dragging" : ""}${swipe.phase === "revealed" ? " is-revealed" : ""}${["deleting", "collapsing"].includes(swipe.phase) ? " is-deleting" : ""}${swipe.phase === "collapsing" ? " is-collapsing" : ""}`}
+      ref={shellRef}
+      className={`expense-swipe-shell${swipe.phase === "dragging" ? " is-dragging" : ""}${swipe.phase === "revealed" ? " is-revealed" : ""}${["deleting", "collapsing"].includes(swipe.phase) ? " is-deleting" : ""}${swipe.phase === "collapsing" ? " is-collapsing" : ""}${isSwipeRight ? " is-swipe-right" : isSwipeLeft ? " is-swipe-left" : ""}`}
+      style={{ "--swipe-x": `${swipe.offset}px` }}
+      data-swipe-dir={isSwipeRight ? "right" : isSwipeLeft ? "left" : undefined}
     >
+      {/* Revealed when swiping left-to-right (button on the left) */}
       <button
-        className={`expense-swipe-delete${e.rec ? " is-skip" : ""}`}
+        className={`expense-swipe-delete is-left${e.rec ? " is-skip" : ""}`}
         type="button"
         aria-label={
           e.rec ? `Skip ${e.desc} for this occurrence` : `Delete ${e.desc}`
         }
-        aria-hidden={swipe.phase !== "revealed"}
-        disabled={swipe.phase !== "revealed"}
-        tabIndex={swipe.phase === "revealed" ? 0 : -1}
-        onClick={() => beginDelete(e.rec && onSkip ? onSkip : onDelete)}
+        aria-hidden={swipe.phase !== "revealed" || swipe.offset <= 0}
+        disabled={swipe.phase !== "revealed" || swipe.offset <= 0}
+        tabIndex={swipe.phase === "revealed" && swipe.offset > 0 ? 0 : -1}
+        onClick={() => beginDelete(e.rec && onSkip ? onSkip : onDelete, "right")}
       >
         <svg viewBox="0 0 24 24" aria-hidden="true">
           {e.rec ? (
@@ -672,6 +810,29 @@ function ExpenseRow({
         </svg>
         <span>{e.rec ? "Skip" : "Delete"}</span>
       </button>
+
+      {/* Revealed when swiping right-to-left (button on the right) */}
+      <button
+        className={`expense-swipe-delete is-right${e.rec ? " is-skip" : ""}`}
+        type="button"
+        aria-label={
+          e.rec ? `Skip ${e.desc} for this occurrence` : `Delete ${e.desc}`
+        }
+        aria-hidden={swipe.phase !== "revealed" || swipe.offset >= 0}
+        disabled={swipe.phase !== "revealed" || swipe.offset >= 0}
+        tabIndex={swipe.phase === "revealed" && swipe.offset < 0 ? 0 : -1}
+        onClick={() => beginDelete(e.rec && onSkip ? onSkip : onDelete, "left")}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          {e.rec ? (
+            <path d="M4 5h16v15H4zM8 3v4m8-4v4M4 10h16m-8 3v4m-2-2h4" />
+          ) : (
+            <path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 3v6m4-6v6" />
+          )}
+        </svg>
+        <span>{e.rec ? "Skip" : "Delete"}</span>
+      </button>
+
       {row}
     </div>
   );
