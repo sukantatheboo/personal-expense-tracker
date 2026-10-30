@@ -127,9 +127,13 @@ function triggerHaptic(type = "light") {
       } else if (type === "heavy") {
         void Haptics.impact({ style: ImpactStyle.Heavy }).catch(() => {});
       } else if (type === "success") {
-        void Haptics.notification({ type: NotificationType.Success }).catch(() => {});
+        void Haptics.notification({ type: NotificationType.Success }).catch(
+          () => {},
+        );
       } else if (type === "warning" || type === "delete") {
-        void Haptics.notification({ type: NotificationType.Warning }).catch(() => {});
+        void Haptics.notification({ type: NotificationType.Warning }).catch(
+          () => {},
+        );
       } else if (type === "selection") {
         void Haptics.selectionChanged().catch(() => {});
       } else {
@@ -142,7 +146,10 @@ function triggerHaptic(type = "light") {
   }
 
   // Web / PWA fallback tuned for Android vibration motors
-  if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+  if (
+    typeof navigator !== "undefined" &&
+    typeof navigator.vibrate === "function"
+  ) {
     try {
       const patterns = {
         selection: 15,
@@ -154,9 +161,7 @@ function triggerHaptic(type = "light") {
         delete: [35, 40, 20],
       };
       const pattern =
-        typeof type === "number"
-          ? Math.max(15, type)
-          : patterns[type] || 22;
+        typeof type === "number" ? Math.max(15, type) : patterns[type] || 22;
       return navigator.vibrate(pattern);
     } catch {
       return false;
@@ -333,7 +338,9 @@ const MonthSwitch = ({ m, onShift }) => (
 );
 
 function suggestedCategory(description, expenses = []) {
-  const title = String(description || "").trim().toLocaleLowerCase();
+  const title = String(description || "")
+    .trim()
+    .toLocaleLowerCase();
   if (!title) return "";
   const exactCategory = Object.keys(CAT)
     .filter((category) => category !== "Savings")
@@ -390,8 +397,7 @@ function suggestedCategory(description, expenses = []) {
     );
     const overlap = [...words].filter((word) => pastWords.has(word)).length;
     const score = overlap / Math.max(words.size, pastWords.size, 1);
-    if (overlap && score > best.score)
-      best = { score, category: expense.cat };
+    if (overlap && score > best.score) best = { score, category: expense.cat };
   }
   return best.score >= 0.5 && best.category !== "Savings" ? best.category : "";
 }
@@ -442,7 +448,8 @@ function ExpenseRow({
     triggerHaptic("delete");
     clearTimeout(swipeTimerRef.current);
     clearTimeout(collapseTimerRef.current);
-    const width = pointerRef.current?.width || rowRef.current?.offsetWidth || 320;
+    const width =
+      pointerRef.current?.width || rowRef.current?.offsetWidth || 320;
     updateSwipe({ offset: -width, phase: "deleting" });
     collapseTimerRef.current = setTimeout(() => {
       updateSwipe({ offset: -width, phase: "collapsing" });
@@ -633,7 +640,10 @@ function ExpenseRow({
       {e.amt == null ? (
         <em className="na">Add amount</em>
       ) : (
-        <b className={amountClass}>{amountPrefix}{M(e.amt)}</b>
+        <b className={amountClass}>
+          {amountPrefix}
+          {M(e.amt)}
+        </b>
       )}
     </button>
   );
@@ -712,7 +722,9 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
     const handleKeyDown = (event) => {
       const sheetNode = sheetRef.current;
       if (!sheetNode) return;
-      const dialogs = document.querySelectorAll('[role="dialog"][aria-modal="true"]');
+      const dialogs = document.querySelectorAll(
+        '[role="dialog"][aria-modal="true"]',
+      );
       if (dialogs[dialogs.length - 1] !== sheetNode) return;
 
       if (event.key === "Escape") {
@@ -740,13 +752,17 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
       const focusIsInside = sheetNode.contains(activeElement);
       if (
         event.shiftKey &&
-        (!focusIsInside || activeElement === sheetNode || activeElement === first)
+        (!focusIsInside ||
+          activeElement === sheetNode ||
+          activeElement === first)
       ) {
         event.preventDefault();
         last.focus();
       } else if (
         !event.shiftKey &&
-        (!focusIsInside || activeElement === sheetNode || activeElement === last)
+        (!focusIsInside ||
+          activeElement === sheetNode ||
+          activeElement === last)
       ) {
         event.preventDefault();
         first.focus();
@@ -782,7 +798,8 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
     const distance = Math.max(0, event.clientY - drag.startY);
-    const shouldClose = distance >= 112 || (distance >= 48 && drag.velocity > 0.72);
+    const shouldClose =
+      distance >= 112 || (distance >= 48 && drag.velocity > 0.72);
     dragRef.current = null;
     setIsDragging(false);
     if (shouldClose) {
@@ -871,8 +888,14 @@ function Home({
     if (e.amt == null || e.cat === "Other" || !CAT[e.cat]) return;
     by[e.cat] = (by[e.cat] || 0) + e.amt;
   });
-  const namedCategoryTotal = Object.values(by).reduce((sum, value) => sum + value, 0);
-  const otherTotal = Math.max(0, Number((total - namedCategoryTotal).toFixed(2)));
+  const namedCategoryTotal = Object.values(by).reduce(
+    (sum, value) => sum + value,
+    0,
+  );
+  const otherTotal = Math.max(
+    0,
+    Number((total - namedCategoryTotal).toFixed(2)),
+  );
   if (otherTotal > 0) by.Other = otherTotal;
   const cs = Object.entries(by).sort((x, y) => y[1] - x[1]);
   const topCategory = cs.find(([category]) => category !== "Savings");
@@ -949,9 +972,7 @@ function Home({
                 className={`budget-pill${overBudget ? " is-over" : ""}`}
                 role="status"
               >
-                {overBudget
-                  ? `${M(t - b)} over budget`
-                  : `${M(b - t)} left`}
+                {overBudget ? `${M(t - b)} over budget` : `${M(b - t)} left`}
               </span>
               <span>of {M(b)}</span>
             </div>
@@ -984,9 +1005,7 @@ function Home({
         </div>
         <div className="card">
           <small>Next recurring</small>
-          <b className="mini-next-value">
-            {nx ? nx.desc : "Nothing due"}
-          </b>
+          <b className="mini-next-value">{nx ? nx.desc : "Nothing due"}</b>
           <span className="mini-caption">
             {nx ? `Due ${dayMonth(nx.next)}` : "You’re all caught up"}
           </span>
@@ -1013,7 +1032,10 @@ function Home({
                 onClick={() =>
                   setHighlightedCategory((current) => (current === c ? "" : c))
                 }
-                style={{ width: (v / total) * 100 + "%", background: CAT[c][1] }}
+                style={{
+                  width: (v / total) * 100 + "%",
+                  background: CAT[c][1],
+                }}
               />
             ))}
           </div>
@@ -1293,8 +1315,7 @@ function Accounts({ S, onTx, highlightedExpenseId, highlightedTransactionId }) {
     else if (event.type === "adjust") {
       changes[event.account] =
         event.direction === "up" ? event.amount : -event.amount;
-    }
-    else if (event.type === "transfer") {
+    } else if (event.type === "transfer") {
       changes[event.from] = (changes[event.from] || 0) - event.amount;
       changes[event.to] = (changes[event.to] || 0) + event.amount;
     }
@@ -1336,7 +1357,8 @@ function Accounts({ S, onTx, highlightedExpenseId, highlightedTransactionId }) {
         signed: true,
       };
     if (selectedAccount) {
-      const value = event.from === selectedAccount ? -event.amount : event.amount;
+      const value =
+        event.from === selectedAccount ? -event.amount : event.amount;
       return { value, signed: true };
     }
     return { value: event.amount, signed: false };
@@ -1402,7 +1424,11 @@ function Accounts({ S, onTx, highlightedExpenseId, highlightedTransactionId }) {
       </div>
 
       <div className="sec account-activity-heading">
-        <h2>{selectedAccount ? `${ACC[selectedAccount][0]} activity` : "Account activity"}</h2>
+        <h2>
+          {selectedAccount
+            ? `${ACC[selectedAccount][0]} activity`
+            : "Account activity"}
+        </h2>
         {selectedAccount && (
           <button type="button" onClick={() => setSelectedAccount("")}>
             Show all
@@ -1423,7 +1449,8 @@ function Accounts({ S, onTx, highlightedExpenseId, highlightedTransactionId }) {
             return (
               <div
                 className={`ri account-activity-row${
-                  highlightedExpenseId === event.id || highlightedTransactionId === event.id
+                  highlightedExpenseId === event.id ||
+                  highlightedTransactionId === event.id
                     ? " is-new"
                     : ""
                 }`}
@@ -1453,8 +1480,14 @@ function Accounts({ S, onTx, highlightedExpenseId, highlightedTransactionId }) {
               <Icon n="activity" />
             </span>
             <span>
-              <b>{selectedAccount ? `No ${ACC[selectedAccount][0]} activity yet` : "No account activity yet"}</b>
-              <small>Income, transfers, expenses, and adjustments will show up here.</small>
+              <b>
+                {selectedAccount
+                  ? `No ${ACC[selectedAccount][0]} activity yet`
+                  : "No account activity yet"}
+              </b>
+              <small>
+                Income, transfers, expenses, and adjustments will show up here.
+              </small>
             </span>
           </div>
         )}
@@ -1669,7 +1702,9 @@ function AddSheet({ iv, categoryOrder, expenses, onSave, onClose }) {
           autoFocus
           data-sheet-autofocus
           enterKeyHint="next"
-          aria-label={f.cat === "Savings" ? "Savings transfer amount" : "Expense amount"}
+          aria-label={
+            f.cat === "Savings" ? "Savings transfer amount" : "Expense amount"
+          }
           placeholder="0"
           value={f.amt}
           onChange={(e) => set("amt", e.target.value)}
@@ -1696,9 +1731,7 @@ function AddSheet({ iv, categoryOrder, expenses, onSave, onClose }) {
               setF((current) => ({
                 ...current,
                 cat: c,
-                ...(c === "Savings" && !current.acct
-                  ? { acct: "bkash" }
-                  : {}),
+                ...(c === "Savings" && !current.acct ? { acct: "bkash" } : {}),
               }));
             }}
           >
@@ -1718,7 +1751,9 @@ function AddSheet({ iv, categoryOrder, expenses, onSave, onClose }) {
         className="in"
         maxLength={80}
         aria-label="Expense description"
-        placeholder={f.cat === "Savings" ? "e.g. Monthly savings" : "e.g. Lunch"}
+        placeholder={
+          f.cat === "Savings" ? "e.g. Monthly savings" : "e.g. Lunch"
+        }
         value={f.desc}
         onChange={(event) => {
           const description = event.target.value;
@@ -1730,9 +1765,15 @@ function AddSheet({ iv, categoryOrder, expenses, onSave, onClose }) {
         }}
       />
       {categorySuggestion && (
-        <p className="category-suggestion-hint" role="status" aria-live="polite">
+        <p
+          className="category-suggestion-hint"
+          role="status"
+          aria-live="polite"
+        >
           <span>Suggested category:</span>
-          <b><CategorySuggestionValue category={categorySuggestion} /></b>
+          <b>
+            <CategorySuggestionValue category={categorySuggestion} />
+          </b>
         </p>
       )}
 
@@ -1791,7 +1832,6 @@ function AddSheet({ iv, categoryOrder, expenses, onSave, onClose }) {
           ["monthly", "Monthly"],
         ]}
       />
-
     </Sheet>
   );
 }
@@ -1821,9 +1861,7 @@ function TxSheet({ type, onSave, onClose }) {
       <h3 id="sheet-title">Account activity</h3>
       <Seg
         value={g.type}
-        onPick={(v) =>
-          setG((current) => ({ ...current, type: v, note: "" }))
-        }
+        onPick={(v) => setG((current) => ({ ...current, type: v, note: "" }))}
         options={[
           ["income", "Income"],
           ["transfer", "Transfer"],
@@ -1917,7 +1955,9 @@ function TxSheet({ type, onSave, onClose }) {
             maxLength={80}
             aria-label="Transaction note"
             autoCapitalize="sentences"
-            placeholder={g.type === "income" ? "e.g. Salary, cash in" : "Optional note"}
+            placeholder={
+              g.type === "income" ? "e.g. Salary, cash in" : "Optional note"
+            }
             value={g.note}
             onChange={(e) => set("note", e.target.value)}
           />
@@ -2009,7 +2049,11 @@ function DetailSheet({ e, suggestion, onSave, onDelete, onClose }) {
       <Seg
         value={f.acct}
         onPick={(value) => set("acct", value)}
-        options={[["", "Cash"], ["bkash", "bKash"], ["bank", "Bank"]]}
+        options={[
+          ["", "Cash"],
+          ["bkash", "bKash"],
+          ["bank", "Bank"],
+        ]}
       />
     </Sheet>
   );
@@ -2164,10 +2208,13 @@ function SettingsSheet({
         </p>
         <p className="settings-note backup-reminder">
           {lastBackupAt
-            ? `Last backed up ${new Date(lastBackupAt).toLocaleString(undefined, {
-                dateStyle: "medium",
-                timeStyle: "short",
-              })}. Consider downloading a fresh copy from time to time.`
+            ? `Last backed up ${new Date(lastBackupAt).toLocaleString(
+                undefined,
+                {
+                  dateStyle: "medium",
+                  timeStyle: "short",
+                },
+              )}. Consider downloading a fresh copy from time to time.`
             : "No backup yet. Download a JSON backup to keep a copy off this device."}
         </p>
         {backupStatus && (
@@ -2360,9 +2407,7 @@ function AppSettingsPage({
           : "Off";
   return (
     <>
-      <p className="settings-page-intro">
-        Manage accounts and reminders.
-      </p>
+      <p className="settings-page-intro">Manage accounts and reminders.</p>
 
       <section className="card app-settings-card">
         <h2>Accounts</h2>
@@ -2469,7 +2514,6 @@ function AppSettingsPage({
               : "Notifications remind you when a scheduled expense is due.")}
         </p>
       </section>
-
     </>
   );
 }
@@ -2512,6 +2556,8 @@ export default function MobilePrototype({
   accountStatus,
   authBusy,
   onResumeSync,
+  inAppNotification,
+  onDismissNotification,
 }) {
   const [tab, setTab] = useState("home");
   const [plan, setPlan] = useState("budget");
@@ -2525,7 +2571,8 @@ export default function MobilePrototype({
   );
   const [sheetExitFromOpacity, setSheetExitFromOpacity] = useState("1");
   const [highlightedExpenseId, setHighlightedExpenseId] = useState(null);
-  const [highlightedTransactionId, setHighlightedTransactionId] = useState(null);
+  const [highlightedTransactionId, setHighlightedTransactionId] =
+    useState(null);
   const [appSettingsOpen, setAppSettingsOpen] = useState(false);
   const [profileSettingsOpen, setProfileSettingsOpen] = useState(false);
   const [toastMsg, setToastMsg] = useState(null);
@@ -2576,6 +2623,42 @@ export default function MobilePrototype({
       .forEach((meta) => meta.setAttribute("content", themeColor));
   }, [S.theme]);
 
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const targetTab = params.get("tab");
+      if (
+        targetTab &&
+        ["home", "activity", "accounts", "plans"].includes(targetTab)
+      ) {
+        setAppSettingsOpen(false);
+        setProfileSettingsOpen(false);
+        setTab(targetTab);
+        const cleanUrl = window.location.pathname + window.location.hash;
+        window.history.replaceState({}, "", cleanUrl);
+      }
+    }
+
+    const handleMessage = (event) => {
+      if (event.data?.type === "NAVIGATE_TAB") {
+        const targetTab = event.data.tab;
+        if (
+          targetTab &&
+          ["home", "activity", "accounts", "plans"].includes(targetTab)
+        ) {
+          setAppSettingsOpen(false);
+          setProfileSettingsOpen(false);
+          setTab(targetTab);
+          triggerHaptic("selection");
+        }
+      }
+    };
+    navigator.serviceWorker?.addEventListener("message", handleMessage);
+    return () => {
+      navigator.serviceWorker?.removeEventListener("message", handleMessage);
+    };
+  }, []);
+
   const resetDockDirectionTimer = () => {
     clearTimeout(dockDirectionResetTimerRef.current);
     dockDirectionResetTimerRef.current = undefined;
@@ -2594,7 +2677,10 @@ export default function MobilePrototype({
     // Ignore scroll events from nested scrollers (for example, the category chips).
     if (event.target !== event.currentTarget) return;
     const scroller = event.currentTarget;
-    const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+    const maxScrollTop = Math.max(
+      0,
+      scroller.scrollHeight - scroller.clientHeight,
+    );
     const rawScrollTop = scroller.scrollTop;
     // Keep the last dock state during iOS elastic overscroll at either edge.
     if (rawScrollTop < 0 || rawScrollTop > maxScrollTop) return;
@@ -2685,7 +2771,8 @@ export default function MobilePrototype({
     const releasePointer = () => {
       const wasDockPointerActive = dockPointerActiveRef.current;
       dockPointerActiveRef.current = false;
-      lastTopRef.current = screenScrollRef.current?.scrollTop ?? lastTopRef.current;
+      lastTopRef.current =
+        screenScrollRef.current?.scrollTop ?? lastTopRef.current;
       dirAccRef.current = 0;
       resetDockDirectionTimer();
 
@@ -2696,7 +2783,10 @@ export default function MobilePrototype({
           nestedScrollResumeTimerRef.current = undefined;
           const scroller = screenScrollRef.current;
           if (!scroller) return;
-          const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+          const maxScrollTop = Math.max(
+            0,
+            scroller.scrollHeight - scroller.clientHeight,
+          );
           if (maxScrollTop < 160 || scroller.scrollTop <= 24) {
             dockMinimizedRef.current = false;
             setDockMinimized(false);
@@ -2714,7 +2804,8 @@ export default function MobilePrototype({
       clearTimeout(nestedScrollResumeTimerRef.current);
       nestedScrollResumeTimerRef.current = undefined;
       dirAccRef.current = 0;
-      lastTopRef.current = screenScrollRef.current?.scrollTop ?? lastTopRef.current;
+      lastTopRef.current =
+        screenScrollRef.current?.scrollTop ?? lastTopRef.current;
       resetDockDirectionTimer();
     };
 
@@ -2832,61 +2923,60 @@ export default function MobilePrototype({
         ? Math.max(0.08, 1 - exit.distance / sheetHeight)
         : 1;
     const velocity =
-      exit?.kind === "drag" ? Math.max(0, Math.min(exit.velocity || 0, 2.4)) : 0;
+      exit?.kind === "drag"
+        ? Math.max(0, Math.min(exit.velocity || 0, 2.4))
+        : 0;
     const exitDuration = prefersReducedMotion
       ? SHEET_REDUCED_EXIT_MS
       : exit?.kind === "drag"
         ? Math.max(
             150,
             Math.round(
-              SHEET_EXIT_MS * Math.sqrt(remaining) / (1 + velocity * 0.12),
+              (SHEET_EXIT_MS * Math.sqrt(remaining)) / (1 + velocity * 0.12),
             ),
           )
         : SHEET_EXIT_MS;
     setSheetExitDuration(exitDuration);
-    sheetCloseTimer.current = window.setTimeout(
-      () => {
-        const returnFocus = sheetReturnFocusRef.current;
-        sheetReturnFocusRef.current = null;
-        setSheet(null);
-        setSheetClosing(false);
-        setSheetExitDuration(SHEET_EXIT_MS);
-        setSheetExitFromTransform("translate3d(0, 0, 0)");
-        setSheetExitFromOpacity("1");
-        sheetCloseTimer.current = null;
-        afterClose?.();
-        if (returnFocus) {
-          window.requestAnimationFrame(() => {
-            if (
-              returnFocus.isConnected &&
-              !document.querySelector('[role="dialog"][aria-modal="true"]')
-            ) {
-              returnFocus.focus({ preventScroll: true });
-            }
-          });
-        }
-      },
-      exitDuration,
-    );
+    sheetCloseTimer.current = window.setTimeout(() => {
+      const returnFocus = sheetReturnFocusRef.current;
+      sheetReturnFocusRef.current = null;
+      setSheet(null);
+      setSheetClosing(false);
+      setSheetExitDuration(SHEET_EXIT_MS);
+      setSheetExitFromTransform("translate3d(0, 0, 0)");
+      setSheetExitFromOpacity("1");
+      sheetCloseTimer.current = null;
+      afterClose?.();
+      if (returnFocus) {
+        window.requestAnimationFrame(() => {
+          if (
+            returnFocus.isConnected &&
+            !document.querySelector('[role="dialog"][aria-modal="true"]')
+          ) {
+            returnFocus.focus({ preventScroll: true });
+          }
+        });
+      }
+    }, exitDuration);
   };
   const captureSheetTrigger = (event) => {
     const target = event.target instanceof Element ? event.target : null;
     const button = target?.closest("button");
-    sheetTriggerCandidateRef.current = button && !button.closest(".sh") ? button : null;
+    sheetTriggerCandidateRef.current =
+      button && !button.closest(".sh") ? button : null;
   };
   const openSheet = (nextSheet) => {
     clearTimeout(sheetCloseTimer.current);
     sheetCloseTimer.current = null;
     const candidate = sheetTriggerCandidateRef.current;
     const activeElement = document.activeElement;
-    sheetReturnFocusRef.current =
-      candidate?.isConnected
-        ? candidate
-        : activeElement instanceof HTMLElement &&
-            activeElement !== document.body &&
-            !activeElement.closest(".sh")
-          ? activeElement
-          : null;
+    sheetReturnFocusRef.current = candidate?.isConnected
+      ? candidate
+      : activeElement instanceof HTMLElement &&
+          activeElement !== document.body &&
+          !activeElement.closest(".sh")
+        ? activeElement
+        : null;
     sheetTriggerCandidateRef.current = null;
     resetDockDirectionTimer();
     dockMinimizedRef.current = false;
@@ -3002,7 +3092,10 @@ export default function MobilePrototype({
     if (typeof saved === "object" && saved.expenseId) {
       clearTimeout(highlightTimer.current);
       setHighlightedExpenseId(saved.expenseId);
-      highlightTimer.current = setTimeout(() => setHighlightedExpenseId(null), 1500);
+      highlightTimer.current = setTimeout(
+        () => setHighlightedExpenseId(null),
+        1500,
+      );
     }
     triggerHaptic("success");
     toast("Expense duplicated");
@@ -3018,13 +3111,16 @@ export default function MobilePrototype({
     ) {
       return toast("Check the description, amount, and date.");
     }
-    if (!onExpenseUpdate(id, {
-      description: form.desc.trim(),
-      amount,
-      category: form.cat,
-      date: form.date,
-      account: form.acct,
-    })) return toast("Could not update this expense.");
+    if (
+      !onExpenseUpdate(id, {
+        description: form.desc.trim(),
+        amount,
+        category: form.cat,
+        date: form.date,
+        account: form.acct,
+      })
+    )
+      return toast("Could not update this expense.");
     close();
     triggerHaptic("success");
     toast("Expense updated");
@@ -3156,6 +3252,69 @@ export default function MobilePrototype({
         "--sheet-exit-from-opacity": sheetExitFromOpacity,
       }}
     >
+      {inAppNotification && (
+        <div
+          className="in-app-notification-banner"
+          role="alert"
+          aria-live="assertive"
+          onClick={() => {
+            triggerHaptic("selection");
+            if (inAppNotification.onAction) {
+              inAppNotification.onAction();
+            } else if (inAppNotification.tab) {
+              nav(inAppNotification.tab);
+            } else {
+              nav("activity");
+            }
+            onDismissNotification?.();
+          }}
+        >
+          <div
+            className={`in-app-notification-icon${
+              inAppNotification.iconType === "budget"
+                ? " is-budget"
+                : inAppNotification.iconType === "danger"
+                  ? " is-danger"
+                  : ""
+            }`}
+          >
+            {inAppNotification.icon || <Icon n="bell" />}
+          </div>
+          <div className="in-app-notification-content">
+            <span className="in-app-notification-title">
+              {inAppNotification.title}
+            </span>
+            <span className="in-app-notification-desc">
+              {inAppNotification.body}
+            </span>
+          </div>
+          {inAppNotification.actionLabel && (
+            <button
+              type="button"
+              className="in-app-notification-action"
+              onClick={(e) => {
+                e.stopPropagation();
+                triggerHaptic("selection");
+                inAppNotification.onAction?.();
+                onDismissNotification?.();
+              }}
+            >
+              {inAppNotification.actionLabel}
+            </button>
+          )}
+          <button
+            type="button"
+            className="in-app-notification-close"
+            aria-label="Dismiss notification"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDismissNotification?.();
+            }}
+          >
+            ×
+          </button>
+        </div>
+      )}
       <header
         className={`prototype-header${isScrolled ? " is-scrolled" : ""}${settingsRoute ? " is-settings-route" : ""}`}
       >
@@ -3314,7 +3473,9 @@ export default function MobilePrototype({
         data-scrolled={isScrolled ? "true" : undefined}
         data-minimized={dockMinimized ? "true" : undefined}
         data-keyboard-open={keyboardOpen ? "true" : undefined}
-        data-hidden={keyboardOpen || Boolean(sheet) || settingsRoute ? "true" : undefined}
+        data-hidden={
+          keyboardOpen || Boolean(sheet) || settingsRoute ? "true" : undefined
+        }
         onPointerDownCapture={onDockPointerDownCapture}
         onClickCapture={() =>
           setIsScrolled((screenScrollRef.current?.scrollTop ?? 0) > 60)

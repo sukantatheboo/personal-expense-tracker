@@ -46,7 +46,12 @@ body {
   min-height: 100dvh;
   background: var(--page-bg);
   color: var(--ink);
-  font-family: Manrope, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family:
+    Manrope,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
@@ -431,10 +436,16 @@ a:active,
   --dock-tab: #59675f;
   --dock-tab-active: var(--g);
   --dock-active-wash: rgb(47 122 90 / 13%);
-  --dock-glass-sheen: linear-gradient(180deg, rgb(255 255 255 / 46%), rgb(255 255 255 / 12%));
+  --dock-glass-sheen: linear-gradient(
+    180deg,
+    rgb(255 255 255 / 46%),
+    rgb(255 255 255 / 12%)
+  );
   --dock-shadow: 0 10px 24px rgb(28 44 34 / 10%), 0 2px 6px rgb(28 44 34 / 4%);
-  --dock-scrolled-shadow: 0 12px 24px rgb(28 44 34 / 12%), 0 3px 8px rgb(28 44 34 / 5%);
-  --dock-minimized-shadow: 0 8px 18px rgb(28 44 34 / 8%), 0 2px 5px rgb(28 44 34 / 4%);
+  --dock-scrolled-shadow:
+    0 12px 24px rgb(28 44 34 / 12%), 0 3px 8px rgb(28 44 34 / 5%);
+  --dock-minimized-shadow:
+    0 8px 18px rgb(28 44 34 / 8%), 0 2px 5px rgb(28 44 34 / 4%);
   box-sizing: border-box;
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -459,10 +470,16 @@ a:active,
     --dock-highlight: rgb(255 255 255 / 9%);
     --dock-tab: #9db0a5;
     --dock-active-wash: rgb(111 211 160 / 16%);
-    --dock-glass-sheen: linear-gradient(180deg, rgb(255 255 255 / 8%), rgb(255 255 255 / 1%));
+    --dock-glass-sheen: linear-gradient(
+      180deg,
+      rgb(255 255 255 / 8%),
+      rgb(255 255 255 / 1%)
+    );
     --dock-shadow: 0 10px 24px rgb(0 0 0 / 24%), 0 2px 6px rgb(0 0 0 / 14%);
-    --dock-scrolled-shadow: 0 12px 24px rgb(0 0 0 / 28%), 0 3px 8px rgb(0 0 0 / 16%);
-    --dock-minimized-shadow: 0 8px 18px rgb(0 0 0 / 20%), 0 2px 5px rgb(0 0 0 / 12%);
+    --dock-scrolled-shadow:
+      0 12px 24px rgb(0 0 0 / 28%), 0 3px 8px rgb(0 0 0 / 16%);
+    --dock-minimized-shadow:
+      0 8px 18px rgb(0 0 0 / 20%), 0 2px 5px rgb(0 0 0 / 12%);
     color-scheme: dark;
   }
 }
@@ -485,10 +502,16 @@ a:active,
   --dock-highlight: rgb(255 255 255 / 9%);
   --dock-tab: #9db0a5;
   --dock-active-wash: rgb(111 211 160 / 16%);
-  --dock-glass-sheen: linear-gradient(180deg, rgb(255 255 255 / 8%), rgb(255 255 255 / 1%));
+  --dock-glass-sheen: linear-gradient(
+    180deg,
+    rgb(255 255 255 / 8%),
+    rgb(255 255 255 / 1%)
+  );
   --dock-shadow: 0 10px 24px rgb(0 0 0 / 24%), 0 2px 6px rgb(0 0 0 / 14%);
-  --dock-scrolled-shadow: 0 12px 24px rgb(0 0 0 / 28%), 0 3px 8px rgb(0 0 0 / 16%);
-  --dock-minimized-shadow: 0 8px 18px rgb(0 0 0 / 20%), 0 2px 5px rgb(0 0 0 / 12%);
+  --dock-scrolled-shadow:
+    0 12px 24px rgb(0 0 0 / 28%), 0 3px 8px rgb(0 0 0 / 16%);
+  --dock-minimized-shadow:
+    0 8px 18px rgb(0 0 0 / 20%), 0 2px 5px rgb(0 0 0 / 12%);
   color-scheme: dark;
 }
 .mobile-prototype {
@@ -1323,10 +1346,14 @@ a:active,
   will-change: transform;
 }
 .mobile-prototype .expense-day-card .expense-row.is-duplicate-press {
-  animation: expense-duplicate-press 360ms cubic-bezier(0.2, 0.8, 0.2, 1.12) both;
+  animation: expense-duplicate-press 360ms cubic-bezier(0.2, 0.8, 0.2, 1.12)
+    both;
   transform-origin: center;
 }
-.mobile-prototype .expense-day-card .expense-swipe-shell.is-collapsing + .expense-swipe-shell {
+.mobile-prototype
+  .expense-day-card
+  .expense-swipe-shell.is-collapsing
+  + .expense-swipe-shell {
   border-top-color: transparent;
 }
 .mobile-prototype .expense-day-card .expense-row .ic {
@@ -1461,7 +1488,9 @@ a:active,
   transform: translate3d(var(--swipe-x, 0px), 0, 0);
   scale: 0.985;
 }
-.mobile-prototype .expense-day-card button.expense-row.is-swipe-dragging:active {
+.mobile-prototype
+  .expense-day-card
+  button.expense-row.is-swipe-dragging:active {
   scale: 1;
 }
 .mobile-prototype button.ri:active .sw {
@@ -1757,7 +1786,8 @@ a:active,
     color-mix(in srgb, var(--account-accent) 82%, #111 18%)
   );
   border: 1px solid color-mix(in srgb, #fff 26%, var(--account-accent));
-  box-shadow: 0 10px 24px color-mix(in srgb, var(--account-accent) 18%, transparent);
+  box-shadow: 0 10px 24px
+    color-mix(in srgb, var(--account-accent) 18%, transparent);
   scroll-snap-align: start;
   transition:
     transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1.12),
@@ -1781,7 +1811,8 @@ a:active,
 @media (hover: hover) and (pointer: fine) {
   .mobile-prototype .acc:hover {
     filter: brightness(1.04) saturate(1.03);
-    box-shadow: 0 13px 28px color-mix(in srgb, var(--account-accent) 24%, transparent);
+    box-shadow: 0 13px 28px
+      color-mix(in srgb, var(--account-accent) 24%, transparent);
   }
 }
 .mobile-prototype .account-cards {
@@ -2151,8 +2182,7 @@ a:active,
     transform 280ms cubic-bezier(0.2, 0.82, 0.24, 1.08);
 }
 @supports not (
-  (-webkit-backdrop-filter: blur(1px)) or
-    (backdrop-filter: blur(1px))
+  (-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))
 ) {
   .mobile-prototype .tabs nav {
     background: var(--card);
@@ -3258,7 +3288,6 @@ a:active,
   }
 }
 
-
 @media (prefers-reduced-motion: reduce) {
   .auth-modal-backdrop,
   .profile-editor-backdrop,
@@ -3312,5 +3341,143 @@ a:active,
   to {
     opacity: 0;
     transform: translate3d(0, calc(var(--sheet-drag-y, 0px) + 20px), 0);
+  }
+}
+
+/* ───────────── Native In-App Notification Banner HUD ───────────── */
+.mobile-prototype .in-app-notification-banner {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 8px);
+  left: 12px;
+  right: 12px;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 20px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow:
+    0 12px 36px rgb(0 0 0 / 18%),
+    0 2px 8px rgb(0 0 0 / 6%);
+  animation: prototype-in-app-banner-enter 380ms
+    cubic-bezier(0.2, 0.9, 0.2, 1.15) both;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  cursor: pointer;
+}
+.mobile-prototype .in-app-notification-banner.is-dismissing {
+  animation: prototype-in-app-banner-exit 240ms cubic-bezier(0.4, 0, 0.8, 1)
+    both;
+  pointer-events: none;
+}
+.mobile-prototype .in-app-notification-icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  place-items: center;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--g) 16%, transparent);
+  color: var(--g);
+  font-size: 18px;
+}
+.mobile-prototype .in-app-notification-icon.is-budget {
+  background: color-mix(in srgb, var(--over, #f0a067) 20%, transparent);
+  color: var(--over, #f0a067);
+}
+.mobile-prototype .in-app-notification-icon.is-danger {
+  background: color-mix(in srgb, var(--bad, #c0483a) 18%, transparent);
+  color: var(--bad, #c0483a);
+}
+.mobile-prototype .in-app-notification-icon svg {
+  width: 20px;
+  height: 20px;
+}
+.mobile-prototype .in-app-notification-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mobile-prototype .in-app-notification-title {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 800;
+  color: var(--ink);
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mobile-prototype .in-app-notification-desc {
+  margin: 0;
+  font-size: 12px;
+  color: var(--mut);
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mobile-prototype .in-app-notification-action {
+  flex: 0 0 auto;
+  padding: 6px 11px;
+  border-radius: 999px;
+  background: var(--g);
+  color: var(--on);
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1;
+  border: 0;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.mobile-prototype .in-app-notification-action:active {
+  transform: scale(0.95);
+}
+.mobile-prototype .in-app-notification-close {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  border-radius: 50%;
+  color: var(--mut);
+  font-size: 18px;
+  line-height: 1;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.mobile-prototype .in-app-notification-close:hover {
+  color: var(--ink);
+}
+
+@keyframes prototype-in-app-banner-enter {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -32px, 0) scale(0.94);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+@keyframes prototype-in-app-banner-exit {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(0, -28px, 0) scale(0.94);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mobile-prototype .in-app-notification-banner,
+  .mobile-prototype .in-app-notification-banner.is-dismissing {
+    animation: none !important;
   }
 }

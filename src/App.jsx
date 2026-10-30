@@ -787,10 +787,7 @@ function usePopupPresence() {
     }, duration);
   }, []);
 
-  useEffect(
-    () => () => window.clearTimeout(closeTimerRef.current),
-    [],
-  );
+  useEffect(() => () => window.clearTimeout(closeTimerRef.current), []);
 
   return { isOpen, isClosing, open, close };
 }
@@ -852,6 +849,8 @@ export default function App() {
   );
   const [conversionFailed, setConversionFailed] = useState(false);
   const [recurringReminder, setRecurringReminder] = useState("");
+  const [inAppNotification, setInAppNotification] = useState(null);
+  const inAppNotifTimerRef = useRef(null);
   const [notificationPermission, setNotificationPermission] = useState(() =>
     typeof window !== "undefined" && "Notification" in window
       ? window.Notification.permission
@@ -1791,38 +1790,79 @@ export default function App() {
   const budgetProgress = Math.min(100, Math.max(0, budgetPercentage));
   const conversionReady = conversionOpen && conversionRate !== null;
 
-  function notifyDueExpenses(dueExpenses) {
-    if (!dueExpenses.length) return;
-    pendingDueRef.current.push(...dueExpenses);
-    const details = dueExpenses
-      .map((expense) => `${expense.description} (${formatDate(expense.date)})`)
-      .join(", ");
-    setRecurringReminder(
-      dueExpenses.length === 1
-        ? dueExpenses[0].date === localDate()
-          ? `${dueExpenses[0].description} is due today and was added to your expenses.`
-          : `${dueExpenses[0].description} was overdue and was added to your expenses.`
-        : `Recurring expenses due today or earlier were added: ${details}.`,
-    );
+  const NOTIFIED_RECURRING_KEY = "spend-notified-recurring-v1";
+  const LAST_DAILY_REMINDER_KEY = "spend-last-daily-reminder-date-v1";
+  const BUDGET_ALERT_KEY_PREFIX = "spend-budget-alert-";
 
-    // If the user has the app open in the foreground, do NOT show an OS system notification.
-    // The in-app banner above and activity feed handle foreground presentation.
-    if (
-      typeof document !== "undefined" &&
-      document.visibilityState === "hidden" &&
-      notificationPermission === "granted" &&
-      !backgroundPushEnabled
-    ) {
-      sendSystemNotification(dueExpenses);
+  function getNotifiedRecurringSet() {
+    try {
+      const saved = JSON.parse(
+        localStorage.getItem(NOTIFIED_RECURRING_KEY) || "[]",
+      );
+      return new Set(Array.isArray(saved) ? saved : []);
+    } catch {
+      return new Set();
     }
   }
 
-  function sendSystemNotification(dueExpenses) {
+  function saveNotifiedRecurringKey(key) {
+    try {
+      const current = getNotifiedRecurringSet();
+      current.add(key);
+      const trimmed = [...current].slice(-100);
+      localStorage.setItem(NOTIFIED_RECURRING_KEY, JSON.stringify(trimmed));
+    } catch {
+      // Storage unavailable fallback
+    }
+  }
+
+  const dismissInAppNotification = useCallback(() => {
+    if (inAppNotifTimerRef.current) {
+      window.clearTimeout(inAppNotifTimerRef.current);
+      inAppNotifTimerRef.current = null;
+    }
+    setInAppNotification(null);
+  }, []);
+
+  const showInAppNotification = useCallback(
+    ({
+      title,
+      body,
+      icon,
+      iconType = "bell",
+      actionLabel,
+      onAction,
+      tab = "activity",
+      duration = 6500,
+    }) => {
+      if (inAppNotifTimerRef.current) {
+        window.clearTimeout(inAppNotifTimerRef.current);
+        inAppNotifTimerRef.current = null;
+      }
+      setInAppNotification({
+        id: makeId(),
+        title,
+        body,
+        icon,
+        iconType,
+        actionLabel,
+        onAction,
+        tab,
+        onDismiss: dismissInAppNotification,
+      });
+      inAppNotifTimerRef.current = window.setTimeout(() => {
+        setInAppNotification(null);
+        inAppNotifTimerRef.current = null;
+      }, duration);
+    },
+    [dismissInAppNotification],
+  );
+
+  function sendSystemNotificationDirect({ title, body, tag, tab = "activity" }) {
     if (
       typeof document !== "undefined" &&
       document.visibilityState === "visible"
     ) {
-      // Suppress OS-level system banners when app is active in foreground
       return;
     }
     if (
@@ -1830,40 +1870,230 @@ export default function App() {
       window.Notification.permission !== "granted"
     )
       return;
-    const details = dueExpenses
-      .map((expense) => `${expense.description} (${formatDate(expense.date)})`)
-      .join(", ");
-    const title =
-      dueExpenses.length === 1
-        ? "Recurring expense due"
-        : "Recurring expenses due";
+
     const options = {
-      body: details,
+      body,
       icon: new URL("./icons/icon-192.png", window.location.origin).href,
       badge: new URL("./icons/icon-180.png", window.location.origin).href,
+      tag: tag || "spend-notification",
+      renotify: true,
+      vibrate: [200, 100, 200],
+      data: {
+        url: window.location.origin + window.location.pathname,
+        tab,
+      },
     };
-    const displayNotification =
-      "serviceWorker" in navigator
-        ? navigator.serviceWorker
-            .getRegistration()
-            .then((registration) =>
-              registration
-                ? registration.showNotification(title, options)
-                : new window.Notification(title, options),
-            )
-        : Promise.resolve(new window.Notification(title, options));
-    displayNotification
-      .then(() => {
-        pendingDueRef.current = pendingDueRef.current.filter(
-          (pending) => !dueExpenses.includes(pending),
-        );
-      })
-      .catch((error) => {
+
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker
+        .getRegistration()
+        .then((registration) =>
+          registration
+            ? registration.showNotification(title, options)
+            : new window.Notification(title, options),
+        )
+        .catch((error) => {
+          setNotificationStatus(
+            `Could not show a system notification: ${error.message}`,
+          );
+        });
+    } else {
+      try {
+        new window.Notification(title, options);
+      } catch (error) {
         setNotificationStatus(
           `Could not show a system notification: ${error.message}`,
         );
-      });
+      }
+    }
   }
+
+  function sendSystemNotification(dueExpenses) {
+    if (!dueExpenses.length) return;
+    const details = dueExpenses
+      .map((expense) => `${expense.description} (${formatDate(expense.date)})`)
+      .join(", ");
+    sendSystemNotificationDirect({
+      title:
+        dueExpenses.length === 1
+          ? "Recurring expense due"
+          : "Recurring expenses due",
+      body: details,
+      tag: `spend-recurring-${localDate()}`,
+      tab: "activity",
+    });
+  }
+
+  function notifyDueExpenses(dueExpenses) {
+    if (!dueExpenses.length) return;
+    pendingDueRef.current.push(...dueExpenses);
+
+    const notifiedSet = getNotifiedRecurringSet();
+    const unnotified = dueExpenses.filter(
+      (expense) => !notifiedSet.has(`${expense.description}:${expense.date}`),
+    );
+    if (!unnotified.length) return;
+
+    unnotified.forEach((expense) =>
+      saveNotifiedRecurringKey(`${expense.description}:${expense.date}`),
+    );
+
+    const details = unnotified
+      .map((expense) => `${expense.description} (${formatDate(expense.date)})`)
+      .join(", ");
+    const title =
+      unnotified.length === 1
+        ? `${unnotified[0].description} recorded`
+        : `${unnotified.length} recurring expenses recorded`;
+    const body =
+      unnotified.length === 1
+        ? unnotified[0].date === localDate()
+          ? `Due today and recorded in Activity.`
+          : `Was overdue and recorded in Activity.`
+        : `Recorded in Activity: ${details}.`;
+
+    setRecurringReminder(
+      unnotified.length === 1
+        ? unnotified[0].date === localDate()
+          ? `${unnotified[0].description} is due today and was added to your expenses.`
+          : `${unnotified[0].description} was overdue and was added to your expenses.`
+        : `Recurring expenses due today or earlier were added: ${details}.`,
+    );
+
+    // 1. Foreground: interactive in-app banner HUD
+    showInAppNotification({
+      title,
+      body,
+      iconType: "calendar",
+      actionLabel: "View in Activity",
+      tab: "activity",
+      onAction: () => navigateMobile("activity"),
+    });
+
+    // 2. Background: OS notification
+    if (
+      typeof document !== "undefined" &&
+      document.visibilityState === "hidden" &&
+      notificationPermission === "granted" &&
+      !backgroundPushEnabled
+    ) {
+      sendSystemNotification(unnotified);
+    }
+  }
+
+  const checkDailyReminder = useCallback(() => {
+    const today = localDate();
+    try {
+      if (localStorage.getItem(LAST_DAILY_REMINDER_KEY) === today) return;
+    } catch {}
+
+    const now = new Date();
+    const currentHours = String(now.getHours()).padStart(2, "0");
+    const currentMinutes = String(now.getMinutes()).padStart(2, "0");
+    const currentTimeStr = `${currentHours}:${currentMinutes}`;
+
+    if (currentTimeStr < reminderTime) return;
+
+    const hasExpenseToday = expenses.some((e) => e.date === today);
+    if (hasExpenseToday) return;
+
+    try {
+      localStorage.setItem(LAST_DAILY_REMINDER_KEY, today);
+    } catch {}
+
+    const title = "Daily expense reminder";
+    const body =
+      "Don’t forget to track today's expenses to keep your budget on target.";
+
+    if (
+      typeof document !== "undefined" &&
+      document.visibilityState === "visible"
+    ) {
+      showInAppNotification({
+        title,
+        body,
+        iconType: "bell",
+        actionLabel: "Add expense",
+        tab: "home",
+      });
+    } else if (notificationPermission === "granted") {
+      sendSystemNotificationDirect({
+        title,
+        body,
+        tag: `spend-daily-${today}`,
+        tab: "home",
+      });
+    }
+  }, [expenses, reminderTime, notificationPermission, showInAppNotification]);
+
+  const checkBudgetMilestones = useCallback(() => {
+    const b = Number(budgets[selectedMonth] || 0);
+    if (b <= 0) return;
+    const pct = (monthlyTotal / b) * 100;
+    const alertKey = BUDGET_ALERT_KEY_PREFIX + selectedMonth;
+    let alertedMilestone = 0;
+    try {
+      alertedMilestone = Number(localStorage.getItem(alertKey) || "0");
+    } catch {}
+
+    if (pct >= 100 && alertedMilestone < 100) {
+      try {
+        localStorage.setItem(alertKey, "100");
+      } catch {}
+      const title = "Budget limit reached";
+      const body = `You've spent ৳${monthlyTotal.toLocaleString("en-IN")} of your ৳${b.toLocaleString("en-IN")} monthly budget.`;
+      if (
+        typeof document !== "undefined" &&
+        document.visibilityState === "visible"
+      ) {
+        showInAppNotification({
+          title,
+          body,
+          iconType: "danger",
+          actionLabel: "View budget",
+          tab: "plans",
+        });
+      } else if (notificationPermission === "granted") {
+        sendSystemNotificationDirect({
+          title,
+          body,
+          tag: `spend-budget-${selectedMonth}-100`,
+          tab: "plans",
+        });
+      }
+    } else if (pct >= 80 && alertedMilestone < 80) {
+      try {
+        localStorage.setItem(alertKey, "80");
+      } catch {}
+      const title = "Budget alert: 80% used";
+      const body = `You've used ${Math.round(pct)}% of your ৳${b.toLocaleString("en-IN")} monthly limit.`;
+      if (
+        typeof document !== "undefined" &&
+        document.visibilityState === "visible"
+      ) {
+        showInAppNotification({
+          title,
+          body,
+          iconType: "budget",
+          actionLabel: "View budget",
+          tab: "plans",
+        });
+      } else if (notificationPermission === "granted") {
+        sendSystemNotificationDirect({
+          title,
+          body,
+          tag: `spend-budget-${selectedMonth}-80`,
+          tab: "plans",
+        });
+      }
+    }
+  }, [
+    budgets,
+    monthlyTotal,
+    selectedMonth,
+    notificationPermission,
+    showInAppNotification,
+  ]);
 
   const processDueSchedules = useRef(null);
   processDueSchedules.current = () => {
@@ -1926,12 +2156,29 @@ export default function App() {
 
   useEffect(() => {
     processDueSchedules.current?.();
-    const timer = window.setInterval(
-      () => processDueSchedules.current?.(),
-      60_000,
-    );
-    return () => window.clearInterval(timer);
-  }, []);
+    checkDailyReminder();
+    checkBudgetMilestones();
+
+    const intervalTimer = window.setInterval(() => {
+      processDueSchedules.current?.();
+      checkDailyReminder();
+      checkBudgetMilestones();
+    }, 30_000);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        processDueSchedules.current?.();
+        checkDailyReminder();
+        checkBudgetMilestones();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      window.clearInterval(intervalTimer);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [checkDailyReminder, checkBudgetMilestones]);
 
   useEffect(() => {
     if (!conversionOpen) return undefined;
@@ -2115,13 +2362,18 @@ export default function App() {
   function saveMobileExpenseUpdate(expenseId, form) {
     const rawAmount = String(form.amount ?? "").trim();
     const amount = rawAmount === "" ? null : Number(rawAmount);
-    const existingExpense = expenses.find((expense) => expense.id === expenseId);
-    const date = existingExpense?.recurringId ? existingExpense.date : form.date;
+    const existingExpense = expenses.find(
+      (expense) => expense.id === expenseId,
+    );
+    const date = existingExpense?.recurringId
+      ? existingExpense.date
+      : form.date;
     if (
       !form.description.trim() ||
       !isValidDateString(date) ||
       (amount !== null && (!Number.isFinite(amount) || amount <= 0))
-    ) return false;
+    )
+      return false;
     setExpenses((current) =>
       current.map((expense) =>
         expense.id === expenseId
@@ -2247,7 +2499,8 @@ export default function App() {
         !isAccountId(transaction.fromAccount) ||
         !isAccountId(transaction.toAccount) ||
         transaction.fromAccount === transaction.toAccount
-      ) return false;
+      )
+        return false;
     } else {
       return false;
     }
@@ -2628,7 +2881,9 @@ export default function App() {
           updatedAt: restoreTimestamp,
         })),
       });
-      const restoredDeletedRecords = normalizeDeletedRecords(data.deletedRecords);
+      const restoredDeletedRecords = normalizeDeletedRecords(
+        data.deletedRecords,
+      );
       for (const changes of Object.values(restoredDeletedRecords)) {
         for (const change of Object.values(changes)) {
           change.updatedAt = restoreTimestamp;
@@ -3164,6 +3419,8 @@ export default function App() {
         accountStatus={authStatus}
         authBusy={authBusy}
         onSignIn={openSignInModal}
+        inAppNotification={inAppNotification}
+        onDismissNotification={dismissInAppNotification}
       />
       {authModalOpen &&
         (!pushUser || authMode === "update-password" || authModalClosing) &&
@@ -3406,8 +3663,7 @@ export default function App() {
               <form
                 onSubmit={async (event) => {
                   event.preventDefault();
-                  if (await saveProfileName(profileDraft))
-                    hideProfileEditor();
+                  if (await saveProfileName(profileDraft)) hideProfileEditor();
                 }}
               >
                 <label htmlFor="profile-display-name">Display name</label>

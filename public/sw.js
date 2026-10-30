@@ -1,4 +1,4 @@
-const CACHE_NAME = "spend-app-v5";
+const CACHE_NAME = "spend-app-v6";
 const APP_FILES = [
   "./",
   "./manifest.webmanifest",
@@ -52,26 +52,56 @@ self.addEventListener("push", (event) => {
   }
   const title =
     typeof payload.title === "string" ? payload.title : "Spend reminder";
+  const tag =
+    typeof payload.tag === "string" ? payload.tag : "spend-notification";
+  const targetTab = payload.tab || "activity";
   const options = {
-    body: typeof payload.body === "string" ? payload.body : "A recurring expense is due.",
+    body:
+      typeof payload.body === "string"
+        ? payload.body
+        : "A recurring expense is due.",
     icon: new URL("./icons/icon-192.png", self.registration.scope).href,
     badge: new URL("./icons/icon-180.png", self.registration.scope).href,
-    data: { url: payload.url || self.registration.scope },
+    tag,
+    renotify: true,
+    vibrate: [200, 100, 200],
+    data: {
+      url: payload.url || self.registration.scope,
+      tab: targetTab,
+      action: payload.action || "view",
+    },
   };
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
+  const notifData = event.notification.data || {};
+  const targetTab = notifData.tab || "activity";
   const target = new URL(
-    event.notification.data?.url || self.registration.scope,
+    notifData.url || self.registration.scope,
     self.registration.scope,
   );
+  if (targetTab) {
+    target.searchParams.set("tab", targetTab);
+  }
+
   event.waitUntil(
-    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
-      const existing = clients.find((client) => new URL(client.url).origin === target.origin);
-      return existing ? existing.focus() : self.clients.openWindow(target.href);
-    }),
+    self.clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then((clients) => {
+        const existing = clients.find(
+          (client) => new URL(client.url).origin === target.origin,
+        );
+        if (existing) {
+          existing.postMessage({
+            type: "NAVIGATE_TAB",
+            tab: targetTab,
+          });
+          return existing.focus();
+        }
+        return self.clients.openWindow(target.href);
+      }),
   );
 });
 
