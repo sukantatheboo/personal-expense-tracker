@@ -2389,6 +2389,7 @@ function AppSettingsPage({
   onSignIn,
   onReminder,
   onToggleNotifications,
+  onTestNotification,
 }) {
   const notificationUnavailable = notificationPermission === "unsupported";
   const notificationBlocked = notificationPermission === "denied";
@@ -2448,29 +2449,49 @@ function AppSettingsPage({
           />
         </div>
         {pushBackendConfigured && profile?.connected ? (
-          <button
-            className="ri settings-action"
-            type="button"
-            role="switch"
-            aria-checked={backgroundPushEnabled}
-            disabled={
-              !backgroundPushEnabled &&
-              (notificationBlocked || notificationUnavailable)
-            }
-            onClick={onToggleNotifications}
-          >
-            <i className="ic" style={{ "--c": "#2f9a6b" }}>
-              <Icon n="bell" />
-            </i>
-            <span className="nm">
-              <b>Background reminders</b>
-              <small>{notificationLabel}</small>
-            </span>
-            <span
-              className={"sw " + (backgroundPushEnabled ? "on" : "")}
-              aria-hidden="true"
-            />
-          </button>
+          <>
+            <button
+              className="ri settings-action"
+              type="button"
+              role="switch"
+              aria-checked={backgroundPushEnabled}
+              disabled={
+                !backgroundPushEnabled &&
+                (notificationBlocked || notificationUnavailable)
+              }
+              onClick={onToggleNotifications}
+            >
+              <i className="ic" style={{ "--c": "#2f9a6b" }}>
+                <Icon n="bell" />
+              </i>
+              <span className="nm">
+                <b>Background reminders</b>
+                <small>{notificationLabel}</small>
+              </span>
+              <span
+                className={"sw " + (backgroundPushEnabled ? "on" : "")}
+                aria-hidden="true"
+              />
+            </button>
+            {backgroundPushEnabled && onTestNotification && (
+              <button
+                className="ri settings-action"
+                type="button"
+                onClick={onTestNotification}
+              >
+                <i className="ic" style={{ "--c": "#3b82c4" }}>
+                  <Icon n="bell" />
+                </i>
+                <span className="nm">
+                  <b>Send test notification</b>
+                  <small>Fires in 3s (lock screen or switch apps)</small>
+                </span>
+                <span className="settings-chevron" aria-hidden="true">
+                  <Icon n="r" />
+                </span>
+              </button>
+            )}
+          </>
         ) : pushBackendConfigured ? (
           <button
             className="ri settings-action"
@@ -2548,6 +2569,7 @@ export default function MobilePrototype({
   notificationStatus,
   backgroundPushEnabled,
   onToggleNotifications,
+  onTestNotification,
   backupStatus,
   lastBackupAt,
   onBackupDownload,
@@ -3410,6 +3432,7 @@ export default function MobilePrototype({
                 onSignIn={signIn}
                 onReminder={onReminder}
                 onToggleNotifications={onToggleNotifications}
+                onTestNotification={onTestNotification}
               />
             ) : (
               tab === "home" && (

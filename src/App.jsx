@@ -3265,11 +3265,59 @@ export default function App() {
       setNotificationStatus(
         "Background reminders are enabled. You’ll get a push when a recurring expense is due.",
       );
+      if ("serviceWorker" in navigator) {
+        const registration = await navigator.serviceWorker.getRegistration();
+        if (registration) {
+          await registration.showNotification("Spend notifications enabled", {
+            body: "Background reminders are active on this device.",
+            icon: new URL("./icons/icon-192.png", window.location.origin).href,
+            badge: new URL("./icons/icon-180.png", window.location.origin).href,
+            tag: "spend-test-confirmation",
+            vibrate: [200, 100, 200],
+          });
+        }
+      }
     } catch (error) {
       setNotificationStatus(
         `Could not enable background reminders: ${error.message}`,
       );
     }
+  }
+
+  async function handleTestNotification() {
+    setNotificationStatus(
+      "Test notification will fire in 3 seconds. Lock your screen or switch apps now.",
+    );
+    window.setTimeout(async () => {
+      try {
+        if ("serviceWorker" in navigator) {
+          const registration = await navigator.serviceWorker.getRegistration();
+          if (registration) {
+            await registration.showNotification("Spend test reminder", {
+              body: "Background push notifications are working properly!",
+              icon: new URL("./icons/icon-192.png", window.location.origin).href,
+              badge: new URL("./icons/icon-180.png", window.location.origin).href,
+              tag: "spend-manual-test",
+              vibrate: [200, 100, 200],
+            });
+            return;
+          }
+        }
+        if (
+          "Notification" in window &&
+          window.Notification.permission === "granted"
+        ) {
+          new window.Notification("Spend test reminder", {
+            body: "Background push notifications are working properly!",
+            icon: new URL("./icons/icon-192.png", window.location.origin).href,
+          });
+        }
+      } catch (error) {
+        setNotificationStatus(
+          `Could not trigger test notification: ${error.message}`,
+        );
+      }
+    }, 3000);
   }
 
   useEffect(() => {
@@ -3409,6 +3457,7 @@ export default function App() {
         notificationStatus={notificationStatus}
         backgroundPushEnabled={backgroundPushEnabled}
         onToggleNotifications={toggleNotifications}
+        onTestNotification={handleTestNotification}
         backupStatus={backupStatus}
         lastBackupAt={lastBackupAt}
         onBackupDownload={downloadBackup}
