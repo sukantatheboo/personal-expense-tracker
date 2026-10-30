@@ -51,19 +51,19 @@ self.addEventListener("push", (event) => {
     payload = { body: event.data?.text() || "" };
   }
   const title =
-    typeof payload.title === "string" ? payload.title : "Spend reminder";
+    typeof payload.title === "string" ? payload.title : "Spend";
   const tag =
-    typeof payload.tag === "string" ? payload.tag : "spend-notification";
+    typeof payload.tag === "string" ? payload.tag : undefined;
   const targetTab = payload.tab || "activity";
   const options = {
     body:
       typeof payload.body === "string"
         ? payload.body
         : "A recurring expense is due.",
-    icon: new URL("./icons/icon-192.png", self.registration.scope).href,
-    badge: new URL("./icons/icon-180.png", self.registration.scope).href,
+    icon: new URL("icons/icon-192.png", self.registration.scope).href,
+    badge: new URL("icons/icon-180.png", self.registration.scope).href,
     tag,
-    renotify: true,
+    renotify: Boolean(tag),
     vibrate: [200, 100, 200],
     data: {
       url: payload.url || self.registration.scope,

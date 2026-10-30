@@ -1,299 +1,145 @@
-import webpush from "npm:web-push@3.6.7";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import webpush from "npm:web-push@3.6.7";
 
-const cronSecret = Deno.env.get("CRON_SECRET");
 const supabaseUrl = Deno.env.get("SUPABASE_URL");
-const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+const vapidSubject = Deno.env.get("VAPID_SUBJECT") || "mailto:admin@example.com";
 const vapidPublicKey = Deno.env.get("VAPID_PUBLIC_KEY");
 const vapidPrivateKey = Deno.env.get("VAPID_PRIVATE_KEY");
-const vapidSubject = Deno.env.get("VAPID_SUBJECT");
 
-function response(status: number, body: Record<string, unknown>) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
-}
+const supabase = createClient(
+  supabaseUrl || "",
+  supabaseServiceRoleKey || "",
+);
 
-function dateInTimeZone(date: Date, timezone: string) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: timezone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(date);
-  const values = Object.fromEntries(
-    parts.map(({ type, value }) => [type, value]),
-  );
-  return `${values.year}-${values.month}-${values.day}`;
-}
-
-function nextOccurrence(
-  dateValue: string,
-  interval: string,
-  dayOfMonth: number,
-) {
-  const [year, month, day] = dateValue.split("-").map(Number);
-  if (interval === "weekly") {
-    const date = new Date(Date.UTC(year, month - 1, day + 7));
-    return date.toISOString().slice(0, 10);
-  }
-  const nextMonth = new Date(Date.UTC(year, month, 1));
-  const lastDay = new Date(
-    Date.UTC(nextMonth.getUTCFullYear(), nextMonth.getUTCMonth() + 1, 0),
-  ).getUTCDate();
-  const nextDay = Math.min(dayOfMonth || day, lastDay);
-  return [
-    nextMonth.getUTCFullYear(),
-    String(nextMonth.getUTCMonth() + 1).padStart(2, "0"),
-    String(nextDay).padStart(2, "0"),
-  ].join("-");
-}
-
-function localTime(dateValue: string, timeValue: string, timezone: string) {
-  const [year, month, day] = dateValue.split("-").map(Number);
-  const [hour, minute] = timeValue.split(":").map(Number);
-  const target = Date.UTC(year, month - 1, day, hour, minute);
-  let candidate = target;
-  const formatter = new Intl.DateTimeFormat("en-GB", {
-    timeZone: timezone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hourCycle: "h23",
-  });
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const values = Object.fromEntries(
-      formatter
-        .formatToParts(new Date(candidate))
-        .map(({ type, value }) => [type, value]),
-    );
-    const represented = Date.UTC(
-      Number(values.year),
-      Number(values.month) - 1,
-      Number(values.day),
-      Number(values.hour),
-      Number(values.minute),
-      Number(values.second),
-    );
-    candidate += target - represented;
-  }
-  return new Date(candidate).toISOString();
-}
-
-Deno.serve(async (request) => {
-  if (request.method !== "POST")
-    return response(405, { error: "Method not allowed." });
-  if (!cronSecret || request.headers.get("x-cron-secret") !== cronSecret) {
-    return response(401, { error: "Unauthorized." });
-  }
-  if (
-    !supabaseUrl ||
-    !serviceRoleKey ||
-    !vapidPublicKey ||
-    !vapidPrivateKey ||
-    !vapidSubject
-  ) {
-    console.error("Push reminder secrets are not configured.");
-    return response(500, { error: "Push reminders are not configured." });
-  }
-
+if (vapidSubject && vapidPublicKey && vapidPrivateKey) {
   webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
-  const supabase = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+}
+
+const STALE_MS = 12 * 60 * 60 * 1000; // don't send reminders that are over 12h late
+
+// ---- date helpers: keep in sync with nextOccurrenceDate in src/data.js ----
+function addDays(date: string, days: number) {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function addMonthsClamped(date: string, months: number, dayOfMonth: number | null) {
+  const [y, m] = date.split("-").map(Number);
+  const first = new Date(Date.UTC(y, m - 1 + months, 1));
+  const lastDay = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)).getUTCDate();
+  first.setUTCDate(Math.min(dayOfMonth || Number(date.slice(-2)), lastDay));
+  return first.toISOString().slice(0, 10);
+}
+
+function nextDate(date: string, interval: string, dayOfMonth: number | null) {
+  if (interval === "weekly") return addDays(date, 7);
+  if (interval === "yearly") return addMonthsClamped(date, 12, dayOfMonth);
+  return addMonthsClamped(date, 1, dayOfMonth); // "monthly"
+}
+
+// wall-clock time in an IANA time zone -> UTC instant
+function zoneOffsetMs(at: Date, timeZone: string) {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: timeZone || "UTC",
+      hourCycle: "h23",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    }).formatToParts(at);
+    const get = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+    return Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second")) - at.getTime();
+  } catch {
+    return 0;
+  }
+}
+
+function zonedTimeToUtc(date: string, time: string, timeZone: string) {
+  const safeTime = /^([01]\d|2[0-3]):[0-5]\d$/.test(time) ? time : "09:00";
+  const guess = new Date(`${date}T${safeTime}:00Z`);
+  return new Date(guess.getTime() - zoneOffsetMs(guess, timeZone));
+}
+
+Deno.serve(async (req) => {
+  const cronSecret = Deno.env.get("CRON_SECRET");
+  if (cronSecret && req.headers.get("x-cron-secret") !== cronSecret) {
+    return new Response("forbidden", { status: 403 });
+  }
+
+  if (!supabaseUrl || !supabaseServiceRoleKey || !vapidPublicKey || !vapidPrivateKey) {
+    return new Response(
+      JSON.stringify({ error: "Missing Supabase URL/service key or VAPID credentials." }),
+      { status: 500, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
   const now = new Date();
-  const { data: dueReminders, error: queryError } = await supabase
+  const { data: due, error } = await supabase
     .from("push_reminders")
-    .select("*")
+    .select("user_id, device_id, schedule_id, description, interval, day_of_month, next_date, next_notify_at, timezone, reminder_time")
     .eq("active", true)
     .lte("next_notify_at", now.toISOString())
-    .order("next_notify_at", { ascending: true })
-    .limit(100);
+    .limit(200);
 
-  if (queryError) {
-    console.error("Could not load due reminders:", queryError.message);
-    return response(500, { error: "Could not load due reminders." });
-  }
+  if (error) return new Response(error.message, { status: 500 });
+  if (!due?.length) return Response.json({ due: 0, sent: 0 });
+
+  const { data: devices } = await supabase
+    .from("push_devices")
+    .select("user_id, device_id, subscription")
+    .in("device_id", [...new Set(due.map((r) => r.device_id))]);
+  const byDevice = new Map((devices ?? []).map((d) => [`${d.user_id}:${d.device_id}`, d]));
 
   let sent = 0;
-  for (const reminder of dueReminders ?? []) {
-    let nextDate = reminder.next_date;
-    let today;
-    try {
-      today = dateInTimeZone(now, reminder.timezone);
-    } catch (error) {
-      console.error("Skipping reminder with invalid timezone:", error);
-      continue;
-    }
-    let attempts = 0;
-    while (nextDate <= today && attempts < 240) {
-      nextDate = nextOccurrence(
-        nextDate,
-        reminder.interval,
-        reminder.day_of_month,
-      );
-      attempts += 1;
-    }
-    if (nextDate <= today) {
-      nextDate = nextOccurrence(
-        today,
-        reminder.interval,
-        reminder.day_of_month,
-      );
+  for (const r of due) {
+    // move the row to its next FUTURE occurrence
+    let date: string = r.next_date;
+    let notifyAt = new Date(r.next_notify_at);
+    for (let i = 0; notifyAt.getTime() <= now.getTime() && i < 500; i += 1) {
+      date = nextDate(date, r.interval, r.day_of_month);
+      notifyAt = zonedTimeToUtc(date, r.reminder_time, r.timezone);
     }
 
-    const nextNotifyAt = localTime(
-      nextDate,
-      reminder.reminder_time,
-      reminder.timezone,
-    );
-    const lockUntil = new Date(now.getTime() + 5 * 60_000).toISOString();
-    const { data: claimed, error: claimError } = await supabase
+    // claim first, so two overlapping runs can never send the same reminder twice
+    const { data: claimed } = await supabase
       .from("push_reminders")
-      .update({
-        next_notify_at: lockUntil,
-        claim_until: lockUntil,
-        pending_notification: true,
-      })
-      .eq("user_id", reminder.user_id)
-      .eq("device_id", reminder.device_id)
-      .eq("schedule_id", reminder.schedule_id)
-      .eq("next_notify_at", reminder.next_notify_at)
-      .lte("next_notify_at", now.toISOString())
+      .update({ next_date: date, next_notify_at: notifyAt.toISOString() })
+      .eq("user_id", r.user_id)
+      .eq("device_id", r.device_id)
+      .eq("schedule_id", r.schedule_id)
+      .eq("next_notify_at", r.next_notify_at)
       .select("schedule_id");
-
-    if (claimError) {
-      console.error("Could not advance reminder:", claimError.message);
-      continue;
-    }
     if (!claimed?.length) continue;
 
-    const { data: devices, error: deviceError } = await supabase
-      .from("push_devices")
-      .select("endpoint, subscription")
-      .eq("user_id", reminder.user_id)
-      .eq("device_id", reminder.device_id);
+    if (now.getTime() - new Date(r.next_notify_at).getTime() > STALE_MS) continue; // too old to be useful
 
-    if (deviceError) {
-      console.error("Could not load push devices:", deviceError.message);
-      continue;
-    }
-    if (!devices?.length) {
-      const { error: deleteError } = await supabase
-        .from("push_reminders")
-        .delete()
-        .eq("user_id", reminder.user_id)
-        .eq("device_id", reminder.device_id)
-        .eq("schedule_id", reminder.schedule_id);
-      if (deleteError) {
-        console.error(
-          "Could not remove reminder without a push device:",
-          deleteError.message,
-        );
+    const device = byDevice.get(`${r.user_id}:${r.device_id}`);
+    if (!device) continue;
+    try {
+      await webpush.sendNotification(
+        device.subscription,
+        JSON.stringify({
+          title: "Recurring expense due",
+          body: `${r.description} is due today.`,
+          tag: `${r.schedule_id}:${r.next_date}`,
+        }),
+        { TTL: 6 * 60 * 60 },
+      );
+      sent += 1;
+    } catch (err) {
+      const status = (err as { statusCode?: number }).statusCode;
+      if (status === 404 || status === 410) {
+        await supabase.from("push_devices").delete()
+          .eq("user_id", r.user_id).eq("device_id", r.device_id); // subscription expired
+      } else {
+        console.error("push failed", status, (err as { body?: unknown }).body ?? err);
       }
-      continue;
-    }
-
-    const payload = JSON.stringify({
-      title: "Recurring expense due",
-      body: `${String(reminder.description).slice(0, 80)} is due today.`,
-    });
-    let deliveryFailed = false;
-    let expired = false;
-    for (const device of devices ?? []) {
-      let endpoint;
-      try {
-        endpoint = new URL(device.endpoint);
-      } catch {
-        console.error("Ignoring an invalid push endpoint.");
-        expired = true;
-        break;
-      }
-      if (
-        ![
-          "fcm.googleapis.com",
-          "web.push.apple.com",
-          "updates.push.services.mozilla.com",
-          "push.services.mozilla.com",
-        ].includes(endpoint.hostname) ||
-        endpoint.protocol !== "https:" ||
-        device.subscription?.endpoint !== device.endpoint
-      ) {
-        console.error("Ignoring an invalid push endpoint.");
-        expired = true;
-        break;
-      }
-      try {
-        await webpush.sendNotification(device.subscription, payload);
-        sent += 1;
-      } catch (error) {
-        const statusCode =
-          error instanceof Error && "statusCode" in error
-            ? error.statusCode
-            : undefined;
-        if (statusCode === 404 || statusCode === 410) {
-          expired = true;
-        } else {
-          deliveryFailed = true;
-          console.error(
-            "Could not send push notification:",
-            error instanceof Error ? error.message : String(error),
-          );
-        }
-      }
-    }
-
-    if (expired) {
-      const { error: deviceDeleteError } = await supabase
-        .from("push_devices")
-        .delete()
-        .eq("user_id", reminder.user_id)
-        .eq("device_id", reminder.device_id);
-      if (deviceDeleteError) {
-        console.error(
-          "Could not remove expired push device:",
-          deviceDeleteError.message,
-        );
-      }
-      const { error: reminderDeleteError } = await supabase
-        .from("push_reminders")
-        .delete()
-        .eq("user_id", reminder.user_id)
-        .eq("device_id", reminder.device_id);
-      if (reminderDeleteError) {
-        console.error(
-          "Could not remove reminders for expired device:",
-          reminderDeleteError.message,
-        );
-      }
-      continue;
-    }
-
-    const retryUntil = new Date(Date.now() + 5 * 60_000).toISOString();
-    const update = deliveryFailed
-      ? { next_notify_at: retryUntil, claim_until: retryUntil }
-      : {
-          next_date: nextDate,
-          next_notify_at: nextNotifyAt,
-          claim_until: null,
-          pending_notification: false,
-        };
-    const { error: finishError } = await supabase
-      .from("push_reminders")
-      .update(update)
-      .eq("user_id", reminder.user_id)
-      .eq("device_id", reminder.device_id)
-      .eq("schedule_id", reminder.schedule_id)
-      .eq("next_notify_at", lockUntil)
-      .eq("claim_until", lockUntil);
-    if (finishError) {
-      console.error("Could not finish reminder delivery:", finishError.message);
     }
   }
-
-  return response(200, { processed: dueReminders?.length ?? 0, sent });
+  return Response.json({ due: due.length, sent });
 });
