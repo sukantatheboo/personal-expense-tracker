@@ -127,6 +127,8 @@ Deno.serve(async (req) => {
           title: "Recurring expense due",
           body: `${r.description} is due today.`,
           tag: `${r.schedule_id}:${r.next_date}`,
+          tab: "activity",
+          url: "./?tab=activity",
         }),
         { TTL: 6 * 60 * 60 },
       );

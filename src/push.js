@@ -1,8 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
-export const vapidPublicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY?.trim();
+const cleanEnv = (value) =>
+  typeof value === "string" ? value.trim().replace(/^["']|["']$/g, "") : "";
+
+const supabaseUrl = cleanEnv(import.meta.env.VITE_SUPABASE_URL);
+const supabaseAnonKey = cleanEnv(import.meta.env.VITE_SUPABASE_ANON_KEY);
+export const vapidPublicKey = cleanEnv(import.meta.env.VITE_VAPID_PUBLIC_KEY);
 
 export const supabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 export const pushBackendConfigured = Boolean(
@@ -25,9 +28,12 @@ function getDeviceId() {
 }
 
 function vapidKeyBytes(value) {
-  const padding = "=".repeat((4 - (value.length % 4)) % 4);
+  const clean = String(value || "")
+    .trim()
+    .replace(/^["']|["']$/g, "");
+  const padding = "=".repeat((4 - (clean.length % 4)) % 4);
   const decoded = atob(
-    (value + padding).replaceAll("-", "+").replaceAll("_", "/"),
+    (clean + padding).replaceAll("-", "+").replaceAll("_", "/"),
   );
   return Uint8Array.from(decoded, (character) => character.charCodeAt(0));
 }
