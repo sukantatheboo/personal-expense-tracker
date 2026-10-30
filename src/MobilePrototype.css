@@ -429,23 +429,23 @@ a:active,
   --over: #f0a067;
   --on: #fff;
   --shadow: 0 8px 24px rgb(28 44 34 / 6%);
-  --dock-surface: rgb(255 255 255 / 78%);
-  --dock-scrolled-surface: rgb(255 255 255 / 90%);
-  --dock-border: rgb(255 255 255 / 76%);
-  --dock-highlight: rgb(255 255 255 / 80%);
-  --dock-tab: #59675f;
-  --dock-tab-active: var(--g);
-  --dock-active-wash: rgb(47 122 90 / 13%);
+  --dock-surface: rgb(38 44 41 / 76%);
+  --dock-scrolled-surface: rgb(30 35 33 / 88%);
+  --dock-border: rgb(255 255 255 / 15%);
+  --dock-highlight: rgb(255 255 255 / 24%);
+  --dock-tab: rgb(240 245 242 / 78%);
+  --dock-tab-active: #6fd0a0;
+  --dock-active-wash: rgb(255 255 255 / 14%);
   --dock-glass-sheen: linear-gradient(
     180deg,
-    rgb(255 255 255 / 46%),
-    rgb(255 255 255 / 12%)
+    rgb(255 255 255 / 14%),
+    rgb(255 255 255 / 2%)
   );
-  --dock-shadow: 0 10px 24px rgb(28 44 34 / 10%), 0 2px 6px rgb(28 44 34 / 4%);
+  --dock-shadow: 0 12px 32px rgb(0 0 0 / 26%), 0 3px 8px rgb(0 0 0 / 12%);
   --dock-scrolled-shadow:
-    0 12px 24px rgb(28 44 34 / 12%), 0 3px 8px rgb(28 44 34 / 5%);
+    0 16px 38px rgb(0 0 0 / 32%), 0 4px 10px rgb(0 0 0 / 16%);
   --dock-minimized-shadow:
-    0 8px 18px rgb(28 44 34 / 8%), 0 2px 5px rgb(28 44 34 / 4%);
+    0 8px 22px rgb(0 0 0 / 22%), 0 2px 6px rgb(0 0 0 / 10%);
   box-sizing: border-box;
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -464,22 +464,23 @@ a:active,
     --bad: #ee8b7d;
     --on: #0c1a12;
     --shadow: 0 8px 24px rgb(0 0 0 / 22%);
-    --dock-surface: rgb(26 30 33 / 84%);
-    --dock-scrolled-surface: rgb(26 30 33 / 93%);
-    --dock-border: rgb(255 255 255 / 12%);
-    --dock-highlight: rgb(255 255 255 / 9%);
-    --dock-tab: #9db0a5;
-    --dock-active-wash: rgb(111 211 160 / 16%);
+    --dock-surface: rgb(30 35 33 / 82%);
+    --dock-scrolled-surface: rgb(22 26 24 / 92%);
+    --dock-border: rgb(255 255 255 / 14%);
+    --dock-highlight: rgb(255 255 255 / 20%);
+    --dock-tab: rgb(240 245 242 / 75%);
+    --dock-tab-active: #6fd0a0;
+    --dock-active-wash: rgb(255 255 255 / 12%);
     --dock-glass-sheen: linear-gradient(
       180deg,
-      rgb(255 255 255 / 8%),
+      rgb(255 255 255 / 12%),
       rgb(255 255 255 / 1%)
     );
-    --dock-shadow: 0 10px 24px rgb(0 0 0 / 24%), 0 2px 6px rgb(0 0 0 / 14%);
+    --dock-shadow: 0 12px 32px rgb(0 0 0 / 36%), 0 3px 8px rgb(0 0 0 / 18%);
     --dock-scrolled-shadow:
-      0 12px 24px rgb(0 0 0 / 28%), 0 3px 8px rgb(0 0 0 / 16%);
+      0 16px 40px rgb(0 0 0 / 42%), 0 4px 12px rgb(0 0 0 / 22%);
     --dock-minimized-shadow:
-      0 8px 18px rgb(0 0 0 / 20%), 0 2px 5px rgb(0 0 0 / 12%);
+      0 8px 22px rgb(0 0 0 / 28%), 0 2px 6px rgb(0 0 0 / 14%);
     color-scheme: dark;
   }
 }
@@ -496,22 +497,23 @@ a:active,
   --over: #f2a16f;
   --on: #0c1a12;
   --shadow: 0 8px 24px rgb(0 0 0 / 22%);
-  --dock-surface: rgb(26 30 33 / 84%);
-  --dock-scrolled-surface: rgb(26 30 33 / 93%);
-  --dock-border: rgb(255 255 255 / 12%);
-  --dock-highlight: rgb(255 255 255 / 9%);
-  --dock-tab: #9db0a5;
-  --dock-active-wash: rgb(111 211 160 / 16%);
+  --dock-surface: rgb(30 35 33 / 82%);
+  --dock-scrolled-surface: rgb(22 26 24 / 92%);
+  --dock-border: rgb(255 255 255 / 14%);
+  --dock-highlight: rgb(255 255 255 / 20%);
+  --dock-tab: rgb(240 245 242 / 75%);
+  --dock-tab-active: #6fd0a0;
+  --dock-active-wash: rgb(255 255 255 / 12%);
   --dock-glass-sheen: linear-gradient(
     180deg,
-    rgb(255 255 255 / 8%),
+    rgb(255 255 255 / 12%),
     rgb(255 255 255 / 1%)
   );
-  --dock-shadow: 0 10px 24px rgb(0 0 0 / 24%), 0 2px 6px rgb(0 0 0 / 14%);
+  --dock-shadow: 0 12px 32px rgb(0 0 0 / 36%), 0 3px 8px rgb(0 0 0 / 18%);
   --dock-scrolled-shadow:
-    0 12px 24px rgb(0 0 0 / 28%), 0 3px 8px rgb(0 0 0 / 16%);
+    0 16px 40px rgb(0 0 0 / 42%), 0 4px 12px rgb(0 0 0 / 22%);
   --dock-minimized-shadow:
-    0 8px 18px rgb(0 0 0 / 20%), 0 2px 5px rgb(0 0 0 / 12%);
+    0 8px 22px rgb(0 0 0 / 28%), 0 2px 6px rgb(0 0 0 / 14%);
   color-scheme: dark;
 }
 .mobile-prototype {
@@ -1266,13 +1268,22 @@ a:active,
 
 /* Real-app message-style delete action box */
 .mobile-prototype .expense-swipe-shell {
-  background: #dc2626;
+  background: transparent;
   border-radius: 14px;
 }
-:root[data-theme="dark"] .mobile-prototype .expense-swipe-shell {
+.mobile-prototype .expense-swipe-shell.is-dragging,
+.mobile-prototype .expense-swipe-shell.is-revealed,
+.mobile-prototype .expense-swipe-shell.is-deleting {
+  background: #dc2626;
+}
+:root[data-theme="dark"] .mobile-prototype .expense-swipe-shell.is-dragging,
+:root[data-theme="dark"] .mobile-prototype .expense-swipe-shell.is-revealed,
+:root[data-theme="dark"] .mobile-prototype .expense-swipe-shell.is-deleting {
   background: #e53935;
 }
-.mobile-prototype .expense-swipe-shell.is-skip-shell {
+.mobile-prototype .expense-swipe-shell.is-skip-shell.is-dragging,
+.mobile-prototype .expense-swipe-shell.is-skip-shell.is-revealed,
+.mobile-prototype .expense-swipe-shell.is-skip-shell.is-deleting {
   background: var(--g, #327a58);
 }
 
@@ -2217,8 +2228,8 @@ a:active,
   box-shadow:
     inset 0 1px 0 var(--dock-highlight),
     var(--dock-shadow);
-  -webkit-backdrop-filter: blur(18px) saturate(155%);
-  backdrop-filter: blur(18px) saturate(155%);
+  -webkit-backdrop-filter: blur(28px) saturate(190%);
+  backdrop-filter: blur(28px) saturate(190%);
   transform: translateZ(0);
   transition:
     height 450ms var(--dock-spring),
