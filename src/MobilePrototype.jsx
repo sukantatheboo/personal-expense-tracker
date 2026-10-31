@@ -9,7 +9,15 @@ import {
 import { Capacitor } from "@capacitor/core";
 import { Haptics, ImpactStyle, NotificationType } from "@capacitor/haptics";
 import { FaPenToSquare, FaPiggyBank } from "react-icons/fa6";
-import { ACCOUNT_OPTIONS } from "./data.js";
+import { ACCOUNT_OPTIONS, DEFAULT_CARDS } from "./data.js";
+import {
+  StackedCardDeck,
+  WalletCard,
+  renderProviderLogo,
+  formatCardNumber,
+  formatExpiry,
+} from "./AccountsCardDeck.jsx";
+import { CARD_PROVIDERS } from "./cardAssets.jsx";
 import "./MobilePrototype.css";
 
 /* ───────────── constants ───────────── */
@@ -30,6 +38,13 @@ const ACC = {
   bank: ["Bank", "#2563a8"],
   savings: ["Savings", "#b6404b"],
 };
+
+function getAccountDisplay(id, cards = []) {
+  const match = cards.find((c) => c.id === id);
+  if (match) return [match.name, match.color || "#2563a8"];
+  if (ACC[id]) return ACC[id];
+  return [id || "Account", "#2563a8"];
+}
 const TABS = [
   ["home", "Home"],
   ["activity", "Activity"],
@@ -1683,25 +1698,40 @@ function AnimatedAmount({ value }) {
   );
 }
 
-function Accounts({ S, onTx, highlightedExpenseId, highlightedTransactionId }) {
-  const accountIds = Object.keys(ACC);
-  const balances = Object.fromEntries(accountIds.map((id) => [id, bal(S, id)]));
-  const totalBalance = Object.values(balances).reduce(
-    (sum, amount) => sum + amount,
-    0,
-  );
-  const [selectedAccount, setSelectedAccount] = useState("");
+function Accounts({
+  S,
+  onTx,
+  onAddCardClick,
+  onDeleteCard,
+  highlightedExpenseId,
+  highlightedTransactionId,
+  profile,
+  onTab,
+  onOpenExpense,
+}) {
+  const cards = S.cards && S.cards.length > 0 ? S.cards : DEFAULT_CARDS;
+  const balances = Object.fromEntries(cards.map((c) => [c.id, bal(S, c.id)]));
+  const [selectedAccount, setSelectedAccount] = useState(() => cards[0]?.id || "amazon");
+  const [infoCard, setInfoCard] = useState(null);
+  const [copiedCard, setCopiedCard] = useState(false);
+  const [showCardSecrets, setShowCardSecrets] = useState(false);
+  const [frozenCards, setFrozenCards] = useState({});
+
+  const activeCard = cards.find((c) => c.id === selectedAccount) || cards[0];
+
   const chooseAccount = (accountId) => {
     triggerHaptic("selection");
-    setSelectedAccount((current) => (current === accountId ? "" : accountId));
+    setSelectedAccount(accountId);
   };
+
+  const getAccountName = (id) =>
+    cards.find((c) => c.id === id)?.name || ACC[id]?.[0] || id || "Account";
 
   const events = [
     ...S.exp
       .filter(
         (expense) =>
           expense.acct &&
-          ACC[expense.acct] &&
           expense.amt != null &&
           expense.date >= S.start.date &&
           expense.date <= ld(),
@@ -1717,6 +1747,7 @@ function Accounts({ S, onTx, highlightedExpenseId, highlightedTransactionId }) {
             capitalizeFirstLetter(expense.desc) ||
             (isSavingsTransfer ? "Transfer to Savings" : expense.cat),
           type: isSavingsTransfer ? "transfer" : "expense",
+          cat: expense.cat,
           amount: expense.amt,
           account: expense.acct,
           from: isSavingsTransfer ? expense.acct : "",
@@ -1739,6 +1770,7 @@ function Accounts({ S, onTx, highlightedExpenseId, highlightedTransactionId }) {
             transaction.type
           ],
         type: transaction.type,
+        cat: transaction.type === "income" ? "Savings" : transaction.type === "transfer" ? "Transport" : "Bills",
         amount: transaction.amt,
         account: transaction.acct,
         from: transaction.acct,
@@ -1811,134 +1843,350 @@ function Accounts({ S, onTx, highlightedExpenseId, highlightedTransactionId }) {
     return { value: event.amount, signed: false };
   };
 
+  const handleCopyCard = (num) => {
+    triggerHaptic("success");
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(num.replace(/\s+/g, "")).catch(() => {});
+    }
+    setCopiedCard(true);
+    setTimeout(() => setCopiedCard(false), 2000);
+  };
+
   return (
     <>
-      <section className="card account-total-card">
-        <small className="lbl">Total balance</small>
-        <div className="account-total-value">
-          <AnimatedAmount value={totalBalance} />
-        </div>
-        <span className="account-total-context">
-          Across {accountIds.length} accounts
-        </span>
-      </section>
+      {/* 3D Stacked Cards Wallet Deck */}
+      <StackedCardDeck
+        cards={cards}
+        balances={balances}
+        selectedId={selectedAccount}
+        onSelectCard={chooseAccount}
+        onAddCardClick={onAddCardClick}
+        onOpenCardDetails={(card) => setInfoCard(card)}
+      />
 
-      <div
-        className="account-cards"
-        aria-label="Accounts"
-        data-dock-scroll-lock
-      >
-        {accountIds.map((id) => (
-          <button
-            key={id}
-            type="button"
-            className={`acc${selectedAccount === id ? " is-selected" : ""}`}
-            style={{ "--account-accent": ACC[id][1] }}
-            aria-label={`Filter account activity by ${ACC[id][0]}, ${M(balances[id])}`}
-            aria-pressed={selectedAccount === id}
-            onClick={() => chooseAccount(id)}
-          >
-            <span className="al">
-              <span className={`lg ${id}`}>
-                {id === "bkash" ? (
-                  <img src={BK} alt="" />
-                ) : id === "bank" ? (
-                  <Icon n="bank" />
-                ) : (
-                  <SavingsMark className="account-savings-mark" />
-                )}
-              </span>
-              <small>{ACC[id][0]}</small>
-            </span>
-            <span className="big">
-              <AnimatedAmount value={balances[id]} />
-            </span>
-          </button>
-        ))}
+      {/* 2×2 Quick Action Buttons Grid (Card Info, Card Options, Withdraw, Converter - Matching Video) */}
+      <div className="accounts-actions-grid">
+        <button
+          type="button"
+          className="accounts-action-card"
+          onClick={() => {
+            triggerHaptic("selection");
+            setInfoCard(activeCard);
+          }}
+          aria-label="View card options and details"
+        >
+          <div className="action-icon-badge is-card-info">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <rect x="2" y="5" width="20" height="14" rx="3" />
+              <line x1="2" y1="10" x2="22" y2="10" />
+              <circle cx="7" cy="15" r="1.5" fill="currentColor" />
+            </svg>
+          </div>
+          <span className="action-label">Card Info</span>
+        </button>
+
+        <button
+          type="button"
+          className="accounts-action-card"
+          onClick={() => {
+            triggerHaptic("light");
+            onTx("adjust", selectedAccount);
+          }}
+          aria-label="Adjust balance and card options"
+        >
+          <div className="action-icon-badge is-card-options">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <line x1="4" y1="21" x2="4" y2="14" />
+              <line x1="4" y1="10" x2="4" y2="3" />
+              <line x1="12" y1="21" x2="12" y2="12" />
+              <line x1="12" y1="8" x2="12" y2="3" />
+              <line x1="20" y1="21" x2="20" y2="16" />
+              <line x1="20" y1="12" x2="20" y2="3" />
+              <line x1="1" y1="14" x2="7" y2="14" />
+              <line x1="9" y1="8" x2="15" y2="8" />
+              <line x1="17" y1="16" x2="23" y2="16" />
+            </svg>
+          </div>
+          <span className="action-label">Card Options</span>
+        </button>
+
+        <button
+          type="button"
+          className="accounts-action-card"
+          onClick={() => {
+            triggerHaptic("light");
+            onTx("transfer", selectedAccount);
+          }}
+          aria-label="Withdraw or transfer between accounts"
+        >
+          <div className="action-icon-badge is-withdraw">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M17 9V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4" />
+              <polyline points="12 15 17 20 22 15" />
+              <line x1="17" y1="9" x2="17" y2="20" />
+            </svg>
+          </div>
+          <span className="action-label">Withdraw</span>
+        </button>
+
+        <button
+          type="button"
+          className="accounts-action-card"
+          onClick={() => {
+            triggerHaptic("light");
+            onTx("income", selectedAccount);
+          }}
+          aria-label="Add income or convert currency"
+        >
+          <div className="action-icon-badge is-converter">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M7 16l-4-4 4-4M3 12h14M17 8l4 4-4 4M21 12H7" />
+            </svg>
+          </div>
+          <span className="action-label">Converter</span>
+        </button>
       </div>
 
-      <div className="acts">
-        {[
-          ["income", "inc", "Income"],
-          ["transfer", "tr", "Transfer"],
-          ["adjust", "adj", "Adjust"],
-        ].map(([type, icon, label]) => (
-          <button key={type} onClick={() => onTx(type)}>
-            <Icon n={icon} />
-            {label}
-          </button>
-        ))}
+      {/* Transactions Section matching Video Header & List */}
+      <div className="accounts-transactions-header">
+        <h2>Transactions</h2>
+        <button
+          type="button"
+          className="accounts-see-all-link"
+          onClick={() => onTab?.("activity")}
+        >
+          See all
+        </button>
       </div>
 
-      <div className="sec account-activity-heading">
-        <h2>
-          {selectedAccount
-            ? `${ACC[selectedAccount][0]} activity`
-            : "Account activity"}
-        </h2>
-        {selectedAccount && (
-          <button type="button" onClick={() => setSelectedAccount("")}>
-            Show all
-          </button>
-        )}
-      </div>
-      <div className="card account-activity-card">
+      <div className="accounts-transactions-card">
         {visibleEvents.length ? (
           visibleEvents.map((event) => {
             const amount = displayAmount(event);
+            const isPositive = amount.value > 0;
             const adjustment = adjustmentBalances.get(event.id);
-            const subtitle =
-              event.type === "transfer"
-                ? `${ACC[event.from]?.[0] || "Cash"} → ${ACC[event.to]?.[0] || "Cash"} · ${displayDate(event.d)}`
-                : event.type === "adjust"
-                  ? `${ACC[event.account]?.[0]} · ${displayDate(event.d)}`
-                  : `${ACC[event.account]?.[0]} · ${displayDate(event.d)}`;
+            const isExpense = event.type === "expense";
+            const category = event.cat || "Food";
+
             return (
-              <div
-                className={`ri account-activity-row${
-                  highlightedExpenseId === event.id ||
-                  highlightedTransactionId === event.id
-                    ? " is-new"
-                    : ""
-                }`}
+              <button
+                type="button"
+                className={`accounts-tx-row${highlightedExpenseId === event.id || highlightedTransactionId === event.id ? " is-new" : ""}`}
                 key={event.id}
+                onClick={() => {
+                  if (isExpense && onOpenExpense) {
+                    onOpenExpense(event.id);
+                  }
+                }}
               >
-                <span className="nm">
-                  <b>{event.title}</b>
-                  <small>{subtitle}</small>
+                <div className={`accounts-tx-icon-circle is-${category.toLowerCase()}`}>
+                  <CategorySymbol category={category} />
+                </div>
+
+                <div className="accounts-tx-info">
+                  <b className="accounts-tx-title">{event.title}</b>
+                  <small className="accounts-tx-date">{displayDate(event.d)}</small>
                   {adjustment && (
-                    <small className="account-balance-change">
+                    <small className="accounts-tx-adj-note">
                       {M(adjustment.before)} → {M(adjustment.after)}
                     </small>
                   )}
-                </span>
-                <b
-                  className={`am${amount.value > 0 ? " is-positive" : ""}${!amount.signed ? " is-neutral" : ""}`}
-                >
-                  {amount.signed ? (amount.value > 0 ? "+" : "−") : ""}
+                </div>
+
+                <b className={`accounts-tx-amount${isPositive ? " is-positive" : ""}`}>
+                  {amount.signed ? (isPositive ? "+" : "−") : ""}
                   {M(Math.abs(amount.value))}
                 </b>
-              </div>
+              </button>
             );
           })
         ) : (
-          <div className="account-activity-empty" role="status">
-            <span className="account-activity-empty-icon">
+          <div className="accounts-tx-empty">
+            <span className="accounts-tx-empty-icon">
               <Icon n="activity" />
             </span>
             <span>
-              <b>
-                {selectedAccount
-                  ? `No ${ACC[selectedAccount][0]} activity yet`
-                  : "No account activity yet"}
-              </b>
-              <small>
-                Income, transfers, expenses, and adjustments will show up here.
-              </small>
+              <b>No transactions yet</b>
+              <small>Activity for {activeCard?.name || "this card"} will show up here.</small>
             </span>
           </div>
         )}
       </div>
+
+      {/* Card Info Details Modal */}
+      {infoCard && (
+        <div
+          className="card-info-backdrop"
+          onClick={() => {
+            setInfoCard(null);
+            setShowCardSecrets(false);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              setInfoCard(null);
+              setShowCardSecrets(false);
+            }
+          }}
+          tabIndex={-1}
+        >
+          <div
+            className="card-info-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="card-info-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="card-info-header">
+              <div className="card-info-header-title-group">
+                <h3 id="card-info-title">Card Details</h3>
+                <span className={`card-info-status-pill ${frozenCards[infoCard.id] ? "is-frozen" : "is-active"}`}>
+                  <span className="card-info-status-dot" />
+                  {frozenCards[infoCard.id] ? "Frozen" : "Active • Contactless"}
+                </span>
+              </div>
+              <button
+                type="button"
+                className="card-info-close"
+                aria-label="Close card details"
+                onClick={() => {
+                  setInfoCard(null);
+                  setShowCardSecrets(false);
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="card-info-preview-wrap">
+              <WalletCard
+                card={infoCard}
+                balance={balances[infoCard.id] || 0}
+                isActive={true}
+                interactive={false}
+                showBalance={true}
+                showFullDetails={showCardSecrets}
+              />
+            </div>
+
+            <div className="card-info-actions-bar">
+              <button
+                type="button"
+                className={`card-info-toggle-secrets-btn ${showCardSecrets ? "is-revealed" : ""}`}
+                onClick={() => {
+                  triggerHaptic("selection");
+                  setShowCardSecrets((prev) => !prev);
+                }}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  {showCardSecrets ? (
+                    <>
+                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                      <line x1="1" y1="1" x2="23" y2="23" />
+                    </>
+                  ) : (
+                    <>
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </>
+                  )}
+                </svg>
+                {showCardSecrets ? "Hide Details" : "Show Details"}
+              </button>
+
+              <button
+                type="button"
+                className={`card-info-freeze-btn ${frozenCards[infoCard.id] ? "is-frozen" : ""}`}
+                onClick={() => {
+                  triggerHaptic("warning");
+                  setFrozenCards((prev) => ({
+                    ...prev,
+                    [infoCard.id]: !prev[infoCard.id],
+                  }));
+                }}
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+                {frozenCards[infoCard.id] ? "Unfreeze" : "Freeze Card"}
+              </button>
+            </div>
+
+            <div className="card-info-details-list">
+              <div className="card-info-row">
+                <span>Account Name</span>
+                <b>{infoCard.name}</b>
+              </div>
+              <div className="card-info-row">
+                <span>Cardholder</span>
+                <b>{infoCard.holderName || profile?.name || "John Smith"}</b>
+              </div>
+              <div className="card-info-row">
+                <span>Account Number</span>
+                <div className="card-info-copy-group">
+                  <b className="card-info-num-display">
+                    {showCardSecrets
+                      ? formatCardNumber(infoCard.number || "", infoCard.type === "mfs", true)
+                      : formatCardNumber(infoCard.number || "", infoCard.type === "mfs", false)}
+                  </b>
+                  <button
+                    type="button"
+                    className="card-info-copy-btn"
+                    onClick={() => handleCopyCard(infoCard.number || "")}
+                  >
+                    {copiedCard ? "Copied! ✓" : "Copy"}
+                  </button>
+                </div>
+              </div>
+              {infoCard.expiry && (
+                <div className="card-info-row">
+                  <span>Valid Thru</span>
+                  <b>{formatExpiry(infoCard.expiry)}</b>
+                </div>
+              )}
+              {infoCard.cvv && (
+                <div className="card-info-row">
+                  <span>CVV Security Code</span>
+                  <b>{showCardSecrets ? infoCard.cvv : "•••"}</b>
+                </div>
+              )}
+              <div className="card-info-row">
+                <span>Current Balance</span>
+                <b className="card-info-bal-highlight">{formatMoney(balances[infoCard.id] || 0)}</b>
+              </div>
+            </div>
+
+            <div className="card-info-modal-actions">
+              <button
+                type="button"
+                className="btn pri card-info-done-btn"
+                onClick={() => {
+                  setInfoCard(null);
+                  setShowCardSecrets(false);
+                }}
+              >
+                Done
+              </button>
+
+              {!["amazon", "citi", "bkash", "bank", "savings"].includes(infoCard.id) && (
+                <button
+                  type="button"
+                  className="btn del card-info-delete-btn"
+                  onClick={() => {
+                    triggerHaptic("warning");
+                    onDeleteCard?.(infoCard.id);
+                    setInfoCard(null);
+                    setShowCardSecrets(false);
+                    setSelectedAccount(cards[0]?.id || "amazon");
+                  }}
+                >
+                  Remove this Card
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
@@ -2108,7 +2356,7 @@ function Plans({
 }
 
 /* ───────────── sheets ───────────── */
-function AddSheet({ iv, categoryOrder, expenses, onSave, onClose }) {
+function AddSheet({ iv, categoryOrder, expenses, cards = DEFAULT_CARDS, onSave, onClose }) {
   const [f, setF] = useState({
     amt: "",
     desc: "",
@@ -2257,14 +2505,10 @@ function AddSheet({ iv, categoryOrder, expenses, onSave, onClose }) {
         onPick={(v) => set("acct", v)}
         options={
           f.cat === "Savings"
-            ? [
-                ["bkash", "bKash"],
-                ["bank", "Bank"],
-              ]
+            ? cards.filter((c) => c.type !== "savings").map((c) => [c.id, c.name])
             : [
                 ["", "Cash"],
-                ["bkash", "bKash"],
-                ["bank", "Bank"],
+                ...cards.filter((c) => c.type !== "savings").map((c) => [c.id, c.name]),
               ]
         }
       />
@@ -2283,15 +2527,25 @@ function AddSheet({ iv, categoryOrder, expenses, onSave, onClose }) {
   );
 }
 
-function TxSheet({ type, onSave, onClose }) {
+function TxSheet({ type, defaultAccount, cards = DEFAULT_CARDS, onSave, onClose }) {
+  const accountOptions = cards.map((c) => [c.id, c.name]);
+  const defaultFrom =
+    defaultAccount && cards.some((c) => c.id === defaultAccount)
+      ? defaultAccount
+      : cards[0]?.id || "bkash";
+  const defaultTo =
+    cards.find((c) => c.id !== defaultFrom)?.id ||
+    cards[1]?.id ||
+    "savings";
+
   const [g, setG] = useState({
     type,
     amt: "",
-    acct: "bank",
+    acct: defaultFrom,
     dir: "up",
     note: "",
-    fromAccount: "bkash",
-    toAccount: "savings",
+    fromAccount: defaultFrom,
+    toAccount: defaultTo,
   });
   const set = (k, v) => setG((x) => ({ ...x, [k]: v }));
   const tr = g.type === "transfer";
@@ -2339,17 +2593,17 @@ function TxSheet({ type, onSave, onClose }) {
                 fromAccount: value,
                 toAccount:
                   current.toAccount === value
-                    ? ACCOUNT_OPTIONS.find(([id]) => id !== value)?.[0]
+                    ? accountOptions.find(([id]) => id !== value)?.[0]
                     : current.toAccount,
               }));
             }}
-            options={ACCOUNT_OPTIONS}
+            options={accountOptions}
           />
           <span className="lbl">To</span>
           <Seg
             value={g.toAccount}
             onPick={(value) => set("toAccount", value)}
-            options={ACCOUNT_OPTIONS.filter(([id]) => id !== g.fromAccount)}
+            options={accountOptions.filter(([id]) => id !== g.fromAccount)}
           />
         </>
       )}
@@ -2360,7 +2614,7 @@ function TxSheet({ type, onSave, onClose }) {
           <Seg
             value={g.acct}
             onPick={(v) => set("acct", v)}
-            options={ACCOUNT_OPTIONS}
+            options={accountOptions}
           />
         </>
       )}
@@ -2414,7 +2668,7 @@ function TxSheet({ type, onSave, onClose }) {
   );
 }
 
-function DetailSheet({ e, suggestion, onSave, onDelete, onClose }) {
+function DetailSheet({ e, suggestion, cards = DEFAULT_CARDS, onSave, onDelete, onClose }) {
   const [f, setF] = useState({
     desc: e.desc,
     amt: e.amt ?? "",
@@ -2498,8 +2752,7 @@ function DetailSheet({ e, suggestion, onSave, onDelete, onClose }) {
         onPick={(value) => set("acct", value)}
         options={[
           ["", "Cash"],
-          ["bkash", "bKash"],
-          ["bank", "Bank"],
+          ...cards.filter((c) => c.type !== "savings").map((c) => [c.id, c.name]),
         ]}
       />
     </Sheet>
@@ -2670,6 +2923,374 @@ function SettingsSheet({
           </p>
         )}
       </div>
+    </Sheet>
+  );
+}
+
+function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
+  const [step, setStep] = useState("catalog"); // 'catalog' | 'customize' | 'success'
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedProvider, setSelectedProvider] = useState(CARD_PROVIDERS[0]);
+  const [createdCard, setCreatedCard] = useState(null);
+
+  // Form State with Live Synchronization
+  const [formData, setFormData] = useState({
+    name: "",
+    holderName: userProfileName || "John Smith",
+    number: "",
+    type: "credit",
+    network: "mastercard",
+    expiry: "11/25",
+    cvv: "654",
+    initialBalance: "",
+  });
+
+  const filteredProviders = useMemo(() => {
+    if (!searchQuery.trim()) return CARD_PROVIDERS;
+    const q = searchQuery.toLowerCase();
+    return CARD_PROVIDERS.filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        p.subtitle.toLowerCase().includes(q) ||
+        p.category.toLowerCase().includes(q) ||
+        (p.currency && p.currency.toLowerCase().includes(q)),
+    );
+  }, [searchQuery]);
+
+  const handlePickProvider = (prov) => {
+    setSelectedProvider(prov);
+    setFormData((prev) => ({
+      ...prev,
+      name: prov.name,
+      holderName: prev.holderName || userProfileName || "John Smith",
+      type: prov.defaultType,
+      network: prov.defaultNetwork,
+      number: prov.isPhone
+        ? `${prov.numberPrefix}12345678`
+        : `${prov.numberPrefix}12540024${prov.id.includes("citi") ? "4328" : "9018"}`,
+      expiry: prov.isPhone ? "" : "11/25",
+      cvv: prov.isPhone ? "" : "654",
+    }));
+    setStep("customize");
+  };
+
+  const handleFormChange = (field, val) => {
+    setFormData((prev) => ({ ...prev, [field]: val }));
+  };
+
+  const handleCardNumberChange = (raw) => {
+    // If not phone, strip non-digits and limit to 16
+    if (!selectedProvider.isPhone) {
+      const digits = raw.replace(/\D/g, "").slice(0, 16);
+      setFormData((prev) => ({ ...prev, number: digits }));
+    } else {
+      const digits = raw.replace(/[^\d+]/g, "").slice(0, 14);
+      setFormData((prev) => ({ ...prev, number: digits }));
+    }
+  };
+
+  const handleExpiryChange = (raw) => {
+    const digits = raw.replace(/\D/g, "").slice(0, 4);
+    if (digits.length <= 2) {
+      setFormData((prev) => ({ ...prev, expiry: digits }));
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        expiry: `${digits.slice(0, 2)}/${digits.slice(2, 4)}`,
+      }));
+    }
+  };
+
+  const handleSubmitCard = (e) => {
+    e?.preventDefault();
+    const isMfs = selectedProvider.category === "mfs";
+    const isSavings = selectedProvider.category === "savings";
+
+    const newCard = {
+      id: `card_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      name: formData.name.trim() || selectedProvider.name,
+      provider: selectedProvider.id,
+      category: selectedProvider.category,
+      type: isMfs ? "mfs" : isSavings ? "savings" : formData.type,
+      network: isMfs ? "mfs" : isSavings ? "none" : formData.network,
+      holderName: formData.holderName.trim() || "John Smith",
+      subtitle: selectedProvider.subtitle || `${selectedProvider.name} Platinum`,
+      number: formData.number.trim() || selectedProvider.numberPlaceholder.replace(/\s+/g, ""),
+      expiry: isMfs || isSavings ? "" : formData.expiry || "11/25",
+      cvv: isMfs || isSavings ? "" : formData.cvv || "654",
+      color: selectedProvider.color,
+      gradient: selectedProvider.gradient,
+      initialBalance: parseFloat(formData.initialBalance) || 0,
+    };
+
+    onAddCard(newCard);
+    setCreatedCard(newCard);
+    setStep("success");
+    triggerHaptic("success");
+  };
+
+  const previewCard = {
+    id: "preview",
+    name: formData.name.trim() || selectedProvider.name,
+    provider: selectedProvider.id,
+    type: formData.type,
+    network: formData.network,
+    holderName: formData.holderName || "John Smith",
+    subtitle: selectedProvider.subtitle || "Platinum Card",
+    number:
+      formData.number ||
+      (selectedProvider.isPhone ? "01712 345678" : "6214 1254 0024 0241"),
+    expiry: formData.expiry || "11/25",
+    cvv: formData.cvv || "654",
+    color: selectedProvider.color,
+    gradient: selectedProvider.gradient,
+  };
+
+  return (
+    <Sheet onClose={onClose}>
+      {/* ──── Step 1: Catalog ("Add New Card") ──── */}
+      {step === "catalog" && (
+        <div className="add-new-card-catalog">
+          <div className="add-card-header-bar">
+            <h3 id="sheet-title" className="add-card-title">Add New Card</h3>
+            <button
+              type="button"
+              className="add-card-close-btn"
+              onClick={onClose}
+              aria-label="Close"
+            >
+              ×
+            </button>
+          </div>
+
+          {/* Search Bar matching video */}
+          <div className="add-card-search-wrap">
+            <svg viewBox="0 0 24 24" className="add-card-search-icon" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2.2" fill="none" />
+              <path d="m20 20-3.5-3.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+            </svg>
+            <input
+              type="text"
+              className="add-card-search-input"
+              placeholder="Search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              autoFocus
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                className="add-card-search-clear"
+                onClick={() => setSearchQuery("")}
+                aria-label="Clear search"
+              >
+                ×
+              </button>
+            )}
+          </div>
+
+          {/* Card Templates List matching video */}
+          <div className="add-card-template-list">
+            {filteredProviders.length ? (
+              filteredProviders.map((prov) => (
+                <button
+                  key={prov.id}
+                  type="button"
+                  className="add-card-template-row"
+                  onClick={() => handlePickProvider(prov)}
+                >
+                  <div
+                    className="add-card-mini-card"
+                    style={{ background: prov.gradient }}
+                  >
+                    <div className="add-card-mini-logo">
+                      {renderProviderLogo(prov.id, { height: 14 })}
+                    </div>
+                    <span className="add-card-mini-num">
+                      {prov.isPhone ? "01X••" : "•••• 4328"}
+                    </span>
+                  </div>
+
+                  <div className="add-card-template-meta">
+                    <b className="add-card-template-name">{prov.name}</b>
+                    <small className="add-card-template-sub">{prov.subtitle}</small>
+                  </div>
+
+                  <span className="add-card-currency-badge">{prov.currency || "USD"}</span>
+
+                  <span className="add-card-template-chevron" aria-hidden="true">
+                    ›
+                  </span>
+                </button>
+              ))
+            ) : (
+              <div className="emp">No matching card template found.</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ──── Step 2: Form & Live Mirror Preview ("Add Card") ──── */}
+      {step === "customize" && (
+        <div className="add-card-customize-flow">
+          <div className="add-card-header-bar">
+            <button
+              type="button"
+              className="add-card-back-btn"
+              onClick={() => setStep("catalog")}
+              aria-label="Back to card selection"
+            >
+              ‹
+            </button>
+            <h3 id="sheet-title" className="add-card-title">Add Card</h3>
+            <button
+              type="button"
+              className="add-card-close-btn"
+              onClick={onClose}
+              aria-label="Close"
+            >
+              ×
+            </button>
+          </div>
+
+          {/* Real-time Dynamic Card Preview */}
+          <div className="add-card-live-preview-wrap">
+            <WalletCard
+              card={previewCard}
+              balance={parseFloat(formData.initialBalance) || 0}
+              isActive={true}
+              interactive={false}
+              showBalance={false}
+              showFullDetails={true}
+            />
+          </div>
+
+          {/* Form Fields ("Card Details") */}
+          <div className="add-card-form-body">
+            <h4 className="add-card-section-label">Card Details</h4>
+
+            <div className="add-card-field">
+              <label className="add-card-input-lbl">Card Holder Name</label>
+              <input
+                className="add-card-native-input"
+                type="text"
+                required
+                maxLength={30}
+                placeholder="John Smith"
+                value={formData.holderName}
+                onChange={(e) => handleFormChange("holderName", e.target.value)}
+              />
+            </div>
+
+            <div className="add-card-field">
+              <label className="add-card-input-lbl">
+                {selectedProvider.isPhone ? "Mobile Number" : "Card Number"}
+              </label>
+              <input
+                className="add-card-native-input"
+                type="text"
+                required
+                inputMode="numeric"
+                placeholder={selectedProvider.isPhone ? "01712 345678" : "6214 1254 0024 0241"}
+                value={
+                  selectedProvider.isPhone
+                    ? formData.number
+                    : formatCardNumber(formData.number, false, true)
+                }
+                onChange={(e) => handleCardNumberChange(e.target.value)}
+              />
+            </div>
+
+            {!selectedProvider.isPhone && selectedProvider.category !== "savings" && (
+              <div className="add-card-two-col">
+                <div className="add-card-field">
+                  <label className="add-card-input-lbl">MM/YY</label>
+                  <input
+                    className="add-card-native-input"
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="11/25"
+                    maxLength={5}
+                    value={formData.expiry}
+                    onChange={(e) => handleExpiryChange(e.target.value)}
+                  />
+                </div>
+
+                <div className="add-card-field">
+                  <label className="add-card-input-lbl">CVC</label>
+                  <input
+                    className="add-card-native-input"
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="654"
+                    maxLength={4}
+                    value={formData.cvv}
+                    onChange={(e) => handleFormChange("cvv", e.target.value.replace(/\D/g, "").slice(0, 4))}
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="add-card-field">
+              <label className="add-card-input-lbl">Starting Balance</label>
+              <div className="add-card-balance-input-wrap">
+                <span className="add-card-curr-prefix">৳</span>
+                <input
+                  className="add-card-native-input add-card-balance-input"
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  value={formData.initialBalance}
+                  onChange={(e) => handleFormChange("initialBalance", e.target.value)}
+                />
+              </div>
+            </div>
+
+            <button
+              className="add-card-submit-cta"
+              type="button"
+              onClick={handleSubmitCard}
+            >
+              Add Card
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ──── Step 3: Success Confirmation Modal matching video ──── */}
+      {step === "success" && (
+        <div className="add-card-success-sheet">
+          <div className="add-card-success-card">
+            {/* Animated circular blue checkmark matching video */}
+            <div className="add-card-success-icon-wrap">
+              <svg viewBox="0 0 80 80" className="add-card-success-svg">
+                <circle
+                  cx="40"
+                  cy="40"
+                  r="35"
+                  className="add-card-success-ring"
+                />
+                <path
+                  d="M26 40 L35 50 L55 28"
+                  className="add-card-success-check"
+                />
+              </svg>
+            </div>
+
+            <h3 className="add-card-success-title">Your card has been added successfully</h3>
+            <p className="add-card-success-desc">
+              We will notify you about your activities via email
+            </p>
+
+            <button
+              type="button"
+              className="add-card-home-cta"
+              onClick={onClose}
+            >
+              Go Home
+            </button>
+          </div>
+        </div>
+      )}
     </Sheet>
   );
 }
@@ -2997,6 +3618,8 @@ export default function MobilePrototype({
   onBudgetSave,
   onBudgetClear,
   onTransactionSave,
+  onAddCard,
+  onDeleteCard,
   onToggleRec,
   onRemoveRec,
   onTheme,
@@ -3029,6 +3652,7 @@ export default function MobilePrototype({
   onDismissNotification,
 }) {
   const [tab, setTab] = useState("home");
+  const cards = S.cards && S.cards.length > 0 ? S.cards : DEFAULT_CARDS;
   const [plan, setPlan] = useState("budget");
   const [q, setQ] = useState("");
   const [cf, setCf] = useState("");
@@ -3720,7 +4344,7 @@ export default function MobilePrototype({
         : tab === "activity"
           ? "Activity"
           : tab === "accounts"
-            ? "Accounts"
+            ? "Cards"
             : "Plans";
   const headerTitle =
     !settingsRoute && tab === "home" && isScrolled ? fM(S.m) : routeTitle;
@@ -3842,12 +4466,13 @@ export default function MobilePrototype({
               <MonthSwitch m={S.m} onShift={onShift} />
             ) : tab === "accounts" ? (
               <button
-                className="prototype-header-action"
+                className="prototype-header-add-pill"
                 type="button"
-                aria-label="Add income"
-                onClick={() => openSheet({ type: "tx", t: "income" })}
+                aria-label="Add new card or account"
+                onClick={() => openSheet({ type: "addCard" })}
               >
-                <Icon n="plus" />
+                <span className="pill-plus">+</span>
+                <span>Add Card</span>
               </button>
             ) : (
               <button
@@ -3941,9 +4566,17 @@ export default function MobilePrototype({
             {!appSettingsOpen && !profileSettingsOpen && tab === "accounts" && (
               <Accounts
                 S={S}
-                onTx={(t) => openSheet({ type: "tx", t })}
+                onTx={(t, acct) => openSheet({ type: "tx", t, acct })}
+                onAddCardClick={() => openSheet({ type: "addCard" })}
+                onDeleteCard={(cardId) => {
+                  onDeleteCard?.(cardId);
+                  toast("Card removed");
+                }}
                 highlightedExpenseId={highlightedExpenseId}
                 highlightedTransactionId={highlightedTransactionId}
+                profile={profile}
+                onTab={nav}
+                onOpenExpense={openExpense}
               />
             )}
             {!appSettingsOpen && !profileSettingsOpen && tab === "plans" && (
@@ -4025,17 +4658,35 @@ export default function MobilePrototype({
         </nav>
       </div>
 
+      {sheet?.type === "addCard" && (
+        <AddCardSheet
+          onClose={close}
+          onAddCard={(newCard) => {
+            const added = onAddCard?.(newCard);
+            toast(`Card ${newCard.name} added`);
+            return added;
+          }}
+          userProfileName={profile?.name}
+        />
+      )}
       {sheet?.type === "add" && (
         <AddSheet
           iv={sheet.iv}
           categoryOrder={categoryOrder}
           expenses={S.exp}
+          cards={cards}
           onSave={saveExpense}
           onClose={close}
         />
       )}
       {sheet?.type === "tx" && (
-        <TxSheet type={sheet.t} onSave={saveTransaction} onClose={close} />
+        <TxSheet
+          type={sheet.t}
+          defaultAccount={sheet.acct}
+          cards={cards}
+          onSave={saveTransaction}
+          onClose={close}
+        />
       )}
       {detail && (
         <DetailSheet
@@ -4044,6 +4695,7 @@ export default function MobilePrototype({
             detail.desc,
             S.exp.filter((pastExpense) => pastExpense.id !== detail.id),
           )}
+          cards={cards}
           onSave={updateExpense}
           onDelete={deleteExpense}
           onClose={close}

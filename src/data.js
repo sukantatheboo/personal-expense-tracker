@@ -40,11 +40,94 @@ export const CURRENCIES = [
   ["THB", "Thai Baht"],
 ];
 
+export const DEFAULT_CARDS = [
+  {
+    id: "amazon",
+    name: "Amazon Platinum",
+    provider: "amazon",
+    type: "credit",
+    network: "mastercard",
+    holderName: "John Smith",
+    subtitle: "Amazon Platinum",
+    number: "4756 8214 0024 9018",
+    expiry: "12/28",
+    cvv: "654",
+    color: "#6358DC",
+    gradient: "linear-gradient(135deg, #7c3aed 0%, #6366f1 50%, #4338ca 100%)",
+  },
+  {
+    id: "citi",
+    name: "Citi Master Card",
+    provider: "citi_mc",
+    type: "credit",
+    network: "mastercard",
+    holderName: "John Smith",
+    subtitle: "Platinum Mastercard",
+    number: "5428 1254 0024 4328",
+    expiry: "11/25",
+    cvv: "654",
+    color: "#1e293b",
+    gradient: "linear-gradient(135deg, #334155 0%, #1e293b 60%, #0f172a 100%)",
+  },
+  {
+    id: "bkash",
+    name: "bKash",
+    provider: "bkash",
+    type: "mfs",
+    network: "mfs",
+    holderName: "Personal Account",
+    subtitle: "Personal Wallet",
+    number: "01712 345678",
+    expiry: "",
+    cvv: "",
+    color: "#e2136e",
+    gradient: "linear-gradient(135deg, #e2136e 0%, #b80053 50%, #800038 100%)",
+  },
+  {
+    id: "bank",
+    name: "Bank",
+    provider: "brac",
+    type: "debit",
+    network: "visa",
+    holderName: "Primary Debit",
+    subtitle: "BRAC Platinum Visa",
+    number: "4756 8214 0024 9018",
+    expiry: "12/28",
+    cvv: "349",
+    color: "#002D62",
+    gradient: "linear-gradient(135deg, #002D62 0%, #0b1d3a 65%, #182747 100%)",
+  },
+  {
+    id: "savings",
+    name: "Savings",
+    provider: "savings",
+    type: "savings",
+    network: "none",
+    holderName: "Savings Vault",
+    subtitle: "Savings Vault",
+    number: "SAV-8829-01",
+    expiry: "",
+    cvv: "",
+    color: "#8c2d36",
+    gradient: "linear-gradient(135deg, #8c2d36 0%, #5c1820 60%, #3d0c12 100%)",
+  },
+];
+
 export const ACCOUNT_OPTIONS = [
+  ["amazon", "Amazon Platinum"],
+  ["citi", "Citi Master Card"],
   ["bkash", "bKash"],
   ["bank", "Bank"],
   ["savings", "Savings"],
 ];
+
+export function getAccountOptions(accountData) {
+  const cards = accountData?.settings?.cards;
+  if (Array.isArray(cards) && cards.length > 0) {
+    return cards.map((c) => [c.id, c.name]);
+  }
+  return ACCOUNT_OPTIONS;
+}
 
 export const PRIMARY_CURRENCY = "BDT";
 
@@ -128,7 +211,15 @@ export function loadBudgets(saved = readStorage(STORAGE_KEYS.budgets, {})) {
 }
 
 export function isAccountId(value) {
-  return ACCOUNT_OPTIONS.some(([id]) => id === value);
+  if (!value || typeof value !== "string") return false;
+  if (ACCOUNT_OPTIONS.some(([id]) => id === value)) return true;
+  if (DEFAULT_CARDS.some((c) => c.id === value)) return true;
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEYS.accounts) || "null");
+    if (saved?.settings?.cards?.some((c) => c.id === value)) return true;
+    if (saved?.settings?.balances && Object.hasOwn(saved.settings.balances, value)) return true;
+  } catch {}
+  return false;
 }
 
 function isValidRecurringSchedule(schedule) {
@@ -166,7 +257,8 @@ export function emptyAccountData() {
   return {
     settings: {
       startDate: localDate(),
-      balances: { bkash: 0, bank: 0, savings: 0 },
+      balances: { amazon: 12450, citi: 8500, bkash: 3200, bank: 15000, savings: 50000 },
+      cards: DEFAULT_CARDS,
       configured: false,
       updatedAt: 0,
     },
@@ -210,16 +302,30 @@ export function loadAccountData(
       ? Math.round(amount * 100) / 100
       : 0;
   };
+  const cards =
+    Array.isArray(settings.cards) && settings.cards.length > 0
+      ? settings.cards
+      : DEFAULT_CARDS;
+  const initialBalances = {
+    bkash: cleanBalance(balances.bkash),
+    bank: cleanBalance(balances.bank),
+    savings: cleanBalance(balances.savings),
+  };
+  for (const card of cards) {
+    if (balances[card.id] !== undefined) {
+      initialBalances[card.id] = cleanBalance(balances[card.id]);
+    } else if (initialBalances[card.id] === undefined) {
+      initialBalances[card.id] = 0;
+    }
+  }
+
   return {
     settings: {
       startDate: isValidDateString(settings.startDate)
         ? settings.startDate
         : localDate(),
-      balances: {
-        bkash: cleanBalance(balances.bkash),
-        bank: cleanBalance(balances.bank),
-        savings: cleanBalance(balances.savings),
-      },
+      balances: initialBalances,
+      cards,
       configured: settings.configured === true,
       updatedAt:
         typeof settings.updatedAt === "number" &&

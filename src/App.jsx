@@ -5,6 +5,7 @@ import {
   ACCOUNT_OPTIONS,
   CATEGORIES,
   CURRENCIES,
+  DEFAULT_CARDS,
   emptyAccountData,
   PRIMARY_CURRENCY,
   STORAGE_KEYS,
@@ -1768,6 +1769,7 @@ export default function App() {
       ...accountData.settings.balances,
       date: accountData.settings.startDate,
     },
+    cards: accountData.settings.cards || DEFAULT_CARDS,
     tx: accountData.transactions.map((transaction) => ({
       id: transaction.id,
       createdAt: transaction.createdAt,
@@ -2510,6 +2512,46 @@ export default function App() {
     }));
     setTransactionForm(makeTransactionForm());
     return { success: true, transactionId: transaction.id };
+  }
+
+  function handleAddCard(newCard) {
+    const cardId = newCard.id || makeId();
+    const card = {
+      ...newCard,
+      id: cardId,
+      createdAt: Date.now(),
+    };
+    const initialBalance = Number(newCard.initialBalance) || 0;
+    setAccountData((current) => {
+      const currentCards = current.settings.cards || DEFAULT_CARDS;
+      return {
+        ...current,
+        settings: {
+          ...current.settings,
+          updatedAt: Date.now(),
+          cards: [...currentCards, card],
+          balances: {
+            ...current.settings.balances,
+            [cardId]: initialBalance,
+          },
+        },
+      };
+    });
+    return card;
+  }
+
+  function handleDeleteCard(cardId) {
+    setAccountData((current) => {
+      const currentCards = current.settings.cards || DEFAULT_CARDS;
+      return {
+        ...current,
+        settings: {
+          ...current.settings,
+          updatedAt: Date.now(),
+          cards: currentCards.filter((c) => c.id !== cardId),
+        },
+      };
+    });
   }
 
   function toggleMobileRecurring(scheduleId) {
@@ -3428,6 +3470,8 @@ export default function App() {
         }}
         onBudgetClear={clearBudget}
         onTransactionSave={saveMobileTransaction}
+        onAddCard={handleAddCard}
+        onDeleteCard={handleDeleteCard}
         onToggleRec={toggleMobileRecurring}
         onRemoveRec={removeMobileRecurring}
         onTheme={() =>
