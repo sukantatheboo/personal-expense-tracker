@@ -2554,6 +2554,29 @@ export default function App() {
     });
   }
 
+  function handleUpdateCard(updatedCard) {
+    setAccountData((current) => {
+      const currentCards = current.settings.cards || DEFAULT_CARDS;
+      const exists = currentCards.some((c) => c.id === updatedCard.id);
+      const newCards = exists
+        ? currentCards.map((c) =>
+            c.id === updatedCard.id
+              ? { ...c, ...updatedCard, updatedAt: Date.now() }
+              : c,
+          )
+        : [...currentCards, updatedCard];
+      return {
+        ...current,
+        settings: {
+          ...current.settings,
+          updatedAt: Date.now(),
+          cards: newCards,
+        },
+      };
+    });
+    return updatedCard;
+  }
+
   function toggleMobileRecurring(scheduleId) {
     setRecurringSchedules((current) =>
       current.map((schedule) => {
@@ -3471,6 +3494,7 @@ export default function App() {
         onBudgetClear={clearBudget}
         onTransactionSave={saveMobileTransaction}
         onAddCard={handleAddCard}
+        onUpdateCard={handleUpdateCard}
         onDeleteCard={handleDeleteCard}
         onToggleRec={toggleMobileRecurring}
         onRemoveRec={removeMobileRecurring}

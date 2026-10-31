@@ -16,6 +16,7 @@ import {
   renderProviderLogo,
   formatCardNumber,
   formatExpiry,
+  formatMoney,
 } from "./AccountsCardDeck.jsx";
 import { CARD_PROVIDERS } from "./cardAssets.jsx";
 import "./MobilePrototype.css";
@@ -291,7 +292,7 @@ const monthExp = (S) =>
     .filter((e) => e.date.startsWith(S.m))
     .sort((a, b) => b.date.localeCompare(a.date));
 function bal(S, id) {
-  let b = S.start[id];
+  let b = Number(S?.start?.[id]) || 0;
   for (const e of S.exp) {
     if (e.amt == null || e.date < S.start.date || e.date > ld()) continue;
     if (e.cat === "Savings") {
@@ -1702,6 +1703,7 @@ function Accounts({
   S,
   onTx,
   onAddCardClick,
+  onOpenCardOptions,
   onDeleteCard,
   highlightedExpenseId,
   highlightedTransactionId,
@@ -1712,10 +1714,6 @@ function Accounts({
   const cards = S.cards && S.cards.length > 0 ? S.cards : DEFAULT_CARDS;
   const balances = Object.fromEntries(cards.map((c) => [c.id, bal(S, c.id)]));
   const [selectedAccount, setSelectedAccount] = useState(() => cards[0]?.id || "amazon");
-  const [infoCard, setInfoCard] = useState(null);
-  const [copiedCard, setCopiedCard] = useState(false);
-  const [showCardSecrets, setShowCardSecrets] = useState(false);
-  const [frozenCards, setFrozenCards] = useState({});
 
   const activeCard = cards.find((c) => c.id === selectedAccount) || cards[0];
 
@@ -1861,28 +1859,43 @@ function Accounts({
         selectedId={selectedAccount}
         onSelectCard={chooseAccount}
         onAddCardClick={onAddCardClick}
-        onOpenCardDetails={(card) => setInfoCard(card)}
+        onOpenCardDetails={(card) => onOpenCardOptions?.(card.id)}
       />
 
-      {/* 2×2 Quick Action Buttons Grid (Card Info, Card Options, Withdraw, Converter - Matching Video) */}
+      {/* 2×2 Quick Action Buttons Grid (Income, Transfer, Adjust, Card Options - Preserving Whole App Functionality) */}
       <div className="accounts-actions-grid">
         <button
           type="button"
           className="accounts-action-card"
           onClick={() => {
-            triggerHaptic("selection");
-            setInfoCard(activeCard);
+            triggerHaptic("light");
+            onTx("income", selectedAccount);
           }}
-          aria-label="View card options and details"
+          aria-label="Add income to this account"
         >
-          <div className="action-icon-badge is-card-info">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <rect x="2" y="5" width="20" height="14" rx="3" />
-              <line x1="2" y1="10" x2="22" y2="10" />
-              <circle cx="7" cy="15" r="1.5" fill="currentColor" />
+          <div className="action-icon-badge is-income">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 4v16M5 13l7 7 7-7" />
             </svg>
           </div>
-          <span className="action-label">Card Info</span>
+          <span className="action-label">Income</span>
+        </button>
+
+        <button
+          type="button"
+          className="accounts-action-card"
+          onClick={() => {
+            triggerHaptic("light");
+            onTx("transfer", selectedAccount);
+          }}
+          aria-label="Transfer between accounts"
+        >
+          <div className="action-icon-badge is-transfer">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M7 16l-4-4 4-4M3 12h14M17 8l4 4-4 4M21 12H7" />
+            </svg>
+          </div>
+          <span className="action-label">Transfer</span>
         </button>
 
         <button
@@ -1892,9 +1905,9 @@ function Accounts({
             triggerHaptic("light");
             onTx("adjust", selectedAccount);
           }}
-          aria-label="Adjust balance and card options"
+          aria-label="Adjust balance"
         >
-          <div className="action-icon-badge is-card-options">
+          <div className="action-icon-badge is-adjust">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <line x1="4" y1="21" x2="4" y2="14" />
               <line x1="4" y1="10" x2="4" y2="3" />
@@ -1907,43 +1920,30 @@ function Accounts({
               <line x1="17" y1="16" x2="23" y2="16" />
             </svg>
           </div>
-          <span className="action-label">Card Options</span>
+          <span className="action-label">Adjust</span>
         </button>
 
         <button
           type="button"
-          className="accounts-action-card"
+          className="accounts-action-card is-card-options-card"
           onClick={() => {
-            triggerHaptic("light");
-            onTx("transfer", selectedAccount);
+            triggerHaptic("selection");
+            onOpenCardOptions?.(selectedAccount);
           }}
-          aria-label="Withdraw or transfer between accounts"
+          aria-label="Manage cards and view card options"
         >
-          <div className="action-icon-badge is-withdraw">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M17 9V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4" />
-              <polyline points="12 15 17 20 22 15" />
-              <line x1="17" y1="9" x2="17" y2="20" />
+          <div className="action-icon-badge is-card-options">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <rect x="2" y="5" width="20" height="14" rx="3" />
+              <line x1="2" y1="10" x2="22" y2="10" />
+              <circle cx="7" cy="15" r="1.5" fill="currentColor" />
+              <path d="M15 15h4" />
             </svg>
           </div>
-          <span className="action-label">Withdraw</span>
-        </button>
-
-        <button
-          type="button"
-          className="accounts-action-card"
-          onClick={() => {
-            triggerHaptic("light");
-            onTx("income", selectedAccount);
-          }}
-          aria-label="Add income or convert currency"
-        >
-          <div className="action-icon-badge is-converter">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M7 16l-4-4 4-4M3 12h14M17 8l4 4-4 4M21 12H7" />
-            </svg>
+          <div className="action-label-block">
+            <span className="action-label">Card Options</span>
+            <small className="action-subhead">Manage &amp; Edit</small>
           </div>
-          <span className="action-label">Converter</span>
         </button>
       </div>
 
@@ -2013,180 +2013,6 @@ function Accounts({
         )}
       </div>
 
-      {/* Card Info Details Modal */}
-      {infoCard && (
-        <div
-          className="card-info-backdrop"
-          onClick={() => {
-            setInfoCard(null);
-            setShowCardSecrets(false);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") {
-              setInfoCard(null);
-              setShowCardSecrets(false);
-            }
-          }}
-          tabIndex={-1}
-        >
-          <div
-            className="card-info-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="card-info-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="card-info-header">
-              <div className="card-info-header-title-group">
-                <h3 id="card-info-title">Card Details</h3>
-                <span className={`card-info-status-pill ${frozenCards[infoCard.id] ? "is-frozen" : "is-active"}`}>
-                  <span className="card-info-status-dot" />
-                  {frozenCards[infoCard.id] ? "Frozen" : "Active • Contactless"}
-                </span>
-              </div>
-              <button
-                type="button"
-                className="card-info-close"
-                aria-label="Close card details"
-                onClick={() => {
-                  setInfoCard(null);
-                  setShowCardSecrets(false);
-                }}
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="card-info-preview-wrap">
-              <WalletCard
-                card={infoCard}
-                balance={balances[infoCard.id] || 0}
-                isActive={true}
-                interactive={false}
-                showBalance={true}
-                showFullDetails={showCardSecrets}
-              />
-            </div>
-
-            <div className="card-info-actions-bar">
-              <button
-                type="button"
-                className={`card-info-toggle-secrets-btn ${showCardSecrets ? "is-revealed" : ""}`}
-                onClick={() => {
-                  triggerHaptic("selection");
-                  setShowCardSecrets((prev) => !prev);
-                }}
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  {showCardSecrets ? (
-                    <>
-                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
-                      <line x1="1" y1="1" x2="23" y2="23" />
-                    </>
-                  ) : (
-                    <>
-                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                      <circle cx="12" cy="12" r="3" />
-                    </>
-                  )}
-                </svg>
-                {showCardSecrets ? "Hide Details" : "Show Details"}
-              </button>
-
-              <button
-                type="button"
-                className={`card-info-freeze-btn ${frozenCards[infoCard.id] ? "is-frozen" : ""}`}
-                onClick={() => {
-                  triggerHaptic("warning");
-                  setFrozenCards((prev) => ({
-                    ...prev,
-                    [infoCard.id]: !prev[infoCard.id],
-                  }));
-                }}
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                </svg>
-                {frozenCards[infoCard.id] ? "Unfreeze" : "Freeze Card"}
-              </button>
-            </div>
-
-            <div className="card-info-details-list">
-              <div className="card-info-row">
-                <span>Account Name</span>
-                <b>{infoCard.name}</b>
-              </div>
-              <div className="card-info-row">
-                <span>Cardholder</span>
-                <b>{infoCard.holderName || profile?.name || "John Smith"}</b>
-              </div>
-              <div className="card-info-row">
-                <span>Account Number</span>
-                <div className="card-info-copy-group">
-                  <b className="card-info-num-display">
-                    {showCardSecrets
-                      ? formatCardNumber(infoCard.number || "", infoCard.type === "mfs", true)
-                      : formatCardNumber(infoCard.number || "", infoCard.type === "mfs", false)}
-                  </b>
-                  <button
-                    type="button"
-                    className="card-info-copy-btn"
-                    onClick={() => handleCopyCard(infoCard.number || "")}
-                  >
-                    {copiedCard ? "Copied! ✓" : "Copy"}
-                  </button>
-                </div>
-              </div>
-              {infoCard.expiry && (
-                <div className="card-info-row">
-                  <span>Valid Thru</span>
-                  <b>{formatExpiry(infoCard.expiry)}</b>
-                </div>
-              )}
-              {infoCard.cvv && (
-                <div className="card-info-row">
-                  <span>CVV Security Code</span>
-                  <b>{showCardSecrets ? infoCard.cvv : "•••"}</b>
-                </div>
-              )}
-              <div className="card-info-row">
-                <span>Current Balance</span>
-                <b className="card-info-bal-highlight">{formatMoney(balances[infoCard.id] || 0)}</b>
-              </div>
-            </div>
-
-            <div className="card-info-modal-actions">
-              <button
-                type="button"
-                className="btn pri card-info-done-btn"
-                onClick={() => {
-                  setInfoCard(null);
-                  setShowCardSecrets(false);
-                }}
-              >
-                Done
-              </button>
-
-              {!["amazon", "citi", "bkash", "bank", "savings"].includes(infoCard.id) && (
-                <button
-                  type="button"
-                  className="btn del card-info-delete-btn"
-                  onClick={() => {
-                    triggerHaptic("warning");
-                    onDeleteCard?.(infoCard.id);
-                    setInfoCard(null);
-                    setShowCardSecrets(false);
-                    setSelectedAccount(cards[0]?.id || "amazon");
-                  }}
-                >
-                  Remove this Card
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }
@@ -2933,15 +2759,15 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
   const [selectedProvider, setSelectedProvider] = useState(CARD_PROVIDERS[0]);
   const [createdCard, setCreatedCard] = useState(null);
 
-  // Form State with Live Synchronization
+  // Form State with Live Synchronization - Clean & Unfilled Initially (Use placeholders instead of pre-typed text)
   const [formData, setFormData] = useState({
     name: "",
-    holderName: userProfileName || "John Smith",
+    holderName: "",
     number: "",
     type: "credit",
     network: "mastercard",
-    expiry: "11/25",
-    cvv: "654",
+    expiry: "",
+    cvv: "",
     initialBalance: "",
   });
 
@@ -2959,18 +2785,16 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
 
   const handlePickProvider = (prov) => {
     setSelectedProvider(prov);
-    setFormData((prev) => ({
-      ...prev,
-      name: prov.name,
-      holderName: prev.holderName || userProfileName || "John Smith",
+    setFormData({
+      name: "",
+      holderName: "",
       type: prov.defaultType,
       network: prov.defaultNetwork,
-      number: prov.isPhone
-        ? `${prov.numberPrefix}12345678`
-        : `${prov.numberPrefix}12540024${prov.id.includes("citi") ? "4328" : "9018"}`,
-      expiry: prov.isPhone ? "" : "11/25",
-      cvv: prov.isPhone ? "" : "654",
-    }));
+      number: "",
+      expiry: "",
+      cvv: "",
+      initialBalance: "",
+    });
     setStep("customize");
   };
 
@@ -3006,6 +2830,10 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
     const isMfs = selectedProvider.category === "mfs";
     const isSavings = selectedProvider.category === "savings";
 
+    const defaultNum = selectedProvider.numberPlaceholder.replace(/\s+/g, "");
+    const number = formData.number.trim() || defaultNum;
+    const holderName = formData.holderName.trim() || userProfileName || "Cardholder";
+
     const newCard = {
       id: `card_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       name: formData.name.trim() || selectedProvider.name,
@@ -3013,11 +2841,11 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
       category: selectedProvider.category,
       type: isMfs ? "mfs" : isSavings ? "savings" : formData.type,
       network: isMfs ? "mfs" : isSavings ? "none" : formData.network,
-      holderName: formData.holderName.trim() || "John Smith",
+      holderName,
       subtitle: selectedProvider.subtitle || `${selectedProvider.name} Platinum`,
-      number: formData.number.trim() || selectedProvider.numberPlaceholder.replace(/\s+/g, ""),
-      expiry: isMfs || isSavings ? "" : formData.expiry || "11/25",
-      cvv: isMfs || isSavings ? "" : formData.cvv || "654",
+      number,
+      expiry: isMfs || isSavings ? "" : formData.expiry.trim() || "12/28",
+      cvv: isMfs || isSavings ? "" : formData.cvv.trim() || "123",
       color: selectedProvider.color,
       gradient: selectedProvider.gradient,
       initialBalance: parseFloat(formData.initialBalance) || 0,
@@ -3035,13 +2863,11 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
     provider: selectedProvider.id,
     type: formData.type,
     network: formData.network,
-    holderName: formData.holderName || "John Smith",
+    holderName: formData.holderName.trim() || (userProfileName ? userProfileName.toUpperCase() : selectedProvider.name.toUpperCase()),
     subtitle: selectedProvider.subtitle || "Platinum Card",
-    number:
-      formData.number ||
-      (selectedProvider.isPhone ? "01712 345678" : "6214 1254 0024 0241"),
-    expiry: formData.expiry || "11/25",
-    cvv: formData.cvv || "654",
+    number: formData.number,
+    expiry: formData.expiry,
+    cvv: formData.cvv,
     color: selectedProvider.color,
     gradient: selectedProvider.gradient,
   };
@@ -3174,9 +3000,8 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
               <input
                 className="add-card-native-input"
                 type="text"
-                required
                 maxLength={30}
-                placeholder="John Smith"
+                placeholder={userProfileName || "John Smith"}
                 value={formData.holderName}
                 onChange={(e) => handleFormChange("holderName", e.target.value)}
               />
@@ -3189,9 +3014,12 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
               <input
                 className="add-card-native-input"
                 type="text"
-                required
                 inputMode="numeric"
-                placeholder={selectedProvider.isPhone ? "01712 345678" : "6214 1254 0024 0241"}
+                placeholder={
+                  selectedProvider.isPhone
+                    ? (selectedProvider.numberPlaceholder || "01712 345678")
+                    : (selectedProvider.numberPlaceholder || "4756 1254 0024 9018")
+                }
                 value={
                   selectedProvider.isPhone
                     ? formData.number
@@ -3291,6 +3119,453 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
           </div>
         </div>
       )}
+    </Sheet>
+  );
+}
+
+const CARD_THEMES = [
+  {
+    id: "emerald",
+    name: "Emerald Vault",
+    color: "#047857",
+    gradient:
+      "linear-gradient(135deg, #065f46 0%, #047857 35%, #064e3b 70%, #022c22 100%)",
+  },
+  {
+    id: "obsidian",
+    name: "Obsidian Slate",
+    color: "#1e293b",
+    gradient:
+      "linear-gradient(135deg, #334155 0%, #1e293b 60%, #0f172a 100%)",
+  },
+  {
+    id: "purple",
+    name: "Royal Purple",
+    color: "#6358DC",
+    gradient:
+      "linear-gradient(135deg, #7c3aed 0%, #6366f1 50%, #4338ca 100%)",
+  },
+  {
+    id: "berry",
+    name: "Velvet Berry",
+    color: "#831843",
+    gradient:
+      "linear-gradient(135deg, #831843 0%, #701a75 40%, #4a044e 70%, #2e0238 100%)",
+  },
+  {
+    id: "navy",
+    name: "Sapphire Navy",
+    color: "#004c8f",
+    gradient:
+      "linear-gradient(135deg, #004c8f 0%, #002d56 70%, #001933 100%)",
+  },
+  {
+    id: "amber",
+    name: "Sunset Amber",
+    color: "#b45309",
+    gradient:
+      "linear-gradient(135deg, #d97706 0%, #b45309 50%, #78350f 100%)",
+  },
+  {
+    id: "teal",
+    name: "Teal Digital",
+    color: "#0f766e",
+    gradient:
+      "linear-gradient(135deg, #14b8a6 0%, #0f766e 60%, #134e4a 100%)",
+  },
+  {
+    id: "crimson",
+    name: "Crimson Red",
+    color: "#b91c1c",
+    gradient:
+      "linear-gradient(135deg, #dc2626 0%, #b91c1c 60%, #7f1d1d 100%)",
+  },
+];
+
+function CardOptionsSheet({
+  initialCardId,
+  cards = [],
+  balances = {},
+  onClose,
+  onUpdateCard,
+  onDeleteCard,
+  onAddCardClick,
+  onAdjustBalance,
+}) {
+  const [selectedId, setSelectedId] = useState(
+    initialCardId || cards[0]?.id || "amazon",
+  );
+  const selectedCard = cards.find((c) => c.id === selectedId) || cards[0];
+
+  const [formData, setFormData] = useState({
+    name: selectedCard?.name || "",
+    holderName: selectedCard?.holderName || "John Smith",
+    subtitle: selectedCard?.subtitle || "",
+    number: selectedCard?.number || "",
+    expiry: selectedCard?.expiry || "",
+    cvv: selectedCard?.cvv || "",
+    color: selectedCard?.color || "#1e293b",
+    gradient:
+      selectedCard?.gradient ||
+      "linear-gradient(135deg, #334155 0%, #1e293b 60%, #0f172a 100%)",
+  });
+
+  const [showSecrets, setShowSecrets] = useState(false);
+  const [isFrozen, setIsFrozen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  useEffect(() => {
+    if (selectedCard) {
+      setFormData({
+        name: selectedCard.name || "",
+        holderName: selectedCard.holderName || "John Smith",
+        subtitle: selectedCard.subtitle || "",
+        number: selectedCard.number || "",
+        expiry: selectedCard.expiry || "",
+        cvv: selectedCard.cvv || "",
+        color: selectedCard.color || "#1e293b",
+        gradient:
+          selectedCard.gradient ||
+          "linear-gradient(135deg, #334155 0%, #1e293b 60%, #0f172a 100%)",
+      });
+      setConfirmDelete(false);
+    }
+  }, [selectedId, selectedCard]);
+
+  const previewCard = useMemo(() => {
+    if (!selectedCard) return null;
+    return {
+      ...selectedCard,
+      name: formData.name || selectedCard.name,
+      holderName: formData.holderName || selectedCard.holderName,
+      subtitle: formData.subtitle || selectedCard.subtitle,
+      gradient: formData.gradient,
+      color: formData.color,
+      number: formData.number || selectedCard.number,
+      expiry: formData.expiry || selectedCard.expiry,
+      cvv: formData.cvv || selectedCard.cvv,
+    };
+  }, [selectedCard, formData]);
+
+  const handleCopyNumber = () => {
+    triggerHaptic("success");
+    const digits = (formData.number || selectedCard?.number || "").replace(
+      /\s+/g,
+      "",
+    );
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(digits).catch(() => {});
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleSave = () => {
+    triggerHaptic("success");
+    onUpdateCard?.({
+      ...selectedCard,
+      ...formData,
+      id: selectedCard.id,
+    });
+    onClose();
+  };
+
+  const handleDelete = () => {
+    triggerHaptic("warning");
+    onDeleteCard?.(selectedCard.id);
+    onClose();
+  };
+
+  return (
+    <Sheet onClose={onClose}>
+      <div className="card-options-sheet-container">
+        {/* Top Header */}
+        <div className="card-options-sheet-header">
+          <div className="card-options-header-text">
+            <h3 id="sheet-title">Card Options</h3>
+            <span className="card-options-subhead">
+              Manage and customize your cards
+            </span>
+          </div>
+          <button
+            type="button"
+            className="sheet-close-pill-btn"
+            onClick={onClose}
+            aria-label="Close"
+          >
+            ×
+          </button>
+        </div>
+
+        {/* Card Selector Pills Track */}
+        <div className="card-options-switcher-wrap">
+          <div className="card-options-switcher-track">
+            {cards.map((c) => {
+              const isCurrent = c.id === selectedId;
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  className={`card-options-pill ${isCurrent ? "is-selected" : ""}`}
+                  onClick={() => {
+                    triggerHaptic("selection");
+                    setSelectedId(c.id);
+                  }}
+                >
+                  <span
+                    className="card-options-pill-dot"
+                    style={{ background: c.color || "#2563eb" }}
+                  />
+                  <span className="card-options-pill-name">{c.name}</span>
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              className="card-options-pill is-add-pill"
+              onClick={() => {
+                triggerHaptic("light");
+                onClose();
+                onAddCardClick?.();
+              }}
+            >
+              + Add Card
+            </button>
+          </div>
+        </div>
+
+        {/* Live Card Preview */}
+        {previewCard && (
+          <div className="card-options-live-card-wrap">
+            <WalletCard
+              card={previewCard}
+              balance={balances[previewCard.id] || 0}
+              isActive={true}
+              interactive={false}
+              showBalance={true}
+              showFullDetails={showSecrets}
+            />
+          </div>
+        )}
+
+        {/* Quick Action Badges Bar */}
+        <div className="card-options-quick-bar">
+          <button
+            type="button"
+            className={`card-options-bar-btn ${showSecrets ? "is-active" : ""}`}
+            onClick={() => {
+              triggerHaptic("selection");
+              setShowSecrets((prev) => !prev);
+            }}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              {showSecrets ? (
+                <>
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                  <line x1="1" y1="1" x2="23" y2="23" />
+                </>
+              ) : (
+                <>
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                  <circle cx="12" cy="12" r="3" />
+                </>
+              )}
+            </svg>
+            <span>{showSecrets ? "Hide Details" : "Show Details"}</span>
+          </button>
+
+          <button
+            type="button"
+            className="card-options-bar-btn"
+            onClick={handleCopyNumber}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+            </svg>
+            <span>{copied ? "Copied! ✓" : "Copy Number"}</span>
+          </button>
+
+          <button
+            type="button"
+            className={`card-options-bar-btn ${isFrozen ? "is-frozen" : ""}`}
+            onClick={() => {
+              triggerHaptic("warning");
+              setIsFrozen((prev) => !prev);
+            }}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+            <span>{isFrozen ? "Locked" : "Lock Card"}</span>
+          </button>
+        </div>
+
+        {/* Card Details & Editing Section */}
+        <div className="card-options-edit-section">
+          <h4 className="card-options-section-title">Edit Card Details</h4>
+
+          <div className="card-options-form-grid">
+            <div className="card-options-field">
+              <label>Card Display Name</label>
+              <input
+                type="text"
+                value={formData.name}
+                placeholder="e.g. Amazon Platinum"
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, name: e.target.value }))
+                }
+              />
+            </div>
+
+            <div className="card-options-field">
+              <label>Cardholder Name</label>
+              <input
+                type="text"
+                value={formData.holderName}
+                placeholder="e.g. John Smith"
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    holderName: e.target.value,
+                  }))
+                }
+              />
+            </div>
+
+            <div className="card-options-field">
+              <label>Card Tag / Subtitle</label>
+              <input
+                type="text"
+                value={formData.subtitle}
+                placeholder="e.g. Platinum Credit, High-Yield Vault"
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    subtitle: e.target.value,
+                  }))
+                }
+              />
+            </div>
+
+            <div className="card-options-field">
+              <label>Card Theme & Color</label>
+              <div className="card-options-theme-grid">
+                {CARD_THEMES.map((theme) => {
+                  const isSelected = formData.gradient === theme.gradient;
+                  return (
+                    <button
+                      key={theme.id}
+                      type="button"
+                      className={`card-options-theme-swatch ${isSelected ? "is-selected" : ""}`}
+                      style={{ background: theme.gradient }}
+                      title={theme.name}
+                      onClick={() => {
+                        triggerHaptic("selection");
+                        setFormData((prev) => ({
+                          ...prev,
+                          color: theme.color,
+                          gradient: theme.gradient,
+                        }));
+                      }}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Quick Balance Adjustment Shortcut */}
+        <div className="card-options-balance-row">
+          <div className="card-options-balance-info">
+            <span className="card-options-balance-lbl">Available Balance</span>
+            <b className="card-options-balance-num">
+              {formatMoney(balances[selectedCard?.id] || 0)}
+            </b>
+          </div>
+          <button
+            type="button"
+            className="card-options-adj-btn"
+            onClick={() => {
+              onClose();
+              onAdjustBalance?.(selectedCard?.id);
+            }}
+          >
+            Adjust Balance
+          </button>
+        </div>
+
+        {/* Footer Actions: Save Changes & Remove Card */}
+        <div className="card-options-sheet-actions">
+          <button
+            type="button"
+            className="card-options-save-cta"
+            onClick={handleSave}
+          >
+            Save Changes
+          </button>
+
+          {confirmDelete ? (
+            <div className="card-options-confirm-delete-box">
+              <span>Are you sure you want to remove this card?</span>
+              <div className="card-options-confirm-delete-btns">
+                <button
+                  type="button"
+                  className="card-options-confirm-cancel"
+                  onClick={() => setConfirmDelete(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="card-options-confirm-remove"
+                  onClick={handleDelete}
+                >
+                  Yes, Remove
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="card-options-delete-cta"
+              onClick={() => {
+                triggerHaptic("light");
+                setConfirmDelete(true);
+              }}
+            >
+              Remove This Card
+            </button>
+          )}
+        </div>
+      </div>
     </Sheet>
   );
 }
@@ -3619,6 +3894,7 @@ export default function MobilePrototype({
   onBudgetClear,
   onTransactionSave,
   onAddCard,
+  onUpdateCard,
   onDeleteCard,
   onToggleRec,
   onRemoveRec,
@@ -4466,13 +4742,20 @@ export default function MobilePrototype({
               <MonthSwitch m={S.m} onShift={onShift} />
             ) : tab === "accounts" ? (
               <button
-                className="prototype-header-add-pill"
+                className="prototype-header-action"
                 type="button"
-                aria-label="Add new card or account"
-                onClick={() => openSheet({ type: "addCard" })}
+                aria-label="Add new card"
+                title="Add Card"
+                onClick={() => {
+                  triggerHaptic("light");
+                  openSheet({ type: "addCard" });
+                }}
               >
-                <span className="pill-plus">+</span>
-                <span>Add Card</span>
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="2" y="5" width="20" height="14" rx="3" />
+                  <line x1="2" y1="10" x2="22" y2="10" />
+                  <circle cx="7" cy="15" r="1.5" fill="currentColor" />
+                </svg>
               </button>
             ) : (
               <button
@@ -4568,6 +4851,9 @@ export default function MobilePrototype({
                 S={S}
                 onTx={(t, acct) => openSheet({ type: "tx", t, acct })}
                 onAddCardClick={() => openSheet({ type: "addCard" })}
+                onOpenCardOptions={(cardId) =>
+                  openSheet({ type: "cardOptions", cardId })
+                }
                 onDeleteCard={(cardId) => {
                   onDeleteCard?.(cardId);
                   toast("Card removed");
@@ -4658,6 +4944,26 @@ export default function MobilePrototype({
         </nav>
       </div>
 
+      {sheet?.type === "cardOptions" && (
+        <CardOptionsSheet
+          initialCardId={sheet.cardId}
+          cards={cards}
+          balances={Object.fromEntries(cards.map((c) => [c.id, bal(S, c.id)]))}
+          onClose={close}
+          onUpdateCard={(updated) => {
+            onUpdateCard?.(updated);
+            toast("Card updated");
+          }}
+          onDeleteCard={(cardId) => {
+            onDeleteCard?.(cardId);
+            toast("Card removed");
+          }}
+          onAddCardClick={() => openSheet({ type: "addCard" })}
+          onAdjustBalance={(cardId) =>
+            openSheet({ type: "tx", t: "adjust", acct: cardId })
+          }
+        />
+      )}
       {sheet?.type === "addCard" && (
         <AddCardSheet
           onClose={close}

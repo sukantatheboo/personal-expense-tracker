@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <!-- Coin at top -->
+  <g id="coin">
+    <!-- Coin Body -->
+    <circle cx="256" cy="116" r="66" fill="#FFD15C" stroke="#000000" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" />
+    <!-- Coin Shadow Arc -->
+    <path d="M256 50 A66 66 0 0 1 316 142 L256 116 Z" fill="#F8B832" opacity="0.35" />
+    <!-- Dollar Sign -->
+    <path d="M256 78 V154 M244 94 C244 86 268 84 268 96 C268 110 244 108 244 122 C244 136 268 134 268 126" stroke="#000000" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+
+  <!-- Coin Slot -->
+  <rect x="168" y="160" width="176" height="16" rx="8" fill="#000000" />
+
+  <!-- Piggy Tail -->
+  <path d="M432 268 C456 264 492 236 496 210 C498 190 472 176 454 196 C442 208 438 234 430 252" fill="#FF94A4" stroke="#000000" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" />
+
+  <!-- Piggy Body Main Path -->
+  <path d="
+    M 334 172
+    C 386 178 440 220 440 286
+    C 440 334 414 366 396 376
+    L 396 432
+    C 396 440 388 446 380 446
+    L 322 446
+    C 314 446 306 440 306 432
+    L 306 386
+    L 206 386
+    L 206 432
+    C 206 440 198 446 190 446
+    L 132 446
+    C 124 446 116 440 116 432
+    L 116 380
+    C 78 368 56 326 56 288
+    L 22 288
+    C 14 288 8 282 8 274
+    L 8 238
+    C 8 230 14 224 22 224
+    L 56 224
+    C 60 196 74 168 90 144
+    L 76 106
+    C 72 96 82 86 92 90
+    L 142 126
+    C 146 128 152 130 156 132
+    C 162 152 168 172 178 172
+    Z
+  " fill="#FF94A4" stroke="#000000" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" />
+
+  <!-- Snout detail -->
+  <line x1="22" y1="256" x2="22" y2="256.1" stroke="#000000" stroke-width="18" stroke-linecap="round" />
+
+  <!-- Eye -->
+  <circle cx="112" cy="208" r="8" fill="#000000" />
+</svg>

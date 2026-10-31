@@ -10,6 +10,7 @@ import upayImg from "./assets/payment-logos/upay.png";
 import visaImg from "./assets/payment-logos/visa.png";
 import bkashSvg from "./assets/payment-logos/bkash.svg";
 import amexSvg from "./assets/payment-logos/amex.svg";
+import savingsPiggySvg from "./assets/payment-logos/savings-piggy.svg";
 
 /* ───────────── Pixel-Perfect Payment & Bank Logos ───────────── */
 
@@ -315,47 +316,19 @@ export function HdfcLogo({ className = "", height = 24 }) {
 }
 
 /**
- * Savings Vault Logo
+ * Official Savings Vault Piggy Bank Logo (Matching images.png)
  */
 export function SavingsLogo({ className = "", height = 24 }) {
-  const width = Math.round(height * 3.4);
   return (
-    <svg
-      className={`card-logo-svg ${className}`}
-      width={width}
-      height={height}
-      viewBox="0 0 134 40"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-label="Savings Vault"
-    >
-      <g transform="translate(2, 6)">
-        <circle cx="14" cy="14" r="13" fill="#F5BD4F" fillOpacity="0.25" stroke="#F5BD4F" strokeWidth="1.5" />
-        <text x="8.5" y="19" fill="#F5BD4F" fontSize="14" fontWeight="900">৳</text>
-      </g>
-      <text
-        x="36"
-        y="21"
-        fill="#FFFFFF"
-        fontFamily="system-ui, -apple-system, sans-serif"
-        fontSize="15"
-        fontWeight="900"
-        letterSpacing="0.04em"
-      >
-        SAVINGS
-      </text>
-      <text
-        x="37"
-        y="30"
-        fill="#F5BD4F"
-        fontFamily="system-ui, -apple-system, sans-serif"
-        fontSize="8"
-        fontWeight="800"
-        letterSpacing="0.1em"
-      >
-        VAULT
-      </text>
-    </svg>
+    <div className={`card-vault-badge ${className}`}>
+      <img
+        src={savingsPiggySvg}
+        alt="Savings Vault"
+        className="card-vault-piggy-img"
+        style={{ height }}
+      />
+      <span className="card-vault-badge-text">VAULT</span>
+    </div>
   );
 }
 
@@ -778,12 +751,12 @@ export const CARD_PROVIDERS = [
     id: "savings",
     name: "Savings",
     category: "savings",
-    subtitle: "Savings Vault",
+    subtitle: "High-Yield Vault",
     defaultType: "savings",
     defaultNetwork: "none",
     currency: "BDT",
-    color: "#8c2d36",
-    gradient: "linear-gradient(135deg, #8c2d36 0%, #5c1820 60%, #3d0c12 100%)",
+    color: "#047857",
+    gradient: "linear-gradient(135deg, #065f46 0%, #047857 35%, #064e3b 70%, #022c22 100%)",
     numberPrefix: "SAV",
     numberPlaceholder: "SAV-8829-01",
     isPhone: false,

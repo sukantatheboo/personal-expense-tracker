@@ -103,13 +103,13 @@ export const DEFAULT_CARDS = [
     provider: "savings",
     type: "savings",
     network: "none",
-    holderName: "Savings Vault",
-    subtitle: "Savings Vault",
+    holderName: "Personal Savings",
+    subtitle: "High-Yield Vault",
     number: "SAV-8829-01",
     expiry: "",
     cvv: "",
-    color: "#8c2d36",
-    gradient: "linear-gradient(135deg, #8c2d36 0%, #5c1820 60%, #3d0c12 100%)",
+    color: "#047857",
+    gradient: "linear-gradient(135deg, #065f46 0%, #047857 35%, #064e3b 70%, #022c22 100%)",
   },
 ];
 

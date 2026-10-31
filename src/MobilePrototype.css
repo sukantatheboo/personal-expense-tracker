@@ -3833,38 +3833,40 @@ a:active,
   gap: 8px;
   flex: 0 0 auto;
 }
-.mobile-prototype .wallet-card-info-btn {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  background: rgba(255, 255, 255, 0.16);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+.mobile-prototype .card-vault-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 18px;
+  padding: 3.5px 10px 3.5px 7px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
+}
+.mobile-prototype .card-vault-piggy-img {
+  height: 22px;
+  width: auto;
+  max-height: 22px;
+  object-fit: contain;
+  display: block;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+}
+.mobile-prototype .card-vault-badge-text {
+  font-size: 10.5px;
+  font-weight: 850;
+  letter-spacing: 0.08em;
   color: #ffffff;
-  display: grid;
-  place-items: center;
-  padding: 0;
-  cursor: pointer;
-  transition: transform 140ms ease, background 140ms ease;
-}
-.mobile-prototype .wallet-card-info-btn svg {
-  width: 13px;
-  height: 13px;
-}
-.mobile-prototype .wallet-card-info-btn:hover {
-  background: rgba(255, 255, 255, 0.28);
-}
-.mobile-prototype .wallet-card-info-btn:active {
-  transform: scale(0.9);
+  line-height: 1;
 }
 .mobile-prototype .wallet-card-brand-logo {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  height: 26px;
-  max-height: 26px;
+  height: 28px;
+  max-height: 28px;
 }
 .mobile-prototype .card-brand-cluster {
   display: inline-flex;
@@ -4091,10 +4093,13 @@ a:active,
   background: linear-gradient(135deg, #10b981 0%, #059669 100%);
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.32);
 }
-.mobile-prototype .action-icon-badge.is-transfer,
-.mobile-prototype .action-icon-badge.is-card-options {
+.mobile-prototype .action-icon-badge.is-transfer {
   background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
   box-shadow: 0 4px 12px rgba(249, 115, 22, 0.32);
+}
+.mobile-prototype .action-icon-badge.is-card-options {
+  background: linear-gradient(135deg, #6366f1 0%, #4338ca 100%);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.36);
 }
 .mobile-prototype .action-icon-badge.is-adjust {
   background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
@@ -4108,11 +4113,28 @@ a:active,
   background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
   box-shadow: 0 4px 12px rgba(245, 158, 11, 0.32);
 }
+.mobile-prototype .action-label-block {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5px;
+}
 .mobile-prototype .action-label {
   font-size: 13.5px;
   font-weight: 750;
   color: var(--ink);
   letter-spacing: -0.01em;
+  line-height: 1.15;
+}
+.mobile-prototype .action-subhead {
+  font-size: 10.5px;
+  font-weight: 650;
+  color: var(--mut);
+  line-height: 1;
+}
+.mobile-prototype .prototype-header-cards-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 /* Transactions Section */
@@ -4775,11 +4797,23 @@ a:active,
   font-size: 16px;
   font-weight: 750;
 }
+.mobile-prototype .add-card-native-input::placeholder {
+  color: var(--mut);
+  opacity: 0.45;
+  font-weight: 500;
+}
+.mobile-prototype .wallet-card-num-placeholder {
+  opacity: 0.38;
+  letter-spacing: 0.08em;
+}
 .mobile-prototype .add-card-submit-cta {
   width: 100%;
-  height: 50px;
-  margin-top: 10px;
-  margin-bottom: 8px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  margin: 18px 0 calc(14px + env(safe-area-inset-bottom, 0px));
   border-radius: 16px;
   border: 0;
   background: #2563eb;
@@ -4890,4 +4924,606 @@ a:active,
 .mobile-prototype .add-card-home-cta:active {
   transform: scale(0.97);
   background: #1d4ed8;
+}
+
+/* ───────────── Card Options & Management Sheet ───────────── */
+.mobile-prototype .card-options-sheet-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+.mobile-prototype .card-options-sheet-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.mobile-prototype .card-options-header-text h3 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 850;
+  color: var(--ink);
+  letter-spacing: -0.02em;
+}
+.mobile-prototype .card-options-subhead {
+  font-size: 12.5px;
+  color: var(--mut);
+  font-weight: 600;
+  margin-top: 2px;
+  display: block;
+}
+.mobile-prototype .card-options-switcher-wrap {
+  margin: 0 -18px 16px;
+  padding: 0 18px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.mobile-prototype .card-options-switcher-wrap::-webkit-scrollbar {
+  display: none;
+}
+.mobile-prototype .card-options-switcher-track {
+  display: flex;
+  gap: 8px;
+  width: max-content;
+  padding-bottom: 2px;
+}
+.mobile-prototype .card-options-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 13px;
+  border-radius: 20px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 750;
+  cursor: pointer;
+  transition: all 160ms ease;
+  white-space: nowrap;
+}
+.mobile-prototype .card-options-pill.is-selected {
+  background: var(--ink);
+  color: var(--bg);
+  border-color: var(--ink);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+}
+.mobile-prototype .card-options-pill-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.mobile-prototype .card-options-pill.is-add-pill {
+  border-style: dashed;
+  color: #2563eb;
+  border-color: rgba(37, 99, 235, 0.4);
+}
+.mobile-prototype .card-options-live-card-wrap {
+  margin-bottom: 16px;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+.mobile-prototype .card-options-quick-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.mobile-prototype .card-options-bar-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 8px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+  transition: all 140ms ease;
+}
+.mobile-prototype .card-options-bar-btn svg {
+  width: 15px;
+  height: 15px;
+}
+.mobile-prototype .card-options-bar-btn:active {
+  transform: scale(0.96);
+}
+.mobile-prototype .card-options-bar-btn.is-active {
+  background: rgba(37, 99, 235, 0.12);
+  color: #2563eb;
+  border-color: rgba(37, 99, 235, 0.35);
+}
+.mobile-prototype .card-options-bar-btn.is-frozen {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.35);
+}
+.mobile-prototype .card-options-edit-section {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 16px;
+  margin-bottom: 14px;
+}
+.mobile-prototype .card-options-section-title {
+  margin: 0 0 12px;
+  font-size: 13.5px;
+  font-weight: 850;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.mobile-prototype .card-options-form-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.mobile-prototype .card-options-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.mobile-prototype .card-options-field label {
+  font-size: 11px;
+  font-weight: 750;
+  color: var(--mut);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.mobile-prototype .card-options-field input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 700;
+  outline: none;
+  transition: border-color 150ms ease;
+}
+.mobile-prototype .card-options-field input:focus {
+  border-color: #2563eb;
+}
+.mobile-prototype .card-options-theme-grid {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+.mobile-prototype .card-options-theme-swatch {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+.mobile-prototype .card-options-theme-swatch:hover {
+  transform: scale(1.06);
+}
+.mobile-prototype .card-options-theme-swatch.is-selected {
+  border-color: #ffffff;
+  box-shadow: 0 0 0 2px #2563eb;
+  transform: scale(1.1);
+}
+.mobile-prototype .card-options-balance-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  margin-bottom: 14px;
+}
+.mobile-prototype .card-options-balance-lbl {
+  font-size: 11px;
+  color: var(--mut);
+  font-weight: 750;
+  display: block;
+}
+.mobile-prototype .card-options-balance-num {
+  font-size: 16px;
+  font-weight: 850;
+  color: #10b981;
+}
+.mobile-prototype .card-options-adj-btn {
+  padding: 7px 12px;
+  border-radius: 10px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+.mobile-prototype .card-options-adj-btn:active {
+  background: var(--field);
+}
+.mobile-prototype .card-options-sheet-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+.mobile-prototype .card-options-save-cta {
+  width: 100%;
+  padding: 13px;
+  border-radius: 14px;
+  background: #2563eb;
+  color: #ffffff;
+  font-size: 14.5px;
+  font-weight: 850;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.3);
+  transition: transform 120ms ease, background-color 120ms ease;
+}
+.mobile-prototype .card-options-save-cta:active {
+  transform: scale(0.98);
+  background: #1d4ed8;
+}
+.mobile-prototype .card-options-delete-cta {
+  width: 100%;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(239, 68, 68, 0.08);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.22);
+  font-size: 13.5px;
+  font-weight: 750;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+.mobile-prototype .card-options-delete-cta:active {
+  background: rgba(239, 68, 68, 0.16);
+}
+.mobile-prototype .card-options-confirm-delete-box {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.28);
+  border-radius: 16px;
+  padding: 14px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: #ef4444;
+  font-weight: 750;
+  font-size: 13px;
+}
+.mobile-prototype .card-options-confirm-delete-btns {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+.mobile-prototype .card-options-confirm-cancel {
+  flex: 1;
+  padding: 9px;
+  border-radius: 10px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font-weight: 750;
+  font-size: 13px;
+  cursor: pointer;
+}
+.mobile-prototype .card-options-confirm-remove {
+  flex: 1;
+  padding: 9px;
+  border-radius: 10px;
+  background: #ef4444;
+  color: #ffffff;
+  border: none;
+  font-weight: 800;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* ───────────── Card Options & Management Sheet ───────────── */
+.mobile-prototype .card-options-sheet-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+.mobile-prototype .card-options-sheet-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.mobile-prototype .card-options-header-text h3 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 850;
+  color: var(--ink);
+  letter-spacing: -0.02em;
+}
+.mobile-prototype .card-options-subhead {
+  font-size: 12.5px;
+  color: var(--mut);
+  font-weight: 600;
+  margin-top: 2px;
+  display: block;
+}
+.mobile-prototype .card-options-switcher-wrap {
+  margin: 0 -18px 16px;
+  padding: 0 18px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.mobile-prototype .card-options-switcher-wrap::-webkit-scrollbar {
+  display: none;
+}
+.mobile-prototype .card-options-switcher-track {
+  display: flex;
+  gap: 8px;
+  width: max-content;
+  padding-bottom: 2px;
+}
+.mobile-prototype .card-options-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 13px;
+  border-radius: 20px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 750;
+  cursor: pointer;
+  transition: all 160ms ease;
+  white-space: nowrap;
+}
+.mobile-prototype .card-options-pill.is-selected {
+  background: var(--ink);
+  color: var(--bg);
+  border-color: var(--ink);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+}
+.mobile-prototype .card-options-pill-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.mobile-prototype .card-options-pill.is-add-pill {
+  border-style: dashed;
+  color: #2563eb;
+  border-color: rgba(37, 99, 235, 0.4);
+}
+.mobile-prototype .card-options-live-card-wrap {
+  margin-bottom: 16px;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+.mobile-prototype .card-options-quick-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.mobile-prototype .card-options-bar-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 8px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+  transition: all 140ms ease;
+}
+.mobile-prototype .card-options-bar-btn svg {
+  width: 15px;
+  height: 15px;
+}
+.mobile-prototype .card-options-bar-btn:active {
+  transform: scale(0.96);
+}
+.mobile-prototype .card-options-bar-btn.is-active {
+  background: rgba(37, 99, 235, 0.12);
+  color: #2563eb;
+  border-color: rgba(37, 99, 235, 0.35);
+}
+.mobile-prototype .card-options-bar-btn.is-frozen {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.35);
+}
+.mobile-prototype .card-options-edit-section {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 16px;
+  margin-bottom: 14px;
+}
+.mobile-prototype .card-options-section-title {
+  margin: 0 0 12px;
+  font-size: 13.5px;
+  font-weight: 850;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.mobile-prototype .card-options-form-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.mobile-prototype .card-options-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.mobile-prototype .card-options-field label {
+  font-size: 11px;
+  font-weight: 750;
+  color: var(--mut);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.mobile-prototype .card-options-field input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 700;
+  outline: none;
+  transition: border-color 150ms ease;
+}
+.mobile-prototype .card-options-field input:focus {
+  border-color: #2563eb;
+}
+.mobile-prototype .card-options-theme-grid {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+.mobile-prototype .card-options-theme-swatch {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+.mobile-prototype .card-options-theme-swatch:hover {
+  transform: scale(1.06);
+}
+.mobile-prototype .card-options-theme-swatch.is-selected {
+  border-color: #ffffff;
+  box-shadow: 0 0 0 2px #2563eb;
+  transform: scale(1.1);
+}
+.mobile-prototype .card-options-balance-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  margin-bottom: 14px;
+}
+.mobile-prototype .card-options-balance-lbl {
+  font-size: 11px;
+  color: var(--mut);
+  font-weight: 750;
+  display: block;
+}
+.mobile-prototype .card-options-balance-num {
+  font-size: 16px;
+  font-weight: 850;
+  color: #10b981;
+}
+.mobile-prototype .card-options-adj-btn {
+  padding: 7px 12px;
+  border-radius: 10px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+.mobile-prototype .card-options-adj-btn:active {
+  background: var(--field);
+}
+.mobile-prototype .card-options-sheet-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+.mobile-prototype .card-options-save-cta {
+  width: 100%;
+  padding: 13px;
+  border-radius: 14px;
+  background: #2563eb;
+  color: #ffffff;
+  font-size: 14.5px;
+  font-weight: 850;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.3);
+  transition: transform 120ms ease, background-color 120ms ease;
+}
+.mobile-prototype .card-options-save-cta:active {
+  transform: scale(0.98);
+  background: #1d4ed8;
+}
+.mobile-prototype .card-options-delete-cta {
+  width: 100%;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(239, 68, 68, 0.08);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.22);
+  font-size: 13.5px;
+  font-weight: 750;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+.mobile-prototype .card-options-delete-cta:active {
+  background: rgba(239, 68, 68, 0.16);
+}
+.mobile-prototype .card-options-confirm-delete-box {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.28);
+  border-radius: 16px;
+  padding: 14px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: #ef4444;
+  font-weight: 750;
+  font-size: 13px;
+}
+.mobile-prototype .card-options-confirm-delete-btns {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+.mobile-prototype .card-options-confirm-cancel {
+  flex: 1;
+  padding: 9px;
+  border-radius: 10px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font-weight: 750;
+  font-size: 13px;
+  cursor: pointer;
+}
+.mobile-prototype .card-options-confirm-remove {
+  flex: 1;
+  padding: 9px;
+  border-radius: 10px;
+  background: #ef4444;
+  color: #ffffff;
+  border: none;
+  font-weight: 800;
+  font-size: 13px;
+  cursor: pointer;
 }

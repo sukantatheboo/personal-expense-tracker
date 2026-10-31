@@ -34,6 +34,8 @@ export const formatMoney = (n) =>
 
 export function formatCardNumber(raw = "", isPhone = false, showFull = false) {
   const digits = String(raw).replace(/\D/g, "");
+  if (!digits) return "";
+
   if (isPhone) {
     if (showFull && digits.length >= 11) {
       return `${digits.slice(0, 5)} ${digits.slice(5, 8)} ${digits.slice(8, 11)}`;
@@ -44,7 +46,7 @@ export function formatCardNumber(raw = "", isPhone = false, showFull = false) {
     if (digits.length > 5) {
       return `${digits.slice(0, 5)} ${digits.slice(5)}`;
     }
-    return digits || "01712 xxxx 78";
+    return digits;
   }
 
   // 16-digit bank card
@@ -59,7 +61,7 @@ export function formatCardNumber(raw = "", isPhone = false, showFull = false) {
   for (let i = 0; i < digits.length && i < 16; i += 4) {
     parts.push(digits.slice(i, i + 4));
   }
-  return parts.join(" ") || "4756 xxxx xxxx 9018";
+  return parts.join(" ");
 }
 
 export function formatExpiry(raw = "") {
@@ -132,7 +134,7 @@ export function WalletCard({
         <div className="wallet-card-sheen" aria-hidden="true" />
         <div className="wallet-card-pattern" aria-hidden="true" />
 
-        {/* Top Row: Card Title/Holder (Left) + Official Brand Logo & Info Trigger (Right) */}
+        {/* Top Row: Card Title/Holder (Left) + Official Brand Logo (Right) */}
         <div className="wallet-card-header">
           <div className="wallet-card-holder-info">
             <span className="wallet-card-holder-name">
@@ -141,28 +143,8 @@ export function WalletCard({
             <span className="wallet-card-type-tag">{cardSubtitle}</span>
           </div>
 
-          <div className="wallet-card-brand-group">
-            {onOpenDetails && (
-              <button
-                type="button"
-                className="wallet-card-info-btn"
-                aria-label={`View info for ${card.name}`}
-                title="View card info"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onOpenDetails(card);
-                }}
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <circle cx="12" cy="12" r="10" />
-                  <line x1="12" y1="16" x2="12" y2="12" />
-                  <line x1="12" y1="8" x2="12.01" y2="8" />
-                </svg>
-              </button>
-            )}
-            <div className="wallet-card-brand-logo">
-              {renderProviderLogo(card.provider, { height: 26 })}
-            </div>
+          <div className="wallet-card-brand-logo">
+            {renderProviderLogo(card.provider, { height: 28 })}
           </div>
         </div>
 
@@ -181,7 +163,13 @@ export function WalletCard({
         </div>
 
         {/* Card Number in Monospace */}
-        <div className="wallet-card-number">{formattedNumber}</div>
+        <div className="wallet-card-number">
+          {formattedNumber || (
+            <span className="wallet-card-num-placeholder">
+              {isMfs ? "01••• ••••••" : "•••• •••• •••• ••••"}
+            </span>
+          )}
+        </div>
 
         {/* Bottom Row: Balance & Expiry (Left) + Network / Vault Badge (Right) */}
         <div className="wallet-card-footer">
@@ -198,7 +186,7 @@ export function WalletCard({
               <div className="wallet-card-expiry-block">
                 <span className="wallet-card-meta-lbl">VALID THRU</span>
                 <span className="wallet-card-meta-val">
-                  {formatExpiry(card.expiry || "12/28")}
+                  {formatExpiry(card.expiry) || "MM/YY"}
                 </span>
               </div>
             )}
@@ -206,7 +194,7 @@ export function WalletCard({
               <div className="wallet-card-expiry-block">
                 <span className="wallet-card-meta-lbl">CVV</span>
                 <span className="wallet-card-meta-val">
-                  {showFullDetails && card.cvv ? card.cvv : "***"}
+                  {showFullDetails && card.cvv ? card.cvv : (card.cvv ? "***" : "•••")}
                 </span>
               </div>
             )}
@@ -222,7 +210,7 @@ export function WalletCard({
             )}
             {isMfs && (
               <span className="wallet-card-mfs-network-pill">
-                {card.name.toUpperCase()}
+                {(card.name || "WALLET").toUpperCase()}
               </span>
             )}
             {isSavings && (
@@ -311,8 +299,8 @@ export function StackedCardDeck({
   const handleCardClick = (offset, card) => {
     if (swapPhase !== "idle") return;
     if (offset === 0) {
-      // Tap on front card: cycle down to next card (matching video interaction)
-      handleSwapDown();
+      // Tap on front card: open Card Options / details immediately
+      onOpenCardDetails?.(card);
     } else if (offset === 1) {
       // Tap on middle card: cycle down to it
       handleSwapDown();
@@ -368,10 +356,6 @@ export function StackedCardDeck({
       handleSwapUp();
     } else if (Math.abs(dy) <= 8) {
       // Discrete tap
-      // If user tapped directly on info button, let its handler handle it
-      if (target?.closest?.(".wallet-card-info-btn")) {
-        return;
-      }
       // If user tapped on middle or back card slot:
       const clickedSlot = target?.closest?.(".cards-deck-slot");
       if (clickedSlot?.classList?.contains("offset-1")) {
@@ -379,8 +363,8 @@ export function StackedCardDeck({
       } else if (clickedSlot?.classList?.contains("offset-2")) {
         handleSwapUp();
       } else {
-        // Tap on front card: cycle down
-        handleSwapDown();
+        // Tap on front card: open Card Options / details immediately
+        onOpenCardDetails?.(cards[activeIndex]);
       }
     } else {
       // Snap back to resting position
