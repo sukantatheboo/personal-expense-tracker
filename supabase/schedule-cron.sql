@@ -16,8 +16,8 @@ create extension if not exists pg_net;
 -- 2. Clear old secrets to prevent duplicate key error, then create fresh
 delete from vault.secrets where name in ('project_url', 'cron_secret');
 
-select vault.create_secret('https://eipexdfsblfyegycbigd.supabase.co', 'project_url');
-select vault.create_secret('d829c5457745e7e320e84040c578014833772be741276dec0d9fa5e1198aef85', 'cron_secret');
+select vault.create_secret('https://<your-project-ref>.supabase.co', 'project_url');
+select vault.create_secret('<your-cron-secret>', 'cron_secret');
 
 -- 3. Schedule the edge function to run every 5 minutes with authorization
 select cron.schedule(
@@ -29,8 +29,8 @@ select cron.schedule(
            || '/functions/v1/send-due-reminders',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
-      'apikey', 'sb_publishable_82E3mCuzEZKHF6ULrOSj8w_bXPh9epE',
-      'Authorization', 'Bearer sb_publishable_82E3mCuzEZKHF6ULrOSj8w_bXPh9epE',
+      'apikey', '<your-anon-key>',
+      'Authorization', 'Bearer <your-anon-key>',
       'x-cron-secret', (select decrypted_secret from vault.decrypted_secrets where name = 'cron_secret' order by created_at desc limit 1)
     ),
     body := '{}'::jsonb
