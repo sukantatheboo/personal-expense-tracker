@@ -5124,306 +5124,6 @@ a:active,
   background: #1d4ed8;
 }
 
-/* ───────────── Card Options & Management Sheet ───────────── */
-.mobile-prototype .card-options-sheet-container {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-}
-.mobile-prototype .card-options-sheet-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: 14px;
-}
-.mobile-prototype .card-options-header-text h3 {
-  margin: 0;
-  font-size: 19px;
-  font-weight: 850;
-  color: var(--ink);
-  letter-spacing: -0.02em;
-}
-.mobile-prototype .card-options-subhead {
-  font-size: 12.5px;
-  color: var(--mut);
-  font-weight: 600;
-  margin-top: 2px;
-  display: block;
-}
-.mobile-prototype .card-options-switcher-wrap {
-  margin: 0 -18px 16px;
-  padding: 0 18px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
-}
-.mobile-prototype .card-options-switcher-wrap::-webkit-scrollbar {
-  display: none;
-}
-.mobile-prototype .card-options-switcher-track {
-  display: flex;
-  gap: 8px;
-  width: max-content;
-  padding-bottom: 2px;
-}
-.mobile-prototype .card-options-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 7px 13px;
-  border-radius: 20px;
-  border: 1px solid var(--line);
-  background: var(--card);
-  color: var(--ink);
-  font-size: 12.5px;
-  font-weight: 750;
-  cursor: pointer;
-  transition: all 160ms ease;
-  white-space: nowrap;
-}
-.mobile-prototype .card-options-pill.is-selected {
-  background: var(--ink);
-  color: var(--bg);
-  border-color: var(--ink);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
-}
-.mobile-prototype .card-options-pill-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-.mobile-prototype .card-options-pill.is-add-pill {
-  border-style: dashed;
-  color: #2563eb;
-  border-color: rgba(37, 99, 235, 0.4);
-}
-.mobile-prototype .card-options-live-card-wrap {
-  margin-bottom: 16px;
-  width: 100%;
-  display: flex;
-  justify-content: center;
-}
-.mobile-prototype .card-options-quick-bar {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-.mobile-prototype .card-options-bar-btn {
-  flex: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 10px 8px;
-  border-radius: 12px;
-  border: 1px solid var(--line);
-  background: var(--bg);
-  color: var(--ink);
-  font-size: 12px;
-  font-weight: 750;
-  cursor: pointer;
-  transition: all 140ms ease;
-}
-.mobile-prototype .card-options-bar-btn svg {
-  width: 15px;
-  height: 15px;
-}
-.mobile-prototype .card-options-bar-btn:active {
-  transform: scale(0.96);
-}
-.mobile-prototype .card-options-bar-btn.is-active {
-  background: rgba(37, 99, 235, 0.12);
-  color: #2563eb;
-  border-color: rgba(37, 99, 235, 0.35);
-}
-.mobile-prototype .card-options-bar-btn.is-frozen {
-  background: rgba(239, 68, 68, 0.12);
-  color: #ef4444;
-  border-color: rgba(239, 68, 68, 0.35);
-}
-.mobile-prototype .card-options-edit-section {
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: 20px;
-  padding: 16px;
-  margin-bottom: 14px;
-}
-.mobile-prototype .card-options-section-title {
-  margin: 0 0 12px;
-  font-size: 13.5px;
-  font-weight: 850;
-  color: var(--ink);
-  letter-spacing: -0.01em;
-}
-.mobile-prototype .card-options-form-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.mobile-prototype .card-options-field {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-.mobile-prototype .card-options-field label {
-  font-size: 11px;
-  font-weight: 750;
-  color: var(--mut);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-.mobile-prototype .card-options-field input {
-  width: 100%;
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid var(--line);
-  background: var(--card);
-  color: var(--ink);
-  font-size: 13.5px;
-  font-weight: 700;
-  outline: none;
-  transition: border-color 150ms ease;
-}
-.mobile-prototype .card-options-field input:focus {
-  border-color: #2563eb;
-}
-.mobile-prototype .card-options-theme-grid {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-top: 4px;
-}
-.mobile-prototype .card-options-theme-swatch {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  border: 2px solid transparent;
-  cursor: pointer;
-  padding: 0;
-  transition: transform 120ms ease, box-shadow 120ms ease;
-}
-.mobile-prototype .card-options-theme-swatch:hover {
-  transform: scale(1.06);
-}
-.mobile-prototype .card-options-theme-swatch.is-selected {
-  border-color: #ffffff;
-  box-shadow: 0 0 0 2px #2563eb;
-  transform: scale(1.1);
-}
-.mobile-prototype .card-options-balance-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 14px;
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  margin-bottom: 14px;
-}
-.mobile-prototype .card-options-balance-lbl {
-  font-size: 11px;
-  color: var(--mut);
-  font-weight: 750;
-  display: block;
-}
-.mobile-prototype .card-options-balance-num {
-  font-size: 16px;
-  font-weight: 850;
-  color: #10b981;
-}
-.mobile-prototype .card-options-adj-btn {
-  padding: 7px 12px;
-  border-radius: 10px;
-  background: var(--card);
-  border: 1px solid var(--line);
-  font-size: 12px;
-  font-weight: 800;
-  color: var(--ink);
-  cursor: pointer;
-  transition: background-color 120ms ease;
-}
-.mobile-prototype .card-options-adj-btn:active {
-  background: var(--field);
-}
-.mobile-prototype .card-options-sheet-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 4px;
-}
-.mobile-prototype .card-options-save-cta {
-  width: 100%;
-  padding: 13px;
-  border-radius: 14px;
-  background: #2563eb;
-  color: #ffffff;
-  font-size: 14.5px;
-  font-weight: 850;
-  border: none;
-  cursor: pointer;
-  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.3);
-  transition: transform 120ms ease, background-color 120ms ease;
-}
-.mobile-prototype .card-options-save-cta:active {
-  transform: scale(0.98);
-  background: #1d4ed8;
-}
-.mobile-prototype .card-options-delete-cta {
-  width: 100%;
-  padding: 12px;
-  border-radius: 14px;
-  background: rgba(239, 68, 68, 0.08);
-  color: #ef4444;
-  border: 1px solid rgba(239, 68, 68, 0.22);
-  font-size: 13.5px;
-  font-weight: 750;
-  cursor: pointer;
-  transition: all 120ms ease;
-}
-.mobile-prototype .card-options-delete-cta:active {
-  background: rgba(239, 68, 68, 0.16);
-}
-.mobile-prototype .card-options-confirm-delete-box {
-  background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.28);
-  border-radius: 16px;
-  padding: 14px;
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  color: #ef4444;
-  font-weight: 750;
-  font-size: 13px;
-}
-.mobile-prototype .card-options-confirm-delete-btns {
-  display: flex;
-  gap: 10px;
-  justify-content: center;
-}
-.mobile-prototype .card-options-confirm-cancel {
-  flex: 1;
-  padding: 9px;
-  border-radius: 10px;
-  background: var(--card);
-  border: 1px solid var(--line);
-  color: var(--ink);
-  font-weight: 750;
-  font-size: 13px;
-  cursor: pointer;
-}
-.mobile-prototype .card-options-confirm-remove {
-  flex: 1;
-  padding: 9px;
-  border-radius: 10px;
-  background: #ef4444;
-  color: #ffffff;
-  border: none;
-  font-weight: 800;
-  font-size: 13px;
-  cursor: pointer;
-}
 
 /* ───────────── Card Options & Management Sheet ───────────── */
 .mobile-prototype .card-options-sheet-container {
@@ -5576,18 +5276,21 @@ a:active,
 }
 .mobile-prototype .card-options-field input {
   width: 100%;
-  padding: 10px 12px;
+  height: 46px;
+  padding: 0 14px;
   border-radius: 12px;
-  border: 1px solid var(--line);
+  border: 1.5px solid var(--line);
   background: var(--card);
   color: var(--ink);
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 700;
   outline: none;
-  transition: border-color 150ms ease;
+  box-sizing: border-box;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
 }
 .mobile-prototype .card-options-field input:focus {
   border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 .mobile-prototype .card-options-theme-grid {
   display: flex;
@@ -5634,7 +5337,7 @@ a:active,
   color: #10b981;
 }
 .mobile-prototype .card-options-adj-btn {
-  padding: 7px 12px;
+  padding: 7px 14px;
   border-radius: 10px;
   background: var(--card);
   border: 1px solid var(--line);
@@ -5642,6 +5345,10 @@ a:active,
   font-weight: 800;
   color: var(--ink);
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
   transition: background-color 120ms ease;
 }
 .mobile-prototype .card-options-adj-btn:active {
@@ -5651,16 +5358,21 @@ a:active,
   display: flex;
   flex-direction: column;
   gap: 10px;
-  margin-top: 4px;
+  margin-top: 14px;
 }
 .mobile-prototype .card-options-save-cta {
   width: 100%;
-  padding: 13px;
-  border-radius: 14px;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  border-radius: 16px;
   background: #2563eb;
   color: #ffffff;
-  font-size: 14.5px;
+  font-size: 15px;
   font-weight: 850;
+  letter-spacing: 0.01em;
   border: none;
   cursor: pointer;
   box-shadow: 0 4px 16px rgba(37, 99, 235, 0.3);
@@ -5672,12 +5384,16 @@ a:active,
 }
 .mobile-prototype .card-options-delete-cta {
   width: 100%;
-  padding: 12px;
-  border-radius: 14px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  border-radius: 16px;
   background: rgba(239, 68, 68, 0.08);
   color: #ef4444;
   border: 1px solid rgba(239, 68, 68, 0.22);
-  font-size: 13.5px;
+  font-size: 14.5px;
   font-weight: 750;
   cursor: pointer;
   transition: all 120ms ease;
@@ -5685,43 +5401,103 @@ a:active,
 .mobile-prototype .card-options-delete-cta:active {
   background: rgba(239, 68, 68, 0.16);
 }
-.mobile-prototype .card-options-confirm-delete-box {
-  background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.28);
-  border-radius: 16px;
-  padding: 14px;
-  text-align: center;
+
+/* ───────────── Confirmation Modal Popup ───────────── */
+.mobile-prototype .confirm-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-  color: #ef4444;
-  font-weight: 750;
-  font-size: 13px;
-}
-.mobile-prototype .card-options-confirm-delete-btns {
-  display: flex;
-  gap: 10px;
+  align-items: center;
   justify-content: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  animation: prototype-fade-in 160ms ease-out both;
+  touch-action: none;
 }
-.mobile-prototype .card-options-confirm-cancel {
-  flex: 1;
-  padding: 9px;
-  border-radius: 10px;
+.mobile-prototype .confirm-modal-box {
+  width: 100%;
+  max-width: 320px;
   background: var(--card);
   border: 1px solid var(--line);
+  border-radius: 24px;
+  padding: 24px 20px 20px;
+  text-align: center;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+  animation: prototype-dialog-up 240ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.mobile-prototype .confirm-modal-icon-badge {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  display: grid;
+  place-items: center;
+  margin-bottom: 14px;
+}
+.mobile-prototype .confirm-modal-icon-badge svg {
+  width: 24px;
+  height: 24px;
+}
+.mobile-prototype .confirm-modal-title {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 850;
   color: var(--ink);
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  text-align: center;
+}
+.mobile-prototype .confirm-modal-message {
+  margin: 0 0 20px;
+  font-size: 13.5px;
+  color: var(--mut);
+  line-height: 1.45;
+  text-align: center;
+}
+.mobile-prototype .confirm-modal-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  width: 100%;
+}
+.mobile-prototype .confirm-modal-btn {
+  height: 46px;
+  border-radius: 14px;
+  font-size: 14px;
   font-weight: 750;
-  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
   cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 120ms ease, background-color 120ms ease;
+  border: 0;
 }
-.mobile-prototype .card-options-confirm-remove {
-  flex: 1;
-  padding: 9px;
-  border-radius: 10px;
-  background: #ef4444;
+.mobile-prototype .confirm-modal-btn:active {
+  transform: scale(0.96);
+}
+.mobile-prototype .confirm-modal-btn.is-cancel {
+  background: var(--bg);
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+.mobile-prototype .confirm-modal-btn.is-cancel:active {
+  background: var(--field);
+}
+.mobile-prototype .confirm-modal-btn.is-destructive {
+  background: #dc2626;
   color: #ffffff;
-  border: none;
-  font-weight: 800;
-  font-size: 13px;
-  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(220, 38, 38, 0.32);
 }
+.mobile-prototype .confirm-modal-btn.is-destructive:active {
+  background: #b91c1c;
+}
+

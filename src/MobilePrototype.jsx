@@ -468,34 +468,16 @@ function ExpenseRow({
   };
 
   const beginDelete = (commit = onDelete, direction = "left") => {
-    if (
-      !commit ||
-      swipeRef.current.phase === "deleting" ||
-      swipeRef.current.phase === "collapsing"
-    )
-      return;
+    if (!commit) return;
     if (dragFrameRef.current) {
       cancelAnimationFrame(dragFrameRef.current);
       dragFrameRef.current = null;
     }
-    triggerHaptic("delete");
-    clearTimeout(swipeTimerRef.current);
-    clearTimeout(collapseTimerRef.current);
-    const width =
-      pointerRef.current?.width || rowRef.current?.offsetWidth || 320;
-    const targetOffset = direction === "right" ? width + 24 : -(width + 24);
-
-    rowRef.current?.classList.remove("is-swipe-dragging");
-    shellRef.current?.classList.remove("is-swipe-dragging");
+    updateSwipe({ offset: 0, phase: "idle" });
     if (rowRef.current) {
-      rowRef.current.style.transform = `translate3d(${targetOffset}px, 0, 0)`;
+      rowRef.current.style.transform = "translate3d(0, 0, 0)";
     }
-    updateSwipe({ offset: targetOffset, phase: "deleting" });
-
-    collapseTimerRef.current = setTimeout(() => {
-      updateSwipe({ offset: targetOffset, phase: "collapsing" });
-    }, 220);
-    swipeTimerRef.current = setTimeout(() => commit(e.id), 460);
+    commit(e.id);
   };
 
   useEffect(
@@ -1945,10 +1927,7 @@ function Accounts({
               <path d="M15 15h4" />
             </svg>
           </div>
-          <div className="action-label-block">
-            <span className="action-label">Card Options</span>
-            <small className="action-subhead">Manage &amp; Edit</small>
-          </div>
+          <span className="action-label">Card Options</span>
         </button>
       </div>
 
@@ -3369,6 +3348,73 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
 
 
 
+function ConfirmationModal({
+  isOpen,
+  title = "Are you sure?",
+  message = "This action cannot be undone.",
+  confirmLabel = "Delete",
+  cancelLabel = "Cancel",
+  isDestructive = true,
+  onConfirm,
+  onCancel,
+}) {
+  if (!isOpen) return null;
+
+  return (
+    <div
+      className="confirm-modal-backdrop"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onCancel?.();
+      }}
+    >
+      <div
+        className="confirm-modal-box"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="confirm-modal-title"
+      >
+        <div className="confirm-modal-icon-badge">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            <line x1="10" y1="11" x2="10" y2="17" />
+            <line x1="14" y1="11" x2="14" y2="17" />
+          </svg>
+        </div>
+
+        <h3 id="confirm-modal-title" className="confirm-modal-title">
+          {title}
+        </h3>
+        <p className="confirm-modal-message">{message}</p>
+
+        <div className="confirm-modal-actions">
+          <button
+            type="button"
+            className="confirm-modal-btn is-cancel"
+            onClick={onCancel}
+          >
+            {cancelLabel}
+          </button>
+          <button
+            type="button"
+            className={`confirm-modal-btn ${isDestructive ? "is-destructive" : "is-primary"}`}
+            onClick={onConfirm}
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CardOptionsSheet({
   initialCardId,
   cards = [],
@@ -3384,6 +3430,22 @@ function CardOptionsSheet({
   );
   const selectedCard = cards.find((c) => c.id === selectedId) || cards[0];
 
+  const isMfs =
+    selectedCard?.category === "mfs" ||
+    selectedCard?.type === "mfs" ||
+    selectedCard?.network === "mfs" ||
+    selectedCard?.provider === "bkash" ||
+    selectedCard?.provider === "nagad" ||
+    selectedCard?.provider === "rocket" ||
+    Boolean(selectedCard?.isPhone);
+
+  const isSavings =
+    selectedCard?.category === "savings" ||
+    selectedCard?.type === "savings" ||
+    selectedCard?.provider === "savings";
+
+  const isCard = !isMfs && !isSavings;
+
   const [formData, setFormData] = useState({
     name: selectedCard?.name || "",
     holderName: selectedCard?.holderName || "John Smith",
@@ -3391,6 +3453,8 @@ function CardOptionsSheet({
     number: selectedCard?.number || "",
     expiry: selectedCard?.expiry || "",
     cvv: selectedCard?.cvv || "",
+    network: selectedCard?.network || "visa",
+    type: selectedCard?.type || "credit",
     color: selectedCard?.color || "#1e293b",
     gradient:
       selectedCard?.gradient ||
@@ -3400,7 +3464,7 @@ function CardOptionsSheet({
   const [showSecrets, setShowSecrets] = useState(false);
   const [isFrozen, setIsFrozen] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   useEffect(() => {
     if (selectedCard) {
@@ -3411,12 +3475,14 @@ function CardOptionsSheet({
         number: selectedCard.number || "",
         expiry: selectedCard.expiry || "",
         cvv: selectedCard.cvv || "",
+        network: selectedCard.network || "visa",
+        type: selectedCard.type || "credit",
         color: selectedCard.color || "#1e293b",
         gradient:
           selectedCard.gradient ||
           "linear-gradient(135deg, #334155 0%, #1e293b 60%, #0f172a 100%)",
       });
-      setConfirmDelete(false);
+      setConfirmDeleteOpen(false);
     }
   }, [selectedId, selectedCard]);
 
@@ -3427,13 +3493,37 @@ function CardOptionsSheet({
       name: formData.name || selectedCard.name,
       holderName: formData.holderName || selectedCard.holderName,
       subtitle: formData.subtitle || selectedCard.subtitle,
+      network: formData.network || selectedCard.network,
+      type: formData.type || selectedCard.type,
       gradient: formData.gradient,
       color: formData.color,
-      number: formData.number || selectedCard.number,
-      expiry: formData.expiry || selectedCard.expiry,
-      cvv: formData.cvv || selectedCard.cvv,
+      number: formData.number,
+      expiry: formData.expiry,
+      cvv: formData.cvv,
     };
   }, [selectedCard, formData]);
+
+  const handleCardNumberChange = (raw) => {
+    if (isMfs) {
+      const digits = raw.replace(/[^\d+]/g, "").slice(0, 14);
+      setFormData((prev) => ({ ...prev, number: digits }));
+    } else {
+      const digits = raw.replace(/\D/g, "").slice(0, 16);
+      setFormData((prev) => ({ ...prev, number: digits }));
+    }
+  };
+
+  const handleExpiryChange = (raw) => {
+    const digits = raw.replace(/\D/g, "").slice(0, 4);
+    if (digits.length <= 2) {
+      setFormData((prev) => ({ ...prev, expiry: digits }));
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        expiry: `${digits.slice(0, 2)}/${digits.slice(2, 4)}`,
+      }));
+    }
+  };
 
   const handleCopyNumber = () => {
     triggerHaptic("success");
@@ -3611,50 +3701,282 @@ function CardOptionsSheet({
           <h4 className="card-options-section-title">Edit Card Details</h4>
 
           <div className="card-options-form-grid">
-            <div className="card-options-field">
-              <label>Card Display Name</label>
-              <input
-                type="text"
-                value={formData.name}
-                placeholder="e.g. Amazon Platinum"
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, name: e.target.value }))
-                }
-              />
-            </div>
+            {/* If regular card (Visa, Mastercard, Amex, Bank, Custom) */}
+            {isCard && (
+              <>
+                <div className="card-options-field">
+                  <label>Card Network</label>
+                  <div className="add-card-network-selector">
+                    <button
+                      type="button"
+                      className={`add-card-network-btn ${formData.network === "visa" ? "is-selected" : ""}`}
+                      onClick={() => {
+                        triggerHaptic("selection");
+                        setFormData((prev) => ({ ...prev, network: "visa" }));
+                      }}
+                    >
+                      <VisaBadge width={44} height={17} />
+                      <span>Visa</span>
+                    </button>
 
-            <div className="card-options-field">
-              <label>Cardholder Name</label>
-              <input
-                type="text"
-                value={formData.holderName}
-                placeholder="e.g. John Smith"
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    holderName: e.target.value,
-                  }))
-                }
-              />
-            </div>
+                    <button
+                      type="button"
+                      className={`add-card-network-btn ${formData.network === "mastercard" ? "is-selected" : ""}`}
+                      onClick={() => {
+                        triggerHaptic("selection");
+                        setFormData((prev) => ({ ...prev, network: "mastercard" }));
+                      }}
+                    >
+                      <MastercardBadge width={30} height={20} />
+                      <span>Mastercard</span>
+                    </button>
 
-            <div className="card-options-field">
-              <label>Card Tag / Subtitle</label>
-              <input
-                type="text"
-                value={formData.subtitle}
-                placeholder="e.g. Platinum Credit, High-Yield Vault"
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    subtitle: e.target.value,
-                  }))
-                }
-              />
-            </div>
+                    <button
+                      type="button"
+                      className={`add-card-network-btn ${formData.network === "amex" ? "is-selected" : ""}`}
+                      onClick={() => {
+                        triggerHaptic("selection");
+                        setFormData((prev) => ({ ...prev, network: "amex" }));
+                      }}
+                    >
+                      <AmexBadge width={34} height={17} />
+                      <span>Amex</span>
+                    </button>
+                  </div>
+                </div>
 
+                <div className="card-options-field">
+                  <label>Card Type</label>
+                  <div className="add-card-type-toggle">
+                    <button
+                      type="button"
+                      className={`add-card-type-pill ${formData.type === "credit" ? "is-selected" : ""}`}
+                      onClick={() => {
+                        triggerHaptic("selection");
+                        setFormData((prev) => ({ ...prev, type: "credit" }));
+                      }}
+                    >
+                      Credit Card
+                    </button>
+                    <button
+                      type="button"
+                      className={`add-card-type-pill ${formData.type === "debit" ? "is-selected" : ""}`}
+                      onClick={() => {
+                        triggerHaptic("selection");
+                        setFormData((prev) => ({ ...prev, type: "debit" }));
+                      }}
+                    >
+                      Debit Card
+                    </button>
+                  </div>
+                </div>
+
+                <div className="card-options-field">
+                  <label>Card Display Name</label>
+                  <input
+                    type="text"
+                    value={formData.name}
+                    placeholder="e.g. Amazon Platinum"
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, name: e.target.value }))
+                    }
+                  />
+                </div>
+
+                <div className="card-options-field">
+                  <label>Cardholder Name</label>
+                  <input
+                    type="text"
+                    value={formData.holderName}
+                    placeholder="e.g. John Smith"
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        holderName: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+
+                <div className="card-options-field">
+                  <label>Card Number</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="4756 1254 0024 9018"
+                    value={formatCardNumber(formData.number, false, true)}
+                    onChange={(e) => handleCardNumberChange(e.target.value)}
+                  />
+                </div>
+
+                <div className="add-card-two-col">
+                  <div className="card-options-field">
+                    <label>MM/YY</label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="12/28"
+                      maxLength={5}
+                      value={formData.expiry}
+                      onChange={(e) => handleExpiryChange(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="card-options-field">
+                    <label>CVC</label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="654"
+                      maxLength={4}
+                      value={formData.cvv}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          cvv: e.target.value.replace(/\D/g, "").slice(0, 4),
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+
+                <div className="card-options-field">
+                  <label>Card Tag / Subtitle</label>
+                  <input
+                    type="text"
+                    value={formData.subtitle}
+                    placeholder="e.g. Platinum Credit, Premium Visa"
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        subtitle: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+              </>
+            )}
+
+            {/* If MFS account (bKash, Nagad, Rocket, Phone) */}
+            {isMfs && (
+              <>
+                <div className="card-options-field">
+                  <label>Account / Wallet Name</label>
+                  <input
+                    type="text"
+                    value={formData.name}
+                    placeholder="e.g. bKash, Nagad"
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, name: e.target.value }))
+                    }
+                  />
+                </div>
+
+                <div className="card-options-field">
+                  <label>Account Holder Name</label>
+                  <input
+                    type="text"
+                    value={formData.holderName}
+                    placeholder="e.g. John Smith"
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        holderName: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+
+                <div className="card-options-field">
+                  <label>Mobile Number</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="01712 345678"
+                    value={formData.number}
+                    onChange={(e) => handleCardNumberChange(e.target.value)}
+                  />
+                </div>
+
+                <div className="card-options-field">
+                  <label>Account Tag / Subtitle</label>
+                  <input
+                    type="text"
+                    value={formData.subtitle}
+                    placeholder="e.g. Personal Wallet"
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        subtitle: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+              </>
+            )}
+
+            {/* If Savings Vault */}
+            {isSavings && (
+              <>
+                <div className="card-options-field">
+                  <label>Vault Display Name</label>
+                  <input
+                    type="text"
+                    value={formData.name}
+                    placeholder="e.g. Savings Vault"
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, name: e.target.value }))
+                    }
+                  />
+                </div>
+
+                <div className="card-options-field">
+                  <label>Account Holder Name</label>
+                  <input
+                    type="text"
+                    value={formData.holderName}
+                    placeholder="e.g. Personal Savings"
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        holderName: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+
+                <div className="card-options-field">
+                  <label>Vault Account Number / ID</label>
+                  <input
+                    type="text"
+                    value={formData.number}
+                    placeholder="SAV-8829-01"
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, number: e.target.value }))
+                    }
+                  />
+                </div>
+
+                <div className="card-options-field">
+                  <label>Tag / Subtitle</label>
+                  <input
+                    type="text"
+                    value={formData.subtitle}
+                    placeholder="e.g. High-Yield Vault"
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        subtitle: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Theme & Color Swatches */}
             <div className="card-options-field">
-              <label>Card Theme & Color</label>
+              <label>Card Theme &amp; Color</label>
               <div className="card-options-theme-grid">
                 {CARD_THEMES.map((theme) => {
                   const isSelected = formData.gradient === theme.gradient;
@@ -3711,40 +4033,32 @@ function CardOptionsSheet({
             Save Changes
           </button>
 
-          {confirmDelete ? (
-            <div className="card-options-confirm-delete-box">
-              <span>Are you sure you want to remove this card?</span>
-              <div className="card-options-confirm-delete-btns">
-                <button
-                  type="button"
-                  className="card-options-confirm-cancel"
-                  onClick={() => setConfirmDelete(false)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="card-options-confirm-remove"
-                  onClick={handleDelete}
-                >
-                  Yes, Remove
-                </button>
-              </div>
-            </div>
-          ) : (
-            <button
-              type="button"
-              className="card-options-delete-cta"
-              onClick={() => {
-                triggerHaptic("light");
-                setConfirmDelete(true);
-              }}
-            >
-              Remove This Card
-            </button>
-          )}
+          <button
+            type="button"
+            className="card-options-delete-cta"
+            onClick={() => {
+              triggerHaptic("warning");
+              setConfirmDeleteOpen(true);
+            }}
+          >
+            Remove This Card
+          </button>
         </div>
       </div>
+
+      <ConfirmationModal
+        isOpen={confirmDeleteOpen}
+        title="Remove Card?"
+        message={`Are you sure you want to remove "${selectedCard?.name || "this card"}"? This card will be removed from your wallet.`}
+        confirmLabel="Yes, Remove"
+        cancelLabel="Cancel"
+        isDestructive={true}
+        onConfirm={() => {
+          setConfirmDeleteOpen(false);
+          handleDelete();
+        }}
+        onCancel={() => setConfirmDeleteOpen(false)}
+      />
     </Sheet>
   );
 }
@@ -4633,16 +4947,31 @@ export default function MobilePrototype({
           : "Expense added",
     );
   };
-  const deleteExpense = (id) => {
+  const [confirmDeleteExpense, setConfirmDeleteExpense] = useState(null);
+
+  const requestDeleteExpense = (id) => {
     const expense = S.exp.find((item) => item.id === id);
-    const undo = expense ? onExpenseDelete(expense) : undefined;
+    if (!expense) return;
+    setConfirmDeleteExpense(expense);
+  };
+
+  const confirmExecuteDeleteExpense = () => {
+    if (!confirmDeleteExpense) return;
+    const expense = confirmDeleteExpense;
+    setConfirmDeleteExpense(null);
+    const undo = onExpenseDelete(expense);
     close();
     triggerHaptic("delete");
     toast("Expense removed", undo);
   };
+
+  const deleteExpense = (id) => {
+    requestDeleteExpense(id);
+  };
+
   const skipRecurringExpense = (id) => {
     const expense = S.exp.find((item) => item.id === id);
-    if (!expense?.rec) return deleteExpense(id);
+    if (!expense?.rec) return requestDeleteExpense(id);
     const undo = onExpenseDelete(expense);
     close();
     triggerHaptic("warning");
@@ -5209,6 +5538,21 @@ export default function MobilePrototype({
           onBackupRestore={onBackupRestore}
         />
       )}
+
+            <ConfirmationModal
+        isOpen={Boolean(confirmDeleteExpense)}
+        title="Delete Expense?"
+        message={
+          confirmDeleteExpense
+            ? `Are you sure you want to delete "${confirmDeleteExpense.desc || "this expense"}" (${M(confirmDeleteExpense.amt || 0)})?`
+            : ""
+        }
+        confirmLabel="Yes, Delete"
+        cancelLabel="Cancel"
+        isDestructive={true}
+        onConfirm={confirmExecuteDeleteExpense}
+        onCancel={() => setConfirmDeleteExpense(null)}
+      />
 
       {toastMsg && (
         <div className="toast" role="status" aria-live="polite">
