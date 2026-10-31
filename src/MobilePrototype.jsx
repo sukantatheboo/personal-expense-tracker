@@ -18,7 +18,12 @@ import {
   formatExpiry,
   formatMoney,
 } from "./AccountsCardDeck.jsx";
-import { CARD_PROVIDERS } from "./cardAssets.jsx";
+import {
+  CARD_PROVIDERS,
+  VisaBadge,
+  MastercardBadge,
+  AmexBadge,
+} from "./cardAssets.jsx";
 import "./MobilePrototype.css";
 
 /* ───────────── constants ───────────── */
@@ -2753,9 +2758,88 @@ function SettingsSheet({
   );
 }
 
+const CARD_THEMES = [
+  {
+    id: "emerald",
+    name: "Emerald Vault",
+    color: "#047857",
+    gradient:
+      "linear-gradient(135deg, #065f46 0%, #047857 35%, #064e3b 70%, #022c22 100%)",
+  },
+  {
+    id: "obsidian",
+    name: "Obsidian Slate",
+    color: "#1e293b",
+    gradient:
+      "linear-gradient(135deg, #334155 0%, #1e293b 60%, #0f172a 100%)",
+  },
+  {
+    id: "purple",
+    name: "Royal Purple",
+    color: "#6358DC",
+    gradient:
+      "linear-gradient(135deg, #7c3aed 0%, #6366f1 50%, #4338ca 100%)",
+  },
+  {
+    id: "berry",
+    name: "Velvet Berry",
+    color: "#831843",
+    gradient:
+      "linear-gradient(135deg, #831843 0%, #701a75 40%, #4a044e 70%, #2e0238 100%)",
+  },
+  {
+    id: "navy",
+    name: "Sapphire Navy",
+    color: "#004c8f",
+    gradient:
+      "linear-gradient(135deg, #004c8f 0%, #002d56 70%, #001933 100%)",
+  },
+  {
+    id: "amber",
+    name: "Sunset Amber",
+    color: "#b45309",
+    gradient:
+      "linear-gradient(135deg, #d97706 0%, #b45309 50%, #78350f 100%)",
+  },
+  {
+    id: "teal",
+    name: "Teal Digital",
+    color: "#0f766e",
+    gradient:
+      "linear-gradient(135deg, #14b8a6 0%, #0f766e 60%, #134e4a 100%)",
+  },
+  {
+    id: "crimson",
+    name: "Crimson Red",
+    color: "#b91c1c",
+    gradient:
+      "linear-gradient(135deg, #dc2626 0%, #b91c1c 60%, #7f1d1d 100%)",
+  },
+];
+
+const CARD_FILTER_TABS = [
+  { id: "all", label: "All" },
+  { id: "mfs", label: "MFS" },
+  { id: "visa", label: "Visa" },
+  { id: "mastercard", label: "Mastercard" },
+  { id: "custom", label: "Custom" },
+  { id: "savings", label: "Savings Vault" },
+];
+
+function getCardLabel(prov) {
+  if (prov.id === "custom") return { label: "Custom", type: "custom" };
+  if (prov.category === "mfs" || prov.isPhone) return { label: "MFS", type: "mfs" };
+  if (prov.category === "savings") return { label: "Vault", type: "savings" };
+  if (prov.defaultNetwork === "visa") return { label: "Visa", type: "visa" };
+  if (prov.defaultNetwork === "mastercard") return { label: "Mastercard", type: "mastercard" };
+  if (prov.defaultNetwork === "amex") return { label: "Amex", type: "amex" };
+  return { label: "Bank", type: "bank" };
+}
+
 function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
   const [step, setStep] = useState("catalog"); // 'catalog' | 'customize' | 'success'
   const [searchQuery, setSearchQuery] = useState("");
+  const [activeFilter, setActiveFilter] = useState("all");
   const [selectedProvider, setSelectedProvider] = useState(CARD_PROVIDERS[0]);
   const [createdCard, setCreatedCard] = useState(null);
 
@@ -2765,35 +2849,56 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
     holderName: "",
     number: "",
     type: "credit",
-    network: "mastercard",
+    network: "visa",
     expiry: "",
     cvv: "",
     initialBalance: "",
+    color: "",
+    gradient: "",
   });
 
   const filteredProviders = useMemo(() => {
-    if (!searchQuery.trim()) return CARD_PROVIDERS;
+    let list = CARD_PROVIDERS;
+
+    if (activeFilter === "mfs") {
+      list = list.filter(
+        (p) => p.category === "mfs" || p.defaultNetwork === "mfs" || p.isPhone,
+      );
+    } else if (activeFilter === "visa") {
+      list = list.filter((p) => p.defaultNetwork === "visa" || p.id === "custom");
+    } else if (activeFilter === "mastercard") {
+      list = list.filter((p) => p.defaultNetwork === "mastercard" || p.id === "custom");
+    } else if (activeFilter === "custom") {
+      list = list.filter((p) => p.id === "custom");
+    } else if (activeFilter === "savings") {
+      list = list.filter((p) => p.category === "savings");
+    }
+
+    if (!searchQuery.trim()) return list;
     const q = searchQuery.toLowerCase();
-    return CARD_PROVIDERS.filter(
+    return list.filter(
       (p) =>
         p.name.toLowerCase().includes(q) ||
         p.subtitle.toLowerCase().includes(q) ||
         p.category.toLowerCase().includes(q) ||
+        (p.defaultNetwork && p.defaultNetwork.toLowerCase().includes(q)) ||
         (p.currency && p.currency.toLowerCase().includes(q)),
     );
-  }, [searchQuery]);
+  }, [searchQuery, activeFilter]);
 
   const handlePickProvider = (prov) => {
     setSelectedProvider(prov);
     setFormData({
       name: "",
       holderName: "",
-      type: prov.defaultType,
-      network: prov.defaultNetwork,
+      type: prov.defaultType || "credit",
+      network: prov.defaultNetwork || "visa",
       number: "",
       expiry: "",
       cvv: "",
       initialBalance: "",
+      color: prov.color || "#1e293b",
+      gradient: prov.gradient || "",
     });
     setStep("customize");
   };
@@ -2825,6 +2930,8 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
     }
   };
 
+  const isCustom = selectedProvider.id === "custom";
+
   const handleSubmitCard = (e) => {
     e?.preventDefault();
     const isMfs = selectedProvider.category === "mfs";
@@ -2833,21 +2940,30 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
     const defaultNum = selectedProvider.numberPlaceholder.replace(/\s+/g, "");
     const number = formData.number.trim() || defaultNum;
     const holderName = formData.holderName.trim() || userProfileName || "Cardholder";
+    const network = isMfs ? "mfs" : isSavings ? "none" : (formData.network || selectedProvider.defaultNetwork || "visa");
+    const type = isMfs ? "mfs" : isSavings ? "savings" : (formData.type || selectedProvider.defaultType || "credit");
+    const name = formData.name.trim() || selectedProvider.name;
 
     const newCard = {
       id: `card_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-      name: formData.name.trim() || selectedProvider.name,
+      name,
       provider: selectedProvider.id,
       category: selectedProvider.category,
-      type: isMfs ? "mfs" : isSavings ? "savings" : formData.type,
-      network: isMfs ? "mfs" : isSavings ? "none" : formData.network,
+      type,
+      network,
       holderName,
-      subtitle: selectedProvider.subtitle || `${selectedProvider.name} Platinum`,
+      subtitle: isMfs
+        ? "Personal Wallet"
+        : isSavings
+          ? "High-Yield Vault"
+          : isCustom
+            ? `${name} ${network === "visa" ? "Visa" : network === "mastercard" ? "Mastercard" : "Card"}`
+            : selectedProvider.subtitle,
       number,
       expiry: isMfs || isSavings ? "" : formData.expiry.trim() || "12/28",
       cvv: isMfs || isSavings ? "" : formData.cvv.trim() || "123",
-      color: selectedProvider.color,
-      gradient: selectedProvider.gradient,
+      color: formData.color || selectedProvider.color,
+      gradient: formData.gradient || selectedProvider.gradient,
       initialBalance: parseFloat(formData.initialBalance) || 0,
     };
 
@@ -2859,17 +2975,19 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
 
   const previewCard = {
     id: "preview",
-    name: formData.name.trim() || selectedProvider.name,
+    name: formData.name.trim() || (isCustom ? "Custom Card" : selectedProvider.name),
     provider: selectedProvider.id,
-    type: formData.type,
-    network: formData.network,
-    holderName: formData.holderName.trim() || (userProfileName ? userProfileName.toUpperCase() : selectedProvider.name.toUpperCase()),
-    subtitle: selectedProvider.subtitle || "Platinum Card",
+    type: formData.type || selectedProvider.defaultType || "credit",
+    network: formData.network || selectedProvider.defaultNetwork || "visa",
+    holderName: formData.holderName.trim() || (userProfileName ? userProfileName.toUpperCase() : (isCustom ? "CARDHOLDER" : selectedProvider.name.toUpperCase())),
+    subtitle: isCustom
+      ? (formData.name.trim() ? `${formData.name.trim()} ${formData.network === "visa" ? "Visa" : formData.network === "mastercard" ? "Mastercard" : "Amex"}` : (formData.network === "visa" ? (formData.type === "credit" ? "Custom Visa Credit" : "Custom Visa Debit") : formData.network === "mastercard" ? (formData.type === "credit" ? "Custom Mastercard Credit" : "Custom Mastercard Debit") : "Custom Amex"))
+      : selectedProvider.subtitle,
     number: formData.number,
     expiry: formData.expiry,
     cvv: formData.cvv,
-    color: selectedProvider.color,
-    gradient: selectedProvider.gradient,
+    color: formData.color || selectedProvider.color,
+    gradient: formData.gradient || selectedProvider.gradient,
   };
 
   return (
@@ -2877,16 +2995,8 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
       {/* ──── Step 1: Catalog ("Add New Card") ──── */}
       {step === "catalog" && (
         <div className="add-new-card-catalog">
-          <div className="add-card-header-bar">
+          <div className="add-card-header-bar is-centered">
             <h3 id="sheet-title" className="add-card-title">Add New Card</h3>
-            <button
-              type="button"
-              className="add-card-close-btn"
-              onClick={onClose}
-              aria-label="Close"
-            >
-              ×
-            </button>
           </div>
 
           {/* Search Bar matching video */}
@@ -2915,40 +3025,68 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
             )}
           </div>
 
+          {/* Category / Network Filter Chips (MFS, Visa, Mastercard, Vault) */}
+          <div className="add-card-filter-track">
+            {CARD_FILTER_TABS.map((f) => {
+              const isActive = activeFilter === f.id;
+              return (
+                <button
+                  key={f.id}
+                  type="button"
+                  className={`add-card-filter-chip ${isActive ? "is-active" : ""}`}
+                  onClick={() => {
+                    triggerHaptic("selection");
+                    setActiveFilter(f.id);
+                  }}
+                >
+                  {f.label}
+                </button>
+              );
+            })}
+          </div>
+
           {/* Card Templates List matching video */}
           <div className="add-card-template-list">
             {filteredProviders.length ? (
-              filteredProviders.map((prov) => (
-                <button
-                  key={prov.id}
-                  type="button"
-                  className="add-card-template-row"
-                  onClick={() => handlePickProvider(prov)}
-                >
-                  <div
-                    className="add-card-mini-card"
-                    style={{ background: prov.gradient }}
+              filteredProviders.map((prov) => {
+                const cardLabel = getCardLabel(prov);
+                return (
+                  <button
+                    key={prov.id}
+                    type="button"
+                    className="add-card-template-row"
+                    onClick={() => handlePickProvider(prov)}
                   >
-                    <div className="add-card-mini-logo">
-                      {renderProviderLogo(prov.id, { height: 14 })}
+                    <div
+                      className="add-card-mini-card"
+                      style={{ background: prov.gradient }}
+                    >
+                      <div className="add-card-mini-logo">
+                        {renderProviderLogo(prov.id, { height: 14 })}
+                      </div>
+                      <span className="add-card-mini-num">
+                        {prov.isPhone ? "01X••" : "•••• 4328"}
+                      </span>
                     </div>
-                    <span className="add-card-mini-num">
-                      {prov.isPhone ? "01X••" : "•••• 4328"}
+
+                    <div className="add-card-template-meta">
+                      <b className="add-card-template-name">{prov.name}</b>
+                      <small className="add-card-template-sub">{prov.subtitle}</small>
+                    </div>
+
+                    <div className="add-card-template-badges">
+                      <span className={`add-card-type-label is-${cardLabel.type}`}>
+                        {cardLabel.label}
+                      </span>
+                      <span className="add-card-currency-badge">{prov.currency || "USD"}</span>
+                    </div>
+
+                    <span className="add-card-template-chevron" aria-hidden="true">
+                      ›
                     </span>
-                  </div>
-
-                  <div className="add-card-template-meta">
-                    <b className="add-card-template-name">{prov.name}</b>
-                    <small className="add-card-template-sub">{prov.subtitle}</small>
-                  </div>
-
-                  <span className="add-card-currency-badge">{prov.currency || "USD"}</span>
-
-                  <span className="add-card-template-chevron" aria-hidden="true">
-                    ›
-                  </span>
-                </button>
-              ))
+                  </button>
+                );
+              })
             ) : (
               <div className="emp">No matching card template found.</div>
             )}
@@ -2969,14 +3107,7 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
               ‹
             </button>
             <h3 id="sheet-title" className="add-card-title">Add Card</h3>
-            <button
-              type="button"
-              className="add-card-close-btn"
-              onClick={onClose}
-              aria-label="Close"
-            >
-              ×
-            </button>
+            <span className="add-card-header-spacer" aria-hidden="true" />
           </div>
 
           {/* Real-time Dynamic Card Preview */}
@@ -2994,6 +3125,119 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
           {/* Form Fields ("Card Details") */}
           <div className="add-card-form-body">
             <h4 className="add-card-section-label">Card Details</h4>
+
+            {!selectedProvider.isPhone && selectedProvider.category !== "savings" && (
+              <div className="add-card-field">
+                <label className="add-card-input-lbl">Card Network</label>
+                <div className="add-card-network-selector">
+                  <button
+                    type="button"
+                    className={`add-card-network-btn ${formData.network === "visa" ? "is-selected" : ""}`}
+                    onClick={() => {
+                      triggerHaptic("selection");
+                      handleFormChange("network", "visa");
+                    }}
+                  >
+                    <VisaBadge width={44} height={17} />
+                    <span>Visa</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className={`add-card-network-btn ${formData.network === "mastercard" ? "is-selected" : ""}`}
+                    onClick={() => {
+                      triggerHaptic("selection");
+                      handleFormChange("network", "mastercard");
+                    }}
+                  >
+                    <MastercardBadge width={30} height={20} />
+                    <span>Mastercard</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className={`add-card-network-btn ${formData.network === "amex" ? "is-selected" : ""}`}
+                    onClick={() => {
+                      triggerHaptic("selection");
+                      handleFormChange("network", "amex");
+                    }}
+                  >
+                    <AmexBadge width={34} height={17} />
+                    <span>Amex</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {!selectedProvider.isPhone && selectedProvider.category !== "savings" && (
+              <div className="add-card-field">
+                <label className="add-card-input-lbl">Card Type</label>
+                <div className="add-card-type-toggle">
+                  <button
+                    type="button"
+                    className={`add-card-type-pill ${formData.type === "credit" ? "is-selected" : ""}`}
+                    onClick={() => {
+                      triggerHaptic("selection");
+                      handleFormChange("type", "credit");
+                    }}
+                  >
+                    Credit Card
+                  </button>
+                  <button
+                    type="button"
+                    className={`add-card-type-pill ${formData.type === "debit" ? "is-selected" : ""}`}
+                    onClick={() => {
+                      triggerHaptic("selection");
+                      handleFormChange("type", "debit");
+                    }}
+                  >
+                    Debit Card
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {selectedProvider.id === "custom" && (
+              <div className="add-card-field">
+                <label className="add-card-input-lbl">Bank / Card Name</label>
+                <input
+                  className="add-card-native-input"
+                  type="text"
+                  maxLength={30}
+                  placeholder="e.g. Chase Sapphire, Revolut, HSBC"
+                  value={formData.name}
+                  onChange={(e) => handleFormChange("name", e.target.value)}
+                />
+              </div>
+            )}
+
+            {selectedProvider.id === "custom" && (
+              <div className="add-card-field">
+                <label className="add-card-input-lbl">Card Theme &amp; Color</label>
+                <div className="card-options-theme-grid">
+                  {CARD_THEMES.map((theme) => {
+                    const isSelected = (formData.gradient || selectedProvider.gradient) === theme.gradient;
+                    return (
+                      <button
+                        key={theme.id}
+                        type="button"
+                        className={`card-options-theme-swatch ${isSelected ? "is-selected" : ""}`}
+                        style={{ background: theme.gradient }}
+                        title={theme.name}
+                        onClick={() => {
+                          triggerHaptic("selection");
+                          setFormData((prev) => ({
+                            ...prev,
+                            color: theme.color,
+                            gradient: theme.gradient,
+                          }));
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             <div className="add-card-field">
               <label className="add-card-input-lbl">Card Holder Name</label>
@@ -3114,7 +3358,7 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
               className="add-card-home-cta"
               onClick={onClose}
             >
-              Go Home
+              View Cards
             </button>
           </div>
         </div>
@@ -3123,64 +3367,7 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
   );
 }
 
-const CARD_THEMES = [
-  {
-    id: "emerald",
-    name: "Emerald Vault",
-    color: "#047857",
-    gradient:
-      "linear-gradient(135deg, #065f46 0%, #047857 35%, #064e3b 70%, #022c22 100%)",
-  },
-  {
-    id: "obsidian",
-    name: "Obsidian Slate",
-    color: "#1e293b",
-    gradient:
-      "linear-gradient(135deg, #334155 0%, #1e293b 60%, #0f172a 100%)",
-  },
-  {
-    id: "purple",
-    name: "Royal Purple",
-    color: "#6358DC",
-    gradient:
-      "linear-gradient(135deg, #7c3aed 0%, #6366f1 50%, #4338ca 100%)",
-  },
-  {
-    id: "berry",
-    name: "Velvet Berry",
-    color: "#831843",
-    gradient:
-      "linear-gradient(135deg, #831843 0%, #701a75 40%, #4a044e 70%, #2e0238 100%)",
-  },
-  {
-    id: "navy",
-    name: "Sapphire Navy",
-    color: "#004c8f",
-    gradient:
-      "linear-gradient(135deg, #004c8f 0%, #002d56 70%, #001933 100%)",
-  },
-  {
-    id: "amber",
-    name: "Sunset Amber",
-    color: "#b45309",
-    gradient:
-      "linear-gradient(135deg, #d97706 0%, #b45309 50%, #78350f 100%)",
-  },
-  {
-    id: "teal",
-    name: "Teal Digital",
-    color: "#0f766e",
-    gradient:
-      "linear-gradient(135deg, #14b8a6 0%, #0f766e 60%, #134e4a 100%)",
-  },
-  {
-    id: "crimson",
-    name: "Crimson Red",
-    color: "#b91c1c",
-    gradient:
-      "linear-gradient(135deg, #dc2626 0%, #b91c1c 60%, #7f1d1d 100%)",
-  },
-];
+
 
 function CardOptionsSheet({
   initialCardId,
@@ -3288,14 +3475,6 @@ function CardOptionsSheet({
               Manage and customize your cards
             </span>
           </div>
-          <button
-            type="button"
-            className="sheet-close-pill-btn"
-            onClick={onClose}
-            aria-label="Close"
-          >
-            ×
-          </button>
         </div>
 
         {/* Card Selector Pills Track */}

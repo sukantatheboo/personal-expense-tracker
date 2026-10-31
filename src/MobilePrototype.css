@@ -4555,6 +4555,16 @@ a:active,
   justify-content: space-between;
   margin-bottom: 12px;
   position: relative;
+  min-height: 36px;
+}
+.mobile-prototype .add-card-header-bar.is-centered {
+  justify-content: center;
+}
+.mobile-prototype .add-card-header-spacer {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  pointer-events: none;
 }
 .mobile-prototype .add-card-title {
   font-size: 18.5px;
@@ -4565,8 +4575,7 @@ a:active,
   flex: 1;
   letter-spacing: -0.02em;
 }
-.mobile-prototype .add-card-back-btn,
-.mobile-prototype .add-card-close-btn {
+.mobile-prototype .add-card-back-btn {
   display: grid;
   place-items: center;
   width: 36px;
@@ -4581,8 +4590,7 @@ a:active,
   touch-action: manipulation;
   transition: transform 140ms ease, background-color 140ms ease;
 }
-.mobile-prototype .add-card-back-btn:active,
-.mobile-prototype .add-card-close-btn:active {
+.mobile-prototype .add-card-back-btn:active {
   transform: scale(0.92);
 }
 .mobile-prototype .add-card-search-wrap {
@@ -4628,12 +4636,49 @@ a:active,
   cursor: pointer;
   padding: 4px;
 }
+.mobile-prototype .add-card-filter-track {
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  margin: 10px 0 14px;
+  padding: 2px 2px 4px;
+}
+.mobile-prototype .add-card-filter-track::-webkit-scrollbar {
+  display: none;
+}
+.mobile-prototype .add-card-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 750;
+  cursor: pointer;
+  white-space: nowrap;
+  touch-action: manipulation;
+  transition: all 160ms ease;
+}
+.mobile-prototype .add-card-filter-chip.is-active {
+  background: var(--ink);
+  color: var(--bg);
+  border-color: var(--ink);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+.mobile-prototype .add-card-filter-chip:active {
+  transform: scale(0.95);
+}
 .mobile-prototype .add-card-template-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-height: calc(72vh - 110px);
-  max-height: calc(72dvh - 110px);
+  max-height: calc(72vh - 150px);
+  max-height: calc(72dvh - 150px);
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 2px;
@@ -4704,6 +4749,67 @@ a:active,
   font-size: 12px;
   color: var(--mut);
 }
+.mobile-prototype .add-card-template-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.mobile-prototype .add-card-type-label {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+.mobile-prototype .add-card-type-label.is-mfs {
+  background: rgba(226, 19, 110, 0.12);
+  color: #e2136e;
+}
+.mobile-prototype .add-card-type-label.is-visa {
+  background: rgba(14, 116, 144, 0.12);
+  color: #0284c7;
+}
+.mobile-prototype .add-card-type-label.is-mastercard {
+  background: rgba(234, 88, 12, 0.12);
+  color: #ea580c;
+}
+.mobile-prototype .add-card-type-label.is-savings {
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+}
+.mobile-prototype .add-card-type-label.is-bank {
+  background: rgba(99, 102, 241, 0.12);
+  color: #6366f1;
+}
+.mobile-prototype .add-card-type-label.is-custom {
+  background: rgba(147, 51, 234, 0.12);
+  color: #9333ea;
+}
+[data-theme="dark"] .mobile-prototype .add-card-type-label.is-mfs {
+  background: rgba(226, 19, 110, 0.22);
+  color: #f472b6;
+}
+[data-theme="dark"] .mobile-prototype .add-card-type-label.is-visa {
+  background: rgba(14, 165, 233, 0.2);
+  color: #38bdf8;
+}
+[data-theme="dark"] .mobile-prototype .add-card-type-label.is-mastercard {
+  background: rgba(249, 115, 22, 0.2);
+  color: #fb923c;
+}
+[data-theme="dark"] .mobile-prototype .add-card-type-label.is-savings {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+}
+[data-theme="dark"] .mobile-prototype .add-card-type-label.is-bank {
+  background: rgba(99, 102, 241, 0.22);
+  color: #818cf8;
+}
+[data-theme="dark"] .mobile-prototype .add-card-type-label.is-custom {
+  background: rgba(168, 85, 247, 0.22);
+  color: #c084fc;
+}
 .mobile-prototype .add-card-currency-badge {
   font-size: 11px;
   font-weight: 800;
@@ -4723,6 +4829,78 @@ a:active,
 }
 
 /* Customize Form */
+.mobile-prototype .add-card-network-selector {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.mobile-prototype .add-card-network-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 6px;
+  border-radius: 14px;
+  border: 1.5px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 11.5px;
+  font-weight: 750;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: all 160ms ease;
+}
+.mobile-prototype .add-card-network-btn:active {
+  transform: scale(0.96);
+}
+.mobile-prototype .add-card-network-btn.is-selected {
+  border-color: #2563eb;
+  background: rgba(37, 99, 235, 0.1);
+  color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25);
+}
+[data-theme="dark"] .mobile-prototype .add-card-network-btn.is-selected {
+  border-color: #60a5fa;
+  background: rgba(59, 130, 246, 0.18);
+  color: #60a5fa;
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.35);
+}
+.mobile-prototype .add-card-type-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.mobile-prototype .add-card-type-pill {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 42px;
+  border-radius: 14px;
+  border: 1.5px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 750;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: all 160ms ease;
+}
+.mobile-prototype .add-card-type-pill:active {
+  transform: scale(0.96);
+}
+.mobile-prototype .add-card-type-pill.is-selected {
+  border-color: #2563eb;
+  background: rgba(37, 99, 235, 0.1);
+  color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25);
+}
+[data-theme="dark"] .mobile-prototype .add-card-type-pill.is-selected {
+  border-color: #60a5fa;
+  background: rgba(59, 130, 246, 0.18);
+  color: #60a5fa;
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.35);
+}
 .mobile-prototype .add-card-live-preview-wrap {
   width: 100%;
   max-width: 350px;
@@ -4833,21 +5011,32 @@ a:active,
 
 /* Success Modal matching video */
 .mobile-prototype .add-card-success-sheet {
-  padding: 24px 16px 20px;
+  padding: 28px 20px calc(24px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   text-align: center;
+  width: 100%;
 }
 .mobile-prototype .add-card-success-card {
   display: flex;
   flex-direction: column;
   align-items: center;
-  max-width: 320px;
+  justify-content: center;
+  text-align: center;
+  width: 100%;
+  max-width: 350px;
   margin: 0 auto;
 }
 .mobile-prototype .add-card-success-icon-wrap {
-  width: 76px;
-  height: 76px;
-  margin: 8px auto 20px;
+  width: 80px;
+  height: 80px;
+  margin: 12px auto 22px;
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .mobile-prototype .add-card-success-svg {
   width: 100%;
@@ -4899,27 +5088,36 @@ a:active,
   color: var(--ink);
   margin: 0 0 10px;
   line-height: 1.3;
+  text-align: center;
+  width: 100%;
 }
 .mobile-prototype .add-card-success-desc {
   font-size: 14.5px;
   color: var(--mut);
-  margin: 0 0 26px;
+  margin: 0 0 28px;
   line-height: 1.5;
-  max-width: 280px;
+  max-width: 300px;
+  text-align: center;
 }
 .mobile-prototype .add-card-home-cta {
   width: 100%;
-  height: 50px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
   border-radius: 16px;
   border: 0;
   background: #2563eb;
   color: #ffffff;
   font-size: 16px;
   font-weight: 800;
+  letter-spacing: 0.01em;
   cursor: pointer;
   touch-action: manipulation;
   box-shadow: 0 6px 20px rgba(37, 99, 235, 0.35);
   transition: transform 160ms ease, background-color 160ms ease;
+  margin-top: 6px;
 }
 .mobile-prototype .add-card-home-cta:active {
   transform: scale(0.97);
