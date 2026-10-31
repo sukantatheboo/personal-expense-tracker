@@ -17,7 +17,7 @@ create extension if not exists pg_net;
 delete from vault.secrets where name in ('project_url', 'cron_secret');
 
 select vault.create_secret('https://eipexdfsblfyegycbigd.supabase.co', 'project_url');
-select vault.create_secret('f7d31ee2709925a1c089abe0605ec1b2d66e38f1e5bdd5380afff5a170aa8069', 'cron_secret');
+select vault.create_secret('d829c5457745e7e320e84040c578014833772be741276dec0d9fa5e1198aef85', 'cron_secret');
 
 -- 3. Schedule the edge function to run every 5 minutes with authorization
 select cron.schedule(
