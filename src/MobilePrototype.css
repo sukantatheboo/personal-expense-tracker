@@ -740,10 +740,25 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  border: 1px solid transparent;
   background: var(--card);
   border-radius: 16px;
   padding: 0 14px;
   box-shadow: var(--shadow);
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease;
+}
+.mobile-prototype .srch:focus-within {
+  border-color: color-mix(in srgb, var(--g) 38%, var(--line));
+  background: color-mix(in srgb, var(--card) 96%, var(--g) 4%);
+}
+.mobile-prototype .srch > svg {
+  color: var(--mut);
+  transition: color 180ms ease;
+}
+.mobile-prototype .srch:focus-within > svg {
+  color: var(--g);
 }
 .mobile-prototype .srch input {
   flex: 1;
@@ -1369,7 +1384,11 @@
   .mobile-prototype .prototype-header-back,
   .mobile-prototype .mn button,
   .mobile-prototype .mon button,
-  .mobile-prototype .tabs nav .fab {
+  .mobile-prototype .tabs nav .fab,
+  .mobile-prototype .srch,
+  .mobile-prototype .srch > svg,
+  .mobile-prototype .amt input,
+  .mobile-prototype .in {
     transition: none;
   }
 
@@ -1495,6 +1514,9 @@
   border-radius: 18px;
   background: var(--bg);
   padding: 8px 12px;
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease;
   outline: 0;
   text-align: center;
   letter-spacing: -0.03em;
@@ -1506,15 +1528,19 @@
   background: var(--bg);
   border-radius: 16px;
   padding: 14px;
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease;
   outline: 0;
 }
 .mobile-prototype .in:focus {
-  border-color: var(--line);
+  border-color: color-mix(in srgb, var(--g) 38%, var(--line));
+  background-color: color-mix(in srgb, var(--bg) 96%, var(--g) 4%);
 }
 .mobile-prototype input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="button"]):not([type="submit"]):not([type="reset"]):focus,
 .mobile-prototype textarea:focus,
 .mobile-prototype select:focus {
-  border-color: var(--line);
+  border-color: color-mix(in srgb, var(--g) 38%, var(--line));
   outline: none;
   box-shadow: none;
 }
