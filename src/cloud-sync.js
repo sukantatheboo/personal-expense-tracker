@@ -50,11 +50,28 @@ function mergeAccountDataWithRawSnapshot(normalizedAccountData, rawSnapshotData)
       : {}),
   };
 
-  const mergedCards = Array.isArray(rawSettings.cards)
-    ? rawSettings.cards
-    : Array.isArray(normSettings.cards)
-      ? normSettings.cards
-      : [];
+  const cardMap = new Map();
+  if (Array.isArray(normSettings.cards)) {
+    for (const c of normSettings.cards) if (c?.id) cardMap.set(c.id, c);
+  }
+  if (Array.isArray(rawSettings.cards)) {
+    for (const c of rawSettings.cards) {
+      if (!c?.id) continue;
+      const existing = cardMap.get(c.id);
+      const cTime =
+        typeof c.updatedAt === "number"
+          ? c.updatedAt
+          : Date.parse(c.updatedAt) || 0;
+      const exTime =
+        typeof existing?.updatedAt === "number"
+          ? existing.updatedAt
+          : Date.parse(existing?.updatedAt) || 0;
+      if (!existing || cTime >= exTime) {
+        cardMap.set(c.id, c);
+      }
+    }
+  }
+  const mergedCards = Array.from(cardMap.values());
 
   const normTransactions = Array.isArray(normalizedAccountData?.transactions)
     ? normalizedAccountData.transactions
@@ -76,7 +93,17 @@ function mergeAccountDataWithRawSnapshot(normalizedAccountData, rawSnapshotData)
     if (tx?.id && !txMap.has(tx.id)) txMap.set(tx.id, tx);
   }
   for (const tx of rawTransactions) {
-    if (tx?.id && !txMap.has(tx.id) && !isLegacyDbCompatibleTransaction(tx)) {
+    if (!tx?.id) continue;
+    const existing = txMap.get(tx.id);
+    const txTime =
+      typeof tx.updatedAt === "number"
+        ? tx.updatedAt
+        : Date.parse(tx.updatedAt) || 0;
+    const exTime =
+      typeof existing?.updatedAt === "number"
+        ? existing.updatedAt
+        : Date.parse(existing?.updatedAt) || 0;
+    if (!existing || txTime > exTime) {
       txMap.set(tx.id, tx);
     }
   }
@@ -100,6 +127,8 @@ function mergeAccountDataWithRawSnapshot(normalizedAccountData, rawSnapshotData)
         rawSettings.cardsConfigured === true ||
         normSettings.cardsConfigured === true ||
         mergedCards.length > 0,
+      configured:
+        rawSettings.configured === true || normSettings.configured === true,
       updatedAt: Math.max(rawUpdatedAt, normUpdatedAt),
     },
     transactions: Array.from(txMap.values()),

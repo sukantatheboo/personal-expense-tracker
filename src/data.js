@@ -129,19 +129,6 @@ export function getAccountOptions(accountData) {
   return [];
 }
 
-export function isSeededDemoCard(card) {
-  if (!card || typeof card !== "object") return false;
-  if (card.createdAt || card.updatedAt) return false;
-  const demoMatch = DEFAULT_CARDS.find((d) => d.id === card.id);
-  if (!demoMatch) return false;
-  return (
-    card.name === demoMatch.name &&
-    card.number === demoMatch.number &&
-    card.holderName === demoMatch.holderName &&
-    card.provider === demoMatch.provider
-  );
-}
-
 export function hasSeededDemoBalances(balances) {
   if (!balances || typeof balances !== "object") return false;
   return (
@@ -151,6 +138,25 @@ export function hasSeededDemoBalances(balances) {
     Number(balances.bank) === 15000 &&
     Number(balances.savings) === 50000
   );
+}
+
+export function isPureUnconfiguredDemoState(saved) {
+  if (!saved || typeof saved !== "object") return false;
+  const settings = saved.settings || {};
+  if (settings.configured === true || settings.cardsConfigured === true) return false;
+  if (Array.isArray(saved.transactions) && saved.transactions.length > 0) return false;
+
+  const rawBalances = settings.balances || {};
+  if (!hasSeededDemoBalances(rawBalances)) return false;
+
+  const rawCards = Array.isArray(settings.cards) ? settings.cards : [];
+  if (rawCards.length === 0) return false;
+  const hasCustomCards = rawCards.some(
+    (c) => c?.createdAt || c?.updatedAt || !DEFAULT_CARDS.some((d) => d.id === c?.id),
+  );
+  if (hasCustomCards) return false;
+
+  return true;
 }
 
 export const PRIMARY_CURRENCY = "BDT";
@@ -239,23 +245,45 @@ export function loadBudgets(saved = readStorage(STORAGE_KEYS.budgets, {})) {
 
 export function isAccountId(value, accountData = null) {
   if (!value || typeof value !== "string") return false;
-  if (ACCOUNT_OPTIONS.some(([id]) => id === value)) return true;
-  if (DEFAULT_CARDS.some((c) => c.id === value)) return true;
-  if (value.startsWith("card_")) return true;
-  if (accountData?.settings?.cards?.some((c) => c.id === value)) return true;
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  if (ACCOUNT_OPTIONS.some(([id]) => id === trimmed)) return true;
+  if (DEFAULT_CARDS.some((c) => c.id === trimmed)) return true;
+  if (trimmed.startsWith("card_")) return true;
+  if (accountData?.settings?.cards?.some((c) => c.id === trimmed)) return true;
   if (
     accountData?.settings?.balances &&
-    Object.hasOwn(accountData.settings.balances, value)
+    Object.hasOwn(accountData.settings.balances, trimmed)
+  )
+    return true;
+  if (
+    Array.isArray(accountData?.transactions) &&
+    accountData.transactions.some(
+      (t) =>
+        t.account === trimmed ||
+        t.fromAccount === trimmed ||
+        t.toAccount === trimmed,
+    )
   )
     return true;
   try {
     const saved = JSON.parse(
       localStorage.getItem(STORAGE_KEYS.accounts) || "null",
     );
-    if (saved?.settings?.cards?.some((c) => c.id === value)) return true;
+    if (saved?.settings?.cards?.some((c) => c.id === trimmed)) return true;
     if (
       saved?.settings?.balances &&
-      Object.hasOwn(saved.settings.balances, value)
+      Object.hasOwn(saved.settings.balances, trimmed)
+    )
+      return true;
+    if (
+      Array.isArray(saved?.transactions) &&
+      saved.transactions.some(
+        (t) =>
+          t.account === trimmed ||
+          t.fromAccount === trimmed ||
+          t.toAccount === trimmed,
+      )
     )
       return true;
   } catch {}
@@ -319,17 +347,22 @@ function isValidAccountTransaction(item, accountData = null) {
     !isValidDateString(item.date)
   )
     return false;
-  if (item.type === "income") return isAccountId(item.account, accountData);
-  if (item.type === "adjustment")
+  const type = item.type === "adjust" ? "adjustment" : item.type;
+  const acct = item.account || item.accountId;
+  const fromAcct = item.fromAccount || item.from_account || item.fromAccountId;
+  const toAcct = item.toAccount || item.to_account || item.toAccountId;
+
+  if (type === "income") return isAccountId(acct, accountData);
+  if (type === "adjustment")
     return (
-      isAccountId(item.account, accountData) &&
-      ["increase", "decrease"].includes(item.direction)
+      isAccountId(acct, accountData) &&
+      ["increase", "decrease", "up", "down"].includes(item.direction)
     );
-  if (item.type === "transfer")
+  if (type === "transfer")
     return (
-      isAccountId(item.fromAccount, accountData) &&
-      isAccountId(item.toAccount, accountData) &&
-      item.fromAccount !== item.toAccount
+      isAccountId(fromAcct, accountData) &&
+      isAccountId(toAcct, accountData) &&
+      fromAcct !== toAcct
     );
   return false;
 }
@@ -338,6 +371,8 @@ export function loadAccountData(
   saved = readStorage(STORAGE_KEYS.accounts, null),
 ) {
   if (!saved || typeof saved !== "object") return emptyAccountData();
+  if (isPureUnconfiguredDemoState(saved)) return emptyAccountData();
+
   const settings = saved.settings || {};
   const rawBalances = settings.balances || {};
   const cleanBalance = (value) => {
@@ -348,33 +383,120 @@ export function loadAccountData(
   };
 
   const rawCards = Array.isArray(settings.cards) ? settings.cards : [];
-  const cards = rawCards.filter(
-    (card) =>
+  const cardMap = new Map();
+
+  for (const card of rawCards) {
+    if (
       card &&
       typeof card === "object" &&
       typeof card.id === "string" &&
-      card.id.trim().length > 0 &&
-      !isSeededDemoCard(card),
-  );
+      card.id.trim()
+    ) {
+      const id = card.id.trim();
+      const existingMatch = DEFAULT_CARDS.find((d) => d.id === id);
+      const createdAt =
+        typeof card.createdAt === "number"
+          ? card.createdAt
+          : Date.parse(card.createdAt) || Date.now();
+      const updatedAt =
+        typeof card.updatedAt === "number"
+          ? card.updatedAt
+          : Date.parse(card.updatedAt) || createdAt;
+      cardMap.set(id, {
+        ...(existingMatch || {}),
+        ...card,
+        id,
+        name: card.name || existingMatch?.name || id,
+        holderName:
+          card.holderName || existingMatch?.holderName || "Cardholder",
+        type: card.type || existingMatch?.type || "credit",
+        network: card.network || existingMatch?.network || "visa",
+        number: card.number || existingMatch?.number || "",
+        expiry: card.expiry || existingMatch?.expiry || "",
+        cvv: card.cvv || existingMatch?.cvv || "",
+        color: card.color || existingMatch?.color || "#1e293b",
+        gradient: card.gradient || existingMatch?.gradient || "",
+        createdAt,
+        updatedAt,
+      });
+    }
+  }
 
-  const isDemoBalanceSet =
-    settings.configured !== true && hasSeededDemoBalances(rawBalances);
-  const balances = isDemoBalanceSet ? {} : rawBalances;
+  // Self-healing recovery: reconstruct accounts referenced in transactions or non-zero balances
+  const allReferencedAccountIds = new Set();
+  for (const [key, val] of Object.entries(rawBalances)) {
+    if (
+      Number(val) > 0 ||
+      key === "bkash" ||
+      key === "bank" ||
+      key === "savings"
+    ) {
+      allReferencedAccountIds.add(key);
+    }
+  }
+  if (Array.isArray(saved.transactions)) {
+    for (const t of saved.transactions) {
+      const acct = t?.account || t?.accountId;
+      const fromAcct = t?.fromAccount || t?.from_account || t?.fromAccountId;
+      const toAcct = t?.toAccount || t?.to_account || t?.toAccountId;
+      if (acct) allReferencedAccountIds.add(acct);
+      if (fromAcct) allReferencedAccountIds.add(fromAcct);
+      if (toAcct) allReferencedAccountIds.add(toAcct);
+    }
+  }
+
+  const isBrandNewAccount =
+    !settings.configured &&
+    !settings.cardsConfigured &&
+    rawCards.length === 0 &&
+    (!Array.isArray(saved.transactions) ||
+      saved.transactions.length === 0) &&
+    Object.values(rawBalances).every((v) => Number(v) === 0);
+
+  if (!isBrandNewAccount) {
+    for (const accountId of allReferencedAccountIds) {
+      if (!cardMap.has(accountId)) {
+        const defaultMatch = DEFAULT_CARDS.find((d) => d.id === accountId);
+        if (defaultMatch) {
+          cardMap.set(accountId, {
+            ...defaultMatch,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          });
+        } else {
+          cardMap.set(accountId, {
+            id: accountId,
+            name: accountId.startsWith("card_") ? "Account" : accountId,
+            holderName: "Cardholder",
+            type: "debit",
+            network: "visa",
+            number: "",
+            expiry: "",
+            cvv: "",
+            color: "#1e293b",
+            gradient:
+              "linear-gradient(135deg, #334155 0%, #1e293b 60%, #0f172a 100%)",
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          });
+        }
+      }
+    }
+  }
+
+  const cards = Array.from(cardMap.values());
 
   const initialBalances = {
-    bkash: cleanBalance(balances.bkash),
-    bank: cleanBalance(balances.bank),
-    savings: cleanBalance(balances.savings),
+    bkash: cleanBalance(rawBalances.bkash),
+    bank: cleanBalance(rawBalances.bank),
+    savings: cleanBalance(rawBalances.savings),
   };
-  for (const [key, val] of Object.entries(balances)) {
-    if (isDemoBalanceSet && (key === "amazon" || key === "citi")) continue;
+  for (const [key, val] of Object.entries(rawBalances)) {
     initialBalances[key] = cleanBalance(val);
   }
   for (const card of cards) {
-    if (balances[card.id] !== undefined) {
-      initialBalances[card.id] = cleanBalance(balances[card.id]);
-    } else if (initialBalances[card.id] === undefined) {
-      initialBalances[card.id] = 0;
+    if (initialBalances[card.id] === undefined) {
+      initialBalances[card.id] = cleanBalance(card.initialBalance);
     }
   }
 
@@ -392,7 +514,7 @@ export function loadAccountData(
         : localDate(),
       balances: initialBalances,
       cards,
-      configured: settings.configured === true,
+      configured: settings.configured === true || cards.length > 0,
       cardsConfigured:
         settings.cardsConfigured === true || cards.length > 0,
       updatedAt:
@@ -411,11 +533,37 @@ export function loadAccountData(
           )
           .map((item) => ({
             ...item,
+            ...(item.account || item.accountId
+              ? { account: item.account || item.accountId }
+              : {}),
+            ...(item.fromAccount || item.from_account
+              ? { fromAccount: item.fromAccount || item.from_account }
+              : {}),
+            ...(item.toAccount || item.to_account
+              ? { toAccount: item.toAccount || item.to_account }
+              : {}),
+            type: item.type === "adjust" ? "adjustment" : item.type,
+            direction:
+              item.direction === "up"
+                ? "increase"
+                : item.direction === "down"
+                  ? "decrease"
+                  : item.direction,
             amount: Math.round(Number(item.amount) * 100) / 100,
             description:
               typeof item.description === "string"
                 ? item.description.slice(0, 80)
-                : "",
+                : typeof item.note === "string"
+                  ? item.note.slice(0, 80)
+                  : "",
+            createdAt:
+              typeof item.createdAt === "number"
+                ? item.createdAt
+                : Date.parse(item.createdAt) || Date.now(),
+            updatedAt:
+              typeof item.updatedAt === "number"
+                ? item.updatedAt
+                : Date.parse(item.updatedAt) || Date.now(),
           }))
       : [],
   };

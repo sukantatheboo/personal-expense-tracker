@@ -96,6 +96,9 @@ begin
   loop
     v_id := nullif(btrim(coalesce(v_tx->>'id', '')), '');
     v_type := coalesce(v_tx->>'type', '');
+    if v_type in ('adjustment', 'adjust') then
+      v_type := 'adjustment';
+    end if;
     v_amount := round(coalesce(public.spend_try_parse_numeric(v_tx->>'amount'), 0), 2);
     v_date := public.spend_try_parse_date(v_tx->>'date');
     v_description := left(coalesce(v_tx->>'description', ''), 80);
@@ -195,13 +198,27 @@ begin
       deleted_at = null;
   end loop;
 
-  update public.spend_account_transactions
-  set
-    deleted_at = timezone('utc', now()),
-    updated_at = timezone('utc', now())
-  where user_id = new.user_id
-    and deleted_at is null
-    and not (id = any(v_seen_ids));
+  declare
+    v_deleted jsonb := new.data #> '{deletedRecords,accountTransactions}';
+    v_tombstone record;
+  begin
+    if jsonb_typeof(v_deleted) = 'object' then
+      for v_tombstone in select key, value from jsonb_each(v_deleted)
+      loop
+        if char_length(v_tombstone.key) between 1 and 120 then
+          if v_tombstone.value ->> 'deleted' = 'true' then
+            update public.spend_account_transactions
+            set deleted_at = timezone('utc', now()), updated_at = timezone('utc', now())
+            where user_id = new.user_id and id = v_tombstone.key and deleted_at is null;
+          elsif v_tombstone.value ->> 'deleted' = 'false' then
+            update public.spend_account_transactions
+            set deleted_at = null, updated_at = timezone('utc', now())
+            where user_id = new.user_id and id = v_tombstone.key and deleted_at is not null;
+          end if;
+        end if;
+      end loop;
+    end if;
+  end;
 
   return new;
 end;

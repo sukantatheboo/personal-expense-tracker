@@ -230,6 +230,7 @@ function emptyDeletedRecords() {
     budgets: {},
     recurringSchedules: {},
     accountTransactions: {},
+    cards: {},
   };
 }
 
@@ -269,6 +270,7 @@ function normalizeDeletedRecords(value) {
     budgets: cleanChanges(value?.budgets),
     recurringSchedules: cleanChanges(value?.recurringSchedules),
     accountTransactions: cleanChanges(value?.accountTransactions),
+    cards: cleanChanges(value?.cards),
   };
 }
 
@@ -554,6 +556,93 @@ function hasMeaningfulLocalAccountSettings(data) {
   return hasMeaningfulAccountSettings(data.accountData.settings);
 }
 
+function mergeAccountSettings(
+  localSettings = {},
+  cloudSettings = {},
+  deletedRecords = {},
+  preferLocal = true,
+) {
+  const localCards = Array.isArray(localSettings.cards)
+    ? localSettings.cards
+    : [];
+  const cloudCards = Array.isArray(cloudSettings.cards)
+    ? cloudSettings.cards
+    : [];
+  const deletedCardTombstones = deletedRecords.cards || {};
+
+  const cardMap = new Map();
+  for (const card of cloudCards) {
+    if (!card?.id) continue;
+    const tombstone = deletedCardTombstones[card.id];
+    const cardTime = recordUpdatedAt(card);
+    if (tombstone?.deleted && tombstone.updatedAt >= cardTime) continue;
+    cardMap.set(card.id, card);
+  }
+  for (const card of localCards) {
+    if (!card?.id) continue;
+    const tombstone = deletedCardTombstones[card.id];
+    const cardTime = recordUpdatedAt(card);
+    if (tombstone?.deleted && tombstone.updatedAt >= cardTime) continue;
+    const cloudCard = cardMap.get(card.id);
+    if (!cloudCard || preferLocalRecord(card, cloudCard, preferLocal)) {
+      cardMap.set(card.id, card);
+    }
+  }
+
+  const localBalances =
+    localSettings.balances && typeof localSettings.balances === "object"
+      ? localSettings.balances
+      : {};
+  const cloudBalances =
+    cloudSettings.balances && typeof cloudSettings.balances === "object"
+      ? cloudSettings.balances
+      : {};
+
+  const mergedBalances = { ...cloudBalances };
+  for (const [id, val] of Object.entries(localBalances)) {
+    if (mergedBalances[id] === undefined) {
+      mergedBalances[id] = val;
+    } else {
+      const localTime = recordUpdatedAt(localSettings);
+      const cloudTime = recordUpdatedAt(cloudSettings);
+      if (
+        (preferLocal && (localTime >= cloudTime || mergedBalances[id] === 0)) ||
+        localTime > cloudTime
+      ) {
+        mergedBalances[id] = val;
+      }
+    }
+  }
+
+  for (const card of cardMap.values()) {
+    if (mergedBalances[card.id] === undefined) {
+      mergedBalances[card.id] = card.initialBalance ?? 0;
+    }
+  }
+
+  const mergedCards = Array.from(cardMap.values());
+  const localTime = recordUpdatedAt(localSettings);
+  const cloudTime = recordUpdatedAt(cloudSettings);
+
+  return {
+    startDate:
+      localSettings.startDate && cloudSettings.startDate
+        ? localSettings.startDate < cloudSettings.startDate
+          ? localSettings.startDate
+          : cloudSettings.startDate
+        : localSettings.startDate || cloudSettings.startDate || localDate(),
+    balances: mergedBalances,
+    cards: mergedCards,
+    configured: Boolean(localSettings.configured || cloudSettings.configured),
+    cardsConfigured: Boolean(
+      localSettings.cardsConfigured ||
+        cloudSettings.cardsConfigured ||
+        mergedCards.length > 0,
+    ),
+    updatedAt: Math.max(localTime, cloudTime, Date.now()),
+  };
+}
+
 function mergeCloudSnapshots(
   local,
   cloud,
@@ -587,7 +676,7 @@ function mergeCloudSnapshots(
     return {
       expenses: mergeExpenseRecords(
         cloudExpenses,
-        [],
+        local.expenses,
         deletedRecords.expenses,
         false,
       ),
@@ -595,15 +684,20 @@ function mergeCloudSnapshots(
       budgetUpdatedAt: budgetData.updatedAt,
       recurringSchedules: mergeRecords(
         cloudSchedules,
-        [],
+        local.recurringSchedules,
         deletedRecords.recurringSchedules,
         false,
       ),
       accountData: {
-        ...cloudAccounts,
+        settings: mergeAccountSettings(
+          local.accountData.settings,
+          cloudAccounts.settings,
+          deletedRecords,
+          false,
+        ),
         transactions: mergeRecords(
           cloudAccounts.transactions,
-          [],
+          local.accountData.transactions,
           deletedRecords.accountTransactions,
           false,
         ),
@@ -628,6 +722,7 @@ function mergeCloudSnapshots(
       cloudExpenses,
       local.expenses,
       deletedRecords.expenses,
+      true,
     ),
     budgets: budgetData.budgets,
     budgetUpdatedAt: budgetData.updatedAt,
@@ -635,22 +730,20 @@ function mergeCloudSnapshots(
       cloudSchedules,
       local.recurringSchedules,
       deletedRecords.recurringSchedules,
+      true,
     ),
     accountData: {
-      settings:
-        preferLocalAccountSettings &&
-        hasMeaningfulLocalAccountSettings(local) &&
-        preferLocalRecord(
-          local.accountData.settings,
-          cloudAccounts.settings,
-          true,
-        )
-          ? local.accountData.settings
-          : cloudAccounts.settings,
+      settings: mergeAccountSettings(
+        local.accountData.settings,
+        cloudAccounts.settings,
+        deletedRecords,
+        preferLocalAccountSettings,
+      ),
       transactions: mergeRecords(
         cloudAccounts.transactions,
         local.accountData.transactions,
         deletedRecords.accountTransactions,
+        true,
       ),
     },
     deletedRecords,
@@ -984,14 +1077,29 @@ export default function App() {
     const snapshot = loadLocalUserSnapshot(userId);
     adoptLocalDataForUser(userId);
     if (snapshot) {
-      applyCloudSnapshot(snapshot);
-      setStartingBalances({
-        bkash: String(snapshot.accountData.settings.balances.bkash),
-        bank: String(snapshot.accountData.settings.balances.bank),
-        savings: String(snapshot.accountData.settings.balances.savings),
-        date: snapshot.accountData.settings.startDate,
-      });
-    } else {
+      if (hasMeaningfulLocalData(cloudSnapshotRef.current)) {
+        const merged = mergeCloudSnapshots(
+          cloudSnapshotRef.current,
+          snapshot,
+          true,
+        );
+        applyCloudSnapshot(merged);
+        setStartingBalances({
+          bkash: String(merged.accountData.settings.balances.bkash || 0),
+          bank: String(merged.accountData.settings.balances.bank || 0),
+          savings: String(merged.accountData.settings.balances.savings || 0),
+          date: merged.accountData.settings.startDate,
+        });
+      } else {
+        applyCloudSnapshot(snapshot);
+        setStartingBalances({
+          bkash: String(snapshot.accountData.settings.balances.bkash || 0),
+          bank: String(snapshot.accountData.settings.balances.bank || 0),
+          savings: String(snapshot.accountData.settings.balances.savings || 0),
+          date: snapshot.accountData.settings.startDate,
+        });
+      }
+    } else if (!hasMeaningfulLocalData(cloudSnapshotRef.current)) {
       resetDataForNewUser();
     }
   }
@@ -2675,8 +2783,11 @@ export default function App() {
       };
     });
 
+    setRecordDeleted("cards", cardId, true);
+
     if (existingCard) {
       const restore = () => {
+        setRecordDeleted("cards", cardId, false);
         setAccountData((current) => {
           const currentCards = Array.isArray(current.settings.cards)
             ? current.settings.cards
@@ -3104,6 +3215,12 @@ export default function App() {
           createdAt: transaction.createdAt ?? restoreTimestamp,
           updatedAt: restoreTimestamp,
         })),
+      });
+      setStartingBalances({
+        bkash: String(restoredAccounts.settings.balances.bkash || 0),
+        bank: String(restoredAccounts.settings.balances.bank || 0),
+        savings: String(restoredAccounts.settings.balances.savings || 0),
+        date: restoredAccounts.settings.startDate,
       });
       const restoredDeletedRecords = normalizeDeletedRecords(
         data.deletedRecords,
