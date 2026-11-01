@@ -600,6 +600,9 @@ function mergeAccountSettings(
 
   const mergedBalances = { ...cloudBalances };
   for (const [id, val] of Object.entries(localBalances)) {
+    if (deletedCardTombstones[id]?.deleted && !cardMap.has(id)) {
+      continue;
+    }
     if (mergedBalances[id] === undefined) {
       mergedBalances[id] = val;
     } else {
@@ -610,6 +613,17 @@ function mergeAccountSettings(
         localTime > cloudTime
       ) {
         mergedBalances[id] = val;
+      }
+    }
+  }
+
+  // Prune tombstoned cards from mergedBalances
+  for (const [id, tombstone] of Object.entries(deletedCardTombstones)) {
+    if (tombstone?.deleted && !cardMap.has(id)) {
+      if (["bkash", "bank", "savings"].includes(id)) {
+        mergedBalances[id] = 0;
+      } else {
+        delete mergedBalances[id];
       }
     }
   }
@@ -639,7 +653,7 @@ function mergeAccountSettings(
         cloudSettings.cardsConfigured ||
         mergedCards.length > 0,
     ),
-    updatedAt: Math.max(localTime, cloudTime, Date.now()),
+    updatedAt: Math.max(localTime, cloudTime),
   };
 }
 
@@ -651,18 +665,19 @@ function mergeCloudSnapshots(
 ) {
   if (!cloud) return local;
 
+  const deletedRecords = mergeDeletedRecords(
+    cloud.deletedRecords,
+    local.deletedRecords,
+  );
   const cloudAccounts = loadAccountData(
     cloud.accountData ?? emptyAccountData(),
+    deletedRecords,
   );
   const cloudExpenses = loadExpenses(cloud.expenses ?? [], cloudAccounts);
   const cloudBudgets = loadBudgets(cloud.budgets ?? {});
   const cloudSchedules = loadRecurringSchedules(
     cloud.recurringSchedules ?? [],
     cloudAccounts,
-  );
-  const deletedRecords = mergeDeletedRecords(
-    cloud.deletedRecords,
-    local.deletedRecords,
   );
   const budgetData = mergeBudgetValues(
     cloudBudgets,
@@ -826,8 +841,10 @@ function readLocalUserSnapshots() {
 function loadLocalUserSnapshot(userId) {
   const snapshot = readLocalUserSnapshots()[userId];
   if (!snapshot || typeof snapshot !== "object") return null;
+  const deletedRecords = normalizeDeletedRecords(snapshot.deletedRecords);
   const loadedAccounts = loadAccountData(
     snapshot.accountData ?? emptyAccountData(),
+    deletedRecords,
   );
   return {
     expenses: loadExpenses(snapshot.expenses ?? [], loadedAccounts),
@@ -838,7 +855,7 @@ function loadLocalUserSnapshot(userId) {
       loadedAccounts,
     ),
     accountData: loadedAccounts,
-    deletedRecords: normalizeDeletedRecords(snapshot.deletedRecords),
+    deletedRecords,
     theme: snapshot.theme === "dark" ? "dark" : "light",
     targetCurrency:
       typeof snapshot.targetCurrency === "string" &&
@@ -1422,12 +1439,23 @@ export default function App() {
           if (!active) return;
           const local = cloudSnapshotRef.current;
           const localBelongsToUser =
-            !localDataOwnerRef.current ||
             localDataOwnerRef.current === pushUser.id;
+          const hasSavedUserSnapshot = Boolean(
+            loadLocalUserSnapshot(pushUser.id),
+          );
+          const hasCloudData = Boolean(
+            remote?.data &&
+              (hasMeaningfulLocalData(remote.data) ||
+                (Array.isArray(remote.data.accountData?.settings?.cards) &&
+                  remote.data.accountData.settings.cards.length > 0)),
+          );
           const preferLocal =
-            localBelongsToUser && hasMeaningfulLocalData(local);
+            !hasCloudData &&
+            (localBelongsToUser || !hasSavedUserSnapshot) &&
+            hasMeaningfulLocalData(local);
           const cloudAccountSettings = loadAccountData(
             remote?.data?.accountData ?? emptyAccountData(),
+            remote?.data?.deletedRecords,
           ).settings;
           const preferLocalAccountSettings =
             preferLocal &&
@@ -2774,6 +2802,7 @@ export default function App() {
         : []
     ).find((c) => c.id === cardId);
     const existingBalance = accountData.settings.balances?.[cardId];
+    const now = Date.now();
 
     setAccountData((current) => {
       const currentCards = Array.isArray(current.settings.cards)
@@ -2789,7 +2818,7 @@ export default function App() {
         ...current,
         settings: {
           ...current.settings,
-          updatedAt: Date.now(),
+          updatedAt: now,
           cardsConfigured: true,
           cards: currentCards.filter((c) => c.id !== cardId),
           balances: nextBalances,
@@ -2801,6 +2830,7 @@ export default function App() {
 
     if (existingCard) {
       const restore = () => {
+        const restoreTime = Date.now();
         setRecordDeleted("cards", cardId, false);
         setAccountData((current) => {
           const currentCards = Array.isArray(current.settings.cards)
@@ -2812,9 +2842,12 @@ export default function App() {
             ...current,
             settings: {
               ...current.settings,
-              updatedAt: Date.now(),
+              updatedAt: restoreTime,
               cardsConfigured: true,
-              cards: [...currentCards, existingCard],
+              cards: [
+                ...currentCards,
+                { ...existingCard, updatedAt: restoreTime },
+              ],
               balances: {
                 ...current.settings.balances,
                 ...(existingBalance !== undefined
@@ -3201,7 +3234,10 @@ export default function App() {
         return;
       }
       const restoreTimestamp = Date.now();
-      const restoredAccounts = loadAccountData(data.accountData);
+      const restoredDeletedRecords = normalizeDeletedRecords(
+        data.deletedRecords,
+      );
+      const restoredAccounts = loadAccountData(data.accountData, restoredDeletedRecords);
       setExpenses(
         loadExpenses(data.expenses, restoredAccounts).map((expense) => ({
           ...expense,
@@ -3237,9 +3273,6 @@ export default function App() {
         savings: String(restoredAccounts.settings.balances.savings || 0),
         date: restoredAccounts.settings.startDate,
       });
-      const restoredDeletedRecords = normalizeDeletedRecords(
-        data.deletedRecords,
-      );
       for (const changes of Object.values(restoredDeletedRecords)) {
         for (const change of Object.values(changes)) {
           change.updatedAt = restoreTimestamp;
@@ -3289,7 +3322,7 @@ export default function App() {
         await queueCloudSnapshotSave(pushUser.id);
         await queueCloudSnapshotRefresh(pushUser.id, "manual");
       } else {
-        const localAccountData = loadAccountData();
+        const localAccountData = loadAccountData(undefined, deletedRecords);
         setAccountData(localAccountData);
         setStartingBalances({
           bkash: String(localAccountData.settings.balances.bkash),

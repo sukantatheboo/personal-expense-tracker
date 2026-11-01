@@ -147,16 +147,25 @@ export function isPureUnconfiguredDemoState(saved) {
   if (Array.isArray(saved.transactions) && saved.transactions.length > 0) return false;
 
   const rawBalances = settings.balances || {};
-  if (!hasSeededDemoBalances(rawBalances)) return false;
+  const isZeroOrDemoBalances =
+    hasSeededDemoBalances(rawBalances) ||
+    Object.values(rawBalances).every((v) => Number(v) === 0);
+  if (!isZeroOrDemoBalances) return false;
 
   const rawCards = Array.isArray(settings.cards) ? settings.cards : [];
   if (rawCards.length === 0) return false;
-  const hasCustomCards = rawCards.some(
-    (c) => c?.createdAt || c?.updatedAt || !DEFAULT_CARDS.some((d) => d.id === c?.id),
-  );
-  if (hasCustomCards) return false;
 
-  return true;
+  const isAllDefaultCards = rawCards.every(
+    (c) =>
+      DEFAULT_CARDS.some((d) => d.id === c?.id) &&
+      (!c?.holderName ||
+        c.holderName === "John Smith" ||
+        c.holderName === "Cardholder" ||
+        DEFAULT_CARDS.some(
+          (d) => d.id === c?.id && d.holderName === c?.holderName,
+        )),
+  );
+  return isAllDefaultCards;
 }
 
 export const PRIMARY_CURRENCY = "BDT";
@@ -369,6 +378,7 @@ function isValidAccountTransaction(item, accountData = null) {
 
 export function loadAccountData(
   saved = readStorage(STORAGE_KEYS.accounts, null),
+  deletedRecords = null,
 ) {
   if (!saved || typeof saved !== "object") return emptyAccountData();
   if (isPureUnconfiguredDemoState(saved)) return emptyAccountData();
@@ -382,6 +392,8 @@ export function loadAccountData(
       : 0;
   };
 
+  const deletedCardTombstones = deletedRecords?.cards || {};
+
   const rawCards = Array.isArray(settings.cards) ? settings.cards : [];
   const cardMap = new Map();
 
@@ -393,15 +405,22 @@ export function loadAccountData(
       card.id.trim()
     ) {
       const id = card.id.trim();
-      const existingMatch = DEFAULT_CARDS.find((d) => d.id === id);
+      const tombstone = deletedCardTombstones[id];
       const createdAt =
         typeof card.createdAt === "number"
           ? card.createdAt
-          : Date.parse(card.createdAt) || Date.now();
+          : Date.parse(card.createdAt) || 0;
       const updatedAt =
         typeof card.updatedAt === "number"
           ? card.updatedAt
-          : Date.parse(card.updatedAt) || createdAt;
+          : Date.parse(card.updatedAt) || createdAt || 0;
+
+      // Skip tombstoned cards unless card was explicitly updated after deletion
+      if (tombstone?.deleted && tombstone.updatedAt >= updatedAt) {
+        continue;
+      }
+
+      const existingMatch = DEFAULT_CARDS.find((d) => d.id === id);
       cardMap.set(id, {
         ...(existingMatch || {}),
         ...card,
@@ -422,15 +441,11 @@ export function loadAccountData(
     }
   }
 
-  // Self-healing recovery: reconstruct accounts referenced in transactions or non-zero balances
+  // Self-healing recovery: reconstruct accounts referenced in active transactions or non-zero balances
   const allReferencedAccountIds = new Set();
   for (const [key, val] of Object.entries(rawBalances)) {
-    if (
-      Number(val) > 0 ||
-      key === "bkash" ||
-      key === "bank" ||
-      key === "savings"
-    ) {
+    if (deletedCardTombstones[key]?.deleted) continue;
+    if (Number(val) > 0) {
       allReferencedAccountIds.add(key);
     }
   }
@@ -439,9 +454,9 @@ export function loadAccountData(
       const acct = t?.account || t?.accountId;
       const fromAcct = t?.fromAccount || t?.from_account || t?.fromAccountId;
       const toAcct = t?.toAccount || t?.to_account || t?.toAccountId;
-      if (acct) allReferencedAccountIds.add(acct);
-      if (fromAcct) allReferencedAccountIds.add(fromAcct);
-      if (toAcct) allReferencedAccountIds.add(toAcct);
+      if (acct && !deletedCardTombstones[acct]?.deleted) allReferencedAccountIds.add(acct);
+      if (fromAcct && !deletedCardTombstones[fromAcct]?.deleted) allReferencedAccountIds.add(fromAcct);
+      if (toAcct && !deletedCardTombstones[toAcct]?.deleted) allReferencedAccountIds.add(toAcct);
     }
   }
 
@@ -454,14 +469,20 @@ export function loadAccountData(
     Object.values(rawBalances).every((v) => Number(v) === 0);
 
   if (!isBrandNewAccount) {
+    const stableTime = settings.updatedAt
+      ? typeof settings.updatedAt === "number"
+        ? settings.updatedAt
+        : Date.parse(settings.updatedAt) || 0
+      : 0;
     for (const accountId of allReferencedAccountIds) {
+      if (deletedCardTombstones[accountId]?.deleted) continue;
       if (!cardMap.has(accountId)) {
         const defaultMatch = DEFAULT_CARDS.find((d) => d.id === accountId);
         if (defaultMatch) {
           cardMap.set(accountId, {
             ...defaultMatch,
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
+            createdAt: stableTime,
+            updatedAt: stableTime,
           });
         } else {
           cardMap.set(accountId, {
@@ -476,8 +497,8 @@ export function loadAccountData(
             color: "#1e293b",
             gradient:
               "linear-gradient(135deg, #334155 0%, #1e293b 60%, #0f172a 100%)",
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
+            createdAt: stableTime,
+            updatedAt: stableTime,
           });
         }
       }
@@ -486,13 +507,16 @@ export function loadAccountData(
 
   const cards = Array.from(cardMap.values());
 
-  const initialBalances = {
-    bkash: cleanBalance(rawBalances.bkash),
-    bank: cleanBalance(rawBalances.bank),
-    savings: cleanBalance(rawBalances.savings),
-  };
+  const initialBalances = {};
+  if (!deletedCardTombstones.bkash?.deleted) initialBalances.bkash = cleanBalance(rawBalances.bkash);
+  if (!deletedCardTombstones.bank?.deleted) initialBalances.bank = cleanBalance(rawBalances.bank);
+  if (!deletedCardTombstones.savings?.deleted) initialBalances.savings = cleanBalance(rawBalances.savings);
+
   for (const [key, val] of Object.entries(rawBalances)) {
-    initialBalances[key] = cleanBalance(val);
+    if (deletedCardTombstones[key]?.deleted) continue;
+    if (cardMap.has(key) || key === "bkash" || key === "bank" || key === "savings") {
+      initialBalances[key] = cleanBalance(val);
+    }
   }
   for (const card of cards) {
     if (initialBalances[card.id] === undefined) {

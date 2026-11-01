@@ -40,28 +40,32 @@ function mergeAccountDataWithRawSnapshot(normalizedAccountData, rawSnapshotData)
   const rawAccounts = rawSnapshotData?.accountData;
   const rawSettings = rawAccounts?.settings || {};
   const normSettings = normalizedAccountData?.settings || {};
-
-  const mergedBalances = {
-    ...(rawSettings.balances && typeof rawSettings.balances === "object"
-      ? rawSettings.balances
-      : {}),
-    ...(normSettings.balances && typeof normSettings.balances === "object"
-      ? normSettings.balances
-      : {}),
-  };
+  const deletedRecords = rawSnapshotData?.deletedRecords || {};
+  const deletedCardTombstones = deletedRecords.cards || {};
 
   const cardMap = new Map();
   if (Array.isArray(normSettings.cards)) {
-    for (const c of normSettings.cards) if (c?.id) cardMap.set(c.id, c);
-  }
-  if (Array.isArray(rawSettings.cards)) {
-    for (const c of rawSettings.cards) {
+    for (const c of normSettings.cards) {
       if (!c?.id) continue;
-      const existing = cardMap.get(c.id);
+      const tombstone = deletedCardTombstones[c.id];
       const cTime =
         typeof c.updatedAt === "number"
           ? c.updatedAt
           : Date.parse(c.updatedAt) || 0;
+      if (tombstone?.deleted && tombstone.updatedAt >= cTime) continue;
+      cardMap.set(c.id, c);
+    }
+  }
+  if (Array.isArray(rawSettings.cards)) {
+    for (const c of rawSettings.cards) {
+      if (!c?.id) continue;
+      const tombstone = deletedCardTombstones[c.id];
+      const cTime =
+        typeof c.updatedAt === "number"
+          ? c.updatedAt
+          : Date.parse(c.updatedAt) || 0;
+      if (tombstone?.deleted && tombstone.updatedAt >= cTime) continue;
+      const existing = cardMap.get(c.id);
       const exTime =
         typeof existing?.updatedAt === "number"
           ? existing.updatedAt
@@ -72,6 +76,26 @@ function mergeAccountDataWithRawSnapshot(normalizedAccountData, rawSnapshotData)
     }
   }
   const mergedCards = Array.from(cardMap.values());
+
+  const mergedBalances = {
+    ...(rawSettings.balances && typeof rawSettings.balances === "object"
+      ? rawSettings.balances
+      : {}),
+    ...(normSettings.balances && typeof normSettings.balances === "object"
+      ? normSettings.balances
+      : {}),
+  };
+
+  // Prune tombstoned cards from mergedBalances
+  for (const [id, tombstone] of Object.entries(deletedCardTombstones)) {
+    if (tombstone?.deleted && !cardMap.has(id)) {
+      if (["bkash", "bank", "savings"].includes(id)) {
+        mergedBalances[id] = 0;
+      } else {
+        delete mergedBalances[id];
+      }
+    }
+  }
 
   const normTransactions = Array.isArray(normalizedAccountData?.transactions)
     ? normalizedAccountData.transactions
@@ -132,7 +156,7 @@ function mergeAccountDataWithRawSnapshot(normalizedAccountData, rawSnapshotData)
       updatedAt: Math.max(rawUpdatedAt, normUpdatedAt),
     },
     transactions: Array.from(txMap.values()),
-  });
+  }, deletedRecords);
 }
 
 async function loadLegacyCloudData(userId) {
