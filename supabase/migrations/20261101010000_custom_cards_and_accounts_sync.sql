@@ -1,5 +1,73 @@
 -- Support custom card IDs and preserve settings.cards & custom card balances in cloud sync snapshots
 
+-- Create helper parsing functions that the updated trigger function depends on.
+-- These replace the older spend_try_date / spend_try_money helpers with
+-- consistent naming and add a new timestamptz parser.
+
+create or replace function public.spend_try_parse_date(p_value text)
+returns date
+language plpgsql
+immutable
+strict
+set search_path = ''
+as $$
+begin
+  return p_value::date;
+exception when others then
+  return null;
+end;
+$$;
+
+create or replace function public.spend_try_parse_numeric(p_value text)
+returns numeric
+language plpgsql
+immutable
+strict
+set search_path = ''
+as $$
+declare
+  v_amount numeric;
+begin
+  v_amount := p_value::numeric;
+  if v_amount::text in ('NaN', 'Infinity', '-Infinity') then
+    return null;
+  end if;
+  if abs(v_amount) >= 100000000000000 then
+    return null;
+  end if;
+  return round(v_amount, 2);
+exception when others then
+  return null;
+end;
+$$;
+
+create or replace function public.spend_try_parse_timestamptz(p_value jsonb)
+returns timestamptz
+language plpgsql
+immutable
+strict
+set search_path = ''
+as $$
+declare
+  v_ms numeric;
+begin
+  -- Accepts a JSON number (epoch milliseconds) or a JSON string (ISO 8601).
+  if jsonb_typeof(p_value) = 'number' then
+    v_ms := p_value::text::numeric;
+    return to_timestamp(v_ms / 1000.0);
+  elsif jsonb_typeof(p_value) = 'string' then
+    return (p_value #>> '{}')::timestamptz;
+  end if;
+  return null;
+exception when others then
+  return null;
+end;
+$$;
+
+revoke all on function public.spend_try_parse_date(text) from public, anon, authenticated;
+revoke all on function public.spend_try_parse_numeric(text) from public, anon, authenticated;
+revoke all on function public.spend_try_parse_timestamptz(jsonb) from public, anon, authenticated;
+
 alter table public.spend_account_transactions
   drop constraint if exists spend_account_transactions_valid_shape;
 
