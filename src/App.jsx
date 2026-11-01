@@ -108,7 +108,11 @@ function capitalizeFirst(value) {
   return characters.join("");
 }
 
-function accountName(accountId) {
+function accountName(accountId, cards = []) {
+  const customCard = Array.isArray(cards)
+    ? cards.find((c) => c?.id === accountId)
+    : null;
+  if (customCard?.name) return customCard.name;
   return ACCOUNT_OPTIONS.find(([id]) => id === accountId)?.[1] || "Account";
 }
 
@@ -203,14 +207,14 @@ function makeTransactionForm() {
   };
 }
 
-function accountActivityLabel(activity) {
+function accountActivityLabel(activity, cards = []) {
   if (activity.type === "expense")
-    return `Expense · ${accountName(activity.account)}`;
+    return `Expense · ${accountName(activity.account, cards)}`;
   if (activity.type === "income")
-    return `Income · ${accountName(activity.account)}`;
+    return `Income · ${accountName(activity.account, cards)}`;
   if (activity.type === "adjustment")
-    return `${activity.direction === "increase" ? "Balance increased" : "Balance decreased"} · ${accountName(activity.account)}`;
-  return `Transfer · ${accountName(activity.fromAccount)} → ${accountName(activity.toAccount)}`;
+    return `${activity.direction === "increase" ? "Balance increased" : "Balance decreased"} · ${accountName(activity.account, cards)}`;
+  return `Transfer · ${accountName(activity.fromAccount, cards)} → ${accountName(activity.toAccount, cards)}`;
 }
 
 function accountActivityPrefix(activity) {
@@ -424,10 +428,7 @@ function hasMeaningfulLocalData(data) {
     Object.keys(data.budgets).length > 0 ||
     data.recurringSchedules.length > 0 ||
     data.accountData.transactions.length > 0 ||
-    data.accountData.settings.configured ||
-    data.accountData.settings.balances.bkash !== 0 ||
-    data.accountData.settings.balances.bank !== 0 ||
-    data.accountData.settings.balances.savings !== 0 ||
+    hasMeaningfulAccountSettings(data.accountData.settings) ||
     Object.values(normalizeDeletedRecords(data.deletedRecords)).some(
       (changes) => Object.keys(changes).length > 0,
     ) ||
@@ -436,23 +437,27 @@ function hasMeaningfulLocalData(data) {
 }
 
 function hasMeaningfulAccountSettings(settings) {
+  if (!settings) return false;
+  const cards = Array.isArray(settings.cards) ? settings.cards : [];
+  const balances = settings.balances || {};
   return (
-    settings.configured ||
-    settings.balances.bkash !== 0 ||
-    settings.balances.bank !== 0 ||
-    settings.balances.savings !== 0
+    settings.configured === true ||
+    settings.cardsConfigured === true ||
+    cards.length > 0 ||
+    Object.values(balances).some((val) => Number(val) !== 0)
   );
 }
 
 function areAccountSettingsEqual(left, right) {
-  return Boolean(
-    left &&
-    right &&
+  if (!left || !right) return false;
+  return (
     left.startDate === right.startDate &&
-    left.balances.bkash === right.balances.bkash &&
-    left.balances.bank === right.balances.bank &&
-    left.balances.savings === right.balances.savings &&
-    left.configured === right.configured,
+    Boolean(left.configured) === Boolean(right.configured) &&
+    Boolean(left.cardsConfigured) === Boolean(right.cardsConfigured) &&
+    JSON.stringify(stableSnapshotValue(left.balances || {})) ===
+      JSON.stringify(stableSnapshotValue(right.balances || {})) &&
+    JSON.stringify(stableSnapshotValue(left.cards || [])) ===
+      JSON.stringify(stableSnapshotValue(right.cards || []))
   );
 }
 
@@ -557,11 +562,14 @@ function mergeCloudSnapshots(
 ) {
   if (!cloud) return local;
 
-  const cloudExpenses = loadExpenses(cloud.expenses ?? []);
-  const cloudBudgets = loadBudgets(cloud.budgets ?? {});
-  const cloudSchedules = loadRecurringSchedules(cloud.recurringSchedules ?? []);
   const cloudAccounts = loadAccountData(
     cloud.accountData ?? emptyAccountData(),
+  );
+  const cloudExpenses = loadExpenses(cloud.expenses ?? [], cloudAccounts);
+  const cloudBudgets = loadBudgets(cloud.budgets ?? {});
+  const cloudSchedules = loadRecurringSchedules(
+    cloud.recurringSchedules ?? [],
+    cloudAccounts,
   );
   const deletedRecords = mergeDeletedRecords(
     cloud.deletedRecords,
@@ -725,14 +733,18 @@ function readLocalUserSnapshots() {
 function loadLocalUserSnapshot(userId) {
   const snapshot = readLocalUserSnapshots()[userId];
   if (!snapshot || typeof snapshot !== "object") return null;
+  const loadedAccounts = loadAccountData(
+    snapshot.accountData ?? emptyAccountData(),
+  );
   return {
-    expenses: loadExpenses(snapshot.expenses ?? []),
+    expenses: loadExpenses(snapshot.expenses ?? [], loadedAccounts),
     budgets: loadBudgets(snapshot.budgets ?? {}),
     budgetUpdatedAt: normalizeBudgetUpdatedAt(snapshot.budgetUpdatedAt),
     recurringSchedules: loadRecurringSchedules(
       snapshot.recurringSchedules ?? [],
+      loadedAccounts,
     ),
-    accountData: loadAccountData(snapshot.accountData ?? emptyAccountData()),
+    accountData: loadedAccounts,
     deletedRecords: normalizeDeletedRecords(snapshot.deletedRecords),
     theme: snapshot.theme === "dark" ? "dark" : "light",
     targetCurrency:
@@ -1769,7 +1781,9 @@ export default function App() {
       ...accountData.settings.balances,
       date: accountData.settings.startDate,
     },
-    cards: accountData.settings.cards || DEFAULT_CARDS,
+    cards: Array.isArray(accountData.settings.cards)
+      ? accountData.settings.cards
+      : [],
     tx: accountData.transactions.map((transaction) => ({
       id: transaction.id,
       createdAt: transaction.createdAt,
@@ -1860,7 +1874,12 @@ export default function App() {
     [dismissInAppNotification],
   );
 
-  function sendSystemNotificationDirect({ title, body, tag, tab = "activity" }) {
+  function sendSystemNotificationDirect({
+    title,
+    body,
+    tag,
+    tab = "activity",
+  }) {
     if (
       typeof document !== "undefined" &&
       document.visibilityState === "visible"
@@ -2413,9 +2432,11 @@ export default function App() {
     setAccountData((current) => ({
       ...current,
       settings: {
+        ...current.settings,
         startDate: startingBalances.date,
         updatedAt: Date.now(),
         balances: {
+          ...current.settings.balances,
           bkash: roundMoney(bkash),
           bank: roundMoney(bank),
           savings: roundMoney(savings),
@@ -2478,6 +2499,8 @@ export default function App() {
   function saveMobileTransaction(form) {
     const amount = Number(form.amt);
     if (!Number.isFinite(amount) || amount <= 0) return false;
+    const txDate =
+      form.date && isValidDateString(form.date) ? form.date : localDate();
     const type = form.type === "adjust" ? "adjustment" : form.type;
     const createdAt = Date.now();
     const transaction = {
@@ -2486,20 +2509,22 @@ export default function App() {
       updatedAt: createdAt,
       type,
       amount: roundMoney(amount),
-      date: localDate(),
+      date: txDate,
       description: capitalizeFirst(form.note ?? ""),
     };
     if (type === "income") {
+      if (!isAccountId(form.acct, accountData)) return false;
       transaction.account = form.acct;
     } else if (type === "adjustment") {
+      if (!isAccountId(form.acct, accountData)) return false;
       transaction.account = form.acct;
       transaction.direction = form.dir === "up" ? "increase" : "decrease";
     } else if (type === "transfer") {
       transaction.fromAccount = form.fromAccount;
       transaction.toAccount = form.toAccount;
       if (
-        !isAccountId(transaction.fromAccount) ||
-        !isAccountId(transaction.toAccount) ||
+        !isAccountId(transaction.fromAccount, accountData) ||
+        !isAccountId(transaction.toAccount, accountData) ||
         transaction.fromAccount === transaction.toAccount
       )
         return false;
@@ -2514,22 +2539,101 @@ export default function App() {
     return { success: true, transactionId: transaction.id };
   }
 
+  function saveMobileTransactionUpdate(txId, form) {
+    const amount = Number(form.amt);
+    if (!txId || !Number.isFinite(amount) || amount <= 0) return false;
+    const txDate =
+      form.date && isValidDateString(form.date) ? form.date : localDate();
+    const type = form.type === "adjust" ? "adjustment" : form.type;
+    if (type === "income" || type === "adjustment") {
+      if (!isAccountId(form.acct, accountData)) return false;
+    } else if (type === "transfer") {
+      if (
+        !isAccountId(form.fromAccount, accountData) ||
+        !isAccountId(form.toAccount, accountData) ||
+        form.fromAccount === form.toAccount
+      )
+        return false;
+    } else {
+      return false;
+    }
+    setAccountData((current) => ({
+      ...current,
+      transactions: current.transactions.map((tx) => {
+        if (tx.id !== txId) return tx;
+        const updated = {
+          id: tx.id,
+          createdAt: tx.createdAt ?? Date.now(),
+          updatedAt: Date.now(),
+          type,
+          amount: roundMoney(amount),
+          date: txDate,
+          description: capitalizeFirst(form.note ?? ""),
+        };
+        if (type === "income") {
+          updated.account = form.acct;
+        } else if (type === "adjustment") {
+          updated.account = form.acct;
+          updated.direction = form.dir === "up" ? "increase" : "decrease";
+        } else if (type === "transfer") {
+          updated.fromAccount = form.fromAccount;
+          updated.toAccount = form.toAccount;
+        }
+        return updated;
+      }),
+    }));
+    return true;
+  }
+
+  function removeMobileTransaction(txOrId) {
+    const txId = typeof txOrId === "object" ? txOrId?.id : txOrId;
+    const existingTx = accountData.transactions.find((item) => item.id === txId);
+    if (!existingTx) return undefined;
+    setAccountData((current) => ({
+      ...current,
+      transactions: current.transactions.filter((item) => item.id !== txId),
+    }));
+    setRecordDeleted("accountTransactions", txId, true);
+    const restore = () => {
+      setRecordDeleted("accountTransactions", txId, false);
+      setAccountData((current) =>
+        current.transactions.some((item) => item.id === txId)
+          ? current
+          : { ...current, transactions: [...current.transactions, existingTx] },
+      );
+    };
+    offerUndo("Transaction removed", restore);
+    return restore;
+  }
+
   function handleAddCard(newCard) {
     const cardId = newCard.id || makeId();
+    const now = Date.now();
     const card = {
       ...newCard,
       id: cardId,
-      createdAt: Date.now(),
+      createdAt: now,
+      updatedAt: now,
     };
-    const initialBalance = Number(newCard.initialBalance) || 0;
+    const rawBal = Number(newCard.initialBalance);
+    const initialBalance =
+      Number.isFinite(rawBal) && rawBal >= 0 ? roundMoney(rawBal) : 0;
     setAccountData((current) => {
-      const currentCards = current.settings.cards || DEFAULT_CARDS;
+      const currentCards = Array.isArray(current.settings.cards)
+        ? current.settings.cards
+        : [];
+      const exists = currentCards.some((c) => c.id === cardId);
+      const nextCards = exists
+        ? currentCards.map((c) => (c.id === cardId ? { ...c, ...card } : c))
+        : [...currentCards, card];
       return {
         ...current,
         settings: {
           ...current.settings,
           updatedAt: Date.now(),
-          cards: [...currentCards, card],
+          cardsConfigured: true,
+          configured: true,
+          cards: nextCards,
           balances: {
             ...current.settings.balances,
             [cardId]: initialBalance,
@@ -2541,35 +2645,88 @@ export default function App() {
   }
 
   function handleDeleteCard(cardId) {
+    if (!cardId) return undefined;
+    const existingCard = (
+      Array.isArray(accountData.settings.cards)
+        ? accountData.settings.cards
+        : []
+    ).find((c) => c.id === cardId);
+    const existingBalance = accountData.settings.balances?.[cardId];
+
     setAccountData((current) => {
-      const currentCards = current.settings.cards || DEFAULT_CARDS;
+      const currentCards = Array.isArray(current.settings.cards)
+        ? current.settings.cards
+        : [];
+      const nextBalances = { ...current.settings.balances };
+      if (!["bkash", "bank", "savings"].includes(cardId)) {
+        delete nextBalances[cardId];
+      } else {
+        nextBalances[cardId] = 0;
+      }
       return {
         ...current,
         settings: {
           ...current.settings,
           updatedAt: Date.now(),
+          cardsConfigured: true,
           cards: currentCards.filter((c) => c.id !== cardId),
+          balances: nextBalances,
         },
       };
     });
+
+    if (existingCard) {
+      const restore = () => {
+        setAccountData((current) => {
+          const currentCards = Array.isArray(current.settings.cards)
+            ? current.settings.cards
+            : [];
+          if (currentCards.some((c) => c.id === existingCard.id))
+            return current;
+          return {
+            ...current,
+            settings: {
+              ...current.settings,
+              updatedAt: Date.now(),
+              cardsConfigured: true,
+              cards: [...currentCards, existingCard],
+              balances: {
+                ...current.settings.balances,
+                ...(existingBalance !== undefined
+                  ? { [existingCard.id]: existingBalance }
+                  : {}),
+              },
+            },
+          };
+        });
+      };
+      offerUndo(`${existingCard.name || "Card"} deleted`, restore);
+      return restore;
+    }
+    return undefined;
   }
 
   function handleUpdateCard(updatedCard) {
+    if (!updatedCard?.id) return updatedCard;
+    const now = Date.now();
     setAccountData((current) => {
-      const currentCards = current.settings.cards || DEFAULT_CARDS;
+      const currentCards = Array.isArray(current.settings.cards)
+        ? current.settings.cards
+        : [];
       const exists = currentCards.some((c) => c.id === updatedCard.id);
       const newCards = exists
         ? currentCards.map((c) =>
             c.id === updatedCard.id
-              ? { ...c, ...updatedCard, updatedAt: Date.now() }
+              ? { ...c, ...updatedCard, updatedAt: now }
               : c,
           )
-        : [...currentCards, updatedCard];
+        : [...currentCards, { ...updatedCard, createdAt: now, updatedAt: now }];
       return {
         ...current,
         settings: {
           ...current.settings,
-          updatedAt: Date.now(),
+          updatedAt: now,
+          cardsConfigured: true,
           cards: newCards,
         },
       };
@@ -2782,8 +2939,8 @@ export default function App() {
         expense.description,
         expense.category,
         expense.amount === null ? "" : expense.amount,
-        isAccountId(expense.account)
-          ? accountName(expense.account)
+        isAccountId(expense.account, accountData)
+          ? accountName(expense.account, accountData.settings.cards)
           : "Cash / Other",
         expense.recurringId ? "Recurring" : "One-time",
       ]),
@@ -2859,8 +3016,8 @@ export default function App() {
           expense.description,
           expense.category,
           expense.amount === null ? "" : expense.amount,
-          isAccountId(expense.account)
-            ? accountName(expense.account)
+          isAccountId(expense.account, accountData)
+            ? accountName(expense.account, accountData.settings.cards)
             : "Cash / Other",
           expense.recurringId ? "Recurring" : "One-time",
         ]),
@@ -2918,8 +3075,9 @@ export default function App() {
         return;
       }
       const restoreTimestamp = Date.now();
+      const restoredAccounts = loadAccountData(data.accountData);
       setExpenses(
-        loadExpenses(data.expenses).map((expense) => ({
+        loadExpenses(data.expenses, restoredAccounts).map((expense) => ({
           ...expense,
           createdAt: expense.createdAt ?? restoreTimestamp,
           updatedAt: restoreTimestamp,
@@ -2932,12 +3090,13 @@ export default function App() {
       );
       setBudgetUpdatedAt(restoredBudgetUpdatedAt);
       setRecurringSchedules(
-        loadRecurringSchedules(data.recurringSchedules).map((schedule) => ({
-          ...schedule,
-          updatedAt: restoreTimestamp,
-        })),
+        loadRecurringSchedules(data.recurringSchedules, restoredAccounts).map(
+          (schedule) => ({
+            ...schedule,
+            updatedAt: restoreTimestamp,
+          }),
+        ),
       );
-      const restoredAccounts = loadAccountData(data.accountData);
       setAccountData({
         settings: { ...restoredAccounts.settings, updatedAt: restoreTimestamp },
         transactions: restoredAccounts.transactions.map((transaction) => ({
@@ -3360,8 +3519,10 @@ export default function App() {
           if (registration) {
             await registration.showNotification("Spend test reminder", {
               body: "Background push notifications are working properly!",
-              icon: new URL("./icons/icon-192.png", window.location.origin).href,
-              badge: new URL("./icons/icon-180.png", window.location.origin).href,
+              icon: new URL("./icons/icon-192.png", window.location.origin)
+                .href,
+              badge: new URL("./icons/icon-180.png", window.location.origin)
+                .href,
               tag: "spend-manual-test",
               vibrate: [200, 100, 200],
             });
@@ -3493,6 +3654,8 @@ export default function App() {
         }}
         onBudgetClear={clearBudget}
         onTransactionSave={saveMobileTransaction}
+        onTransactionUpdate={saveMobileTransactionUpdate}
+        onTransactionDelete={removeMobileTransaction}
         onAddCard={handleAddCard}
         onUpdateCard={handleUpdateCard}
         onDeleteCard={handleDeleteCard}

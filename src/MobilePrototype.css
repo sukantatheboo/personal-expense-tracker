@@ -1349,16 +1349,26 @@ a:active,
 }
 
 /* Threshold reached: icon pop and deeper red, like iOS Messages */
-.mobile-prototype .expense-swipe-shell[data-threshold="true"] .expense-swipe-delete svg {
+.mobile-prototype
+  .expense-swipe-shell[data-threshold="true"]
+  .expense-swipe-delete
+  svg {
   transform: scale(1.18);
 }
-.mobile-prototype .expense-swipe-shell[data-threshold="true"] .expense-swipe-delete {
+.mobile-prototype
+  .expense-swipe-shell[data-threshold="true"]
+  .expense-swipe-delete {
   background: #b91c1c;
 }
-:root[data-theme="dark"] .mobile-prototype .expense-swipe-shell[data-threshold="true"] .expense-swipe-delete {
+:root[data-theme="dark"]
+  .mobile-prototype
+  .expense-swipe-shell[data-threshold="true"]
+  .expense-swipe-delete {
   background: #c62828;
 }
-.mobile-prototype .expense-swipe-shell[data-threshold="true"] .expense-swipe-delete.is-skip {
+.mobile-prototype
+  .expense-swipe-shell[data-threshold="true"]
+  .expense-swipe-delete.is-skip {
   background: color-mix(in srgb, var(--g, #327a58) 85%, #000);
 }
 
@@ -1539,12 +1549,8 @@ a:active,
   background: var(--card);
   scale: 0.985;
 }
-.mobile-prototype
-  .expense-day-card
-  button.expense-row.is-swipe-dragging:active,
-.mobile-prototype
-  .expense-day-card
-  button.expense-row.is-swipe-revealed:active,
+.mobile-prototype .expense-day-card button.expense-row.is-swipe-dragging:active,
+.mobile-prototype .expense-day-card button.expense-row.is-swipe-revealed:active,
 .mobile-prototype
   .expense-day-card
   button.expense-row.is-swipe-deleting:active {
@@ -3624,7 +3630,9 @@ a:active,
 }
 
 /* Smooth Resting State Transition with Organic Spring Easing */
-.mobile-prototype .cards-deck-stage:not(.is-swapping-down):not(.is-swapping-up) .cards-deck-slot {
+.mobile-prototype
+  .cards-deck-stage:not(.is-swapping-down):not(.is-swapping-up)
+  .cards-deck-slot {
   transition:
     transform 380ms cubic-bezier(0.25, 1, 0.4, 1),
     opacity 280ms ease,
@@ -3751,7 +3759,10 @@ a:active,
   border-radius: 20px;
   overflow: hidden;
   color: #ffffff;
-  background: var(--card-gradient, linear-gradient(135deg, #0f172a 0%, #1e293b 100%));
+  background: var(
+    --card-gradient,
+    linear-gradient(135deg, #0f172a 0%, #1e293b 100%)
+  );
   border: 1px solid rgba(255, 255, 255, 0.22);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.32);
   touch-action: manipulation;
@@ -3788,8 +3799,17 @@ a:active,
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background-image: radial-gradient(circle at 85% 15%, rgba(255, 255, 255, 0.14) 0%, transparent 45%),
-    radial-gradient(circle at 15% 85%, rgba(255, 255, 255, 0.08) 0%, transparent 40%);
+  background-image:
+    radial-gradient(
+      circle at 85% 15%,
+      rgba(255, 255, 255, 0.14) 0%,
+      transparent 45%
+    ),
+    radial-gradient(
+      circle at 15% 85%,
+      rgba(255, 255, 255, 0.08) 0%,
+      transparent 40%
+    );
   z-index: 1;
 }
 .mobile-prototype .wallet-card-header {
@@ -4000,7 +4020,10 @@ a:active,
   font-weight: 750;
   cursor: pointer;
   touch-action: manipulation;
-  transition: transform 160ms ease, background-color 160ms ease, border-color 160ms ease;
+  transition:
+    transform 160ms ease,
+    background-color 160ms ease,
+    border-color 160ms ease;
 }
 .mobile-prototype .prototype-header-add-pill:active {
   transform: scale(0.94);
@@ -4033,7 +4056,10 @@ a:active,
   padding: 0;
   border: 0;
   cursor: pointer;
-  transition: width 240ms cubic-bezier(0.2, 0.8, 0.2, 1), background-color 180ms ease, border-radius 240ms ease;
+  transition:
+    width 240ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    background-color 180ms ease,
+    border-radius 240ms ease;
 }
 .mobile-prototype .cards-deck-dot.is-active {
   width: 18px;
@@ -4190,7 +4216,9 @@ a:active,
   border-top: 0;
   cursor: pointer;
   touch-action: manipulation;
-  transition: transform 140ms ease, background-color 140ms ease;
+  transition:
+    transform 140ms ease,
+    background-color 140ms ease;
 }
 .mobile-prototype .accounts-tx-row:last-child {
   border-bottom: 0;
@@ -4275,7 +4303,9 @@ a:active,
   background: rgba(147, 51, 234, 0.18);
   color: #c084fc;
 }
-[data-theme="dark"] .mobile-prototype .accounts-tx-icon-circle.is-entertainment {
+[data-theme="dark"]
+  .mobile-prototype
+  .accounts-tx-icon-circle.is-entertainment {
   background: rgba(13, 148, 136, 0.18);
   color: #2dd4bf;
 }
@@ -4588,7 +4618,9 @@ a:active,
   line-height: 1;
   cursor: pointer;
   touch-action: manipulation;
-  transition: transform 140ms ease, background-color 140ms ease;
+  transition:
+    transform 140ms ease,
+    background-color 140ms ease;
 }
 .mobile-prototype .add-card-back-btn:active {
   transform: scale(0.92);
@@ -4612,7 +4644,9 @@ a:active,
   color: var(--ink);
   outline: none;
   box-sizing: border-box;
-  transition: border-color 160ms ease, box-shadow 160ms ease;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
 }
 .mobile-prototype .add-card-search-input:focus {
   border-color: #2563eb;
@@ -4696,7 +4730,10 @@ a:active,
   cursor: pointer;
   touch-action: manipulation;
   text-align: left;
-  transition: transform 140ms ease, background-color 140ms ease, border-color 140ms ease;
+  transition:
+    transform 140ms ease,
+    background-color 140ms ease,
+    border-color 140ms ease;
 }
 .mobile-prototype .add-card-template-row:active {
   transform: scale(0.98);
@@ -4945,7 +4982,9 @@ a:active,
   color: var(--ink);
   outline: none;
   box-sizing: border-box;
-  transition: border-color 160ms ease, box-shadow 160ms ease;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
 }
 .mobile-prototype .add-card-native-input:focus {
   border-color: #2563eb;
@@ -5002,7 +5041,9 @@ a:active,
   cursor: pointer;
   touch-action: manipulation;
   box-shadow: 0 6px 20px rgba(37, 99, 235, 0.35);
-  transition: transform 160ms ease, background-color 160ms ease;
+  transition:
+    transform 160ms ease,
+    background-color 160ms ease;
 }
 .mobile-prototype .add-card-submit-cta:active {
   transform: scale(0.97);
@@ -5116,14 +5157,15 @@ a:active,
   cursor: pointer;
   touch-action: manipulation;
   box-shadow: 0 6px 20px rgba(37, 99, 235, 0.35);
-  transition: transform 160ms ease, background-color 160ms ease;
+  transition:
+    transform 160ms ease,
+    background-color 160ms ease;
   margin-top: 6px;
 }
 .mobile-prototype .add-card-home-cta:active {
   transform: scale(0.97);
   background: #1d4ed8;
 }
-
 
 /* ───────────── Card Options & Management Sheet ───────────── */
 .mobile-prototype .card-options-sheet-container {
@@ -5286,7 +5328,9 @@ a:active,
   font-weight: 700;
   outline: none;
   box-sizing: border-box;
-  transition: border-color 150ms ease, box-shadow 150ms ease;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
 }
 .mobile-prototype .card-options-field input:focus {
   border-color: #2563eb;
@@ -5305,7 +5349,9 @@ a:active,
   border: 2px solid transparent;
   cursor: pointer;
   padding: 0;
-  transition: transform 120ms ease, box-shadow 120ms ease;
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease;
 }
 .mobile-prototype .card-options-theme-swatch:hover {
   transform: scale(1.06);
@@ -5376,7 +5422,9 @@ a:active,
   border: none;
   cursor: pointer;
   box-shadow: 0 4px 16px rgba(37, 99, 235, 0.3);
-  transition: transform 120ms ease, background-color 120ms ease;
+  transition:
+    transform 120ms ease,
+    background-color 120ms ease;
 }
 .mobile-prototype .card-options-save-cta:active {
   transform: scale(0.98);
@@ -5478,7 +5526,9 @@ a:active,
   text-align: center;
   cursor: pointer;
   touch-action: manipulation;
-  transition: transform 120ms ease, background-color 120ms ease;
+  transition:
+    transform 120ms ease,
+    background-color 120ms ease;
   border: 0;
 }
 .mobile-prototype .confirm-modal-btn:active {
@@ -5501,3 +5551,89 @@ a:active,
   background: #b91c1c;
 }
 
+/* ───────────── Empty Wallet Deck & Locked Card States ───────────── */
+.mobile-prototype .cards-deck-container.is-empty {
+  padding: 14px 0 6px;
+}
+.mobile-prototype .wallet-card-empty-state {
+  width: 100%;
+  max-width: 340px;
+  min-height: 184px;
+  margin: 0 auto;
+  padding: 22px 20px;
+  border-radius: 22px;
+  border: 1.5px dashed color-mix(in srgb, var(--ink) 22%, var(--line));
+  background: color-mix(in srgb, var(--card) 86%, var(--bg));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-align: center;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background-color 160ms ease;
+}
+.mobile-prototype .wallet-card-empty-state:active {
+  transform: scale(0.97);
+}
+.mobile-prototype .wallet-card-empty-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: rgba(37, 99, 235, 0.12);
+  color: #2563eb;
+  display: grid;
+  place-items: center;
+}
+[data-theme="dark"] .mobile-prototype .wallet-card-empty-icon {
+  background: rgba(96, 165, 250, 0.16);
+  color: #60a5fa;
+}
+.mobile-prototype .wallet-card-empty-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 250px;
+}
+.mobile-prototype .wallet-card-empty-copy strong {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.mobile-prototype .wallet-card-empty-copy span {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--mut);
+  line-height: 1.38;
+}
+.mobile-prototype .wallet-card-empty-cta {
+  margin-top: 2px;
+  padding: 7px 16px;
+  border-radius: 999px;
+  background: #2563eb;
+  color: #ffffff;
+  font-size: 12.5px;
+  font-weight: 800;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.28);
+}
+.mobile-prototype .wallet-card.is-frozen .wallet-card-surface {
+  filter: saturate(0.65);
+}
+.mobile-prototype .wallet-card-locked-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1.5px 6px;
+  border-radius: 6px;
+  background: rgba(239, 68, 68, 0.32);
+  border: 1px solid rgba(254, 202, 202, 0.5);
+  color: #fecaca;
+  font-size: 8px;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  vertical-align: middle;
+}

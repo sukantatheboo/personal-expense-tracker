@@ -83,6 +83,7 @@ export function WalletCard({
   className = "",
   style = {},
 }) {
+  if (!card) return null;
   const provider = getProviderMeta(card.provider);
   const gradient =
     card.gradient ||
@@ -90,6 +91,7 @@ export function WalletCard({
     "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)";
   const isMfs = card.type === "mfs" || provider?.category === "mfs";
   const isSavings = card.type === "savings" || provider?.category === "savings";
+  const isFrozen = Boolean(card.frozen);
 
   const formattedNumber = formatCardNumber(
     card.number || "",
@@ -111,8 +113,8 @@ export function WalletCard({
     <div
       role={interactive ? "button" : undefined}
       tabIndex={interactive ? 0 : undefined}
-      aria-label={`${card.name}, ${cardSubtitle}, balance ${formatMoney(balance || 0)}`}
-      className={`wallet-card ${isActive ? "is-active" : ""} ${isMfs ? "is-mfs" : ""} ${isSavings ? "is-savings" : ""} ${className}`}
+      aria-label={`${card.name}, ${cardSubtitle}, balance ${formatMoney(balance || 0)}${isFrozen ? ", locked" : ""}`}
+      className={`wallet-card ${isActive ? "is-active" : ""} ${isMfs ? "is-mfs" : ""} ${isSavings ? "is-savings" : ""} ${isFrozen ? "is-frozen" : ""} ${className}`}
       onClick={interactive ? onClick : undefined}
       onKeyDown={
         interactive
@@ -138,9 +140,14 @@ export function WalletCard({
         <div className="wallet-card-header">
           <div className="wallet-card-holder-info">
             <span className="wallet-card-holder-name">
-              {card.holderName || card.name || "John Smith"}
+              {card.holderName || card.name || "Cardholder"}
             </span>
-            <span className="wallet-card-type-tag">{cardSubtitle}</span>
+            <span className="wallet-card-type-tag">
+              {cardSubtitle}
+              {isFrozen && (
+                <span className="wallet-card-locked-badge">LOCKED</span>
+              )}
+            </span>
           </div>
 
           <div className="wallet-card-brand-logo">
@@ -194,7 +201,11 @@ export function WalletCard({
               <div className="wallet-card-expiry-block">
                 <span className="wallet-card-meta-lbl">CVV</span>
                 <span className="wallet-card-meta-val">
-                  {showFullDetails && card.cvv ? card.cvv : (card.cvv ? "***" : "•••")}
+                  {showFullDetails && card.cvv
+                    ? card.cvv
+                    : card.cvv
+                      ? "***"
+                      : "•••"}
                 </span>
               </div>
             )}
@@ -245,15 +256,33 @@ export function StackedCardDeck({
   const dragStartRef = useRef(null);
   const animTimeoutRef = useRef(null);
 
+  const totalCards = cards.length;
+  const safeActiveIndex =
+    totalCards > 0 ? Math.min(activeIndex, totalCards - 1) : 0;
+
+  // Clamp activeIndex if cards array shrinks (e.g. after deleting the last card)
+  useEffect(() => {
+    if (totalCards === 0) {
+      if (activeIndex !== 0) setActiveIndex(0);
+      if (swapPhase !== "idle") setSwapPhase("idle");
+      return;
+    }
+    if (activeIndex >= totalCards) {
+      const clamped = totalCards - 1;
+      setActiveIndex(clamped);
+      onSelectCard?.(cards[clamped]?.id);
+    }
+  }, [totalCards, activeIndex, cards, onSelectCard, swapPhase]);
+
   // Sync activeIndex if selectedId changes from external filter
   useEffect(() => {
-    if (selectedId && swapPhase === "idle") {
+    if (selectedId && swapPhase === "idle" && totalCards > 0) {
       const idx = cards.findIndex((c) => c.id === selectedId);
       if (idx >= 0 && idx !== activeIndex) {
         setActiveIndex(idx);
       }
     }
-  }, [selectedId, cards, activeIndex, swapPhase]);
+  }, [selectedId, cards, activeIndex, swapPhase, totalCards]);
 
   useEffect(() => {
     return () => {
@@ -261,23 +290,20 @@ export function StackedCardDeck({
     };
   }, []);
 
-  const totalCards = cards.length;
-
   // Swap Down: Front card glides down, tucks behind, middle card glides to front
   const handleSwapDown = useCallback(() => {
     if (totalCards <= 1 || swapPhase !== "idle") return;
     setSwapPhase("swapping-down");
     setDragY(0);
 
-    const nextIndex = (activeIndex + 1) % totalCards;
-    // Immediately synchronize active card selection so action buttons and details reflect the new card
+    const nextIndex = (safeActiveIndex + 1) % totalCards;
     onSelectCard?.(cards[nextIndex]?.id);
 
     animTimeoutRef.current = setTimeout(() => {
       setActiveIndex(nextIndex);
       setSwapPhase("idle");
     }, 380);
-  }, [totalCards, swapPhase, activeIndex, cards, onSelectCard]);
+  }, [totalCards, swapPhase, safeActiveIndex, cards, onSelectCard]);
 
   // Swap Up: Back card glides up into front
   const handleSwapUp = useCallback(() => {
@@ -285,27 +311,23 @@ export function StackedCardDeck({
     setSwapPhase("swapping-up");
     setDragY(0);
 
-    const prevIndex = (activeIndex - 1 + totalCards) % totalCards;
-    // Immediately synchronize active card selection
+    const prevIndex = (safeActiveIndex - 1 + totalCards) % totalCards;
     onSelectCard?.(cards[prevIndex]?.id);
 
     animTimeoutRef.current = setTimeout(() => {
       setActiveIndex(prevIndex);
       setSwapPhase("idle");
     }, 380);
-  }, [totalCards, swapPhase, activeIndex, cards, onSelectCard]);
+  }, [totalCards, swapPhase, safeActiveIndex, cards, onSelectCard]);
 
   // Direct card click
   const handleCardClick = (offset, card) => {
-    if (swapPhase !== "idle") return;
+    if (swapPhase !== "idle" || !card) return;
     if (offset === 0) {
-      // Tap on front card: open Card Options / details immediately
       onOpenCardDetails?.(card);
     } else if (offset === 1) {
-      // Tap on middle card: cycle down to it
       handleSwapDown();
     } else {
-      // Tap on back card: cycle up
       handleSwapUp();
     }
   };
@@ -330,7 +352,6 @@ export function StackedCardDeck({
     if (e.pointerId !== dragStartRef.current.pointerId) return;
 
     const dy = e.clientY - dragStartRef.current.startY;
-    // Rubber band resistance when dragging up
     const resistedDy = dy > 0 ? dy * 0.88 : dy * 0.38;
     setDragY(resistedDy);
   };
@@ -349,25 +370,19 @@ export function StackedCardDeck({
     const velocity = dy / dt;
 
     if (dy > 36 || (dy > 12 && velocity > 0.35)) {
-      // Downward swipe or flick -> swap down
       handleSwapDown();
     } else if (dy < -36 || (dy < -12 && velocity < -0.35)) {
-      // Upward swipe or flick -> swap up
       handleSwapUp();
     } else if (Math.abs(dy) <= 8) {
-      // Discrete tap
-      // If user tapped on middle or back card slot:
       const clickedSlot = target?.closest?.(".cards-deck-slot");
       if (clickedSlot?.classList?.contains("offset-1")) {
         handleSwapDown();
       } else if (clickedSlot?.classList?.contains("offset-2")) {
         handleSwapUp();
-      } else {
-        // Tap on front card: open Card Options / details immediately
-        onOpenCardDetails?.(cards[activeIndex]);
+      } else if (cards[safeActiveIndex]) {
+        onOpenCardDetails?.(cards[safeActiveIndex]);
       }
     } else {
-      // Snap back to resting position
       setDragY(0);
     }
   };
@@ -376,6 +391,43 @@ export function StackedCardDeck({
     dragStartRef.current = null;
     setDragY(0);
   };
+
+  if (totalCards === 0) {
+    return (
+      <div className="cards-deck-container is-empty">
+        <button
+          type="button"
+          className="wallet-card-empty-state"
+          onClick={() => onAddCardClick?.()}
+          aria-label="Add your first card or wallet"
+        >
+          <div className="wallet-card-empty-icon" aria-hidden="true">
+            <svg
+              width="28"
+              height="28"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.9"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <rect x="2" y="5" width="20" height="14" rx="3" />
+              <line x1="2" y1="10" x2="22" y2="10" />
+              <path d="M12 14h4" />
+            </svg>
+          </div>
+          <div className="wallet-card-empty-copy">
+            <strong>No cards or wallets yet</strong>
+            <span>
+              Tap to add a bank card, bKash/Nagad wallet, or savings vault
+            </span>
+          </div>
+          <span className="wallet-card-empty-cta">+ Add Card</span>
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="cards-deck-container">
@@ -390,14 +442,9 @@ export function StackedCardDeck({
         onPointerCancel={onPointerCancel}
       >
         {cards.map((card, index) => {
-          // Offset relative to activeIndex (0 = front, 1 = middle, 2 = back)
-          const offset = (index - activeIndex + totalCards) % totalCards;
+          const offset = (index - safeActiveIndex + totalCards) % totalCards;
           const isFront = offset === 0;
 
-          // Compute resting coordinates matching video:
-          // Card 0 (front): y = 0, scale = 1.0, zIndex = 25
-          // Card 1 (middle): y = -26, scale = 0.94, zIndex = 18
-          // Card 2 (back): y = -48, scale = 0.88, zIndex = 12
           let y = 0;
           let scale = 1;
           let zIndex = 25 - offset * 6;
@@ -419,7 +466,7 @@ export function StackedCardDeck({
             y = -48 + dragProgress * 22;
             scale = 0.88 + dragProgress * 0.06;
             zIndex = 12;
-            opacity = 0.90;
+            opacity = 0.9;
           } else {
             y = -64;
             scale = 0.82;
@@ -427,7 +474,6 @@ export function StackedCardDeck({
             opacity = 0;
           }
 
-          // Slot CSS classes for active swapping animation
           let slotAnimClass = "";
           if (swapPhase === "swapping-down") {
             if (offset === 0) slotAnimClass = "slot-swap-down-leave";
@@ -435,7 +481,8 @@ export function StackedCardDeck({
             else if (offset === 2) slotAnimClass = "slot-swap-down-advance";
           } else if (swapPhase === "swapping-up") {
             if (offset === 0) slotAnimClass = "slot-swap-up-front";
-            else if (offset === totalCards - 1) slotAnimClass = "slot-swap-up-enter";
+            else if (offset === totalCards - 1)
+              slotAnimClass = "slot-swap-up-enter";
           }
 
           return (
@@ -472,7 +519,7 @@ export function StackedCardDeck({
           <button
             key={card.id}
             type="button"
-            className={`cards-deck-dot ${idx === activeIndex ? "is-active" : ""}`}
+            className={`cards-deck-dot ${idx === safeActiveIndex ? "is-active" : ""}`}
             aria-label={`Switch to ${card.name}`}
             onClick={(e) => {
               e.stopPropagation();

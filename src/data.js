@@ -123,10 +123,34 @@ export const ACCOUNT_OPTIONS = [
 
 export function getAccountOptions(accountData) {
   const cards = accountData?.settings?.cards;
-  if (Array.isArray(cards) && cards.length > 0) {
+  if (Array.isArray(cards)) {
     return cards.map((c) => [c.id, c.name]);
   }
-  return ACCOUNT_OPTIONS;
+  return [];
+}
+
+export function isSeededDemoCard(card) {
+  if (!card || typeof card !== "object") return false;
+  if (card.createdAt || card.updatedAt) return false;
+  const demoMatch = DEFAULT_CARDS.find((d) => d.id === card.id);
+  if (!demoMatch) return false;
+  return (
+    card.name === demoMatch.name &&
+    card.number === demoMatch.number &&
+    card.holderName === demoMatch.holderName &&
+    card.provider === demoMatch.provider
+  );
+}
+
+export function hasSeededDemoBalances(balances) {
+  if (!balances || typeof balances !== "object") return false;
+  return (
+    Number(balances.amazon) === 12450 &&
+    Number(balances.citi) === 8500 &&
+    Number(balances.bkash) === 3200 &&
+    Number(balances.bank) === 15000 &&
+    Number(balances.savings) === 50000
+  );
 }
 
 export const PRIMARY_CURRENCY = "BDT";
@@ -175,7 +199,10 @@ export function writeStorage(key, value) {
   }
 }
 
-export function loadExpenses(saved = readStorage(STORAGE_KEYS.expenses, [])) {
+export function loadExpenses(
+  saved = readStorage(STORAGE_KEYS.expenses, []),
+  accountData = null,
+) {
   return Array.isArray(saved)
     ? saved
         .filter(
@@ -193,7 +220,7 @@ export function loadExpenses(saved = readStorage(STORAGE_KEYS.expenses, [])) {
           category: CATEGORIES.includes(item.category)
             ? item.category
             : "Other",
-          account: isAccountId(item.account) ? item.account : "",
+          account: isAccountId(item.account, accountData) ? item.account : "",
         }))
     : [];
 }
@@ -210,14 +237,27 @@ export function loadBudgets(saved = readStorage(STORAGE_KEYS.budgets, {})) {
   );
 }
 
-export function isAccountId(value) {
+export function isAccountId(value, accountData = null) {
   if (!value || typeof value !== "string") return false;
   if (ACCOUNT_OPTIONS.some(([id]) => id === value)) return true;
   if (DEFAULT_CARDS.some((c) => c.id === value)) return true;
+  if (value.startsWith("card_")) return true;
+  if (accountData?.settings?.cards?.some((c) => c.id === value)) return true;
+  if (
+    accountData?.settings?.balances &&
+    Object.hasOwn(accountData.settings.balances, value)
+  )
+    return true;
   try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEYS.accounts) || "null");
+    const saved = JSON.parse(
+      localStorage.getItem(STORAGE_KEYS.accounts) || "null",
+    );
     if (saved?.settings?.cards?.some((c) => c.id === value)) return true;
-    if (saved?.settings?.balances && Object.hasOwn(saved.settings.balances, value)) return true;
+    if (
+      saved?.settings?.balances &&
+      Object.hasOwn(saved.settings.balances, value)
+    )
+      return true;
   } catch {}
   return false;
 }
@@ -238,11 +278,14 @@ function isValidRecurringSchedule(schedule) {
 
 export function loadRecurringSchedules(
   saved = readStorage(STORAGE_KEYS.recurring, []),
+  accountData = null,
 ) {
   return Array.isArray(saved)
     ? saved.filter(isValidRecurringSchedule).map((schedule) => ({
         ...schedule,
-        account: isAccountId(schedule.account) ? schedule.account : "",
+        account: isAccountId(schedule.account, accountData)
+          ? schedule.account
+          : "",
         dayOfMonth:
           Number.isInteger(schedule.dayOfMonth) &&
           schedule.dayOfMonth >= 1 &&
@@ -257,16 +300,17 @@ export function emptyAccountData() {
   return {
     settings: {
       startDate: localDate(),
-      balances: { amazon: 12450, citi: 8500, bkash: 3200, bank: 15000, savings: 50000 },
-      cards: DEFAULT_CARDS,
+      balances: { bkash: 0, bank: 0, savings: 0 },
+      cards: [],
       configured: false,
+      cardsConfigured: false,
       updatedAt: 0,
     },
     transactions: [],
   };
 }
 
-function isValidAccountTransaction(item) {
+function isValidAccountTransaction(item, accountData = null) {
   if (
     !item ||
     typeof item.id !== "string" ||
@@ -275,16 +319,16 @@ function isValidAccountTransaction(item) {
     !isValidDateString(item.date)
   )
     return false;
-  if (item.type === "income") return isAccountId(item.account);
+  if (item.type === "income") return isAccountId(item.account, accountData);
   if (item.type === "adjustment")
     return (
-      isAccountId(item.account) &&
+      isAccountId(item.account, accountData) &&
       ["increase", "decrease"].includes(item.direction)
     );
   if (item.type === "transfer")
     return (
-      isAccountId(item.fromAccount) &&
-      isAccountId(item.toAccount) &&
+      isAccountId(item.fromAccount, accountData) &&
+      isAccountId(item.toAccount, accountData) &&
       item.fromAccount !== item.toAccount
     );
   return false;
@@ -295,22 +339,37 @@ export function loadAccountData(
 ) {
   if (!saved || typeof saved !== "object") return emptyAccountData();
   const settings = saved.settings || {};
-  const balances = settings.balances || {};
+  const rawBalances = settings.balances || {};
   const cleanBalance = (value) => {
     const amount = Number(value);
     return Number.isFinite(amount) && amount >= 0
       ? Math.round(amount * 100) / 100
       : 0;
   };
-  const cards =
-    Array.isArray(settings.cards) && settings.cards.length > 0
-      ? settings.cards
-      : DEFAULT_CARDS;
+
+  const rawCards = Array.isArray(settings.cards) ? settings.cards : [];
+  const cards = rawCards.filter(
+    (card) =>
+      card &&
+      typeof card === "object" &&
+      typeof card.id === "string" &&
+      card.id.trim().length > 0 &&
+      !isSeededDemoCard(card),
+  );
+
+  const isDemoBalanceSet =
+    settings.configured !== true && hasSeededDemoBalances(rawBalances);
+  const balances = isDemoBalanceSet ? {} : rawBalances;
+
   const initialBalances = {
     bkash: cleanBalance(balances.bkash),
     bank: cleanBalance(balances.bank),
     savings: cleanBalance(balances.savings),
   };
+  for (const [key, val] of Object.entries(balances)) {
+    if (isDemoBalanceSet && (key === "amazon" || key === "citi")) continue;
+    initialBalances[key] = cleanBalance(val);
+  }
   for (const card of cards) {
     if (balances[card.id] !== undefined) {
       initialBalances[card.id] = cleanBalance(balances[card.id]);
@@ -318,6 +377,13 @@ export function loadAccountData(
       initialBalances[card.id] = 0;
     }
   }
+
+  const normalizedAccountContext = {
+    settings: {
+      cards,
+      balances: initialBalances,
+    },
+  };
 
   return {
     settings: {
@@ -327,6 +393,8 @@ export function loadAccountData(
       balances: initialBalances,
       cards,
       configured: settings.configured === true,
+      cardsConfigured:
+        settings.cardsConfigured === true || cards.length > 0,
       updatedAt:
         typeof settings.updatedAt === "number" &&
         Number.isFinite(settings.updatedAt)
@@ -337,14 +405,18 @@ export function loadAccountData(
             : 0,
     },
     transactions: Array.isArray(saved.transactions)
-      ? saved.transactions.filter(isValidAccountTransaction).map((item) => ({
-          ...item,
-          amount: Math.round(Number(item.amount) * 100) / 100,
-          description:
-            typeof item.description === "string"
-              ? item.description.slice(0, 80)
-              : "",
-        }))
+      ? saved.transactions
+          .filter((item) =>
+            isValidAccountTransaction(item, normalizedAccountContext),
+          )
+          .map((item) => ({
+            ...item,
+            amount: Math.round(Number(item.amount) * 100) / 100,
+            description:
+              typeof item.description === "string"
+                ? item.description.slice(0, 80)
+                : "",
+          }))
       : [],
   };
 }
@@ -409,25 +481,33 @@ export function nextOccurrenceDate(dateValue, interval, dayOfMonth) {
   );
 }
 
+export function getSavingsAccountId(cards = []) {
+  if (!Array.isArray(cards) || cards.length === 0) return "savings";
+  const exact = cards.find((c) => c.id === "savings");
+  if (exact) return exact.id;
+  const byType = cards.find(
+    (c) => c.type === "savings" || c.provider === "savings",
+  );
+  return byType ? byType.id : "savings";
+}
+
 export function calculateAccountBalance(accountId, expenses, accountData) {
-  const { startDate, balances } = accountData.settings;
+  const { balances, cards = [] } = accountData.settings;
+  const savingsId = getSavingsAccountId(cards);
   const today = localDate();
   let balance = Number(balances[accountId] || 0);
 
   for (const expense of expenses) {
-    if (
-      expense.amount !== null &&
-      expense.date >= startDate &&
-      expense.date <= today
-    ) {
+    if (expense.amount !== null && expense.date <= today) {
       if (expense.category === "Savings") {
         if (
-          accountId === "savings" &&
-          expense.account !== "savings" &&
-          isAccountId(expense.account)
+          accountId === savingsId &&
+          expense.account &&
+          expense.account !== savingsId &&
+          isAccountId(expense.account, accountData)
         )
           balance += Number(expense.amount);
-        else if (expense.account === accountId && accountId !== "savings")
+        else if (expense.account === accountId && accountId !== savingsId)
           balance -= Number(expense.amount);
       } else if (expense.account === accountId) {
         balance -= Number(expense.amount);
@@ -436,7 +516,7 @@ export function calculateAccountBalance(accountId, expenses, accountData) {
   }
 
   for (const transaction of accountData.transactions) {
-    if (transaction.date < startDate || transaction.date > today) continue;
+    if (transaction.date > today) continue;
     if (transaction.type === "income" && transaction.account === accountId)
       balance += Number(transaction.amount);
     if (transaction.type === "adjustment" && transaction.account === accountId)

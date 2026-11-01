@@ -3,12 +3,107 @@ import { emptyAccountData, loadAccountData } from "./data.js";
 
 export const CLOUD_SYNC_USER_KEY = "spend-cloud-sync-user-v1";
 
+const LEGACY_DB_ACCOUNTS = new Set(["bkash", "bank", "savings"]);
+
 function isNormalizedAccountSchemaUnavailable(error) {
   return error?.code === "42P01" || error?.code === "PGRST205";
 }
 
 function isSnapshotRpcUnavailable(error) {
   return error?.code === "42883" || error?.code === "PGRST202";
+}
+
+function isLegacyAccountConstraintError(error) {
+  return (
+    error?.code === "22023" ||
+    error?.code === "23514" ||
+    Boolean(error?.message?.includes("Invalid spend_account_transactions"))
+  );
+}
+
+function isLegacyDbCompatibleTransaction(tx) {
+  if (!tx || typeof tx !== "object") return false;
+  if (tx.type === "income" || tx.type === "adjustment") {
+    return LEGACY_DB_ACCOUNTS.has(tx.account);
+  }
+  if (tx.type === "transfer") {
+    return (
+      LEGACY_DB_ACCOUNTS.has(tx.fromAccount) &&
+      LEGACY_DB_ACCOUNTS.has(tx.toAccount) &&
+      tx.fromAccount !== tx.toAccount
+    );
+  }
+  return false;
+}
+
+function mergeAccountDataWithRawSnapshot(normalizedAccountData, rawSnapshotData) {
+  const rawAccounts = rawSnapshotData?.accountData;
+  const rawSettings = rawAccounts?.settings || {};
+  const normSettings = normalizedAccountData?.settings || {};
+
+  const mergedBalances = {
+    ...(rawSettings.balances && typeof rawSettings.balances === "object"
+      ? rawSettings.balances
+      : {}),
+    ...(normSettings.balances && typeof normSettings.balances === "object"
+      ? normSettings.balances
+      : {}),
+  };
+
+  const mergedCards = Array.isArray(rawSettings.cards)
+    ? rawSettings.cards
+    : Array.isArray(normSettings.cards)
+      ? normSettings.cards
+      : [];
+
+  const normTransactions = Array.isArray(normalizedAccountData?.transactions)
+    ? normalizedAccountData.transactions
+    : [];
+  const extraTransactions = Array.isArray(
+    rawSnapshotData?.customAccountTransactions,
+  )
+    ? rawSnapshotData.customAccountTransactions
+    : [];
+  const rawTransactions = Array.isArray(rawAccounts?.transactions)
+    ? rawAccounts.transactions
+    : [];
+
+  const txMap = new Map();
+  for (const tx of normTransactions) {
+    if (tx?.id) txMap.set(tx.id, tx);
+  }
+  for (const tx of extraTransactions) {
+    if (tx?.id && !txMap.has(tx.id)) txMap.set(tx.id, tx);
+  }
+  for (const tx of rawTransactions) {
+    if (tx?.id && !txMap.has(tx.id) && !isLegacyDbCompatibleTransaction(tx)) {
+      txMap.set(tx.id, tx);
+    }
+  }
+
+  const rawUpdatedAt =
+    typeof rawSettings.updatedAt === "number"
+      ? rawSettings.updatedAt
+      : Date.parse(rawSettings.updatedAt) || 0;
+  const normUpdatedAt =
+    typeof normSettings.updatedAt === "number"
+      ? normSettings.updatedAt
+      : Date.parse(normSettings.updatedAt) || 0;
+
+  return loadAccountData({
+    settings: {
+      ...rawSettings,
+      ...normSettings,
+      balances: mergedBalances,
+      cards: mergedCards,
+      cardsConfigured:
+        rawSettings.cardsConfigured === true ||
+        normSettings.cardsConfigured === true ||
+        mergedCards.length > 0,
+      updatedAt: Math.max(rawUpdatedAt, normUpdatedAt),
+    },
+    transactions: Array.from(txMap.values()),
+  });
 }
 
 async function loadLegacyCloudData(userId) {
@@ -77,7 +172,10 @@ async function loadLegacyCloudData(userId) {
       normalizedAccountSync: false,
       data: {
         ...snapshot.data,
-        accountData: loadAccountData(legacyAccounts),
+        accountData: mergeAccountDataWithRawSnapshot(
+          legacyAccounts,
+          snapshot.data,
+        ),
       },
     };
   }
@@ -89,12 +187,26 @@ async function loadLegacyCloudData(userId) {
         settings: {
           startDate: settingsResult.data.start_date,
           balances: {
+            ...(legacyAccounts?.settings?.balances || {}),
             bkash: settingsResult.data.bkash_balance,
             bank: settingsResult.data.bank_balance,
-            savings: settingsResult.data.savings_balance ?? 0,
+            savings:
+              settingsResult.data.savings_balance ??
+              legacyAccounts?.settings?.balances?.savings ??
+              0,
           },
+          cards: Array.isArray(legacyAccounts?.settings?.cards)
+            ? legacyAccounts.settings.cards
+            : [],
+          cardsConfigured:
+            legacyAccounts?.settings?.cardsConfigured === true ||
+            (Array.isArray(legacyAccounts?.settings?.cards) &&
+              legacyAccounts.settings.cards.length > 0),
           configured: settingsResult.data.configured,
-          updatedAt: Date.parse(settingsResult.data.updated_at) || 0,
+          updatedAt: Math.max(
+            Date.parse(settingsResult.data.updated_at) || 0,
+            Number(legacyAccounts?.settings?.updatedAt) || 0,
+          ),
         },
         transactions: transactionsResult.data.map((transaction) => ({
           id: transaction.id,
@@ -123,7 +235,10 @@ async function loadLegacyCloudData(userId) {
     normalizedAccountSync: true,
     data: {
       ...snapshot.data,
-      accountData: loadAccountData(normalizedAccounts),
+      accountData: mergeAccountDataWithRawSnapshot(
+        normalizedAccounts,
+        snapshot.data,
+      ),
     },
   };
 }
@@ -131,29 +246,91 @@ async function loadLegacyCloudData(userId) {
 export async function loadCloudData(userId) {
   if (!supabase) throw new Error("Cloud sync is not configured.");
 
-  const { data, error } = await supabase.rpc("load_spend_user_snapshot");
-  if (!error) return data;
-  if (!isSnapshotRpcUnavailable(error)) throw error;
+  const [rpcResult, rawSnapshotResult] = await Promise.all([
+    supabase.rpc("load_spend_user_snapshot"),
+    supabase
+      .from("spend_user_data")
+      .select("data, updated_at")
+      .eq("user_id", userId)
+      .maybeSingle(),
+  ]);
+
+  if (!rpcResult.error) {
+    const rpcData = rpcResult.data;
+    const rawData = rawSnapshotResult.data?.data;
+    if (rpcData?.data && rawData) {
+      return {
+        ...rpcData,
+        data: {
+          ...rawData,
+          ...rpcData.data,
+          accountData: mergeAccountDataWithRawSnapshot(
+            rpcData.data.accountData,
+            rawData,
+          ),
+        },
+      };
+    }
+    return rpcData;
+  }
+
+  if (!isSnapshotRpcUnavailable(rpcResult.error)) throw rpcResult.error;
   return loadLegacyCloudData(userId);
 }
 
-export async function saveCloudData(userId, data, expectedUpdatedAt = null) {
-  if (!supabase) throw new Error("Cloud sync is not configured.");
-
+async function executeSaveQuery(userId, payload, expectedUpdatedAt) {
   const query = supabase.from("spend_user_data");
-  const { data: saved, error } = expectedUpdatedAt
+  return expectedUpdatedAt
     ? await query
-        .update({ data })
+        .update({ data: payload })
         .eq("user_id", userId)
         .eq("updated_at", expectedUpdatedAt)
         .select("updated_at")
         .maybeSingle()
     : await query
-        .insert({ user_id: userId, data })
+        .insert({ user_id: userId, data: payload })
         .select("updated_at")
         .single();
-  if (error) throw error;
-  return saved?.updated_at ?? null;
+}
+
+export async function saveCloudData(userId, data, expectedUpdatedAt = null) {
+  if (!supabase) throw new Error("Cloud sync is not configured.");
+
+  const { data: saved, error } = await executeSaveQuery(
+    userId,
+    data,
+    expectedUpdatedAt,
+  );
+  if (!error) return saved?.updated_at ?? null;
+
+  if (isLegacyAccountConstraintError(error) && data?.accountData) {
+    const allTransactions = Array.isArray(data.accountData.transactions)
+      ? data.accountData.transactions
+      : [];
+    const legacyCompatible = allTransactions.filter(
+      isLegacyDbCompatibleTransaction,
+    );
+    const customOnly = allTransactions.filter(
+      (tx) => !isLegacyDbCompatibleTransaction(tx),
+    );
+    const fallbackPayload = {
+      ...data,
+      customAccountTransactions: customOnly,
+      accountData: {
+        ...data.accountData,
+        transactions: legacyCompatible,
+      },
+    };
+    const { data: retrySaved, error: retryError } = await executeSaveQuery(
+      userId,
+      fallbackPayload,
+      expectedUpdatedAt,
+    );
+    if (retryError) throw retryError;
+    return retrySaved?.updated_at ?? null;
+  }
+
+  throw error;
 }
 
 export async function deleteCloudData(userId) {

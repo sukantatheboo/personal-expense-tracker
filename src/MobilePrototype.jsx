@@ -9,7 +9,7 @@ import {
 import { Capacitor } from "@capacitor/core";
 import { Haptics, ImpactStyle, NotificationType } from "@capacitor/haptics";
 import { FaPenToSquare, FaPiggyBank } from "react-icons/fa6";
-import { ACCOUNT_OPTIONS, DEFAULT_CARDS } from "./data.js";
+import { ACCOUNT_OPTIONS, DEFAULT_CARDS, getSavingsAccountId } from "./data.js";
 import {
   StackedCardDeck,
   WalletCard,
@@ -298,15 +298,16 @@ const monthExp = (S) =>
     .sort((a, b) => b.date.localeCompare(a.date));
 function bal(S, id) {
   let b = Number(S?.start?.[id]) || 0;
+  const savingsId = getSavingsAccountId(S?.cards);
   for (const e of S.exp) {
-    if (e.amt == null || e.date < S.start.date || e.date > ld()) continue;
+    if (e.amt == null || e.date > ld()) continue;
     if (e.cat === "Savings") {
-      if (id === "savings" && e.acct !== "savings" && ACC[e.acct]) b += e.amt;
-      else if (e.acct === id && id !== "savings") b -= e.amt;
+      if (id === savingsId && e.acct && e.acct !== savingsId) b += e.amt;
+      else if (e.acct === id && id !== savingsId) b -= e.amt;
     } else if (e.acct === id) b -= e.amt;
   }
   for (const t of S.tx) {
-    if (t.date < S.start.date || t.date > ld()) continue;
+    if (t.date > ld()) continue;
     if (t.type === "income" && t.acct === id) b += t.amt;
     if (t.type === "adjust" && t.acct === id)
       b += t.dir === "up" ? t.amt : -t.amt;
@@ -425,6 +426,7 @@ function suggestedCategory(description, expenses = []) {
 
 function ExpenseRow({
   e,
+  cards = [],
   onOpen,
   onDelete,
   onSkip,
@@ -599,7 +601,10 @@ function ExpenseRow({
         }
         if (!gesture.draggingStateApplied) {
           gesture.draggingStateApplied = true;
-          swipeRef.current = { offset: gesture.initialOffset, phase: "dragging" };
+          swipeRef.current = {
+            offset: gesture.initialOffset,
+            phase: "dragging",
+          };
           setSwipe((prev) => ({ ...prev, phase: "dragging" }));
         }
       }
@@ -678,8 +683,12 @@ function ExpenseRow({
     wasPastThresholdRef.current = false;
 
     if (event?.type === "pointercancel") {
-      const resetOffset = Math.abs(gesture.initialOffset) === 76 ? gesture.initialOffset : 0;
-      updateSwipe({ offset: resetOffset, phase: resetOffset === 0 ? "idle" : "revealed" });
+      const resetOffset =
+        Math.abs(gesture.initialOffset) === 76 ? gesture.initialOffset : 0;
+      updateSwipe({
+        offset: resetOffset,
+        phase: resetOffset === 0 ? "idle" : "revealed",
+      });
       if (rowRef.current) {
         rowRef.current.style.transform = `translate3d(${resetOffset}px, 0, 0)`;
       }
@@ -755,7 +764,11 @@ function ExpenseRow({
       ref={rowRef}
       className={rowClasses}
       type="button"
-      style={onDelete && swipe.offset !== 0 ? { transform: `translate3d(${swipe.offset}px, 0, 0)` } : undefined}
+      style={
+        onDelete && swipe.offset !== 0
+          ? { transform: `translate3d(${swipe.offset}px, 0, 0)` }
+          : undefined
+      }
       aria-label={`${e.desc}, ${M(e.amt || 0)}${e.cat === "Savings" ? ", savings transfer" : ""}. ${gestureHint}`}
       onPointerDown={startGesture}
       onPointerMove={moveGesture}
@@ -786,7 +799,7 @@ function ExpenseRow({
         <b>{e.desc}</b>
         <small>
           {e.cat}
-          {e.acct ? " · " + ACC[e.acct][0] : ""}
+          {e.acct ? " · " + getAccountDisplay(e.acct, cards)[0] : ""}
           {e.rec ? " · Recurring" : ""}
           {suggestion && suggestion !== e.cat ? (
             <span className="category-suggestion-inline">
@@ -827,7 +840,9 @@ function ExpenseRow({
         aria-hidden={swipe.phase !== "revealed" || swipe.offset <= 0}
         disabled={swipe.phase !== "revealed" || swipe.offset <= 0}
         tabIndex={swipe.phase === "revealed" && swipe.offset > 0 ? 0 : -1}
-        onClick={() => beginDelete(e.rec && onSkip ? onSkip : onDelete, "right")}
+        onClick={() =>
+          beginDelete(e.rec && onSkip ? onSkip : onDelete, "right")
+        }
       >
         <svg viewBox="0 0 24 24" aria-hidden="true">
           {e.rec ? (
@@ -1116,7 +1131,8 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
         sheetRef.current.style.transform = "translate3d(0, 105%, 0)";
       }
       if (overlayRef.current) {
-        overlayRef.current.style.transition = "opacity 240ms cubic-bezier(0.2, 0.9, 0.28, 1)";
+        overlayRef.current.style.transition =
+          "opacity 240ms cubic-bezier(0.2, 0.9, 0.28, 1)";
         overlayRef.current.style.opacity = "0";
       }
 
@@ -1132,7 +1148,8 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
         sheetRef.current.style.transform = "translate3d(0, 0, 0)";
       }
       if (overlayRef.current) {
-        overlayRef.current.style.transition = "opacity 260ms cubic-bezier(0.2, 0.9, 0.28, 1)";
+        overlayRef.current.style.transition =
+          "opacity 260ms cubic-bezier(0.2, 0.9, 0.28, 1)";
         overlayRef.current.style.opacity = "1";
       }
 
@@ -1518,6 +1535,7 @@ function Home({
               <ExpenseRow
                 key={e.id}
                 e={e}
+                cards={S.cards}
                 onOpen={onOpen}
                 isNew={highlightedExpenseId === e.id}
               />
@@ -1615,6 +1633,7 @@ function Activity({
                     <ExpenseRow
                       key={e.id}
                       e={e}
+                      cards={S.cards}
                       onOpen={onOpen}
                       onDelete={onDelete}
                       onSkip={onSkip}
@@ -1697,14 +1716,47 @@ function Accounts({
   profile,
   onTab,
   onOpenExpense,
+  onOpenTransaction,
+  onLockedCardNotice,
 }) {
-  const cards = S.cards && S.cards.length > 0 ? S.cards : DEFAULT_CARDS;
+  const cards = Array.isArray(S.cards) ? S.cards : [];
+  const savingsAccountId = getSavingsAccountId(cards);
   const balances = Object.fromEntries(cards.map((c) => [c.id, bal(S, c.id)]));
-  const [selectedAccount, setSelectedAccount] = useState(() => cards[0]?.id || "amazon");
+  const [selectedAccount, setSelectedAccount] = useState(
+    () => cards[0]?.id || "",
+  );
+  const [showAllTx, setShowAllTx] = useState(false);
+  const prevCardCountRef = useRef(cards.length);
 
-  const activeCard = cards.find((c) => c.id === selectedAccount) || cards[0];
+  useEffect(() => {
+    if (cards.length === 0) {
+      if (selectedAccount !== "") setSelectedAccount("");
+      prevCardCountRef.current = 0;
+      return;
+    }
+    if (cards.length > prevCardCountRef.current) {
+      const newestCard = cards[cards.length - 1];
+      if (newestCard?.id) {
+        setSelectedAccount(newestCard.id);
+        prevCardCountRef.current = cards.length;
+        return;
+      }
+    }
+    prevCardCountRef.current = cards.length;
+    if (!selectedAccount || !cards.some((c) => c.id === selectedAccount)) {
+      setSelectedAccount(cards[0].id);
+    }
+  }, [cards, selectedAccount]);
+
+  useEffect(() => {
+    setShowAllTx(false);
+  }, [selectedAccount]);
+
+  const activeCard =
+    cards.find((c) => c.id === selectedAccount) || cards[0] || null;
 
   const chooseAccount = (accountId) => {
+    if (!accountId) return;
     triggerHaptic("selection");
     setSelectedAccount(accountId);
   };
@@ -1718,13 +1770,13 @@ function Accounts({
         (expense) =>
           expense.acct &&
           expense.amt != null &&
-          expense.date >= S.start.date &&
           expense.date <= ld(),
       )
       .map((expense) => {
         const isSavingsTransfer = expense.cat === "Savings";
         return {
           id: expense.id,
+          sourceType: "expense",
           createdAt: expense.createdAt,
           updatedAt: expense.updatedAt,
           d: expense.date,
@@ -1736,16 +1788,14 @@ function Accounts({
           amount: expense.amt,
           account: expense.acct,
           from: isSavingsTransfer ? expense.acct : "",
-          to: isSavingsTransfer ? "savings" : "",
+          to: isSavingsTransfer ? savingsAccountId : "",
         };
       }),
     ...S.tx
-      .filter(
-        (transaction) =>
-          transaction.date >= S.start.date && transaction.date <= ld(),
-      )
+      .filter((transaction) => transaction.date <= ld())
       .map((transaction) => ({
         id: transaction.id,
+        sourceType: "tx",
         createdAt: transaction.createdAt,
         updatedAt: transaction.updatedAt,
         d: transaction.date,
@@ -1755,7 +1805,12 @@ function Accounts({
             transaction.type
           ],
         type: transaction.type,
-        cat: transaction.type === "income" ? "Savings" : transaction.type === "transfer" ? "Transport" : "Bills",
+        cat:
+          transaction.type === "income"
+            ? "Savings"
+            : transaction.type === "transfer"
+              ? "Transport"
+              : "Bills",
         amount: transaction.amt,
         account: transaction.acct,
         from: transaction.acct,
@@ -1795,7 +1850,7 @@ function Accounts({
       runningBalances[accountId] = (runningBalances[accountId] || 0) + change;
   }
 
-  const visibleEvents = events
+  const filteredEvents = events
     .filter((event) => {
       if (!selectedAccount) return true;
       if (event.type === "transfer")
@@ -1807,8 +1862,10 @@ function Accounts({
         right.d.localeCompare(left.d) ||
         activityTime(right) - activityTime(left) ||
         right.id.localeCompare(left.id),
-    )
-    .slice(0, 8);
+    );
+  const visibleEvents = showAllTx
+    ? filteredEvents
+    : filteredEvents.slice(0, 8);
 
   const displayDate = (date) =>
     date === ld() ? "Today" : date === ago(1) ? "Yesterday" : fD(date);
@@ -1828,15 +1885,6 @@ function Accounts({
     return { value: event.amount, signed: false };
   };
 
-  const handleCopyCard = (num) => {
-    triggerHaptic("success");
-    if (navigator?.clipboard?.writeText) {
-      navigator.clipboard.writeText(num.replace(/\s+/g, "")).catch(() => {});
-    }
-    setCopiedCard(true);
-    setTimeout(() => setCopiedCard(false), 2000);
-  };
-
   return (
     <>
       {/* 3D Stacked Cards Wallet Deck */}
@@ -1846,7 +1894,7 @@ function Accounts({
         selectedId={selectedAccount}
         onSelectCard={chooseAccount}
         onAddCardClick={onAddCardClick}
-        onOpenCardDetails={(card) => onOpenCardOptions?.(card.id)}
+        onOpenCardDetails={(card) => card && onOpenCardOptions?.(card.id)}
       />
 
       {/* 2×2 Quick Action Buttons Grid (Income, Transfer, Adjust, Card Options - Preserving Whole App Functionality) */}
@@ -1856,12 +1904,24 @@ function Accounts({
           className="accounts-action-card"
           onClick={() => {
             triggerHaptic("light");
+            if (!cards.length) {
+              onAddCardClick?.();
+              return;
+            }
             onTx("income", selectedAccount);
           }}
           aria-label="Add income to this account"
         >
           <div className="action-icon-badge is-income">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
               <path d="M12 4v16M5 13l7 7 7-7" />
             </svg>
           </div>
@@ -1873,12 +1933,28 @@ function Accounts({
           className="accounts-action-card"
           onClick={() => {
             triggerHaptic("light");
+            if (!cards.length) {
+              onAddCardClick?.();
+              return;
+            }
+            if (activeCard?.frozen) {
+              onLockedCardNotice?.(activeCard.name);
+              return;
+            }
             onTx("transfer", selectedAccount);
           }}
           aria-label="Transfer between accounts"
         >
           <div className="action-icon-badge is-transfer">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
               <path d="M7 16l-4-4 4-4M3 12h14M17 8l4 4-4 4M21 12H7" />
             </svg>
           </div>
@@ -1890,12 +1966,24 @@ function Accounts({
           className="accounts-action-card"
           onClick={() => {
             triggerHaptic("light");
+            if (!cards.length) {
+              onAddCardClick?.();
+              return;
+            }
             onTx("adjust", selectedAccount);
           }}
           aria-label="Adjust balance"
         >
           <div className="action-icon-badge is-adjust">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
               <line x1="4" y1="21" x2="4" y2="14" />
               <line x1="4" y1="10" x2="4" y2="3" />
               <line x1="12" y1="21" x2="12" y2="12" />
@@ -1915,12 +2003,24 @@ function Accounts({
           className="accounts-action-card is-card-options-card"
           onClick={() => {
             triggerHaptic("selection");
+            if (!cards.length) {
+              onAddCardClick?.();
+              return;
+            }
             onOpenCardOptions?.(selectedAccount);
           }}
           aria-label="Manage cards and view card options"
         >
           <div className="action-icon-badge is-card-options">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
               <rect x="2" y="5" width="20" height="14" rx="3" />
               <line x1="2" y1="10" x2="22" y2="10" />
               <circle cx="7" cy="15" r="1.5" fill="currentColor" />
@@ -1937,9 +2037,20 @@ function Accounts({
         <button
           type="button"
           className="accounts-see-all-link"
-          onClick={() => onTab?.("activity")}
+          onClick={() => {
+            triggerHaptic("selection");
+            if (filteredEvents.length > 8) {
+              setShowAllTx((prev) => !prev);
+            } else {
+              onTab?.("activity");
+            }
+          }}
         >
-          See all
+          {filteredEvents.length > 8
+            ? showAllTx
+              ? "Show less"
+              : `See all (${filteredEvents.length})`
+            : "See all"}
         </button>
       </div>
 
@@ -1949,8 +2060,11 @@ function Accounts({
             const amount = displayAmount(event);
             const isPositive = amount.value > 0;
             const adjustment = adjustmentBalances.get(event.id);
-            const isExpense = event.type === "expense";
             const category = event.cat || "Food";
+            const subtitleMeta =
+              event.type === "transfer"
+                ? `${getAccountName(event.from)} → ${getAccountName(event.to)}`
+                : getAccountName(event.account);
 
             return (
               <button
@@ -1958,18 +2072,26 @@ function Accounts({
                 className={`accounts-tx-row${highlightedExpenseId === event.id || highlightedTransactionId === event.id ? " is-new" : ""}`}
                 key={event.id}
                 onClick={() => {
-                  if (isExpense && onOpenExpense) {
+                  triggerHaptic("selection");
+                  if (event.sourceType === "expense" && onOpenExpense) {
                     onOpenExpense(event.id);
+                  } else if (event.sourceType === "tx" && onOpenTransaction) {
+                    onOpenTransaction(event.id);
                   }
                 }}
               >
-                <div className={`accounts-tx-icon-circle is-${category.toLowerCase()}`}>
+                <div
+                  className={`accounts-tx-icon-circle is-${category.toLowerCase()}`}
+                >
                   <CategorySymbol category={category} />
                 </div>
 
                 <div className="accounts-tx-info">
                   <b className="accounts-tx-title">{event.title}</b>
-                  <small className="accounts-tx-date">{displayDate(event.d)}</small>
+                  <small className="accounts-tx-date">
+                    {displayDate(event.d)}
+                    {subtitleMeta ? ` · ${subtitleMeta}` : ""}
+                  </small>
                   {adjustment && (
                     <small className="accounts-tx-adj-note">
                       {M(adjustment.before)} → {M(adjustment.after)}
@@ -1977,7 +2099,9 @@ function Accounts({
                   )}
                 </div>
 
-                <b className={`accounts-tx-amount${isPositive ? " is-positive" : ""}`}>
+                <b
+                  className={`accounts-tx-amount${isPositive ? " is-positive" : ""}`}
+                >
                   {amount.signed ? (isPositive ? "+" : "−") : ""}
                   {M(Math.abs(amount.value))}
                 </b>
@@ -1991,12 +2115,14 @@ function Accounts({
             </span>
             <span>
               <b>No transactions yet</b>
-              <small>Activity for {activeCard?.name || "this card"} will show up here.</small>
+              <small>
+                Activity for {activeCard?.name || "this card"} will show up
+                here.
+              </small>
             </span>
           </div>
         )}
       </div>
-
     </>
   );
 }
@@ -2166,7 +2292,15 @@ function Plans({
 }
 
 /* ───────────── sheets ───────────── */
-function AddSheet({ iv, categoryOrder, expenses, cards = DEFAULT_CARDS, onSave, onClose }) {
+function AddSheet({
+  iv,
+  categoryOrder,
+  expenses,
+  cards = [],
+  onSave,
+  onClose,
+}) {
+  const spendableCards = cards.filter((c) => c.type !== "savings" && !c.frozen);
   const [f, setF] = useState({
     amt: "",
     desc: "",
@@ -2236,7 +2370,9 @@ function AddSheet({ iv, categoryOrder, expenses, cards = DEFAULT_CARDS, onSave, 
               setF((current) => ({
                 ...current,
                 cat: c,
-                ...(c === "Savings" && !current.acct ? { acct: "bkash" } : {}),
+                ...(c === "Savings" && !current.acct
+                  ? { acct: spendableCards[0]?.id || "" }
+                  : {}),
               }));
             }}
           >
@@ -2314,12 +2450,9 @@ function AddSheet({ iv, categoryOrder, expenses, cards = DEFAULT_CARDS, onSave, 
         value={f.acct}
         onPick={(v) => set("acct", v)}
         options={
-          f.cat === "Savings"
-            ? cards.filter((c) => c.type !== "savings").map((c) => [c.id, c.name])
-            : [
-                ["", "Cash"],
-                ...cards.filter((c) => c.type !== "savings").map((c) => [c.id, c.name]),
-              ]
+          f.cat === "Savings" && spendableCards.length > 0
+            ? spendableCards.map((c) => [c.id, c.name])
+            : [["", "Cash"], ...spendableCards.map((c) => [c.id, c.name])]
         }
       />
 
@@ -2337,16 +2470,28 @@ function AddSheet({ iv, categoryOrder, expenses, cards = DEFAULT_CARDS, onSave, 
   );
 }
 
-function TxSheet({ type, defaultAccount, cards = DEFAULT_CARDS, onSave, onClose }) {
+function TxSheet({
+  type,
+  defaultAccount,
+  cards = [],
+  onSave,
+  onClose,
+}) {
   const accountOptions = cards.map((c) => [c.id, c.name]);
+  const unfrozenFromOptions = cards
+    .filter((c) => !c.frozen)
+    .map((c) => [c.id, c.name]);
   const defaultFrom =
     defaultAccount && cards.some((c) => c.id === defaultAccount)
       ? defaultAccount
-      : cards[0]?.id || "bkash";
+      : cards[0]?.id || "";
+  const defaultTransferFrom =
+    defaultAccount &&
+    unfrozenFromOptions.some(([id]) => id === defaultAccount)
+      ? defaultAccount
+      : unfrozenFromOptions[0]?.[0] || defaultFrom;
   const defaultTo =
-    cards.find((c) => c.id !== defaultFrom)?.id ||
-    cards[1]?.id ||
-    "savings";
+    cards.find((c) => c.id !== defaultTransferFrom)?.id || cards[1]?.id || "";
 
   const [g, setG] = useState({
     type,
@@ -2354,17 +2499,32 @@ function TxSheet({ type, defaultAccount, cards = DEFAULT_CARDS, onSave, onClose 
     acct: defaultFrom,
     dir: "up",
     note: "",
-    fromAccount: defaultFrom,
+    date: ld(),
+    fromAccount: defaultTransferFrom,
     toAccount: defaultTo,
   });
   const set = (k, v) => setG((x) => ({ ...x, [k]: v }));
   const tr = g.type === "transfer";
+  const customDate = g.date !== ld() && g.date !== ago(1);
+  const transferFromOptions =
+    unfrozenFromOptions.length > 0 ? unfrozenFromOptions : accountOptions;
+  const fromCardIsFrozen = cards.find((c) => c.id === g.fromAccount)?.frozen;
+  const canSave =
+    accountOptions.length > 0 &&
+    (!tr ||
+      (accountOptions.length >= 2 &&
+        g.fromAccount !== g.toAccount &&
+        !fromCardIsFrozen));
 
   return (
     <Sheet
       onClose={onClose}
       actions={
-        <button className="btn" onClick={() => onSave(g)}>
+        <button
+          className="btn"
+          disabled={!canSave}
+          onClick={() => canSave && onSave(g)}
+        >
           Save
         </button>
       }
@@ -2392,7 +2552,13 @@ function TxSheet({ type, defaultAccount, cards = DEFAULT_CARDS, onSave, onClose 
         />
       </div>
 
-      {tr && (
+      {tr && accountOptions.length < 2 && (
+        <p className="hint">
+          Add at least two cards or wallets to transfer between accounts.
+        </p>
+      )}
+
+      {tr && accountOptions.length >= 2 && (
         <>
           <span className="lbl">From</span>
           <Seg
@@ -2407,7 +2573,7 @@ function TxSheet({ type, defaultAccount, cards = DEFAULT_CARDS, onSave, onClose 
                     : current.toAccount,
               }));
             }}
-            options={accountOptions}
+            options={transferFromOptions}
           />
           <span className="lbl">To</span>
           <Seg
@@ -2442,6 +2608,31 @@ function TxSheet({ type, defaultAccount, cards = DEFAULT_CARDS, onSave, onClose 
           />
         </>
       )}
+
+      <span className="lbl">Date</span>
+      <div className="seg">
+        <button
+          className={g.date === ld() ? "on" : ""}
+          onClick={() => set("date", ld())}
+        >
+          Today
+        </button>
+        <button
+          className={g.date === ago(1) ? "on" : ""}
+          onClick={() => set("date", ago(1))}
+        >
+          Yesterday
+        </button>
+        <input
+          type="date"
+          className={customDate ? "on" : ""}
+          aria-label="Transaction date"
+          value={g.date}
+          onChange={(e) => {
+            if (e.target.value) set("date", e.target.value);
+          }}
+        />
+      </div>
 
       {g.type === "adjust" ? (
         <>
@@ -2478,7 +2669,181 @@ function TxSheet({ type, defaultAccount, cards = DEFAULT_CARDS, onSave, onClose 
   );
 }
 
-function DetailSheet({ e, suggestion, cards = DEFAULT_CARDS, onSave, onDelete, onClose }) {
+function AccountTxDetailSheet({ tx, cards = [], onSave, onDelete, onClose }) {
+  const accountOptions = cards.map((c) => [c.id, c.name]);
+  const ensureAccountOption = (id) => {
+    if (!id) return accountOptions;
+    if (accountOptions.some(([optId]) => optId === id)) return accountOptions;
+    return [...accountOptions, [id, getAccountDisplay(id, cards)[0]]];
+  };
+  const [g, setG] = useState({
+    type: tx.type || "income",
+    amt: tx.amt ?? "",
+    acct: tx.acct || cards[0]?.id || "",
+    dir: tx.dir || "up",
+    note: tx.note || "",
+    date: tx.date || ld(),
+    fromAccount: tx.acct || cards[0]?.id || "",
+    toAccount:
+      tx.to ||
+      cards.find((c) => c.id !== tx.acct)?.id ||
+      cards[1]?.id ||
+      "",
+  });
+  const set = (k, v) => setG((x) => ({ ...x, [k]: v }));
+  const tr = g.type === "transfer";
+  const allFromOptions = ensureAccountOption(g.fromAccount);
+  const allToOptions = ensureAccountOption(g.toAccount).filter(
+    ([id]) => id !== g.fromAccount,
+  );
+  const singleAccountOptions = ensureAccountOption(g.acct);
+  const canSave =
+    singleAccountOptions.length > 0 &&
+    (!tr || (allFromOptions.length >= 1 && allToOptions.length >= 1 && g.fromAccount !== g.toAccount));
+
+  return (
+    <Sheet
+      onClose={onClose}
+      actionsClassName="is-paired"
+      actions={
+        <>
+          <button
+            className="btn"
+            disabled={!canSave}
+            onClick={() => canSave && onSave(tx.id, g)}
+          >
+            Save changes
+          </button>
+          <button className="btn del" onClick={() => onDelete(tx.id)}>
+            Delete
+          </button>
+        </>
+      }
+    >
+      <h3 id="sheet-title">Edit account activity</h3>
+      <Seg
+        value={g.type}
+        onPick={(v) => setG((current) => ({ ...current, type: v }))}
+        options={[
+          ["income", "Income"],
+          ["transfer", "Transfer"],
+          ["adjust", "Adjust"],
+        ]}
+      />
+      <div className="amt">
+        <span>৳</span>
+        <input
+          inputMode="decimal"
+          aria-label="Transaction amount in taka"
+          placeholder="0"
+          value={g.amt}
+          onChange={(e) => set("amt", e.target.value)}
+        />
+      </div>
+
+      {tr ? (
+        <>
+          <span className="lbl">From</span>
+          <Seg
+            value={g.fromAccount}
+            onPick={(value) => {
+              setG((current) => ({
+                ...current,
+                fromAccount: value,
+                toAccount:
+                  current.toAccount === value
+                    ? allFromOptions.find(([id]) => id !== value)?.[0] || ""
+                    : current.toAccount,
+              }));
+            }}
+            options={allFromOptions}
+          />
+          <span className="lbl">To</span>
+          <Seg
+            value={g.toAccount}
+            onPick={(value) => set("toAccount", value)}
+            options={allToOptions}
+          />
+        </>
+      ) : (
+        <>
+          <span className="lbl">Account</span>
+          <Seg
+            value={g.acct}
+            onPick={(v) => set("acct", v)}
+            options={singleAccountOptions}
+          />
+        </>
+      )}
+
+      {g.type === "adjust" && (
+        <>
+          <span className="lbl">Direction</span>
+          <Seg
+            value={g.dir}
+            onPick={(v) => set("dir", v)}
+            options={[
+              ["up", "Increase"],
+              ["down", "Decrease"],
+            ]}
+          />
+        </>
+      )}
+
+      <span className="lbl">Date</span>
+      <input
+        className="in"
+        type="date"
+        aria-label="Transaction date"
+        value={g.date}
+        onChange={(e) => {
+          if (e.target.value) set("date", e.target.value);
+        }}
+      />
+
+      {g.type === "adjust" ? (
+        <>
+          <span className="lbl">Reason (optional)</span>
+          <select
+            className="in"
+            aria-label="Adjustment reason (optional)"
+            value={g.note}
+            onChange={(event) => set("note", event.target.value)}
+          >
+            <option value="">No reason</option>
+            <option value="Fee">Fee</option>
+            <option value="Cash withdrawn">Cash withdrawn</option>
+            <option value="Correction">Correction</option>
+          </select>
+        </>
+      ) : (
+        <>
+          <span className="lbl">Note (optional)</span>
+          <input
+            className="in"
+            maxLength={80}
+            aria-label="Transaction note"
+            autoCapitalize="sentences"
+            placeholder={
+              g.type === "income" ? "e.g. Salary, cash in" : "Optional note"
+            }
+            value={g.note}
+            onChange={(e) => set("note", e.target.value)}
+          />
+        </>
+      )}
+    </Sheet>
+  );
+}
+
+function DetailSheet({
+  e,
+  suggestion,
+  cards = [],
+  onSave,
+  onDelete,
+  onClose,
+}) {
   const [f, setF] = useState({
     desc: e.desc,
     amt: e.amt ?? "",
@@ -2562,7 +2927,12 @@ function DetailSheet({ e, suggestion, cards = DEFAULT_CARDS, onSave, onDelete, o
         onPick={(value) => set("acct", value)}
         options={[
           ["", "Cash"],
-          ...cards.filter((c) => c.type !== "savings").map((c) => [c.id, c.name]),
+          ...cards
+            .filter((c) => c.type !== "savings")
+            .map((c) => [c.id, c.name]),
+          ...(f.acct && !cards.some((c) => c.id === f.acct)
+            ? [[f.acct, getAccountDisplay(f.acct, cards)[0]]]
+            : []),
         ]}
       />
     </Sheet>
@@ -2749,15 +3119,13 @@ const CARD_THEMES = [
     id: "obsidian",
     name: "Obsidian Slate",
     color: "#1e293b",
-    gradient:
-      "linear-gradient(135deg, #334155 0%, #1e293b 60%, #0f172a 100%)",
+    gradient: "linear-gradient(135deg, #334155 0%, #1e293b 60%, #0f172a 100%)",
   },
   {
     id: "purple",
     name: "Royal Purple",
     color: "#6358DC",
-    gradient:
-      "linear-gradient(135deg, #7c3aed 0%, #6366f1 50%, #4338ca 100%)",
+    gradient: "linear-gradient(135deg, #7c3aed 0%, #6366f1 50%, #4338ca 100%)",
   },
   {
     id: "berry",
@@ -2770,29 +3138,25 @@ const CARD_THEMES = [
     id: "navy",
     name: "Sapphire Navy",
     color: "#004c8f",
-    gradient:
-      "linear-gradient(135deg, #004c8f 0%, #002d56 70%, #001933 100%)",
+    gradient: "linear-gradient(135deg, #004c8f 0%, #002d56 70%, #001933 100%)",
   },
   {
     id: "amber",
     name: "Sunset Amber",
     color: "#b45309",
-    gradient:
-      "linear-gradient(135deg, #d97706 0%, #b45309 50%, #78350f 100%)",
+    gradient: "linear-gradient(135deg, #d97706 0%, #b45309 50%, #78350f 100%)",
   },
   {
     id: "teal",
     name: "Teal Digital",
     color: "#0f766e",
-    gradient:
-      "linear-gradient(135deg, #14b8a6 0%, #0f766e 60%, #134e4a 100%)",
+    gradient: "linear-gradient(135deg, #14b8a6 0%, #0f766e 60%, #134e4a 100%)",
   },
   {
     id: "crimson",
     name: "Crimson Red",
     color: "#b91c1c",
-    gradient:
-      "linear-gradient(135deg, #dc2626 0%, #b91c1c 60%, #7f1d1d 100%)",
+    gradient: "linear-gradient(135deg, #dc2626 0%, #b91c1c 60%, #7f1d1d 100%)",
   },
 ];
 
@@ -2807,10 +3171,12 @@ const CARD_FILTER_TABS = [
 
 function getCardLabel(prov) {
   if (prov.id === "custom") return { label: "Custom", type: "custom" };
-  if (prov.category === "mfs" || prov.isPhone) return { label: "MFS", type: "mfs" };
+  if (prov.category === "mfs" || prov.isPhone)
+    return { label: "MFS", type: "mfs" };
   if (prov.category === "savings") return { label: "Vault", type: "savings" };
   if (prov.defaultNetwork === "visa") return { label: "Visa", type: "visa" };
-  if (prov.defaultNetwork === "mastercard") return { label: "Mastercard", type: "mastercard" };
+  if (prov.defaultNetwork === "mastercard")
+    return { label: "Mastercard", type: "mastercard" };
   if (prov.defaultNetwork === "amex") return { label: "Amex", type: "amex" };
   return { label: "Bank", type: "bank" };
 }
@@ -2844,9 +3210,13 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
         (p) => p.category === "mfs" || p.defaultNetwork === "mfs" || p.isPhone,
       );
     } else if (activeFilter === "visa") {
-      list = list.filter((p) => p.defaultNetwork === "visa" || p.id === "custom");
+      list = list.filter(
+        (p) => p.defaultNetwork === "visa" || p.id === "custom",
+      );
     } else if (activeFilter === "mastercard") {
-      list = list.filter((p) => p.defaultNetwork === "mastercard" || p.id === "custom");
+      list = list.filter(
+        (p) => p.defaultNetwork === "mastercard" || p.id === "custom",
+      );
     } else if (activeFilter === "custom") {
       list = list.filter((p) => p.id === "custom");
     } else if (activeFilter === "savings") {
@@ -2918,9 +3288,18 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
 
     const defaultNum = selectedProvider.numberPlaceholder.replace(/\s+/g, "");
     const number = formData.number.trim() || defaultNum;
-    const holderName = formData.holderName.trim() || userProfileName || "Cardholder";
-    const network = isMfs ? "mfs" : isSavings ? "none" : (formData.network || selectedProvider.defaultNetwork || "visa");
-    const type = isMfs ? "mfs" : isSavings ? "savings" : (formData.type || selectedProvider.defaultType || "credit");
+    const holderName =
+      formData.holderName.trim() || userProfileName || "Cardholder";
+    const network = isMfs
+      ? "mfs"
+      : isSavings
+        ? "none"
+        : formData.network || selectedProvider.defaultNetwork || "visa";
+    const type = isMfs
+      ? "mfs"
+      : isSavings
+        ? "savings"
+        : formData.type || selectedProvider.defaultType || "credit";
     const name = formData.name.trim() || selectedProvider.name;
 
     const newCard = {
@@ -2954,13 +3333,31 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
 
   const previewCard = {
     id: "preview",
-    name: formData.name.trim() || (isCustom ? "Custom Card" : selectedProvider.name),
+    name:
+      formData.name.trim() ||
+      (isCustom ? "Custom Card" : selectedProvider.name),
     provider: selectedProvider.id,
     type: formData.type || selectedProvider.defaultType || "credit",
     network: formData.network || selectedProvider.defaultNetwork || "visa",
-    holderName: formData.holderName.trim() || (userProfileName ? userProfileName.toUpperCase() : (isCustom ? "CARDHOLDER" : selectedProvider.name.toUpperCase())),
+    holderName:
+      formData.holderName.trim() ||
+      (userProfileName
+        ? userProfileName.toUpperCase()
+        : isCustom
+          ? "CARDHOLDER"
+          : selectedProvider.name.toUpperCase()),
     subtitle: isCustom
-      ? (formData.name.trim() ? `${formData.name.trim()} ${formData.network === "visa" ? "Visa" : formData.network === "mastercard" ? "Mastercard" : "Amex"}` : (formData.network === "visa" ? (formData.type === "credit" ? "Custom Visa Credit" : "Custom Visa Debit") : formData.network === "mastercard" ? (formData.type === "credit" ? "Custom Mastercard Credit" : "Custom Mastercard Debit") : "Custom Amex"))
+      ? formData.name.trim()
+        ? `${formData.name.trim()} ${formData.network === "visa" ? "Visa" : formData.network === "mastercard" ? "Mastercard" : "Amex"}`
+        : formData.network === "visa"
+          ? formData.type === "credit"
+            ? "Custom Visa Credit"
+            : "Custom Visa Debit"
+          : formData.network === "mastercard"
+            ? formData.type === "credit"
+              ? "Custom Mastercard Credit"
+              : "Custom Mastercard Debit"
+            : "Custom Amex"
       : selectedProvider.subtitle,
     number: formData.number,
     expiry: formData.expiry,
@@ -2975,14 +3372,32 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
       {step === "catalog" && (
         <div className="add-new-card-catalog">
           <div className="add-card-header-bar is-centered">
-            <h3 id="sheet-title" className="add-card-title">Add New Card</h3>
+            <h3 id="sheet-title" className="add-card-title">
+              Add New Card
+            </h3>
           </div>
 
           {/* Search Bar matching video */}
           <div className="add-card-search-wrap">
-            <svg viewBox="0 0 24 24" className="add-card-search-icon" aria-hidden="true">
-              <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2.2" fill="none" />
-              <path d="m20 20-3.5-3.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+            <svg
+              viewBox="0 0 24 24"
+              className="add-card-search-icon"
+              aria-hidden="true"
+            >
+              <circle
+                cx="11"
+                cy="11"
+                r="7"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                fill="none"
+              />
+              <path
+                d="m20 20-3.5-3.5"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+              />
             </svg>
             <input
               type="text"
@@ -3050,17 +3465,26 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
 
                     <div className="add-card-template-meta">
                       <b className="add-card-template-name">{prov.name}</b>
-                      <small className="add-card-template-sub">{prov.subtitle}</small>
+                      <small className="add-card-template-sub">
+                        {prov.subtitle}
+                      </small>
                     </div>
 
                     <div className="add-card-template-badges">
-                      <span className={`add-card-type-label is-${cardLabel.type}`}>
+                      <span
+                        className={`add-card-type-label is-${cardLabel.type}`}
+                      >
                         {cardLabel.label}
                       </span>
-                      <span className="add-card-currency-badge">{prov.currency || "USD"}</span>
+                      <span className="add-card-currency-badge">
+                        {prov.currency || "USD"}
+                      </span>
                     </div>
 
-                    <span className="add-card-template-chevron" aria-hidden="true">
+                    <span
+                      className="add-card-template-chevron"
+                      aria-hidden="true"
+                    >
                       ›
                     </span>
                   </button>
@@ -3085,7 +3509,9 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
             >
               ‹
             </button>
-            <h3 id="sheet-title" className="add-card-title">Add Card</h3>
+            <h3 id="sheet-title" className="add-card-title">
+              Add Card
+            </h3>
             <span className="add-card-header-spacer" aria-hidden="true" />
           </div>
 
@@ -3105,76 +3531,78 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
           <div className="add-card-form-body">
             <h4 className="add-card-section-label">Card Details</h4>
 
-            {!selectedProvider.isPhone && selectedProvider.category !== "savings" && (
-              <div className="add-card-field">
-                <label className="add-card-input-lbl">Card Network</label>
-                <div className="add-card-network-selector">
-                  <button
-                    type="button"
-                    className={`add-card-network-btn ${formData.network === "visa" ? "is-selected" : ""}`}
-                    onClick={() => {
-                      triggerHaptic("selection");
-                      handleFormChange("network", "visa");
-                    }}
-                  >
-                    <VisaBadge width={44} height={17} />
-                    <span>Visa</span>
-                  </button>
+            {!selectedProvider.isPhone &&
+              selectedProvider.category !== "savings" && (
+                <div className="add-card-field">
+                  <label className="add-card-input-lbl">Card Network</label>
+                  <div className="add-card-network-selector">
+                    <button
+                      type="button"
+                      className={`add-card-network-btn ${formData.network === "visa" ? "is-selected" : ""}`}
+                      onClick={() => {
+                        triggerHaptic("selection");
+                        handleFormChange("network", "visa");
+                      }}
+                    >
+                      <VisaBadge width={44} height={17} />
+                      <span>Visa</span>
+                    </button>
 
-                  <button
-                    type="button"
-                    className={`add-card-network-btn ${formData.network === "mastercard" ? "is-selected" : ""}`}
-                    onClick={() => {
-                      triggerHaptic("selection");
-                      handleFormChange("network", "mastercard");
-                    }}
-                  >
-                    <MastercardBadge width={30} height={20} />
-                    <span>Mastercard</span>
-                  </button>
+                    <button
+                      type="button"
+                      className={`add-card-network-btn ${formData.network === "mastercard" ? "is-selected" : ""}`}
+                      onClick={() => {
+                        triggerHaptic("selection");
+                        handleFormChange("network", "mastercard");
+                      }}
+                    >
+                      <MastercardBadge width={30} height={20} />
+                      <span>Mastercard</span>
+                    </button>
 
-                  <button
-                    type="button"
-                    className={`add-card-network-btn ${formData.network === "amex" ? "is-selected" : ""}`}
-                    onClick={() => {
-                      triggerHaptic("selection");
-                      handleFormChange("network", "amex");
-                    }}
-                  >
-                    <AmexBadge width={34} height={17} />
-                    <span>Amex</span>
-                  </button>
+                    <button
+                      type="button"
+                      className={`add-card-network-btn ${formData.network === "amex" ? "is-selected" : ""}`}
+                      onClick={() => {
+                        triggerHaptic("selection");
+                        handleFormChange("network", "amex");
+                      }}
+                    >
+                      <AmexBadge width={34} height={17} />
+                      <span>Amex</span>
+                    </button>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {!selectedProvider.isPhone && selectedProvider.category !== "savings" && (
-              <div className="add-card-field">
-                <label className="add-card-input-lbl">Card Type</label>
-                <div className="add-card-type-toggle">
-                  <button
-                    type="button"
-                    className={`add-card-type-pill ${formData.type === "credit" ? "is-selected" : ""}`}
-                    onClick={() => {
-                      triggerHaptic("selection");
-                      handleFormChange("type", "credit");
-                    }}
-                  >
-                    Credit Card
-                  </button>
-                  <button
-                    type="button"
-                    className={`add-card-type-pill ${formData.type === "debit" ? "is-selected" : ""}`}
-                    onClick={() => {
-                      triggerHaptic("selection");
-                      handleFormChange("type", "debit");
-                    }}
-                  >
-                    Debit Card
-                  </button>
+            {!selectedProvider.isPhone &&
+              selectedProvider.category !== "savings" && (
+                <div className="add-card-field">
+                  <label className="add-card-input-lbl">Card Type</label>
+                  <div className="add-card-type-toggle">
+                    <button
+                      type="button"
+                      className={`add-card-type-pill ${formData.type === "credit" ? "is-selected" : ""}`}
+                      onClick={() => {
+                        triggerHaptic("selection");
+                        handleFormChange("type", "credit");
+                      }}
+                    >
+                      Credit Card
+                    </button>
+                    <button
+                      type="button"
+                      className={`add-card-type-pill ${formData.type === "debit" ? "is-selected" : ""}`}
+                      onClick={() => {
+                        triggerHaptic("selection");
+                        handleFormChange("type", "debit");
+                      }}
+                    >
+                      Debit Card
+                    </button>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
             {selectedProvider.id === "custom" && (
               <div className="add-card-field">
@@ -3192,10 +3620,14 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
 
             {selectedProvider.id === "custom" && (
               <div className="add-card-field">
-                <label className="add-card-input-lbl">Card Theme &amp; Color</label>
+                <label className="add-card-input-lbl">
+                  Card Theme &amp; Color
+                </label>
                 <div className="card-options-theme-grid">
                   {CARD_THEMES.map((theme) => {
-                    const isSelected = (formData.gradient || selectedProvider.gradient) === theme.gradient;
+                    const isSelected =
+                      (formData.gradient || selectedProvider.gradient) ===
+                      theme.gradient;
                     return (
                       <button
                         key={theme.id}
@@ -3240,8 +3672,9 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
                 inputMode="numeric"
                 placeholder={
                   selectedProvider.isPhone
-                    ? (selectedProvider.numberPlaceholder || "01712 345678")
-                    : (selectedProvider.numberPlaceholder || "4756 1254 0024 9018")
+                    ? selectedProvider.numberPlaceholder || "01712 345678"
+                    : selectedProvider.numberPlaceholder ||
+                      "4756 1254 0024 9018"
                 }
                 value={
                   selectedProvider.isPhone
@@ -3252,35 +3685,41 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
               />
             </div>
 
-            {!selectedProvider.isPhone && selectedProvider.category !== "savings" && (
-              <div className="add-card-two-col">
-                <div className="add-card-field">
-                  <label className="add-card-input-lbl">MM/YY</label>
-                  <input
-                    className="add-card-native-input"
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="11/25"
-                    maxLength={5}
-                    value={formData.expiry}
-                    onChange={(e) => handleExpiryChange(e.target.value)}
-                  />
-                </div>
+            {!selectedProvider.isPhone &&
+              selectedProvider.category !== "savings" && (
+                <div className="add-card-two-col">
+                  <div className="add-card-field">
+                    <label className="add-card-input-lbl">MM/YY</label>
+                    <input
+                      className="add-card-native-input"
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="11/25"
+                      maxLength={5}
+                      value={formData.expiry}
+                      onChange={(e) => handleExpiryChange(e.target.value)}
+                    />
+                  </div>
 
-                <div className="add-card-field">
-                  <label className="add-card-input-lbl">CVC</label>
-                  <input
-                    className="add-card-native-input"
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="654"
-                    maxLength={4}
-                    value={formData.cvv}
-                    onChange={(e) => handleFormChange("cvv", e.target.value.replace(/\D/g, "").slice(0, 4))}
-                  />
+                  <div className="add-card-field">
+                    <label className="add-card-input-lbl">CVC</label>
+                    <input
+                      className="add-card-native-input"
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="654"
+                      maxLength={4}
+                      value={formData.cvv}
+                      onChange={(e) =>
+                        handleFormChange(
+                          "cvv",
+                          e.target.value.replace(/\D/g, "").slice(0, 4),
+                        )
+                      }
+                    />
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
             <div className="add-card-field">
               <label className="add-card-input-lbl">Starting Balance</label>
@@ -3291,7 +3730,9 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
                   inputMode="decimal"
                   placeholder="0.00"
                   value={formData.initialBalance}
-                  onChange={(e) => handleFormChange("initialBalance", e.target.value)}
+                  onChange={(e) =>
+                    handleFormChange("initialBalance", e.target.value)
+                  }
                 />
               </div>
             </div>
@@ -3327,7 +3768,9 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
               </svg>
             </div>
 
-            <h3 className="add-card-success-title">Your card has been added successfully</h3>
+            <h3 className="add-card-success-title">
+              Your card has been added successfully
+            </h3>
             <p className="add-card-success-desc">
               We will notify you about your activities via email
             </p>
@@ -3345,8 +3788,6 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
     </Sheet>
   );
 }
-
-
 
 function ConfirmationModal({
   isOpen,
@@ -3426,9 +3867,18 @@ function CardOptionsSheet({
   onAdjustBalance,
 }) {
   const [selectedId, setSelectedId] = useState(
-    initialCardId || cards[0]?.id || "amazon",
+    () => initialCardId || cards[0]?.id || "",
   );
-  const selectedCard = cards.find((c) => c.id === selectedId) || cards[0];
+
+  useEffect(() => {
+    if (cards.length === 0) return;
+    if (!selectedId || !cards.some((c) => c.id === selectedId)) {
+      setSelectedId(cards[0].id);
+    }
+  }, [cards, selectedId]);
+
+  const selectedCard =
+    cards.find((c) => c.id === selectedId) || cards[0] || null;
 
   const isMfs =
     selectedCard?.category === "mfs" ||
@@ -3448,7 +3898,7 @@ function CardOptionsSheet({
 
   const [formData, setFormData] = useState({
     name: selectedCard?.name || "",
-    holderName: selectedCard?.holderName || "John Smith",
+    holderName: selectedCard?.holderName || "Cardholder",
     subtitle: selectedCard?.subtitle || "",
     number: selectedCard?.number || "",
     expiry: selectedCard?.expiry || "",
@@ -3462,7 +3912,7 @@ function CardOptionsSheet({
   });
 
   const [showSecrets, setShowSecrets] = useState(false);
-  const [isFrozen, setIsFrozen] = useState(false);
+  const [isFrozen, setIsFrozen] = useState(() => Boolean(selectedCard?.frozen));
   const [copied, setCopied] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
@@ -3470,7 +3920,7 @@ function CardOptionsSheet({
     if (selectedCard) {
       setFormData({
         name: selectedCard.name || "",
-        holderName: selectedCard.holderName || "John Smith",
+        holderName: selectedCard.holderName || "Cardholder",
         subtitle: selectedCard.subtitle || "",
         number: selectedCard.number || "",
         expiry: selectedCard.expiry || "",
@@ -3482,9 +3932,10 @@ function CardOptionsSheet({
           selectedCard.gradient ||
           "linear-gradient(135deg, #334155 0%, #1e293b 60%, #0f172a 100%)",
       });
+      setIsFrozen(Boolean(selectedCard.frozen));
       setConfirmDeleteOpen(false);
     }
-  }, [selectedId, selectedCard]);
+  }, [selectedCard?.id]);
 
   const previewCard = useMemo(() => {
     if (!selectedCard) return null;
@@ -3500,8 +3951,9 @@ function CardOptionsSheet({
       number: formData.number,
       expiry: formData.expiry,
       cvv: formData.cvv,
+      frozen: isFrozen,
     };
-  }, [selectedCard, formData]);
+  }, [selectedCard, formData, isFrozen]);
 
   const handleCardNumberChange = (raw) => {
     if (isMfs) {
@@ -3538,19 +3990,36 @@ function CardOptionsSheet({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleToggleFreeze = () => {
+    if (!selectedCard) return;
+    triggerHaptic("warning");
+    const nextFrozen = !isFrozen;
+    setIsFrozen(nextFrozen);
+    onUpdateCard?.({
+      ...selectedCard,
+      ...formData,
+      frozen: nextFrozen,
+      id: selectedCard.id,
+    });
+  };
+
   const handleSave = () => {
+    if (!selectedCard) return;
     triggerHaptic("success");
     onUpdateCard?.({
       ...selectedCard,
       ...formData,
+      frozen: isFrozen,
       id: selectedCard.id,
     });
     onClose();
   };
 
   const handleDelete = () => {
+    if (!selectedCard) return;
     triggerHaptic("warning");
-    onDeleteCard?.(selectedCard.id);
+    const deletingId = selectedCard.id;
+    onDeleteCard?.(deletingId);
     onClose();
   };
 
@@ -3675,10 +4144,7 @@ function CardOptionsSheet({
           <button
             type="button"
             className={`card-options-bar-btn ${isFrozen ? "is-frozen" : ""}`}
-            onClick={() => {
-              triggerHaptic("warning");
-              setIsFrozen((prev) => !prev);
-            }}
+            onClick={handleToggleFreeze}
           >
             <svg
               viewBox="0 0 24 24"
@@ -3724,7 +4190,10 @@ function CardOptionsSheet({
                       className={`add-card-network-btn ${formData.network === "mastercard" ? "is-selected" : ""}`}
                       onClick={() => {
                         triggerHaptic("selection");
-                        setFormData((prev) => ({ ...prev, network: "mastercard" }));
+                        setFormData((prev) => ({
+                          ...prev,
+                          network: "mastercard",
+                        }));
                       }}
                     >
                       <MastercardBadge width={30} height={20} />
@@ -3952,7 +4421,10 @@ function CardOptionsSheet({
                     value={formData.number}
                     placeholder="SAV-8829-01"
                     onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, number: e.target.value }))
+                      setFormData((prev) => ({
+                        ...prev,
+                        number: e.target.value,
+                      }))
                     }
                   />
                 </div>
@@ -4386,6 +4858,8 @@ export default function MobilePrototype({
   onBudgetSave,
   onBudgetClear,
   onTransactionSave,
+  onTransactionUpdate,
+  onTransactionDelete,
   onAddCard,
   onUpdateCard,
   onDeleteCard,
@@ -4421,7 +4895,7 @@ export default function MobilePrototype({
   onDismissNotification,
 }) {
   const [tab, setTab] = useState("home");
-  const cards = S.cards && S.cards.length > 0 ? S.cards : DEFAULT_CARDS;
+  const cards = Array.isArray(S.cards) ? S.cards : [];
   const [plan, setPlan] = useState("budget");
   const [q, setQ] = useState("");
   const [cf, setCf] = useState("");
@@ -4899,9 +5373,12 @@ export default function MobilePrototype({
     resetScreenScroll();
   };
   const openExpense = (id) => openSheet({ type: "det", id });
+  const openTransaction = (id) => openSheet({ type: "txDet", id });
   const openBudget = () => openSheet({ type: "bud" });
   const detail =
     sheet?.type === "det" ? S.exp.find((x) => x.id === sheet.id) : null;
+  const txDetail =
+    sheet?.type === "txDet" ? S.tx.find((x) => x.id === sheet.id) : null;
 
   const saveExpense = (f) => {
     const isSavingsTransfer = f.cat === "Savings";
@@ -5055,6 +5532,21 @@ export default function MobilePrototype({
     close();
     triggerHaptic("success");
     toast("Saved");
+  };
+  const updateTransaction = (id, value) => {
+    const updated = onTransactionUpdate?.(id, value);
+    if (!updated) return toast("Enter a valid amount.");
+    close();
+    triggerHaptic("success");
+    toast("Transaction updated");
+  };
+  const deleteTransaction = (id) => {
+    const tx = S.tx.find((item) => item.id === id);
+    if (!tx) return;
+    const undo = onTransactionDelete?.(tx);
+    close();
+    triggerHaptic("delete");
+    toast("Transaction removed", undo);
   };
   const removeRecurring = (id) => {
     const undo = onRemoveRec(id);
@@ -5259,7 +5751,17 @@ export default function MobilePrototype({
                   openSheet({ type: "addCard" });
                 }}
               >
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  width="20"
+                  height="20"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
                   <rect x="2" y="5" width="20" height="14" rx="3" />
                   <line x1="2" y1="10" x2="22" y2="10" />
                   <circle cx="7" cy="15" r="1.5" fill="currentColor" />
@@ -5363,14 +5865,18 @@ export default function MobilePrototype({
                   openSheet({ type: "cardOptions", cardId })
                 }
                 onDeleteCard={(cardId) => {
-                  onDeleteCard?.(cardId);
-                  toast("Card removed");
+                  const undo = onDeleteCard?.(cardId);
+                  toast("Card removed", undo);
                 }}
                 highlightedExpenseId={highlightedExpenseId}
                 highlightedTransactionId={highlightedTransactionId}
                 profile={profile}
                 onTab={nav}
                 onOpenExpense={openExpense}
+                onOpenTransaction={openTransaction}
+                onLockedCardNotice={(cardName) =>
+                  toast(`${cardName || "This card"} is locked. Unlock it in Card Options first.`)
+                }
               />
             )}
             {!appSettingsOpen && !profileSettingsOpen && tab === "plans" && (
@@ -5463,8 +5969,8 @@ export default function MobilePrototype({
             toast("Card updated");
           }}
           onDeleteCard={(cardId) => {
-            onDeleteCard?.(cardId);
-            toast("Card removed");
+            const undo = onDeleteCard?.(cardId);
+            toast("Card removed", undo);
           }}
           onAddCardClick={() => openSheet({ type: "addCard" })}
           onAdjustBalance={(cardId) =>
@@ -5480,7 +5986,7 @@ export default function MobilePrototype({
             toast(`Card ${newCard.name} added`);
             return added;
           }}
-          userProfileName={profile?.name}
+          userProfileName={profile?.hasName ? profile.name : ""}
         />
       )}
       {sheet?.type === "add" && (
@@ -5499,6 +6005,15 @@ export default function MobilePrototype({
           defaultAccount={sheet.acct}
           cards={cards}
           onSave={saveTransaction}
+          onClose={close}
+        />
+      )}
+      {txDetail && (
+        <AccountTxDetailSheet
+          tx={txDetail}
+          cards={cards}
+          onSave={updateTransaction}
+          onDelete={deleteTransaction}
           onClose={close}
         />
       )}
@@ -5539,7 +6054,7 @@ export default function MobilePrototype({
         />
       )}
 
-            <ConfirmationModal
+      <ConfirmationModal
         isOpen={Boolean(confirmDeleteExpense)}
         title="Delete Expense?"
         message={
