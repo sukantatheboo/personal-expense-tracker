@@ -162,14 +162,16 @@ export async function syncBackgroundSchedules(userId, schedules, reminderTime) {
   if (loadError) throw loadError;
 
   const currentIds = new Set(reminders.map(({ schedule_id }) => schedule_id));
-  for (const reminder of existing ?? []) {
-    if (currentIds.has(reminder.schedule_id)) continue;
+  const staleIds = (existing ?? [])
+    .map((r) => r.schedule_id)
+    .filter((id) => !currentIds.has(id));
+  if (staleIds.length) {
     const { error } = await supabase
       .from("push_reminders")
       .delete()
       .eq("user_id", userId)
       .eq("device_id", deviceId)
-      .eq("schedule_id", reminder.schedule_id);
+      .in("schedule_id", staleIds);
     if (error) throw error;
   }
 }

@@ -67,7 +67,7 @@ function zonedTimeToUtc(date: string, time: string, timeZone: string) {
 
 Deno.serve(async (req) => {
   const cronSecret = Deno.env.get("CRON_SECRET");
-  if (cronSecret && req.headers.get("x-cron-secret") !== cronSecret) {
+  if (!cronSecret || req.headers.get("x-cron-secret") !== cronSecret) {
     return new Response("forbidden", { status: 403 });
   }
 
@@ -89,10 +89,13 @@ Deno.serve(async (req) => {
   if (error) return new Response(error.message, { status: 500 });
   if (!due?.length) return Response.json({ due: 0, sent: 0 });
 
+  const dueUserIds = [...new Set(due.map((r) => r.user_id))];
+  const dueDeviceIds = [...new Set(due.map((r) => r.device_id))];
   const { data: devices } = await supabase
     .from("push_devices")
     .select("user_id, device_id, subscription")
-    .in("device_id", [...new Set(due.map((r) => r.device_id))]);
+    .in("user_id", dueUserIds)
+    .in("device_id", dueDeviceIds);
   const byDevice = new Map((devices ?? []).map((d) => [`${d.user_id}:${d.device_id}`, d]));
 
   let sent = 0;

@@ -105,7 +105,7 @@ create or replace function public.sync_spend_accounts_from_snapshot()
 returns trigger
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_account_data jsonb := coalesce(new.data->'accountData', '{}'::jsonb);
@@ -158,7 +158,20 @@ begin
     bank_balance = excluded.bank_balance,
     savings_balance = excluded.savings_balance,
     configured = excluded.configured,
-    updated_at = excluded.updated_at;
+    updated_at = excluded.updated_at
+  where (
+    public.spend_account_settings.start_date,
+    public.spend_account_settings.bkash_balance,
+    public.spend_account_settings.bank_balance,
+    public.spend_account_settings.savings_balance,
+    public.spend_account_settings.configured
+  ) is distinct from (
+    excluded.start_date,
+    excluded.bkash_balance,
+    excluded.bank_balance,
+    excluded.savings_balance,
+    excluded.configured
+  );
 
   for v_tx in select value from jsonb_array_elements(v_transactions)
   loop
@@ -263,8 +276,39 @@ begin
       from_account = excluded.from_account,
       to_account = excluded.to_account,
       updated_at = excluded.updated_at,
-      deleted_at = null;
+      deleted_at = null
+    where (
+      public.spend_account_transactions.type,
+      public.spend_account_transactions.amount,
+      public.spend_account_transactions.transaction_date,
+      public.spend_account_transactions.description,
+      public.spend_account_transactions.account,
+      public.spend_account_transactions.direction,
+      public.spend_account_transactions.from_account,
+      public.spend_account_transactions.to_account,
+      public.spend_account_transactions.deleted_at
+    ) is distinct from (
+      excluded.type,
+      excluded.amount,
+      excluded.transaction_date,
+      excluded.description,
+      excluded.account,
+      excluded.direction,
+      excluded.from_account,
+      excluded.to_account,
+      excluded.deleted_at
+    );
   end loop;
+
+  -- Soft-delete transactions present in DB but absent from the current snapshot.
+  -- This prevents ghost records from reappearing after client-side deletion.
+  if array_length(v_seen_ids, 1) > 0 then
+    update public.spend_account_transactions
+    set deleted_at = timezone('utc', now()), updated_at = timezone('utc', now())
+    where user_id = new.user_id
+      and deleted_at is null
+      and id <> all(v_seen_ids);
+  end if;
 
   declare
     v_deleted jsonb := new.data #> '{deletedRecords,accountTransactions}';
@@ -294,10 +338,22 @@ $$;
 
 create or replace function public.load_spend_user_snapshot()
 returns jsonb
-language sql
+language plpgsql
+stable
 security invoker
-set search_path = public
+set search_path = ''
 as $$
+declare
+  v_result jsonb;
+begin
+  if auth.uid() is null then
+    return jsonb_build_object(
+      'data', null,
+      'updated_at', null,
+      'normalizedAccountSync', true
+    );
+  end if;
+
   with raw_snapshot as (
     select d.data, d.updated_at
     from public.spend_user_data d
@@ -391,7 +447,27 @@ as $$
     'normalizedAccountSync',
     true
   )
+  into v_result
   from raw_snapshot r
   left join account_settings s on true
   cross join account_transactions tx;
+
+  if v_result is null then
+    return jsonb_build_object(
+      'data', null,
+      'updated_at', null,
+      'normalizedAccountSync', true
+    );
+  end if;
+
+  return v_result;
+end;
 $$;
+
+-- Prevent unbounded JSON payloads in spend_user_data (max 512 KB).
+alter table public.spend_user_data
+  drop constraint if exists spend_user_data_max_size;
+
+alter table public.spend_user_data
+  add constraint spend_user_data_max_size
+  check (pg_column_size(data) <= 524288);
