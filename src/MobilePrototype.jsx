@@ -1166,35 +1166,34 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
     }
   };
 
-  // Wire header title drag
+  // Wire header drag zone
   useEffect(() => {
     const sheetNode = sheetRef.current;
     if (!sheetNode) return undefined;
-    const titleNode = sheetNode.querySelector("#sheet-title");
-    if (!titleNode) return undefined;
+    const dragZoneNode = sheetNode.querySelector(".sheet-drag-zone");
+    if (!dragZoneNode) return undefined;
 
-    titleNode.style.touchAction = "none";
-    titleNode.style.cursor = "grab";
-
-    titleNode.addEventListener("pointerdown", onDragStart);
-    titleNode.addEventListener("pointermove", onDragMove);
-    titleNode.addEventListener("pointerup", onDragEnd);
-    titleNode.addEventListener("pointercancel", onDragEnd);
+    dragZoneNode.addEventListener("pointerdown", onDragStart);
+    dragZoneNode.addEventListener("pointermove", onDragMove);
+    dragZoneNode.addEventListener("pointerup", onDragEnd);
+    dragZoneNode.addEventListener("pointercancel", onDragEnd);
 
     return () => {
-      titleNode.removeEventListener("pointerdown", onDragStart);
-      titleNode.removeEventListener("pointermove", onDragMove);
-      titleNode.removeEventListener("pointerup", onDragEnd);
-      titleNode.removeEventListener("pointercancel", onDragEnd);
+      dragZoneNode.removeEventListener("pointerdown", onDragStart);
+      dragZoneNode.removeEventListener("pointermove", onDragMove);
+      dragZoneNode.removeEventListener("pointerup", onDragEnd);
+      dragZoneNode.removeEventListener("pointercancel", onDragEnd);
     };
   }, []);
 
-  // Support pull-down from top of scrollable content when at scrollTop <= 0
+  // Support pull-down from top of scrollable content only when gesture started at scrollTop <= 0
   useEffect(() => {
     const scrollNode = scrollRef.current;
     if (!scrollNode) return undefined;
 
     let touchStartY = 0;
+    let touchStartX = 0;
+    let touchStartScrollTop = 0;
     let isPulling = false;
 
     const onTouchStart = (e) => {
@@ -1208,16 +1207,28 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
         return;
       }
       touchStartY = e.touches[0].clientY;
+      touchStartX = e.touches[0].clientX;
+      touchStartScrollTop = scrollNode.scrollTop;
       isPulling = false;
     };
 
     const onTouchMove = (e) => {
       if (e.touches.length !== 1) return;
       const clientY = e.touches[0].clientY;
+      const clientX = e.touches[0].clientX;
       const dy = clientY - touchStartY;
+      const dx = clientX - touchStartX;
 
-      if (scrollNode.scrollTop <= 1 && dy > 0) {
-        if (!isPulling && dy > 6) {
+      // Only engage pull-down if gesture started at the very top (touchStartScrollTop <= 0),
+      // scroll position remains at top, gesture is downwards (dy > 0), strictly vertical,
+      // and passes an intentional deadband threshold (dy > 20px) without interrupting normal scrolls!
+      if (
+        touchStartScrollTop <= 0 &&
+        scrollNode.scrollTop <= 0 &&
+        dy > 0 &&
+        Math.abs(dy) > Math.abs(dx) * 1.6
+      ) {
+        if (!isPulling && dy > 20) {
           isPulling = true;
           if (document.activeElement instanceof HTMLElement) {
             document.activeElement.blur();
@@ -1230,7 +1241,7 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
           dragRef.current = {
             pointerId: -1,
             target: null,
-            startY: touchStartY,
+            startY: touchStartY + 20,
             currentOffset: 0,
             recentPoints: [{ y: clientY, t: performance.now() }],
             sheetHeight,
@@ -1254,10 +1265,12 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
               dragRef.current.recentPoints.shift();
             }
           }
-          updateDragPosition(dy);
+          updateDragPosition(dy - 20);
         }
       } else {
-        isPulling = false;
+        if (!isPulling) {
+          // Allow full fluid native scrolling up and down without interruption
+        }
       }
     };
 
@@ -4073,93 +4086,98 @@ function CardOptionsSheet({
           </div>
         </div>
 
-        {/* Live Card Preview */}
-        {previewCard && (
-          <div className="card-options-live-card-wrap">
-            <WalletCard
-              card={previewCard}
-              balance={balances[previewCard.id] || 0}
-              isActive={true}
-              interactive={false}
-              showBalance={true}
-              showFullDetails={showSecrets}
-            />
+        {/* Hero Card & Quick Actions Bar - Perfectly Aligned & Compact */}
+        <div className="card-options-card-hero">
+          {previewCard && (
+            <div className="card-options-live-card-wrap">
+              <WalletCard
+                card={previewCard}
+                balance={balances[previewCard.id] || 0}
+                isActive={true}
+                interactive={false}
+                showBalance={true}
+                showFullDetails={showSecrets}
+              />
+            </div>
+          )}
+
+          {/* Quick Action Badges Bar */}
+          <div className="card-options-quick-bar">
+            <button
+              type="button"
+              className={`card-options-bar-btn ${showSecrets ? "is-active" : ""}`}
+              onClick={() => {
+                triggerHaptic("selection");
+                setShowSecrets((prev) => !prev);
+              }}
+              aria-label={showSecrets ? "Hide card details" : "Show card details"}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                {showSecrets ? (
+                  <>
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                    <line x1="1" y1="1" x2="23" y2="23" />
+                  </>
+                ) : (
+                  <>
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </>
+                )}
+              </svg>
+              <span>{showSecrets ? "Hide Details" : "Show Details"}</span>
+            </button>
+
+            <button
+              type="button"
+              className={`card-options-bar-btn ${copied ? "is-copied" : ""}`}
+              onClick={handleCopyNumber}
+              aria-label="Copy card number to clipboard"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+              </svg>
+              <span>{copied ? "Copied! ✓" : "Copy Number"}</span>
+            </button>
+
+            <button
+              type="button"
+              className={`card-options-bar-btn ${isFrozen ? "is-frozen" : ""}`}
+              onClick={handleToggleFreeze}
+              aria-label={isFrozen ? "Unlock card" : "Lock card"}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+              <span>{isFrozen ? "Locked" : "Lock Card"}</span>
+            </button>
           </div>
-        )}
-
-        {/* Quick Action Badges Bar */}
-        <div className="card-options-quick-bar">
-          <button
-            type="button"
-            className={`card-options-bar-btn ${showSecrets ? "is-active" : ""}`}
-            onClick={() => {
-              triggerHaptic("selection");
-              setShowSecrets((prev) => !prev);
-            }}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              {showSecrets ? (
-                <>
-                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
-                  <line x1="1" y1="1" x2="23" y2="23" />
-                </>
-              ) : (
-                <>
-                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                  <circle cx="12" cy="12" r="3" />
-                </>
-              )}
-            </svg>
-            <span>{showSecrets ? "Hide Details" : "Show Details"}</span>
-          </button>
-
-          <button
-            type="button"
-            className="card-options-bar-btn"
-            onClick={handleCopyNumber}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-            </svg>
-            <span>{copied ? "Copied! ✓" : "Copy Number"}</span>
-          </button>
-
-          <button
-            type="button"
-            className={`card-options-bar-btn ${isFrozen ? "is-frozen" : ""}`}
-            onClick={handleToggleFreeze}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-            </svg>
-            <span>{isFrozen ? "Locked" : "Lock Card"}</span>
-          </button>
         </div>
 
         {/* Card Details & Editing Section */}
@@ -4658,7 +4676,7 @@ function ProfileSettingsPage({
             {accountStatus}
           </p>
         )}
-        {profile?.connected && !cloudSyncEnabled && (
+        {profile?.connected && (!cloudSyncEnabled || hasSyncError) && (
           <button
             className="btn settings-account-action"
             type="button"
@@ -4666,7 +4684,7 @@ function ProfileSettingsPage({
             onClick={onResumeSync}
             style={{ marginBottom: "10px" }}
           >
-            Resume sync
+            {hasSyncError ? "Retry sync" : "Resume sync"}
           </button>
         )}
         <button

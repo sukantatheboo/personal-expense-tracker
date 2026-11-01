@@ -2510,11 +2510,12 @@ a:active,
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
   scrollbar-width: none;
-  scroll-padding-block: 0 20px;
-  padding: 0 20px 18px;
+  scroll-padding-block: 0 24px;
+  padding: 0 18px 24px;
 }
 .mobile-prototype .sheet-content::-webkit-scrollbar {
   display: none;
@@ -4573,11 +4574,19 @@ a:active,
 }
 
 /* ───────────── Add Card Flow (Matching Video) ───────────── */
-.mobile-prototype .add-new-card-catalog,
+.mobile-prototype .add-new-card-catalog {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 340px;
+  margin: 0 auto;
+}
 .mobile-prototype .add-card-customize-flow {
   display: flex;
   flex-direction: column;
   width: 100%;
+  max-width: 340px;
+  margin: 0 auto;
 }
 .mobile-prototype .add-card-header-bar {
   display: flex;
@@ -4711,11 +4720,7 @@ a:active,
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-height: calc(72vh - 150px);
-  max-height: calc(72dvh - 150px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: 2px;
+  padding: 2px 0 24px;
 }
 .mobile-prototype .add-card-template-row {
   display: flex;
@@ -4940,15 +4945,23 @@ a:active,
 }
 .mobile-prototype .add-card-live-preview-wrap {
   width: 100%;
-  max-width: 350px;
-  margin: 0 auto 16px;
+  max-width: 340px;
+  margin: 0 auto 14px;
+  display: flex;
+  justify-content: center;
+}
+.mobile-prototype .add-card-live-preview-wrap .wallet-card {
+  width: 100%;
+  max-width: 100%;
+  aspect-ratio: 1.586;
+  border-radius: 20px;
 }
 .mobile-prototype .add-card-form-body {
   display: flex;
   flex-direction: column;
   gap: 13px;
   width: 100%;
-  max-width: 350px;
+  max-width: 340px;
   margin: 0 auto;
 }
 .mobile-prototype .add-card-section-label {
@@ -5177,7 +5190,11 @@ a:active,
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
+  width: 100%;
+  max-width: 340px;
+  margin-left: auto;
+  margin-right: auto;
 }
 .mobile-prototype .card-options-header-text h3 {
   margin: 0;
@@ -5194,7 +5211,7 @@ a:active,
   display: block;
 }
 .mobile-prototype .card-options-switcher-wrap {
-  margin: 0 -18px 16px;
+  margin: 0 -18px 14px;
   padding: 0 18px;
   overflow-x: auto;
   scrollbar-width: none;
@@ -5241,36 +5258,70 @@ a:active,
   color: #2563eb;
   border-color: rgba(37, 99, 235, 0.4);
 }
+.mobile-prototype .card-options-card-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 340px;
+  margin: 0 auto 14px;
+}
 .mobile-prototype .card-options-live-card-wrap {
-  margin-bottom: 16px;
   width: 100%;
   display: flex;
   justify-content: center;
+  margin-bottom: 10px;
+}
+.mobile-prototype .card-options-live-card-wrap .wallet-card {
+  width: 100%;
+  max-width: 100%;
+  aspect-ratio: 1.586;
+  border-radius: 20px;
 }
 .mobile-prototype .card-options-quick-bar {
   display: flex;
   gap: 8px;
-  margin-bottom: 16px;
+  width: 100%;
+  margin: 0;
 }
 .mobile-prototype .card-options-bar-btn {
-  flex: 1;
+  flex: 1 1 0px;
+  min-width: 0;
+  height: 40px;
+  min-height: 40px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 10px 8px;
+  gap: 5px;
+  padding: 0 4px;
   border-radius: 12px;
   border: 1px solid var(--line);
   background: var(--bg);
   color: var(--ink);
-  font-size: 12px;
+  font-size: clamp(10px, 2.7vw, 11.5px);
   font-weight: 750;
   cursor: pointer;
+  white-space: nowrap;
+  letter-spacing: -0.01em;
   transition: all 140ms ease;
+  box-sizing: border-box;
+}
+.mobile-prototype .card-options-bar-btn svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+.mobile-prototype .card-options-bar-btn span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1;
+  text-align: center;
 }
 .mobile-prototype .card-options-bar-btn svg {
   width: 15px;
   height: 15px;
+  flex-shrink: 0;
 }
 .mobile-prototype .card-options-bar-btn:active {
   transform: scale(0.96);
@@ -5280,12 +5331,19 @@ a:active,
   color: #2563eb;
   border-color: rgba(37, 99, 235, 0.35);
 }
+.mobile-prototype .card-options-bar-btn.is-copied {
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+  border-color: rgba(16, 185, 129, 0.35);
+}
 .mobile-prototype .card-options-bar-btn.is-frozen {
   background: rgba(239, 68, 68, 0.12);
   color: #ef4444;
   border-color: rgba(239, 68, 68, 0.35);
 }
 .mobile-prototype .card-options-edit-section {
+  width: 100%;
+  box-sizing: border-box;
   background: var(--bg);
   border: 1px solid var(--line);
   border-radius: 20px;
@@ -5362,6 +5420,8 @@ a:active,
   transform: scale(1.1);
 }
 .mobile-prototype .card-options-balance-row {
+  width: 100%;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -5401,10 +5461,12 @@ a:active,
   background: var(--field);
 }
 .mobile-prototype .card-options-sheet-actions {
+  width: 100%;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  margin-top: 14px;
+  margin: 14px 0 calc(20px + env(safe-area-inset-bottom, 0px));
 }
 .mobile-prototype .card-options-save-cta {
   width: 100%;
@@ -5449,7 +5511,6 @@ a:active,
 .mobile-prototype .card-options-delete-cta:active {
   background: rgba(239, 68, 68, 0.16);
 }
-
 /* ───────────── Confirmation Modal Popup ───────────── */
 .mobile-prototype .confirm-modal-backdrop {
   position: fixed;

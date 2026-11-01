@@ -275,51 +275,87 @@ async function loadLegacyCloudData(userId) {
 export async function loadCloudData(userId) {
   if (!supabase) throw new Error("Cloud sync is not configured.");
 
-  const [rpcResult, rawSnapshotResult] = await Promise.all([
-    supabase.rpc("load_spend_user_snapshot"),
-    supabase
-      .from("spend_user_data")
-      .select("data, updated_at")
-      .eq("user_id", userId)
-      .maybeSingle(),
-  ]);
+  try {
+    const [rpcResult, rawSnapshotResult] = await Promise.all([
+      supabase.rpc("load_spend_user_snapshot"),
+      supabase
+        .from("spend_user_data")
+        .select("data, updated_at")
+        .eq("user_id", userId)
+        .maybeSingle(),
+    ]);
 
-  if (!rpcResult.error) {
-    const rpcData = rpcResult.data;
-    const rawData = rawSnapshotResult.data?.data;
-    if (rpcData?.data && rawData) {
+    if (!rpcResult.error && rpcResult.data) {
+      const rpcData = rpcResult.data;
+      const rawData = rawSnapshotResult?.data?.data;
+      const rawUpdatedAt = rawSnapshotResult?.data?.updated_at;
+      const effectiveUpdatedAt = rawUpdatedAt || rpcData.updated_at;
+
+      if (rpcData.data && rawData) {
+        return {
+          ...rpcData,
+          updated_at: effectiveUpdatedAt,
+          data: {
+            ...rawData,
+            ...rpcData.data,
+            accountData: mergeAccountDataWithRawSnapshot(
+              rpcData.data.accountData,
+              rawData,
+            ),
+          },
+        };
+      }
       return {
         ...rpcData,
-        data: {
-          ...rawData,
-          ...rpcData.data,
-          accountData: mergeAccountDataWithRawSnapshot(
-            rpcData.data.accountData,
-            rawData,
-          ),
-        },
+        updated_at: effectiveUpdatedAt,
+        data: rpcData.data || rawData || null,
       };
     }
-    return rpcData;
+  } catch {
+    // If RPC or snapshot load encounters any error, fallback to legacy table queries
   }
 
-  if (!isSnapshotRpcUnavailable(rpcResult.error)) throw rpcResult.error;
   return loadLegacyCloudData(userId);
 }
 
 async function executeSaveQuery(userId, payload, expectedUpdatedAt) {
   const query = supabase.from("spend_user_data");
-  return expectedUpdatedAt
-    ? await query
-        .update({ data: payload })
-        .eq("user_id", userId)
-        .eq("updated_at", expectedUpdatedAt)
-        .select("updated_at")
-        .maybeSingle()
-    : await query
-        .insert({ user_id: userId, data: payload })
+  if (expectedUpdatedAt) {
+    const updateResult = await query
+      .update({ data: payload })
+      .eq("user_id", userId)
+      .eq("updated_at", expectedUpdatedAt)
+      .select("updated_at")
+      .maybeSingle();
+
+    if (updateResult.error) return updateResult;
+    if (updateResult.data) return updateResult;
+
+    // If update returned 0 rows, check if row exists
+    const { data: existing, error: checkError } = await supabase
+      .from("spend_user_data")
+      .select("updated_at")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (checkError) return { data: null, error: checkError };
+    if (!existing) {
+      // Row doesn't exist yet, insert safely with upsert
+      return await query
+        .upsert({ user_id: userId, data: payload }, { onConflict: "user_id" })
         .select("updated_at")
         .single();
+    }
+
+    // Optimistic concurrency mismatch: row exists with different updated_at
+    return { data: null, error: null };
+  }
+
+  // Without expectedUpdatedAt, upsert guarantees no duplicate key 23505 crashes
+  return await query
+    .upsert({ user_id: userId, data: payload }, { onConflict: "user_id" })
+    .select("updated_at")
+    .single();
 }
 
 export async function saveCloudData(userId, data, expectedUpdatedAt = null) {
@@ -336,9 +372,18 @@ export async function saveCloudData(userId, data, expectedUpdatedAt = null) {
     const allTransactions = Array.isArray(data.accountData.transactions)
       ? data.accountData.transactions
       : [];
-    const legacyCompatible = allTransactions.filter(
-      isLegacyDbCompatibleTransaction,
-    );
+    const legacyCompatible = allTransactions
+      .filter(isLegacyDbCompatibleTransaction)
+      .map((tx) => ({
+        ...tx,
+        type: tx.type === "adjust" ? "adjustment" : tx.type,
+        direction:
+          tx.direction === "up"
+            ? "increase"
+            : tx.direction === "down"
+              ? "decrease"
+              : tx.direction,
+      }));
     const customOnly = allTransactions.filter(
       (tx) => !isLegacyDbCompatibleTransaction(tx),
     );
@@ -355,8 +400,8 @@ export async function saveCloudData(userId, data, expectedUpdatedAt = null) {
       fallbackPayload,
       expectedUpdatedAt,
     );
-    if (retryError) throw retryError;
-    return retrySaved?.updated_at ?? null;
+    if (!retryError) return retrySaved?.updated_at ?? null;
+    throw retryError;
   }
 
   throw error;

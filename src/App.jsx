@@ -1136,10 +1136,12 @@ export default function App() {
         for (let attempt = 0; attempt < 3; attempt += 1) {
           let savedVersion = null;
           try {
+            const expectedVersion =
+              attempt === 2 ? null : cloudVersionRef.current;
             savedVersion = await saveCloudData(
               userId,
               snapshot,
-              cloudVersionRef.current,
+              expectedVersion,
             );
           } catch (error) {
             if (error.code !== "23505") throw error;
@@ -1438,10 +1440,12 @@ export default function App() {
             preferLocalAccountSettings,
           );
           try {
+            const expectedVersion =
+              attempt === 2 ? null : (remote?.updated_at ?? null);
             savedVersion = await saveCloudData(
               pushUser.id,
               merged,
-              remote?.updated_at ?? null,
+              expectedVersion,
             );
           } catch (error) {
             if (error.code !== "23505" || remote?.data) throw error;
@@ -1487,19 +1491,19 @@ export default function App() {
         setCloudSyncStatus("Cloud sync is on. Your data is saved to Supabase.");
       } catch (error) {
         if (active) {
-          setCloudSyncEnabled(false);
           setCloudSyncReady(false);
-          setCloudSyncActivity("error");
-          setCloudRealtimeStatus("disconnected");
-          try {
-            localStorage.removeItem(CLOUD_SYNC_USER_KEY);
-          } catch {
-            setCloudSyncStatus(
-              `Could not start cloud sync: ${error.message}. This browser could not clear its sync preference.`,
-            );
-            return;
-          }
-          setCloudSyncStatus(`Could not start cloud sync: ${error.message}`);
+          const isOffline =
+            !navigator.onLine ||
+            error?.message?.includes("Failed to fetch") ||
+            error?.message?.includes("NetworkError");
+          setCloudSyncActivity(isOffline ? "offline" : "error");
+          setCloudRealtimeStatus(isOffline ? "offline" : "disconnected");
+          const errorMsg = error?.message || "Sync failed";
+          setCloudSyncStatus(
+            isOffline
+              ? "You are offline. Cloud sync will automatically resume when connected."
+              : `Could not start cloud sync: ${errorMsg}. Tap Resume sync to retry.`,
+          );
         }
       }
     }
@@ -1508,7 +1512,7 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, [cloudSyncEnabled, pushUser?.id]);
+  }, [cloudSyncEnabled, pushUser?.id, cloudSyncRetry]);
 
   useEffect(() => {
     if (!supabase || !pushUser || !cloudSyncEnabled || !cloudSyncReady) {
@@ -1565,10 +1569,18 @@ export default function App() {
       handleCloudChange();
     };
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") handleCloudChange();
+      if (document.visibilityState === "hidden") {
+        void queueCloudSnapshotSave(pushUser.id).catch(() => {});
+      } else if (document.visibilityState === "visible") {
+        handleCloudChange();
+      }
+    };
+    const handlePageHide = () => {
+      void queueCloudSnapshotSave(pushUser.id).catch(() => {});
     };
     window.addEventListener("offline", handleOffline);
     window.addEventListener("online", handleOnline);
+    window.addEventListener("pagehide", handlePageHide);
     document.addEventListener("visibilitychange", handleVisibilityChange);
     if (!navigator.onLine) handleOffline();
 
@@ -1577,6 +1589,7 @@ export default function App() {
       window.clearTimeout(liveChangeTimerRef.current);
       window.removeEventListener("offline", handleOffline);
       window.removeEventListener("online", handleOnline);
+      window.removeEventListener("pagehide", handlePageHide);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       unsubscribe();
     };
@@ -2726,6 +2739,7 @@ export default function App() {
     const rawBal = Number(newCard.initialBalance);
     const initialBalance =
       Number.isFinite(rawBal) && rawBal >= 0 ? roundMoney(rawBal) : 0;
+    setRecordDeleted("cards", cardId, false);
     setAccountData((current) => {
       const currentCards = Array.isArray(current.settings.cards)
         ? current.settings.cards
@@ -2820,6 +2834,7 @@ export default function App() {
   function handleUpdateCard(updatedCard) {
     if (!updatedCard?.id) return updatedCard;
     const now = Date.now();
+    setRecordDeleted("cards", updatedCard.id, false);
     setAccountData((current) => {
       const currentCards = Array.isArray(current.settings.cards)
         ? current.settings.cards
@@ -3379,7 +3394,9 @@ export default function App() {
         setAuthStatus(
           authMode === "sign-up"
             ? "Account created. You can now enable background reminders."
-            : "Signed in. Your recurring reminder schedule is syncing.",
+            : backgroundPushEnabled
+              ? "Signed in. Your recurring reminder schedule is syncing."
+              : "Signed in.",
         );
         hideAuthModal();
       }
@@ -3479,6 +3496,7 @@ export default function App() {
     setCloudSyncStatus("Starting cloud sync…");
     setCloudSyncActivity("syncing");
     setCloudSyncEnabled(true);
+    setCloudSyncRetry((r) => r + 1);
   }
 
   async function signOutOfPush() {
@@ -3813,7 +3831,7 @@ export default function App() {
         onBackupRestore={() => backupFileInputRef.current?.click()}
         onSignOut={signOutOfPush}
         onResumeSync={handleResumeSync}
-        accountStatus={authStatus}
+        accountStatus={cloudSyncStatus || authStatus}
         authBusy={authBusy}
         onSignIn={openSignInModal}
         inAppNotification={inAppNotification}
