@@ -1230,10 +1230,22 @@ a:active,
   line-height: 1.3;
 }
 .mobile-prototype .mini .top-category-value .category-symbol {
-  width: 1.15em;
-  height: 1.15em;
-  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
   vertical-align: 0;
+}
+.mobile-prototype .mini .top-category-value .category-symbol-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 .mobile-prototype .ri {
   display: flex;
@@ -1463,13 +1475,26 @@ a:active,
   vertical-align: middle;
 }
 .mobile-prototype .category-suggestion-value .category-symbol {
-  display: inline-grid;
-  width: 1.15em;
-  height: 1.15em;
-  flex: 0 0 1.15em;
-  place-items: center;
+  display: inline-flex;
+  width: 1.55em;
+  height: 1.55em;
+  flex: 0 0 1.55em;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--c, #7d8a82) 16%, rgba(255, 255, 255, 0.7));
+  border: 1px solid color-mix(in srgb, var(--c, #7d8a82) 25%, transparent);
+  align-items: center;
+  justify-content: center;
   line-height: 1;
   vertical-align: middle;
+}
+[data-theme="dark"] .mobile-prototype .category-suggestion-value .category-symbol {
+  background: color-mix(in srgb, var(--c, #7d8a82) 24%, rgba(255, 255, 255, 0.08));
+  border-color: color-mix(in srgb, var(--c, #7d8a82) 36%, transparent);
+}
+.mobile-prototype .category-suggestion-value .category-symbol-img {
+  width: 85%;
+  height: 85%;
+  object-fit: contain;
 }
 .mobile-prototype button.ri {
   border-radius: 14px;
@@ -1584,43 +1609,39 @@ a:active,
   height: 21px;
   flex: none;
 }
-.mobile-prototype .category-symbol {
-  display: inline-grid;
+.mobile-prototype .category-symbol,
+.mobile-prototype .transaction-symbol {
+  display: inline-flex;
   width: 1.2em;
   height: 1.2em;
-  place-items: center;
-  vertical-align: -0.2em;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
   line-height: 1;
+  vertical-align: middle;
 }
-.mobile-prototype .category-symbol-other {
-  width: 1.15em;
-  height: 1.15em;
-  fill: currentColor;
-  stroke: none;
+.mobile-prototype .category-symbol-img,
+.mobile-prototype .transaction-symbol-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
-.mobile-prototype .category-symbol-savings {
-  width: 1.35em;
-  height: 1.35em;
-  color: #b6404b;
-}
-.mobile-prototype .category-symbol-savings > svg {
-  width: 1.05em;
-  height: 1.05em;
-  fill: currentColor;
-  stroke: none;
-}
-.mobile-prototype .category-symbol-savings .savings-mark-coin {
-  top: -0.08em;
-  right: -0.1em;
-  width: 0.55em;
-  height: 0.55em;
-  border-width: 1px;
-  font-size: 0.34em;
-}
-.mobile-prototype .ic .category-symbol {
-  width: 22px;
-  height: 22px;
+.mobile-prototype .ic .category-symbol,
+.mobile-prototype .ic .transaction-symbol {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
   vertical-align: 0;
+}
+.mobile-prototype .expense-day-card .expense-row .ic .category-symbol,
+.mobile-prototype .expense-day-card .expense-row .ic .transaction-symbol {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
 }
 .mobile-prototype .nm {
   flex: 1;
@@ -1769,25 +1790,67 @@ a:active,
   min-height: 42px;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 8px;
   flex: 0 0 auto;
   line-height: 1;
 }
-.mobile-prototype .chips button .category-symbol {
-  flex: 0 0 auto;
+.mobile-prototype .chips button .category-symbol,
+.mobile-prototype .cg button .category-symbol {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   vertical-align: 0;
+}
+.mobile-prototype .chips button .category-symbol-img,
+.mobile-prototype .cg button .category-symbol-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
 }
 .mobile-prototype .cg button {
   display: inline-flex;
   min-height: 42px;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 8px;
   line-height: 1;
 }
-.mobile-prototype .cg button .category-symbol {
-  flex: 0 0 1.2em;
-  vertical-align: 0;
+.mobile-prototype .chips button > span:last-child,
+.mobile-prototype .cg button > span:last-child {
+  display: inline-block;
+  line-height: 1;
+}
+.mobile-prototype .seg-item-with-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  line-height: 1;
+  vertical-align: middle;
+}
+.mobile-prototype .seg-item-with-icon .transaction-symbol {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.mobile-prototype .seg-item-with-icon .transaction-symbol-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
 }
 .mobile-prototype .chips .on,
 .mobile-prototype .cg .on {
@@ -4115,22 +4178,51 @@ a:active,
   width: 20px;
   height: 20px;
 }
+.mobile-prototype .action-icon-badge .transaction-symbol {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 .mobile-prototype .action-icon-badge.is-income,
 .mobile-prototype .action-icon-badge.is-withdraw {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.32);
+  background: rgba(16, 185, 129, 0.14);
+  border: 1px solid rgba(16, 185, 129, 0.28);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.16);
 }
 .mobile-prototype .action-icon-badge.is-transfer {
-  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
-  box-shadow: 0 4px 12px rgba(249, 115, 22, 0.32);
+  background: rgba(59, 130, 246, 0.14);
+  border: 1px solid rgba(59, 130, 246, 0.28);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.16);
 }
 .mobile-prototype .action-icon-badge.is-card-options {
-  background: linear-gradient(135deg, #6366f1 0%, #4338ca 100%);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.36);
+  background: rgba(99, 102, 241, 0.14);
+  border: 1px solid rgba(99, 102, 241, 0.28);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.16);
 }
 .mobile-prototype .action-icon-badge.is-adjust {
-  background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
-  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.32);
+  background: rgba(139, 92, 246, 0.14);
+  border: 1px solid rgba(139, 92, 246, 0.28);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.16);
+}
+[data-theme="dark"] .mobile-prototype .action-icon-badge.is-income,
+[data-theme="dark"] .mobile-prototype .action-icon-badge.is-withdraw {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: rgba(16, 185, 129, 0.38);
+}
+[data-theme="dark"] .mobile-prototype .action-icon-badge.is-transfer {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: rgba(59, 130, 246, 0.38);
+}
+[data-theme="dark"] .mobile-prototype .action-icon-badge.is-card-options {
+  background: rgba(99, 102, 241, 0.2);
+  border-color: rgba(99, 102, 241, 0.38);
+}
+[data-theme="dark"] .mobile-prototype .action-icon-badge.is-adjust {
+  background: rgba(139, 92, 246, 0.2);
+  border-color: rgba(139, 92, 246, 0.38);
 }
 .mobile-prototype .action-icon-badge.is-card-info {
   background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
@@ -4236,6 +4328,28 @@ a:active,
   flex: 0 0 44px;
   font-size: 19px;
 }
+.mobile-prototype .accounts-tx-icon-circle .category-symbol,
+.mobile-prototype .accounts-tx-icon-circle .transaction-symbol {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mobile-prototype .accounts-tx-icon-circle.is-income {
+  background: #ecfdf5;
+  color: #10b981;
+}
+.mobile-prototype .accounts-tx-icon-circle.is-transfer {
+  background: #eff6ff;
+  color: #2563eb;
+}
+.mobile-prototype .accounts-tx-icon-circle.is-adjust,
+.mobile-prototype .accounts-tx-icon-circle.is-adjustment {
+  background: #faf5ff;
+  color: #8b5cf6;
+}
 .mobile-prototype .accounts-tx-icon-circle.is-food {
   background: #fff7ed;
   color: #ea580c;
@@ -4277,6 +4391,19 @@ a:active,
 .mobile-prototype .accounts-tx-icon-circle.is-other {
   background: #f1f5f9;
   color: #64748b;
+}
+[data-theme="dark"] .mobile-prototype .accounts-tx-icon-circle.is-income {
+  background: rgba(16, 185, 129, 0.18);
+  color: #34d399;
+}
+[data-theme="dark"] .mobile-prototype .accounts-tx-icon-circle.is-transfer {
+  background: rgba(59, 130, 246, 0.18);
+  color: #60a5fa;
+}
+[data-theme="dark"] .mobile-prototype .accounts-tx-icon-circle.is-adjust,
+[data-theme="dark"] .mobile-prototype .accounts-tx-icon-circle.is-adjustment {
+  background: rgba(139, 92, 246, 0.18);
+  color: #c084fc;
 }
 [data-theme="dark"] .mobile-prototype .accounts-tx-icon-circle.is-food {
   background: rgba(234, 88, 12, 0.18);
@@ -4321,6 +4448,15 @@ a:active,
 [data-theme="dark"] .mobile-prototype .accounts-tx-icon-circle.is-other {
   background: rgba(100, 116, 139, 0.18);
   color: #94a3b8;
+}
+
+[data-theme="dark"] .mobile-prototype .category-symbol-img,
+[data-theme="dark"] .mobile-prototype .transaction-symbol-img {
+  filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.5));
+}
+.mobile-prototype .chips button.on .category-symbol-img,
+.mobile-prototype .cg button.on .category-symbol-img {
+  filter: none;
 }
 .mobile-prototype .accounts-tx-info {
   display: flex;

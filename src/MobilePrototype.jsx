@@ -8,7 +8,7 @@ import {
 } from "react";
 import { Capacitor } from "@capacitor/core";
 import { Haptics, ImpactStyle, NotificationType } from "@capacitor/haptics";
-import { FaPenToSquare, FaPiggyBank } from "react-icons/fa6";
+import { FaPenToSquare } from "react-icons/fa6";
 import { ACCOUNT_OPTIONS, DEFAULT_CARDS, getSavingsAccountId } from "./data.js";
 import {
   StackedCardDeck,
@@ -24,20 +24,34 @@ import {
   MastercardBadge,
   AmexBadge,
 } from "./cardAssets.jsx";
+import {
+  CategorySymbol,
+  TransactionSymbol,
+  foodSvg,
+  transportSvg,
+  billsSvg,
+  homeSvg,
+  shoppingSvg,
+  healthSvg,
+  entertainmentSvg,
+  educationSvg,
+  savingsSvg,
+  otherSvg,
+} from "./categoryAssets.jsx";
 import "./MobilePrototype.css";
 
 /* ───────────── constants ───────────── */
 const CAT = {
-  Food: ["🍜", "#e8873a"],
-  Transport: ["🚌", "#3b82c4"],
-  Bills: ["⚡", "#d6a31f"],
-  Home: ["🏠", "#8a6fd1"],
-  Shopping: ["🛍️", "#d9528a"],
-  Health: ["💊", "#e0594f"],
-  Entertainment: ["🎧", "#20a4a4"],
-  Education: ["📚", "#5b73d9"],
-  Savings: ["", "#b6404b"],
-  Other: ["", "#7d8a82"],
+  Food: [foodSvg, "#e8873a"],
+  Transport: [transportSvg, "#3b82c4"],
+  Bills: [billsSvg, "#d6a31f"],
+  Home: [homeSvg, "#8a6fd1"],
+  Shopping: [shoppingSvg, "#d9528a"],
+  Health: [healthSvg, "#e0594f"],
+  Entertainment: [entertainmentSvg, "#20a4a4"],
+  Education: [educationSvg, "#5b73d9"],
+  Savings: [savingsSvg, "#b6404b"],
+  Other: [otherSvg, "#7d8a82"],
 };
 const ACC = {
   bkash: ["bKash", "#e2136e"],
@@ -131,15 +145,6 @@ const ICONS = {
 };
 const Icon = ({ n }) => <svg viewBox="0 0 24 24">{ICONS[n]}</svg>;
 
-function SavingsMark({ className }) {
-  return (
-    <span className={`savings-mark ${className}`} aria-hidden="true">
-      <FaPiggyBank focusable="false" />
-      <span className="savings-mark-coin">৳</span>
-    </span>
-  );
-}
-
 function triggerHaptic(type = "light") {
   if (Capacitor.isNativePlatform()) {
     try {
@@ -189,31 +194,6 @@ function triggerHaptic(type = "light") {
     }
   }
   return false;
-}
-
-function CategorySymbol({ category }) {
-  if (category === "Other") {
-    return (
-      <svg
-        className="category-symbol category-symbol-other"
-        viewBox="0 0 24 24"
-        aria-hidden="true"
-        focusable="false"
-      >
-        <circle cx="4" cy="12" r="2.1" />
-        <circle cx="12" cy="12" r="2.1" />
-        <circle cx="20" cy="12" r="2.1" />
-      </svg>
-    );
-  }
-  if (category === "Savings") {
-    return <SavingsMark className="category-symbol category-symbol-savings" />;
-  }
-  return (
-    <span className="category-symbol" aria-hidden="true">
-      {CAT[category]?.[0] || ""}
-    </span>
-  );
 }
 
 function CategorySuggestionValue({ category }) {
@@ -324,7 +304,7 @@ const Seg = ({ value, options, onPick }) => (
   <div className="seg">
     {options.map(([x, l]) => (
       <button
-        key={l}
+        key={x}
         className={value === x ? "on" : ""}
         onClick={() => onPick(x)}
       >
@@ -1607,7 +1587,8 @@ function Activity({
             className={cf === c ? "on" : ""}
             onClick={() => setCf(c)}
           >
-            <CategorySymbol category={c} /> {c}
+            <CategorySymbol category={c} />
+            <span>{c}</span>
           </button>
         ))}
       </div>
@@ -1926,17 +1907,7 @@ function Accounts({
           aria-label="Add income to this account"
         >
           <div className="action-icon-badge is-income">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M12 4v16M5 13l7 7 7-7" />
-            </svg>
+            <TransactionSymbol type="income" />
           </div>
           <span className="action-label">Income</span>
         </button>
@@ -1959,17 +1930,7 @@ function Accounts({
           aria-label="Transfer between accounts"
         >
           <div className="action-icon-badge is-transfer">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M7 16l-4-4 4-4M3 12h14M17 8l4 4-4 4M21 12H7" />
-            </svg>
+            <TransactionSymbol type="transfer" />
           </div>
           <span className="action-label">Transfer</span>
         </button>
@@ -1988,25 +1949,7 @@ function Accounts({
           aria-label="Adjust balance"
         >
           <div className="action-icon-badge is-adjust">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <line x1="4" y1="21" x2="4" y2="14" />
-              <line x1="4" y1="10" x2="4" y2="3" />
-              <line x1="12" y1="21" x2="12" y2="12" />
-              <line x1="12" y1="8" x2="12" y2="3" />
-              <line x1="20" y1="21" x2="20" y2="16" />
-              <line x1="20" y1="12" x2="20" y2="3" />
-              <line x1="1" y1="14" x2="7" y2="14" />
-              <line x1="9" y1="8" x2="15" y2="8" />
-              <line x1="17" y1="16" x2="23" y2="16" />
-            </svg>
+            <TransactionSymbol type="adjust" />
           </div>
           <span className="action-label">Adjust</span>
         </button>
@@ -2025,20 +1968,7 @@ function Accounts({
           aria-label="Manage cards and view card options"
         >
           <div className="action-icon-badge is-card-options">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.3"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <rect x="2" y="5" width="20" height="14" rx="3" />
-              <line x1="2" y1="10" x2="22" y2="10" />
-              <circle cx="7" cy="15" r="1.5" fill="currentColor" />
-              <path d="M15 15h4" />
-            </svg>
+            <TransactionSymbol type="card-options" />
           </div>
           <span className="action-label">Card Options</span>
         </button>
@@ -2094,9 +2024,13 @@ function Accounts({
                 }}
               >
                 <div
-                  className={`accounts-tx-icon-circle is-${category.toLowerCase()}`}
+                  className={`accounts-tx-icon-circle ${event.sourceType === "tx" || event.type !== "expense" ? `is-${event.type.toLowerCase()}` : `is-${category.toLowerCase()}`}`}
                 >
-                  <CategorySymbol category={category} />
+                  {event.sourceType === "tx" || event.type !== "expense" ? (
+                    <TransactionSymbol type={event.type} />
+                  ) : (
+                    <CategorySymbol category={category} />
+                  )}
                 </div>
 
                 <div className="accounts-tx-info">
@@ -2389,7 +2323,8 @@ function AddSheet({
               }));
             }}
           >
-            <CategorySymbol category={c} /> {c}
+            <CategorySymbol category={c} />
+            <span>{c}</span>
           </button>
         ))}
       </div>
@@ -2547,9 +2482,27 @@ function TxSheet({
         value={g.type}
         onPick={(v) => setG((current) => ({ ...current, type: v, note: "" }))}
         options={[
-          ["income", "Income"],
-          ["transfer", "Transfer"],
-          ["adjust", "Adjust"],
+          [
+            "income",
+            <span className="seg-item-with-icon" key="income">
+              <TransactionSymbol type="income" />
+              <span>Income</span>
+            </span>,
+          ],
+          [
+            "transfer",
+            <span className="seg-item-with-icon" key="transfer">
+              <TransactionSymbol type="transfer" />
+              <span>Transfer</span>
+            </span>,
+          ],
+          [
+            "adjust",
+            <span className="seg-item-with-icon" key="adjust">
+              <TransactionSymbol type="adjust" />
+              <span>Adjust</span>
+            </span>,
+          ],
         ]}
       />
       <div className="amt">
@@ -2738,9 +2691,27 @@ function AccountTxDetailSheet({ tx, cards = [], onSave, onDelete, onClose }) {
         value={g.type}
         onPick={(v) => setG((current) => ({ ...current, type: v }))}
         options={[
-          ["income", "Income"],
-          ["transfer", "Transfer"],
-          ["adjust", "Adjust"],
+          [
+            "income",
+            <span className="seg-item-with-icon" key="income">
+              <TransactionSymbol type="income" />
+              <span>Income</span>
+            </span>,
+          ],
+          [
+            "transfer",
+            <span className="seg-item-with-icon" key="transfer">
+              <TransactionSymbol type="transfer" />
+              <span>Transfer</span>
+            </span>,
+          ],
+          [
+            "adjust",
+            <span className="seg-item-with-icon" key="adjust">
+              <TransactionSymbol type="adjust" />
+              <span>Adjust</span>
+            </span>,
+          ],
         ]}
       />
       <div className="amt">
@@ -2916,7 +2887,8 @@ function DetailSheet({
             className={f.cat === category ? "on" : ""}
             onClick={() => set("cat", category)}
           >
-            <CategorySymbol category={category} /> {category}
+            <CategorySymbol category={category} />
+            <span>{category}</span>
           </button>
         ))}
       </div>
