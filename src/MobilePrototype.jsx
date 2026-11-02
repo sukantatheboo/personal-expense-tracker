@@ -24,6 +24,7 @@ import {
   VisaBadge,
   MastercardBadge,
   AmexBadge,
+  MiniCardPreview,
 } from "./cardAssets.jsx";
 import {
   CategorySymbol,
@@ -1356,7 +1357,7 @@ function useReveal(autoHideMs = AUTO_HIDE_MS) {
       }
       triggerHaptic("selection");
     },
-    [autoHideMs]
+    [autoHideMs],
   );
 
   useEffect(() => {
@@ -1515,7 +1516,13 @@ function Home({
           {p ? (
             <span className="chip">
               <span className="mx-tri">{d > 0 ? "▲" : "▼"}</span>
-              ৳<Amount value={amountFormatter.format(Math.abs(d))} mask={3} shown={shown} /> vs last
+              ৳
+              <Amount
+                value={amountFormatter.format(Math.abs(d))}
+                mask={3}
+                shown={shown}
+              />{" "}
+              vs last
             </span>
           ) : null}
         </div>
@@ -1523,7 +1530,11 @@ function Home({
         <div className="mx-hero">
           <div className="big mx-hero-amt" onClick={toggle}>
             <span className="mx-cur">৳</span>
-            <Amount value={amountFormatter.format(Number(t) || 0)} mask={4} shown={shown} />
+            <Amount
+              value={amountFormatter.format(Number(t) || 0)}
+              mask={4}
+              shown={shown}
+            />
           </div>
           <EyeToggle shown={shown} onToggle={toggle} />
         </div>
@@ -1532,7 +1543,12 @@ function Home({
           <div className="hero-saved">
             <span>Saved</span>
             <b>
-              ৳<Amount value={amountFormatter.format(saved)} mask={3} shown={shown} />
+              ৳
+              <Amount
+                value={amountFormatter.format(saved)}
+                mask={3}
+                shown={shown}
+              />
             </b>
           </div>
         )}
@@ -1554,16 +1570,33 @@ function Home({
               >
                 {overBudget ? (
                   <>
-                    ৳<Amount value={amountFormatter.format(t - b)} mask={3} shown={shown} /> over budget
+                    ৳
+                    <Amount
+                      value={amountFormatter.format(t - b)}
+                      mask={3}
+                      shown={shown}
+                    />{" "}
+                    over budget
                   </>
                 ) : (
                   <>
-                    ৳<Amount value={amountFormatter.format(b - t)} mask={3} shown={shown} /> left
+                    ৳
+                    <Amount
+                      value={amountFormatter.format(b - t)}
+                      mask={3}
+                      shown={shown}
+                    />{" "}
+                    left
                   </>
                 )}
               </span>
               <span>
-                of ৳<Amount value={amountFormatter.format(b)} mask={3} shown={shown} />
+                of ৳
+                <Amount
+                  value={amountFormatter.format(b)}
+                  mask={3}
+                  shown={shown}
+                />
               </span>
             </div>
           </>
@@ -1895,9 +1928,7 @@ function Accounts({
     ...S.exp
       .filter(
         (expense) =>
-          expense.acct &&
-          expense.amt != null &&
-          expense.date <= ld(),
+          expense.acct && expense.amt != null && expense.date <= ld(),
       )
       .map((expense) => {
         const isSavingsTransfer = expense.cat === "Savings";
@@ -1990,9 +2021,7 @@ function Accounts({
         activityTime(right) - activityTime(left) ||
         right.id.localeCompare(left.id),
     );
-  const visibleEvents = showAllTx
-    ? filteredEvents
-    : filteredEvents.slice(0, 8);
+  const visibleEvents = showAllTx ? filteredEvents : filteredEvents.slice(0, 8);
 
   const displayDate = (date) =>
     date === ld() ? "Today" : date === ago(1) ? "Yesterday" : fD(date);
@@ -2551,13 +2580,7 @@ function AddSheet({
   );
 }
 
-function TxSheet({
-  type,
-  defaultAccount,
-  cards = [],
-  onSave,
-  onClose,
-}) {
+function TxSheet({ type, defaultAccount, cards = [], onSave, onClose }) {
   const accountOptions = cards.map((c) => [c.id, c.name]);
   const unfrozenFromOptions = cards
     .filter((c) => !c.frozen)
@@ -2567,8 +2590,7 @@ function TxSheet({
       ? defaultAccount
       : cards[0]?.id || "";
   const defaultTransferFrom =
-    defaultAccount &&
-    unfrozenFromOptions.some(([id]) => id === defaultAccount)
+    defaultAccount && unfrozenFromOptions.some(([id]) => id === defaultAccount)
       ? defaultAccount
       : unfrozenFromOptions[0]?.[0] || defaultFrom;
   const defaultTo =
@@ -2784,10 +2806,7 @@ function AccountTxDetailSheet({ tx, cards = [], onSave, onDelete, onClose }) {
     date: tx.date || ld(),
     fromAccount: tx.acct || cards[0]?.id || "",
     toAccount:
-      tx.to ||
-      cards.find((c) => c.id !== tx.acct)?.id ||
-      cards[1]?.id ||
-      "",
+      tx.to || cards.find((c) => c.id !== tx.acct)?.id || cards[1]?.id || "",
   });
   const set = (k, v) => setG((x) => ({ ...x, [k]: v }));
   const tr = g.type === "transfer";
@@ -2798,7 +2817,10 @@ function AccountTxDetailSheet({ tx, cards = [], onSave, onDelete, onClose }) {
   const singleAccountOptions = ensureAccountOption(g.acct);
   const canSave =
     singleAccountOptions.length > 0 &&
-    (!tr || (allFromOptions.length >= 1 && allToOptions.length >= 1 && g.fromAccount !== g.toAccount));
+    (!tr ||
+      (allFromOptions.length >= 1 &&
+        allToOptions.length >= 1 &&
+        g.fromAccount !== g.toAccount));
 
   return (
     <Sheet
@@ -2953,14 +2975,7 @@ function AccountTxDetailSheet({ tx, cards = [], onSave, onDelete, onClose }) {
   );
 }
 
-function DetailSheet({
-  e,
-  suggestion,
-  cards = [],
-  onSave,
-  onDelete,
-  onClose,
-}) {
+function DetailSheet({ e, suggestion, cards = [], onSave, onDelete, onClose }) {
   const [f, setF] = useState({
     desc: e.desc,
     amt: e.amt ?? "",
@@ -3280,11 +3295,11 @@ const CARD_THEMES = [
 
 const CARD_FILTER_TABS = [
   { id: "all", label: "All" },
-  { id: "mfs", label: "MFS" },
   { id: "visa", label: "Visa" },
   { id: "mastercard", label: "Mastercard" },
+  { id: "mfs", label: "MFS Wallets" },
+  { id: "savings", label: "Vault" },
   { id: "custom", label: "Custom" },
-  { id: "savings", label: "Savings Vault" },
 ];
 
 function getCardLabel(prov) {
@@ -3337,7 +3352,7 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
       );
     } else if (activeFilter === "custom") {
       list = list.filter((p) => p.id === "custom");
-    } else if (activeFilter === "savings") {
+    } else if (activeFilter === "savings" || activeFilter === "vault") {
       list = list.filter((p) => p.category === "savings");
     }
 
@@ -3495,7 +3510,7 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
             </h3>
           </div>
 
-          {/* Search Bar matching video */}
+          {/* Search Bar */}
           <div className="add-card-search-wrap">
             <svg
               viewBox="0 0 24 24"
@@ -3520,7 +3535,7 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
             <input
               type="text"
               className="add-card-search-input"
-              placeholder="Search"
+              placeholder="Search by bank, card, or wallet..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               autoFocus
@@ -3537,7 +3552,7 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
             )}
           </div>
 
-          {/* Category / Network Filter Chips (MFS, Visa, Mastercard, Vault) */}
+          {/* Category / Network Filter Chips */}
           <div className="add-card-filter-track">
             {CARD_FILTER_TABS.map((f) => {
               const isActive = activeFilter === f.id;
@@ -3557,11 +3572,10 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
             })}
           </div>
 
-          {/* Card Templates List matching video */}
+          {/* Card Templates List */}
           <div className="add-card-template-list">
             {filteredProviders.length ? (
               filteredProviders.map((prov) => {
-                const cardLabel = getCardLabel(prov);
                 return (
                   <button
                     key={prov.id}
@@ -3569,42 +3583,26 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
                     className="add-card-template-row"
                     onClick={() => handlePickProvider(prov)}
                   >
-                    <div
-                      className="add-card-mini-card"
-                      style={{ background: prov.gradient }}
-                    >
-                      <div className="add-card-mini-logo">
-                        {renderProviderLogo(prov.id, { height: 14 })}
-                      </div>
-                      <span className="add-card-mini-num">
-                        {prov.isPhone ? "01X••" : "•••• 4328"}
-                      </span>
-                    </div>
+                    <MiniCardPreview provider={prov} />
 
                     <div className="add-card-template-meta">
                       <b className="add-card-template-name">{prov.name}</b>
-                      <small className="add-card-template-sub">
+                      <span className="add-card-template-sub">
                         {prov.subtitle}
-                      </small>
+                      </span>
                     </div>
 
-                    <div className="add-card-template-badges">
-                      <span
-                        className={`add-card-type-label is-${cardLabel.type}`}
-                      >
-                        {cardLabel.label}
-                      </span>
-                      <span className="add-card-currency-badge">
+                    <div className="add-card-template-trailing">
+                      <span className="add-card-currency-pill">
                         {prov.currency || "USD"}
                       </span>
+                      <span
+                        className="add-card-template-chevron"
+                        aria-hidden="true"
+                      >
+                        ›
+                      </span>
                     </div>
-
-                    <span
-                      className="add-card-template-chevron"
-                      aria-hidden="true"
-                    >
-                      ›
-                    </span>
                   </button>
                 );
               })
@@ -4215,7 +4213,9 @@ function CardOptionsSheet({
                 triggerHaptic("selection");
                 setShowSecrets((prev) => !prev);
               }}
-              aria-label={showSecrets ? "Hide card details" : "Show card details"}
+              aria-label={
+                showSecrets ? "Hide card details" : "Show card details"
+              }
             >
               <svg
                 viewBox="0 0 24 24"
@@ -5998,7 +5998,9 @@ export default function MobilePrototype({
                 onOpenExpense={openExpense}
                 onOpenTransaction={openTransaction}
                 onLockedCardNotice={(cardName) =>
-                  toast(`${cardName || "This card"} is locked. Unlock it in Card Options first.`)
+                  toast(
+                    `${cardName || "This card"} is locked. Unlock it in Card Options first.`,
+                  )
                 }
               />
             )}

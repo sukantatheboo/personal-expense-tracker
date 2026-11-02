@@ -11,6 +11,7 @@ import visaImg from "./assets/payment-logos/visa.png";
 import bkashSvg from "./assets/payment-logos/bkash.svg";
 import amexSvg from "./assets/payment-logos/amex.svg";
 import savingsPiggySvg from "./assets/payment-logos/savings-piggy.svg";
+import contactlessImg from "./assets/payment-logos/contactless.png";
 
 /* ───────────── Pixel-Perfect Payment & Bank Logos ───────────── */
 
@@ -454,38 +455,26 @@ export function EmvChip({ className = "", size = 30 }) {
 }
 
 /**
- * Contactless RFID Waves
+ * Official Real Contactless Payment Waves Indicator (from contactless.png)
  */
-export function ContactlessWaves({ className = "", size = 16 }) {
+export function ContactlessWaves({ className = "", size = 18, height, width, style = {} }) {
+  const h = height || size;
   return (
-    <svg
+    <img
+      src={contactlessImg}
+      alt="Contactless"
       className={`card-contactless-waves ${className}`}
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-label="Contactless"
-    >
-      <path
-        d="M8 7C10 9 11 11.5 11 14.5C11 17.5 10 20 8 22"
-        stroke="currentColor"
-        strokeWidth="2.2"
-        strokeLinecap="round"
-      />
-      <path
-        d="M12.5 4C15.5 6.5 17 10 17 14.5C17 19 15.5 22.5 12.5 25"
-        stroke="currentColor"
-        strokeWidth="2.2"
-        strokeLinecap="round"
-      />
-      <path
-        d="M17 1C21 4 23 8.5 23 14.5C23 20.5 21 25 17 28"
-        stroke="currentColor"
-        strokeWidth="2.2"
-        strokeLinecap="round"
-      />
-    </svg>
+      style={{
+        height: h,
+        width: width || "auto",
+        maxHeight: h,
+        objectFit: "contain",
+        display: "block",
+        filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.3))",
+        opacity: 0.9,
+        ...style,
+      }}
+    />
   );
 }
 
@@ -497,7 +486,7 @@ export const CARD_PROVIDERS = [
     id: "amazon",
     name: "Amazon Platinum",
     category: "bank",
-    subtitle: "Amazon Platinum Mastercard",
+    subtitle: "Mastercard Credit · USD",
     defaultType: "credit",
     defaultNetwork: "mastercard",
     currency: "USD",
@@ -511,7 +500,7 @@ export const CARD_PROVIDERS = [
     id: "citi_mc",
     name: "Citi Master Card",
     category: "bank",
-    subtitle: "Citi Master Card *4328",
+    subtitle: "Mastercard Credit · USD",
     defaultType: "credit",
     defaultNetwork: "mastercard",
     currency: "USD",
@@ -525,7 +514,7 @@ export const CARD_PROVIDERS = [
     id: "hdfc_visa",
     name: "HDFC Visa Card",
     category: "bank",
-    subtitle: "HDFC Visa Card *7892",
+    subtitle: "Visa Debit · USD",
     defaultType: "debit",
     defaultNetwork: "visa",
     currency: "USD",
@@ -539,7 +528,7 @@ export const CARD_PROVIDERS = [
     id: "sc_visa",
     name: "SC Visa Card",
     category: "bank",
-    subtitle: "SC Visa Card *3245",
+    subtitle: "Visa Credit · USD",
     defaultType: "credit",
     defaultNetwork: "visa",
     currency: "USD",
@@ -553,7 +542,7 @@ export const CARD_PROVIDERS = [
     id: "hdfc_credit",
     name: "HDFC Credit Card",
     category: "bank",
-    subtitle: "HDFC Credit Card *2219",
+    subtitle: "Visa Credit · USD",
     defaultType: "credit",
     defaultNetwork: "visa",
     currency: "USD",
@@ -567,7 +556,7 @@ export const CARD_PROVIDERS = [
     id: "gold_mc",
     name: "Gold Master Card",
     category: "bank",
-    subtitle: "Gold Master Card *1234",
+    subtitle: "Gold Mastercard · USD",
     defaultType: "credit",
     defaultNetwork: "mastercard",
     currency: "USD",
@@ -581,7 +570,7 @@ export const CARD_PROVIDERS = [
     id: "citi_credit",
     name: "Citi Credit Card",
     category: "bank",
-    subtitle: "Citi Credit Card *2134",
+    subtitle: "Mastercard Credit · USD",
     defaultType: "credit",
     defaultNetwork: "mastercard",
     currency: "USD",
@@ -595,7 +584,7 @@ export const CARD_PROVIDERS = [
     id: "virtual_mc",
     name: "Virtual MasterCard",
     category: "bank",
-    subtitle: "Virtual MasterCard",
+    subtitle: "Virtual Mastercard · USD",
     defaultType: "credit",
     defaultNetwork: "mastercard",
     currency: "USD",
@@ -609,7 +598,7 @@ export const CARD_PROVIDERS = [
     id: "virtual_visa",
     name: "Virtual Visa Card",
     category: "bank",
-    subtitle: "Virtual Visa Card",
+    subtitle: "Virtual Visa · USD",
     defaultType: "debit",
     defaultNetwork: "visa",
     currency: "USD",
@@ -625,7 +614,7 @@ export const CARD_PROVIDERS = [
     id: "bkash",
     name: "bKash",
     category: "mfs",
-    subtitle: "bKash Personal",
+    subtitle: "Personal Wallet · BDT",
     defaultType: "mfs",
     defaultNetwork: "mfs",
     currency: "BDT",
@@ -639,7 +628,7 @@ export const CARD_PROVIDERS = [
     id: "nagad",
     name: "Nagad",
     category: "mfs",
-    subtitle: "Nagad Wallet",
+    subtitle: "Digital Wallet · BDT",
     defaultType: "mfs",
     defaultNetwork: "mfs",
     currency: "BDT",
@@ -653,7 +642,7 @@ export const CARD_PROVIDERS = [
     id: "rocket",
     name: "Rocket",
     category: "mfs",
-    subtitle: "DBBL Rocket Wallet",
+    subtitle: "DBBL Mobile Banking · BDT",
     defaultType: "mfs",
     defaultNetwork: "mfs",
     currency: "BDT",
@@ -667,7 +656,7 @@ export const CARD_PROVIDERS = [
     id: "upay",
     name: "Upay",
     category: "mfs",
-    subtitle: "UCB Upay Digital",
+    subtitle: "UCB Digital Wallet · BDT",
     defaultType: "mfs",
     defaultNetwork: "mfs",
     currency: "BDT",
@@ -681,7 +670,7 @@ export const CARD_PROVIDERS = [
     id: "brac",
     name: "BRAC Bank",
     category: "bank",
-    subtitle: "BRAC Platinum Visa",
+    subtitle: "Platinum Visa Debit · BDT",
     defaultType: "debit",
     defaultNetwork: "visa",
     currency: "BDT",
@@ -695,7 +684,7 @@ export const CARD_PROVIDERS = [
     id: "city",
     name: "City Bank",
     category: "bank",
-    subtitle: "City Bank World Mastercard",
+    subtitle: "World Mastercard Credit · BDT",
     defaultType: "credit",
     defaultNetwork: "mastercard",
     currency: "BDT",
@@ -709,7 +698,7 @@ export const CARD_PROVIDERS = [
     id: "ebl",
     name: "Eastern Bank PLC",
     category: "bank",
-    subtitle: "EBL Titanium Mastercard",
+    subtitle: "Titanium Mastercard Credit · BDT",
     defaultType: "credit",
     defaultNetwork: "mastercard",
     currency: "BDT",
@@ -723,7 +712,7 @@ export const CARD_PROVIDERS = [
     id: "dbbl",
     name: "Dutch-Bangla Bank",
     category: "bank",
-    subtitle: "DBBL Nexus Visa",
+    subtitle: "Nexus Visa Debit · BDT",
     defaultType: "debit",
     defaultNetwork: "visa",
     currency: "BDT",
@@ -737,7 +726,7 @@ export const CARD_PROVIDERS = [
     id: "sc",
     name: "Standard Chartered",
     category: "bank",
-    subtitle: "SC Visa Signature",
+    subtitle: "Visa Signature Credit · BDT",
     defaultType: "credit",
     defaultNetwork: "visa",
     currency: "BDT",
@@ -751,7 +740,7 @@ export const CARD_PROVIDERS = [
     id: "savings",
     name: "Savings",
     category: "savings",
-    subtitle: "High-Yield Vault",
+    subtitle: "High-Yield Vault · BDT",
     defaultType: "savings",
     defaultNetwork: "none",
     currency: "BDT",
@@ -839,4 +828,95 @@ export function renderProviderLogo(providerId, { height = 24, className = "" } =
         </span>
       );
   }
+}
+
+/**
+ * Senior Native App Dev Grade Mini Card Preview (56px × 35px)
+ * Designed with authentic physical credit card ratio (1.586:1), hairline metallic border,
+ * specular gloss sheen, micro EMV chip / contactless indicator, SF Mono masked digits,
+ * and vector network emblems (Mastercard dual interlocking circles, Visa italic wordmark, etc.)
+ */
+export function MiniCardPreview({ provider, card, className = "" }) {
+  const p = provider || (card ? getProviderMeta(card.provider) : null) || CARD_PROVIDERS[0];
+  const network = card?.network || p.defaultNetwork || "visa";
+  const category = p.category || card?.category || "bank";
+  const isMfs = category === "mfs" || network === "mfs" || p.isPhone;
+  const isSavings = category === "savings" || p.id === "savings";
+  const gradient = card?.gradient || p.gradient || "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)";
+
+  // Extract last 4 digits or masked identifier
+  const rawNum = card?.number || p.numberPlaceholder || "4328";
+  const cleanDigits = rawNum.replace(/\D/g, "");
+  const last4 = cleanDigits.slice(-4) || (p.numberPrefix ? p.numberPrefix.slice(-4) : "4328");
+
+  return (
+    <div
+      className={`mini-card-preview ${className}`}
+      style={{ background: gradient }}
+      aria-hidden="true"
+    >
+      <div className="mini-card-sheen" />
+
+      {/* Top Row: Micro EMV Chip + Waves OR Brand Logo */}
+      <div className="mini-card-top-row">
+        {isMfs ? (
+          <div className="mini-card-mfs-brand">
+            {p.id === "bkash" && (
+              <img src={bkashSvg} alt="bKash" style={{ height: 10, width: "auto", filter: "brightness(0) invert(1)" }} />
+            )}
+            {p.id === "nagad" && (
+              <img src={nagadImg} alt="Nagad" style={{ height: 10, width: "auto" }} />
+            )}
+            {p.id === "rocket" && (
+              <img src={rocketImg} alt="Rocket" style={{ height: 10, width: "auto", filter: "brightness(0) invert(1)" }} />
+            )}
+            {p.id === "upay" && (
+              <img src={upayImg} alt="Upay" style={{ height: 10, width: "auto" }} />
+            )}
+          </div>
+        ) : isSavings ? (
+          <div className="mini-card-savings-brand">
+            <img src={savingsPiggySvg} alt="Savings" style={{ height: 11, width: "auto" }} />
+          </div>
+        ) : (
+          <div className="mini-card-chip-waves">
+            <svg className="mini-card-emv" width="10" height="7.5" viewBox="0 0 20 15" fill="none">
+              <rect x="0.5" y="0.5" width="19" height="14" rx="2.5" fill="#E5C158" stroke="#9A7B1C" strokeWidth="1" />
+              <path d="M0.5 5.5H7.5M0.5 9.5H7.5M12.5 5.5H19.5M12.5 9.5H19.5M9.5 0.5V5.5M9.5 9.5V14.5" stroke="#7A5612" strokeWidth="0.8" />
+              <rect x="7" y="4.5" width="6" height="6" rx="1" fill="#FFEAA0" stroke="#7A5612" strokeWidth="0.7" />
+            </svg>
+            <ContactlessWaves size={8} className="mini-card-contactless" />
+          </div>
+        )}
+      </div>
+
+      {/* Bottom Row: Digits + Network Emblem */}
+      <div className="mini-card-bottom-row">
+        <span className="mini-card-digits">
+          {isMfs ? "01X ••" : isSavings ? "VAULT" : `•• ${last4}`}
+        </span>
+
+        <div className="mini-card-network-emblem">
+          {network === "mastercard" && (
+            <svg width="15" height="10" viewBox="0 0 30 20" fill="none">
+              <circle cx="10" cy="10" r="9.5" fill="#EB001B" />
+              <circle cx="20" cy="10" r="9.5" fill="#F79E1B" fillOpacity="0.88" />
+            </svg>
+          )}
+          {network === "visa" && (
+            <span className="mini-card-visa-text">VISA</span>
+          )}
+          {network === "amex" && (
+            <span className="mini-card-amex-text">AMEX</span>
+          )}
+          {isMfs && (
+            <span className="mini-card-mfs-text">MFS</span>
+          )}
+          {isSavings && (
+            <span className="mini-card-vault-star">★</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
