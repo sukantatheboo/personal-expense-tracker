@@ -1,5 +1,6 @@
 import {
   Fragment,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -145,6 +146,27 @@ const ICONS = {
 };
 const Icon = ({ n }) => <svg viewBox="0 0 24 24">{ICONS[n]}</svg>;
 
+function triggerSafariWebHaptic() {
+  if (typeof document === "undefined") return;
+  try {
+    let trigger = document.getElementById("safari-haptic-trigger");
+    if (!trigger) {
+      trigger = document.createElement("input");
+      trigger.id = "safari-haptic-trigger";
+      trigger.type = "checkbox";
+      trigger.setAttribute("switch", "");
+      trigger.setAttribute("aria-hidden", "true");
+      trigger.tabIndex = -1;
+      trigger.style.cssText =
+        "position:fixed;opacity:0;pointer-events:none;left:-9999px;width:0;height:0;";
+      document.body.appendChild(trigger);
+    }
+    trigger.click();
+  } catch {
+    // ignore
+  }
+}
+
 function triggerHaptic(type = "light") {
   if (Capacitor.isNativePlatform()) {
     try {
@@ -193,7 +215,10 @@ function triggerHaptic(type = "light") {
       return false;
     }
   }
-  return false;
+
+  // iOS Safari Web / WebKit Taptic Engine tick fallback (iOS 17.4+)
+  triggerSafariWebHaptic();
+  return true;
 }
 
 function CategorySuggestionValue({ category }) {
@@ -1315,6 +1340,85 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
   );
 }
 
+/* ───────────── amount masking & reveal components ───────────── */
+const AUTO_HIDE_MS = 5000;
+
+function useReveal(autoHideMs = AUTO_HIDE_MS) {
+  const [shown, setShown] = useState(false);
+  const timer = useRef(null);
+
+  const set = useCallback(
+    (next) => {
+      setShown(next);
+      clearTimeout(timer.current);
+      if (next && autoHideMs) {
+        timer.current = setTimeout(() => setShown(false), autoHideMs);
+      }
+      triggerHaptic("selection");
+    },
+    [autoHideMs]
+  );
+
+  useEffect(() => {
+    const onVis = () => document.hidden && setShown(false);
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      clearTimeout(timer.current);
+    };
+  }, []);
+
+  const toggle = useCallback(() => set(!shown), [set, shown]);
+  return { shown, toggle };
+}
+
+function Amount({ value, mask = 3, shown }) {
+  const text = String(value);
+  const chars = [...text];
+  const digits = chars.filter((c) => /\d/.test(c)).length;
+  const extras = Math.max(0, mask - digits);
+
+  const cols = [
+    ...chars.map((c) => ({ c, kind: /\d/.test(c) ? "digit" : "sep" })),
+    ...Array.from({ length: extras }, () => ({ c: "", kind: "x" })),
+  ];
+
+  return (
+    <span className="mx-amt">
+      {cols.map(({ c, kind }, i) => (
+        <span
+          key={i}
+          className={`mx-ch mx-${kind}`}
+          style={{ "--i": i }}
+          aria-hidden="true"
+        >
+          <span className="mx-b">{kind === "sep" ? "" : "•"}</span>
+          <span className="mx-d">{c}</span>
+        </span>
+      ))}
+      <span className="mx-sr">{shown ? text : "hidden"}</span>
+    </span>
+  );
+}
+
+function EyeToggle({ shown, onToggle }) {
+  return (
+    <button
+      type="button"
+      className="mx-eye"
+      onClick={onToggle}
+      aria-pressed={shown}
+      aria-label={shown ? "Hide amounts" : "Show amounts"}
+    >
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" />
+        <circle className="mx-pupil" cx="12" cy="12" r="3" />
+        <path className="mx-slash" d="M4 4l16 16" />
+      </svg>
+    </button>
+  );
+}
+
 /* ───────────── screens ───────────── */
 function Home({
   S,
@@ -1328,6 +1432,7 @@ function Home({
 }) {
   const [currentTime, setCurrentTime] = useState(() => new Date());
   const [highlightedCategory, setHighlightedCategory] = useState("");
+  const { shown, toggle } = useReveal(5000);
   const total = tot(S, S.m);
   const saved = monthExp(S)
     .filter((expense) => expense.cat === "Savings" && expense.amt != null)
@@ -1401,22 +1506,37 @@ function Home({
         </div>
       </div>
 
-      <section className={`hero${overBudget ? " is-over-budget" : ""}`}>
+      <section
+        className={`hero spend-card${overBudget ? " is-over-budget" : ""}${shown ? " is-shown" : ""}`}
+        aria-label="Spending this month"
+      >
         <div className="row">
           <span>Spent this month</span>
           {p ? (
             <span className="chip">
-              {d > 0 ? "▲" : "▼"} {M(Math.abs(d))} vs last
+              <span className="mx-tri">{d > 0 ? "▲" : "▼"}</span>
+              ৳<Amount value={amountFormatter.format(Math.abs(d))} mask={3} shown={shown} /> vs last
             </span>
           ) : null}
         </div>
-        <div className="big">{M(t)}</div>
+
+        <div className="mx-hero">
+          <div className="big mx-hero-amt" onClick={toggle}>
+            <span className="mx-cur">৳</span>
+            <Amount value={amountFormatter.format(Number(t) || 0)} mask={4} shown={shown} />
+          </div>
+          <EyeToggle shown={shown} onToggle={toggle} />
+        </div>
+
         {saved > 0 && (
           <div className="hero-saved">
             <span>Saved</span>
-            <b>{M(saved)}</b>
+            <b>
+              ৳<Amount value={amountFormatter.format(saved)} mask={3} shown={shown} />
+            </b>
           </div>
         )}
+
         {b ? (
           <>
             <div className="bar">
@@ -1432,9 +1552,19 @@ function Home({
                 className={`budget-pill${overBudget ? " is-over" : ""}`}
                 role="status"
               >
-                {overBudget ? `${M(t - b)} over budget` : `${M(b - t)} left`}
+                {overBudget ? (
+                  <>
+                    ৳<Amount value={amountFormatter.format(t - b)} mask={3} shown={shown} /> over budget
+                  </>
+                ) : (
+                  <>
+                    ৳<Amount value={amountFormatter.format(b - t)} mask={3} shown={shown} /> left
+                  </>
+                )}
               </span>
-              <span>of {M(b)}</span>
+              <span>
+                of ৳<Amount value={amountFormatter.format(b)} mask={3} shown={shown} />
+              </span>
             </div>
           </>
         ) : (
@@ -1442,6 +1572,9 @@ function Home({
             Set a monthly budget
           </button>
         )}
+        <span className="mx-sr" aria-live="polite">
+          {shown ? "Amounts shown" : "Amounts hidden"}
+        </span>
       </section>
 
       <div className="mini">
