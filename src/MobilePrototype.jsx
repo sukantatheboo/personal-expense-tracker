@@ -43,21 +43,21 @@ import "./MobilePrototype.css";
 
 /* ───────────── constants ───────────── */
 const CAT = {
-  Food: [foodSvg, "#e8873a"],
-  Transport: [transportSvg, "#3b82c4"],
-  Bills: [billsSvg, "#d6a31f"],
-  Home: [homeSvg, "#8a6fd1"],
-  Shopping: [shoppingSvg, "#d9528a"],
-  Health: [healthSvg, "#e0594f"],
-  Entertainment: [entertainmentSvg, "#20a4a4"],
-  Education: [educationSvg, "#5b73d9"],
-  Savings: [savingsSvg, "#b6404b"],
-  Other: [otherSvg, "#7d8a82"],
+  Food: [foodSvg, "#f97316"],
+  Transport: [transportSvg, "#2563eb"],
+  Bills: [billsSvg, "#eab308"],
+  Home: [homeSvg, "#10b981"],
+  Shopping: [shoppingSvg, "#8b5cf6"],
+  Health: [healthSvg, "#dc2626"],
+  Entertainment: [entertainmentSvg, "#06b6d4"],
+  Education: [educationSvg, "#4f46e5"],
+  Savings: [savingsSvg, "#be185d"],
+  Other: [otherSvg, "#64748b"],
 };
 const ACC = {
   bkash: ["bKash", "#e2136e"],
   bank: ["Bank", "#2563a8"],
-  savings: ["Savings", "#b6404b"],
+  savings: ["Savings", "#10b981"],
 };
 
 function getAccountDisplay(id, cards = []) {

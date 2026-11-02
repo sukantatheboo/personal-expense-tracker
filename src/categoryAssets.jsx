@@ -50,20 +50,20 @@ export const CATEGORY_ICONS = {
 };
 
 export const CATEGORY_COLORS = {
-  Food: "#e8873a",
-  Transport: "#3b82c4",
-  Bills: "#d6a31f",
-  Home: "#8a6fd1",
-  Shopping: "#d9528a",
-  Health: "#e0594f",
-  Entertainment: "#20a4a4",
-  Education: "#5b73d9",
-  Savings: "#b6404b",
-  Other: "#7d8a82",
-  Grocery: "#d9528a",
-  Medicine: "#e0594f",
-  Utilities: "#d6a31f",
-  Travel: "#3b82c4",
+  Food: "#f97316",
+  Transport: "#2563eb",
+  Bills: "#eab308",
+  Home: "#10b981",
+  Shopping: "#8b5cf6",
+  Health: "#dc2626",
+  Entertainment: "#06b6d4",
+  Education: "#4f46e5",
+  Savings: "#be185d",
+  Other: "#64748b",
+  Grocery: "#8b5cf6",
+  Medicine: "#dc2626",
+  Utilities: "#eab308",
+  Travel: "#2563eb",
 };
 
 export const TRANSACTION_ICONS = {
@@ -82,14 +82,14 @@ export const TRANSACTION_ICONS = {
 };
 
 export const TRANSACTION_COLORS = {
-  income: "#10b981",
+  income: "#a855f7",
   transfer: "#3b82c4",
   adjust: "#8b5cf6",
   adjustment: "#8b5cf6",
   "card-options": "#6366f1",
   card_options: "#6366f1",
   cardoptions: "#6366f1",
-  Income: "#10b981",
+  Income: "#a855f7",
   Transfer: "#3b82c4",
   Adjust: "#8b5cf6",
   Adjustment: "#8b5cf6",

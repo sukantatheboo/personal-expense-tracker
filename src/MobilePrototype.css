@@ -4382,9 +4382,9 @@ a:active,
 }
 .mobile-prototype .action-icon-badge.is-income,
 .mobile-prototype .action-icon-badge.is-withdraw {
-  background: rgba(16, 185, 129, 0.14);
-  border: 1px solid rgba(16, 185, 129, 0.28);
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.16);
+  background: linear-gradient(135deg, rgba(214, 226, 137, 0.24) 0%, rgba(202, 155, 247, 0.22) 100%);
+  border: 1px solid rgba(202, 155, 247, 0.35);
+  box-shadow: 0 4px 12px rgba(202, 155, 247, 0.16);
 }
 .mobile-prototype .action-icon-badge.is-transfer {
   background: rgba(59, 130, 246, 0.14);
@@ -4403,8 +4403,8 @@ a:active,
 }
 [data-theme="dark"] .mobile-prototype .action-icon-badge.is-income,
 [data-theme="dark"] .mobile-prototype .action-icon-badge.is-withdraw {
-  background: rgba(16, 185, 129, 0.2);
-  border-color: rgba(16, 185, 129, 0.38);
+  background: linear-gradient(135deg, rgba(214, 226, 137, 0.20) 0%, rgba(202, 155, 247, 0.26) 100%);
+  border-color: rgba(202, 155, 247, 0.45);
 }
 [data-theme="dark"] .mobile-prototype .action-icon-badge.is-transfer {
   background: rgba(59, 130, 246, 0.2);
@@ -4532,8 +4532,8 @@ a:active,
   justify-content: center;
 }
 .mobile-prototype .accounts-tx-icon-circle.is-income {
-  background: #ecfdf5;
-  color: #10b981;
+  background: linear-gradient(135deg, rgba(214, 226, 137, 0.22) 0%, rgba(202, 155, 247, 0.20) 100%);
+  color: #a855f7;
 }
 .mobile-prototype .accounts-tx-icon-circle.is-transfer {
   background: #eff6ff;
@@ -4546,7 +4546,7 @@ a:active,
 }
 .mobile-prototype .accounts-tx-icon-circle.is-food {
   background: #fff7ed;
-  color: #ea580c;
+  color: #f97316;
 }
 .mobile-prototype .accounts-tx-icon-circle.is-transport {
   background: #eff6ff;
@@ -4559,36 +4559,36 @@ a:active,
 }
 .mobile-prototype .accounts-tx-icon-circle.is-grocery,
 .mobile-prototype .accounts-tx-icon-circle.is-shopping {
-  background: #f0fdf4;
-  color: #16a34a;
+  background: #f5f3ff;
+  color: #8b5cf6;
 }
 .mobile-prototype .accounts-tx-icon-circle.is-bills {
   background: #fefce8;
   color: #ca8a04;
 }
 .mobile-prototype .accounts-tx-icon-circle.is-home {
-  background: #faf5ff;
-  color: #9333ea;
+  background: #ecfdf5;
+  color: #10b981;
 }
 .mobile-prototype .accounts-tx-icon-circle.is-entertainment {
-  background: #f0fdfa;
-  color: #0d9488;
+  background: #ecfeff;
+  color: #06b6d4;
 }
 .mobile-prototype .accounts-tx-icon-circle.is-education {
   background: #eef2ff;
   color: #4f46e5;
 }
 .mobile-prototype .accounts-tx-icon-circle.is-savings {
-  background: #fdf2f4;
-  color: #b6404b;
+  background: #fdf2f8;
+  color: #be185d;
 }
 .mobile-prototype .accounts-tx-icon-circle.is-other {
   background: #f1f5f9;
   color: #64748b;
 }
 [data-theme="dark"] .mobile-prototype .accounts-tx-icon-circle.is-income {
-  background: rgba(16, 185, 129, 0.18);
-  color: #34d399;
+  background: linear-gradient(135deg, rgba(214, 226, 137, 0.18) 0%, rgba(202, 155, 247, 0.24) 100%);
+  color: #d8b4fe;
 }
 [data-theme="dark"] .mobile-prototype .accounts-tx-icon-circle.is-transfer {
   background: rgba(59, 130, 246, 0.18);
@@ -4600,7 +4600,7 @@ a:active,
   color: #c084fc;
 }
 [data-theme="dark"] .mobile-prototype .accounts-tx-icon-circle.is-food {
-  background: rgba(234, 88, 12, 0.18);
+  background: rgba(249, 115, 22, 0.18);
   color: #fb923c;
 }
 [data-theme="dark"] .mobile-prototype .accounts-tx-icon-circle.is-transport {
@@ -4614,30 +4614,30 @@ a:active,
 }
 [data-theme="dark"] .mobile-prototype .accounts-tx-icon-circle.is-grocery,
 [data-theme="dark"] .mobile-prototype .accounts-tx-icon-circle.is-shopping {
-  background: rgba(22, 163, 74, 0.18);
-  color: #4ade80;
+  background: rgba(139, 92, 246, 0.18);
+  color: #c084fc;
 }
 [data-theme="dark"] .mobile-prototype .accounts-tx-icon-circle.is-bills {
-  background: rgba(202, 138, 4, 0.18);
+  background: rgba(234, 179, 8, 0.18);
   color: #facc15;
 }
 [data-theme="dark"] .mobile-prototype .accounts-tx-icon-circle.is-home {
-  background: rgba(147, 51, 234, 0.18);
-  color: #c084fc;
+  background: rgba(16, 185, 129, 0.18);
+  color: #34d399;
 }
 [data-theme="dark"]
   .mobile-prototype
   .accounts-tx-icon-circle.is-entertainment {
-  background: rgba(13, 148, 136, 0.18);
-  color: #2dd4bf;
+  background: rgba(6, 182, 212, 0.18);
+  color: #22d3ee;
 }
 [data-theme="dark"] .mobile-prototype .accounts-tx-icon-circle.is-education {
   background: rgba(79, 70, 229, 0.18);
   color: #818cf8;
 }
 [data-theme="dark"] .mobile-prototype .accounts-tx-icon-circle.is-savings {
-  background: rgba(182, 64, 75, 0.22);
-  color: #f87171;
+  background: rgba(190, 24, 93, 0.18);
+  color: #f472b6;
 }
 [data-theme="dark"] .mobile-prototype .accounts-tx-icon-circle.is-other {
   background: rgba(100, 116, 139, 0.18);
