@@ -40,6 +40,22 @@ import {
   savingsSvg,
   otherSvg,
 } from "./categoryAssets.jsx";
+import {
+  setAppPin,
+  verifyAppPin,
+  hasAppPin,
+  removeAppPin,
+  isBiometricsAvailable,
+  hasBiometricsConfigured,
+  enableBiometrics,
+  disableBiometrics,
+  authenticateWithBiometrics,
+  getLockTimeoutMinutes,
+  setLockTimeoutMinutes,
+  markActive,
+  shouldLockApp,
+  lockAppManually,
+} from "./security.js";
 import "./MobilePrototype.css";
 
 /* ───────────── constants ───────────── */
@@ -3494,6 +3510,7 @@ function SettingsSheet({
   onTheme,
   onAdvanced,
   onProfileSettings,
+  onSecurity,
   backupStatus,
   lastBackupAt,
   onBackupDownload,
@@ -3538,6 +3555,15 @@ function SettingsSheet({
         <span className="nm">
           <b>App settings</b>
           <small>Accounts and reminders</small>
+        </span>
+        <span className="settings-chevron" aria-hidden="true">
+          <Icon n="r" />
+        </span>
+      </button>
+      <button className="ri" type="button" onClick={onSecurity}>
+        <span className="nm">
+          <b>Security &amp; App Lock</b>
+          <small>{hasAppPin() ? "Passcode active · Zero-knowledge sync" : "Set PIN passcode &amp; biometrics"}</small>
         </span>
         <span className="settings-chevron" aria-hidden="true">
           <Icon n="r" />
@@ -3702,11 +3728,11 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
   const [formData, setFormData] = useState({
     name: "",
     holderName: "",
+    last4: "",
     number: "",
     type: "credit",
     network: "visa",
     expiry: "",
-    cvv: "",
     initialBalance: "",
     color: "",
     gradient: "",
@@ -3752,9 +3778,9 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
       holderName: "",
       type: prov.defaultType || "credit",
       network: prov.defaultNetwork || "visa",
+      last4: "",
       number: "",
       expiry: "",
-      cvv: "",
       initialBalance: "",
       color: prov.color || "#1e293b",
       gradient: prov.gradient || "",
@@ -3767,13 +3793,12 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
   };
 
   const handleCardNumberChange = (raw) => {
-    // If not phone, strip non-digits and limit to 16
     if (!selectedProvider.isPhone) {
-      const digits = raw.replace(/\D/g, "").slice(0, 16);
-      setFormData((prev) => ({ ...prev, number: digits }));
+      const digits = raw.replace(/\D/g, "").slice(0, 4);
+      setFormData((prev) => ({ ...prev, last4: digits, number: digits }));
     } else {
       const digits = raw.replace(/[^\d+]/g, "").slice(0, 14);
-      setFormData((prev) => ({ ...prev, number: digits }));
+      setFormData((prev) => ({ ...prev, last4: digits.slice(-4), number: digits }));
     }
   };
 
@@ -3797,7 +3822,11 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
     const isSavings = selectedProvider.category === "savings";
 
     const defaultNum = selectedProvider.numberPlaceholder.replace(/\s+/g, "");
-    const number = formData.number.trim() || defaultNum;
+    const defaultLast4 = selectedProvider.isPhone ? defaultNum : defaultNum.slice(-4);
+    const last4 = (formData.last4 || formData.number || "").trim() || defaultLast4;
+    const number = selectedProvider.isPhone
+      ? (formData.number.trim() || defaultNum)
+      : `•••• •••• •••• ${last4}`;
     const holderName =
       formData.holderName.trim() || userProfileName || "Cardholder";
     const network = isMfs
@@ -3827,9 +3856,9 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
           : isCustom
             ? `${name} ${network === "visa" ? "Visa" : network === "mastercard" ? "Mastercard" : "Card"}`
             : selectedProvider.subtitle,
+      last4,
       number,
       expiry: isMfs || isSavings ? "" : formData.expiry.trim() || "12/28",
-      cvv: isMfs || isSavings ? "" : formData.cvv.trim() || "123",
       color: formData.color || selectedProvider.color,
       gradient: formData.gradient || selectedProvider.gradient,
       initialBalance: parseFloat(formData.initialBalance) || 0,
@@ -3869,9 +3898,9 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
               : "Custom Mastercard Debit"
             : "Custom Amex"
       : selectedProvider.subtitle,
-    number: formData.number,
+    last4: formData.last4 || (formData.number ? formData.number.slice(-4) : ""),
+    number: formData.last4 ? `•••• •••• •••• ${formData.last4}` : formData.number,
     expiry: formData.expiry,
-    cvv: formData.cvv,
     color: formData.color || selectedProvider.color,
     gradient: formData.gradient || selectedProvider.gradient,
   };
@@ -4157,22 +4186,22 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
 
             <div className="add-card-field">
               <label className="add-card-input-lbl">
-                {selectedProvider.isPhone ? "Mobile Number" : "Card Number"}
+                {selectedProvider.isPhone ? "Mobile Number" : "Last 4 Digits"}
               </label>
               <input
                 className="add-card-native-input"
                 type="text"
                 inputMode="numeric"
+                maxLength={selectedProvider.isPhone ? 14 : 4}
                 placeholder={
                   selectedProvider.isPhone
                     ? selectedProvider.numberPlaceholder || "01712 345678"
-                    : selectedProvider.numberPlaceholder ||
-                      "4756 1254 0024 9018"
+                    : "e.g. 9018"
                 }
                 value={
                   selectedProvider.isPhone
                     ? formData.number
-                    : formatCardNumber(formData.number, false, true)
+                    : formData.last4 || formData.number
                 }
                 onChange={(e) => handleCardNumberChange(e.target.value)}
               />
@@ -4180,37 +4209,17 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
 
             {!selectedProvider.isPhone &&
               selectedProvider.category !== "savings" && (
-                <div className="add-card-two-col">
-                  <div className="add-card-field">
-                    <label className="add-card-input-lbl">MM/YY</label>
-                    <input
-                      className="add-card-native-input"
-                      type="text"
-                      inputMode="numeric"
-                      placeholder="11/25"
-                      maxLength={5}
-                      value={formData.expiry}
-                      onChange={(e) => handleExpiryChange(e.target.value)}
-                    />
-                  </div>
-
-                  <div className="add-card-field">
-                    <label className="add-card-input-lbl">CVC</label>
-                    <input
-                      className="add-card-native-input"
-                      type="text"
-                      inputMode="numeric"
-                      placeholder="654"
-                      maxLength={4}
-                      value={formData.cvv}
-                      onChange={(e) =>
-                        handleFormChange(
-                          "cvv",
-                          e.target.value.replace(/\D/g, "").slice(0, 4),
-                        )
-                      }
-                    />
-                  </div>
+                <div className="add-card-field">
+                  <label className="add-card-input-lbl">Expiry (MM/YY)</label>
+                  <input
+                    className="add-card-native-input"
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="11/25"
+                    maxLength={5}
+                    value={formData.expiry}
+                    onChange={(e) => handleExpiryChange(e.target.value)}
+                  />
                 </div>
               )}
 
@@ -4393,9 +4402,13 @@ function CardOptionsSheet({
     name: selectedCard?.name || "",
     holderName: selectedCard?.holderName || "Cardholder",
     subtitle: selectedCard?.subtitle || "",
+    last4:
+      selectedCard?.last4 ||
+      (selectedCard?.number
+        ? selectedCard.number.replace(/\D/g, "").slice(-4)
+        : ""),
     number: selectedCard?.number || "",
     expiry: selectedCard?.expiry || "",
-    cvv: selectedCard?.cvv || "",
     network: selectedCard?.network || "visa",
     type: selectedCard?.type || "credit",
     color: selectedCard?.color || "#1e293b",
@@ -4415,9 +4428,13 @@ function CardOptionsSheet({
         name: selectedCard.name || "",
         holderName: selectedCard.holderName || "Cardholder",
         subtitle: selectedCard.subtitle || "",
+        last4:
+          selectedCard.last4 ||
+          (selectedCard.number
+            ? selectedCard.number.replace(/\D/g, "").slice(-4)
+            : ""),
         number: selectedCard.number || "",
         expiry: selectedCard.expiry || "",
-        cvv: selectedCard.cvv || "",
         network: selectedCard.network || "visa",
         type: selectedCard.type || "credit",
         color: selectedCard.color || "#1e293b",
@@ -4441,9 +4458,9 @@ function CardOptionsSheet({
       type: formData.type || selectedCard.type,
       gradient: formData.gradient,
       color: formData.color,
-      number: formData.number,
+      last4: formData.last4 || (formData.number ? formData.number.slice(-4) : ""),
+      number: formData.last4 ? `•••• •••• •••• ${formData.last4}` : formData.number,
       expiry: formData.expiry,
-      cvv: formData.cvv,
       frozen: isFrozen,
     };
   }, [selectedCard, formData, isFrozen]);
@@ -4451,10 +4468,14 @@ function CardOptionsSheet({
   const handleCardNumberChange = (raw) => {
     if (isMfs) {
       const digits = raw.replace(/[^\d+]/g, "").slice(0, 14);
-      setFormData((prev) => ({ ...prev, number: digits }));
+      setFormData((prev) => ({ ...prev, number: digits, last4: digits.slice(-4) }));
     } else {
-      const digits = raw.replace(/\D/g, "").slice(0, 16);
-      setFormData((prev) => ({ ...prev, number: digits }));
+      const digits = raw.replace(/\D/g, "").slice(0, 4);
+      setFormData((prev) => ({
+        ...prev,
+        last4: digits,
+        number: `•••• •••• •••• ${digits}`,
+      }));
     }
   };
 
@@ -4472,12 +4493,10 @@ function CardOptionsSheet({
 
   const handleCopyNumber = () => {
     triggerHaptic("success");
-    const digits = (formData.number || selectedCard?.number || "").replace(
-      /\s+/g,
-      "",
-    );
+    const raw = String(formData.last4 || formData.number || selectedCard?.last4 || selectedCard?.number || "").trim();
+    const toCopy = raw.includes("•") ? raw : raw.replace(/\s+/g, "");
     if (navigator?.clipboard?.writeText) {
-      navigator.clipboard.writeText(digits).catch(() => {});
+      navigator.clipboard.writeText(toCopy).catch(() => {});
     }
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -4768,45 +4787,27 @@ function CardOptionsSheet({
                 </div>
 
                 <div className="card-options-field">
-                  <label>Card Number</label>
+                  <label>{isMfs ? "Phone / Account Number" : "Last 4 Digits"}</label>
                   <input
                     type="text"
-                    inputMode="numeric"
-                    placeholder="4756 1254 0024 9018"
-                    value={formatCardNumber(formData.number, false, true)}
+                    inputMode={isMfs ? "tel" : "numeric"}
+                    placeholder={isMfs ? "01712 •••678" : "9018"}
+                    maxLength={isMfs ? 16 : 4}
+                    value={isMfs ? (formData.number || "") : (formData.last4 || "")}
                     onChange={(e) => handleCardNumberChange(e.target.value)}
                   />
                 </div>
 
-                <div className="add-card-two-col">
-                  <div className="card-options-field">
-                    <label>MM/YY</label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      placeholder="12/28"
-                      maxLength={5}
-                      value={formData.expiry}
-                      onChange={(e) => handleExpiryChange(e.target.value)}
-                    />
-                  </div>
-
-                  <div className="card-options-field">
-                    <label>CVC</label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      placeholder="654"
-                      maxLength={4}
-                      value={formData.cvv}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          cvv: e.target.value.replace(/\D/g, "").slice(0, 4),
-                        }))
-                      }
-                    />
-                  </div>
+                <div className="card-options-field">
+                  <label>Expiry (MM/YY)</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="12/28"
+                    maxLength={5}
+                    value={formData.expiry}
+                    onChange={(e) => handleExpiryChange(e.target.value)}
+                  />
                 </div>
 
                 <div className="card-options-field">
@@ -5302,6 +5303,560 @@ function AppSettingsPage({
   );
 }
 
+function SecuritySheet({ onClose, onLockNow }) {
+  const [pinSet, setPinSet] = useState(() => hasAppPin());
+  const [biometricsAvailable, setBiometricsAvailable] = useState(false);
+  const [biometricsConfigured, setBiometricsConfigured] = useState(() =>
+    hasBiometricsConfigured(),
+  );
+  const [timeoutMinutes, setTimeoutMinutes] = useState(() =>
+    getLockTimeoutMinutes(),
+  );
+  const [step, setStep] = useState("overview"); // "overview" | "setup_pin" | "confirm_pin"
+  const [pinDraft, setPinDraft] = useState("");
+  const [pinConfirm, setPinConfirm] = useState("");
+  const [pinError, setPinError] = useState("");
+  const [statusMsg, setStatusMsg] = useState("");
+
+  useEffect(() => {
+    isBiometricsAvailable().then((avail) => setBiometricsAvailable(avail));
+  }, []);
+
+  const handleStartSetPin = () => {
+    setPinDraft("");
+    setPinConfirm("");
+    setPinError("");
+    setStep("setup_pin");
+  };
+
+  const handleDraftPinSubmit = (e) => {
+    e?.preventDefault();
+    if (pinDraft.length !== 4) {
+      setPinError("PIN must be exactly 4 digits");
+      triggerHaptic("warning");
+      return;
+    }
+    setPinError("");
+    setStep("confirm_pin");
+  };
+
+  const handleConfirmPinSubmit = async (e) => {
+    e?.preventDefault();
+    if (pinConfirm !== pinDraft) {
+      setPinError("PINs do not match. Please try again.");
+      triggerHaptic("warning");
+      setPinConfirm("");
+      return;
+    }
+    await setAppPin(pinDraft);
+    setPinSet(true);
+    triggerHaptic("success");
+    setStatusMsg("PIN passcode enabled successfully.");
+    setStep("overview");
+  };
+
+  const handleRemovePin = () => {
+    removeAppPin();
+    disableBiometrics();
+    setPinSet(false);
+    setBiometricsConfigured(false);
+    triggerHaptic("delete");
+    setStatusMsg("PIN passcode removed.");
+  };
+
+  const handleToggleBiometrics = async () => {
+    if (biometricsConfigured) {
+      disableBiometrics();
+      setBiometricsConfigured(false);
+      triggerHaptic("light");
+    } else {
+      const ok = await enableBiometrics();
+      if (ok) {
+        setBiometricsConfigured(true);
+        triggerHaptic("success");
+        setStatusMsg("Biometric authentication enabled.");
+      } else {
+        triggerHaptic("warning");
+        setPinError("Could not enable biometric unlock on this device.");
+      }
+    }
+  };
+
+  const handleTimeoutChange = (mins) => {
+    setLockTimeoutMinutes(mins);
+    setTimeoutMinutes(mins);
+    triggerHaptic("selection");
+  };
+
+  return (
+    <Sheet onClose={onClose}>
+      <h3 id="sheet-title">Security &amp; App Lock</h3>
+
+      {step === "overview" && (
+        <div className="security-sheet-content">
+          <div style={{ marginBottom: 16 }}>
+            <span className="security-badge-e2e">
+              <span className="security-badge-dot" />
+              AES-GCM-256 Zero-Knowledge Active
+            </span>
+            <p className="settings-note" style={{ marginTop: 8 }}>
+              Financial cards and cloud snapshots are encrypted client-side using WebCrypto PBKDF2 + AES-GCM before syncing to Supabase.
+            </p>
+          </div>
+
+          <div className="settings-menu-section">
+            <h4>App Lock Passcode</h4>
+            {pinSet ? (
+              <>
+                <div className="ri" style={{ justifyContent: "space-between" }}>
+                  <span className="nm">
+                    <b>App Passcode</b>
+                    <small>Active (4-digit PIN)</small>
+                  </span>
+                  <span
+                    className="security-badge-e2e"
+                    style={{
+                      color: "#10b981",
+                      background: "rgba(16,185,129,0.1)",
+                    }}
+                  >
+                    Enabled
+                  </span>
+                </div>
+                <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+                  <button
+                    type="button"
+                    className="btn"
+                    style={{ flex: 1, padding: "10px 14px", fontSize: 13 }}
+                    onClick={handleStartSetPin}
+                  >
+                    Change PIN
+                  </button>
+                  <button
+                    type="button"
+                    className="btn del"
+                    style={{ flex: 1, padding: "10px 14px", fontSize: 13 }}
+                    onClick={handleRemovePin}
+                  >
+                    Turn Off PIN
+                  </button>
+                </div>
+              </>
+            ) : (
+              <button
+                className="ri settings-action"
+                type="button"
+                onClick={handleStartSetPin}
+              >
+                <i className="ic" style={{ "--c": "#10b981" }}>
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="20"
+                    height="20"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                </i>
+                <span className="nm">
+                  <b>Set 4-Digit Passcode</b>
+                  <small>Lock app when inactive or closed</small>
+                </span>
+                <span className="settings-chevron" aria-hidden="true">
+                  <Icon n="r" />
+                </span>
+              </button>
+            )}
+          </div>
+
+          {pinSet && (
+            <div className="settings-menu-section" style={{ marginTop: 16 }}>
+              <h4>Biometrics</h4>
+              <button
+                className="ri"
+                type="button"
+                aria-pressed={biometricsConfigured}
+                disabled={!biometricsAvailable && !Capacitor.isNativePlatform()}
+                onClick={handleToggleBiometrics}
+              >
+                <i className="ic" style={{ "--c": "#6366f1" }}>
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="20"
+                    height="20"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+                    <path d="M9 9h.01M15 9h.01M10 13a2 2 0 0 0 4 0m-2 0v2" />
+                  </svg>
+                </i>
+                <span className="nm">
+                  <b>Biometric Unlock</b>
+                  <small>
+                    {biometricsConfigured
+                      ? "Face ID / Touch ID Enabled"
+                      : biometricsAvailable
+                        ? "Use Face ID / Touch ID / Fingerprint"
+                        : "Unavailable on this device"}
+                  </small>
+                </span>
+                <span
+                  className={"sw " + (biometricsConfigured ? "on" : "")}
+                  aria-hidden="true"
+                />
+              </button>
+            </div>
+          )}
+
+          {pinSet && (
+            <div className="settings-menu-section" style={{ marginTop: 16 }}>
+              <h4>Auto-Lock Timeout</h4>
+              <p className="settings-note" style={{ marginBottom: 10 }}>
+                Choose when Spend requires your passcode after leaving:
+              </p>
+              <Seg
+                value={timeoutMinutes}
+                onPick={handleTimeoutChange}
+                options={[
+                  [0, "Immediately"],
+                  [1, "1 min"],
+                  [5, "5 min"],
+                ]}
+              />
+            </div>
+          )}
+
+          {statusMsg && (
+            <p
+              className="settings-status"
+              role="status"
+              aria-live="polite"
+              style={{ marginTop: 14 }}
+            >
+              {statusMsg}
+            </p>
+          )}
+
+          {pinSet && (
+            <div style={{ marginTop: 24 }}>
+              <button
+                type="button"
+                className="btn"
+                style={{
+                  width: "100%",
+                  background: "var(--card)",
+                  border: "1px solid var(--line)",
+                  color: "var(--ink)",
+                }}
+                onClick={() => {
+                  lockAppManually();
+                  onLockNow?.();
+                }}
+              >
+                Lock App Now
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {step === "setup_pin" && (
+        <form onSubmit={handleDraftPinSubmit}>
+          <p className="hint">Enter a new 4-digit PIN for your app passcode:</p>
+          <div className="amt" style={{ margin: "20px 0" }}>
+            <input
+              type="password"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={4}
+              autoFocus
+              data-sheet-autofocus
+              placeholder="••••"
+              value={pinDraft}
+              onChange={(e) =>
+                setPinDraft(e.target.value.replace(/\D/g, "").slice(0, 4))
+              }
+              style={{ textAlign: "center", letterSpacing: "0.4em" }}
+            />
+          </div>
+          {pinError && (
+            <p
+              className="app-lock-error-msg"
+              style={{ textAlign: "center" }}
+            >
+              {pinError}
+            </p>
+          )}
+          <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+            <button
+              type="button"
+              className="btn del"
+              onClick={() => setStep("overview")}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="btn"
+              disabled={pinDraft.length !== 4}
+            >
+              Continue
+            </button>
+          </div>
+        </form>
+      )}
+
+      {step === "confirm_pin" && (
+        <form onSubmit={handleConfirmPinSubmit}>
+          <p className="hint">Re-enter your 4-digit PIN to confirm:</p>
+          <div className="amt" style={{ margin: "20px 0" }}>
+            <input
+              type="password"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={4}
+              autoFocus
+              data-sheet-autofocus
+              placeholder="••••"
+              value={pinConfirm}
+              onChange={(e) =>
+                setPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 4))
+              }
+              style={{ textAlign: "center", letterSpacing: "0.4em" }}
+            />
+          </div>
+          {pinError && (
+            <p
+              className="app-lock-error-msg"
+              style={{ textAlign: "center" }}
+            >
+              {pinError}
+            </p>
+          )}
+          <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+            <button
+              type="button"
+              className="btn del"
+              onClick={() => {
+                setStep("setup_pin");
+                setPinConfirm("");
+              }}
+            >
+              Back
+            </button>
+            <button
+              type="submit"
+              className="btn"
+              disabled={pinConfirm.length !== 4}
+            >
+              Confirm &amp; Enable
+            </button>
+          </div>
+        </form>
+      )}
+    </Sheet>
+  );
+}
+
+function AppLockScreen({ onUnlock }) {
+  const [pin, setPin] = useState("");
+  const [isError, setIsError] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+  const [biometricsConfigured] = useState(() => hasBiometricsConfigured());
+
+  const handleDigit = useCallback(
+    async (d) => {
+      if (pin.length >= 4) return;
+      triggerHaptic("selection");
+      const nextPin = pin + d;
+      setPin(nextPin);
+      setIsError(false);
+      setErrorMsg("");
+
+      if (nextPin.length === 4) {
+        const ok = await verifyAppPin(nextPin);
+        if (ok) {
+          triggerHaptic("success");
+          onUnlock();
+        } else {
+          triggerHaptic("warning");
+          setIsError(true);
+          setErrorMsg("Incorrect passcode. Try again.");
+          setTimeout(() => {
+            setPin("");
+            setIsError(false);
+          }, 500);
+        }
+      }
+    },
+    [pin, onUnlock],
+  );
+
+  const handleBackspace = () => {
+    if (pin.length > 0) {
+      triggerHaptic("selection");
+      setPin((prev) => prev.slice(0, -1));
+      setIsError(false);
+      setErrorMsg("");
+    }
+  };
+
+  const handleBiometricAuth = useCallback(async () => {
+    triggerHaptic("light");
+    const ok = await authenticateWithBiometrics();
+    if (ok) {
+      triggerHaptic("success");
+      onUnlock();
+    }
+  }, [onUnlock]);
+
+  useEffect(() => {
+    if (biometricsConfigured) {
+      handleBiometricAuth();
+    }
+  }, [biometricsConfigured, handleBiometricAuth]);
+
+  return (
+    <div
+      className="app-lock-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Spend is locked"
+    >
+      <div className="app-lock-header">
+        <div className="app-lock-icon-wrap" aria-hidden="true">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </svg>
+        </div>
+        <h2 className="app-lock-title">Spend is Locked</h2>
+        <p className="app-lock-subtitle">
+          Enter your 4-digit PIN to access your accounts
+        </p>
+
+        <div
+          className={`app-lock-dots${isError ? " is-error" : ""}`}
+          aria-hidden="true"
+        >
+          {[0, 1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className={`app-lock-dot${pin.length > i ? " is-filled" : ""}`}
+            />
+          ))}
+        </div>
+        <div
+          className="app-lock-error-msg"
+          role="status"
+          aria-live="assertive"
+        >
+          {errorMsg}
+        </div>
+      </div>
+
+      <div
+        className="app-lock-keypad"
+        role="group"
+        aria-label="Passcode keypad"
+      >
+        {[
+          ["1", ""],
+          ["2", "ABC"],
+          ["3", "DEF"],
+          ["4", "GHI"],
+          ["5", "JKL"],
+          ["6", "MNO"],
+          ["7", "PQRS"],
+          ["8", "TUV"],
+          ["9", "WXYZ"],
+        ].map(([num, letters]) => (
+          <button
+            key={num}
+            type="button"
+            className="app-lock-key"
+            onClick={() => handleDigit(num)}
+            aria-label={num}
+          >
+            <span className="app-lock-key-num">{num}</span>
+            {letters && (
+              <span className="app-lock-key-letters">{letters}</span>
+            )}
+          </button>
+        ))}
+
+        {biometricsConfigured ? (
+          <button
+            type="button"
+            className="app-lock-action-key"
+            onClick={handleBiometricAuth}
+            aria-label="Unlock with biometrics"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+              <path d="M9 9h.01M15 9h.01M10 13a2 2 0 0 0 4 0m-2 0v2" />
+            </svg>
+          </button>
+        ) : (
+          <div aria-hidden="true" />
+        )}
+
+        <button
+          type="button"
+          className="app-lock-key"
+          onClick={() => handleDigit("0")}
+          aria-label="0"
+        >
+          <span className="app-lock-key-num">0</span>
+        </button>
+
+        <button
+          type="button"
+          className="app-lock-action-key"
+          onClick={handleBackspace}
+          aria-label="Delete last digit"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z" />
+            <line x1="18" y1="9" x2="12" y2="15" />
+            <line x1="12" y1="9" x2="18" y2="15" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* These screens stay presentational. App supplies shared expense data,
    persistence, account actions, and sync state. */
 export default function MobilePrototype({
@@ -5365,6 +5920,28 @@ export default function MobilePrototype({
   const [appSettingsOpen, setAppSettingsOpen] = useState(false);
   const [profileSettingsOpen, setProfileSettingsOpen] = useState(false);
   const [toastMsg, setToastMsg] = useState(null);
+  const [isAppLocked, setIsAppLocked] = useState(() => shouldLockApp());
+
+  useEffect(() => {
+    const handleActivity = () => markActive();
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        if (shouldLockApp()) {
+          setIsAppLocked(true);
+        }
+      } else {
+        markActive();
+      }
+    };
+    window.addEventListener("pointerdown", handleActivity, { passive: true });
+    window.addEventListener("keydown", handleActivity, { passive: true });
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.removeEventListener("pointerdown", handleActivity);
+      window.removeEventListener("keydown", handleActivity);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, []);
   const [isScrolled, setIsScrolled] = useState(false);
   const [dockMinimized, setDockMinimized] = useState(false);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
@@ -6441,11 +7018,21 @@ export default function MobilePrototype({
           onTheme={onTheme}
           onAdvanced={advanced}
           onProfileSettings={openProfileSettings}
+          onSecurity={() => openSheet({ type: "sec" })}
           backupStatus={backupStatus}
           lastBackupAt={lastBackupAt}
           onBackupDownload={onBackupDownload}
           onExpensesCsv={onExpensesCsv}
           onBackupRestore={onBackupRestore}
+        />
+      )}
+      {sheet?.type === "sec" && (
+        <SecuritySheet
+          onClose={close}
+          onLockNow={() => {
+            close();
+            setIsAppLocked(true);
+          }}
         />
       )}
 
@@ -6480,6 +7067,15 @@ export default function MobilePrototype({
             </button>
           )}
         </div>
+      )}
+
+      {isAppLocked && (
+        <AppLockScreen
+          onUnlock={() => {
+            markActive();
+            setIsAppLocked(false);
+          }}
+        />
       )}
     </div>
   );

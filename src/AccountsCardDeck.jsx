@@ -33,15 +33,19 @@ export const formatMoney = (n) =>
   }).format(Number(n) || 0);
 
 export function formatCardNumber(raw = "", isPhone = false, showFull = false) {
-  const digits = String(raw).replace(/\D/g, "");
-  if (!digits) return "";
+  const str = String(raw || "").trim();
+  if (!str) return "";
+  if (str.startsWith("SAV-") || str.startsWith("VAULT-")) return str;
+
+  const digits = str.replace(/\D/g, "");
+  if (!digits) return str;
 
   if (isPhone) {
     if (showFull && digits.length >= 11) {
       return `${digits.slice(0, 5)} ${digits.slice(5, 8)} ${digits.slice(8, 11)}`;
     }
     if (digits.length >= 11) {
-      return `${digits.slice(0, 5)} xxxx ${digits.slice(9, 11)}`;
+      return `${digits.slice(0, 5)} •••• ${digits.slice(9, 11)}`;
     }
     if (digits.length > 5) {
       return `${digits.slice(0, 5)} ${digits.slice(5)}`;
@@ -49,19 +53,19 @@ export function formatCardNumber(raw = "", isPhone = false, showFull = false) {
     return digits;
   }
 
-  // 16-digit bank card
-  if (showFull && digits.length >= 16) {
-    return `${digits.slice(0, 4)} ${digits.slice(4, 8)} ${digits.slice(8, 12)} ${digits.slice(12, 16)}`;
-  }
-  if (digits.length >= 16) {
-    return `${digits.slice(0, 4)} xxxx xxxx ${digits.slice(12, 16)}`;
+  // Bank card:
+  // If showFull is requested (e.g. inside form inputs during entry), display typed digits in readable 4-digit groups
+  if (showFull) {
+    const parts = [];
+    for (let i = 0; i < digits.length && i < 16; i += 4) {
+      parts.push(digits.slice(i, i + 4));
+    }
+    return parts.join(" ");
   }
 
-  const parts = [];
-  for (let i = 0; i < digits.length && i < 16; i += 4) {
-    parts.push(digits.slice(i, i + 4));
-  }
-  return parts.join(" ");
+  // Mask bank cards to last 4 digits for security
+  const last4 = digits.length >= 4 ? digits.slice(-4) : digits;
+  return `•••• •••• •••• ${last4}`;
 }
 
 export function formatExpiry(raw = "") {
@@ -94,7 +98,7 @@ export function WalletCard({
   const isFrozen = Boolean(card.frozen);
 
   const formattedNumber = formatCardNumber(
-    card.number || "",
+    card.last4 || card.number || "",
     isMfs,
     showFullDetails,
   );
@@ -194,18 +198,6 @@ export function WalletCard({
                 <span className="wallet-card-meta-lbl">VALID THRU</span>
                 <span className="wallet-card-meta-val">
                   {formatExpiry(card.expiry) || "MM/YY"}
-                </span>
-              </div>
-            )}
-            {!isMfs && !isSavings && (
-              <div className="wallet-card-expiry-block">
-                <span className="wallet-card-meta-lbl">CVV</span>
-                <span className="wallet-card-meta-val">
-                  {showFullDetails && card.cvv
-                    ? card.cvv
-                    : card.cvv
-                      ? "***"
-                      : "•••"}
                 </span>
               </div>
             )}

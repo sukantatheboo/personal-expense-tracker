@@ -49,9 +49,8 @@ export const DEFAULT_CARDS = [
     network: "mastercard",
     holderName: "John Smith",
     subtitle: "Amazon Platinum",
-    number: "4756 8214 0024 9018",
+    last4: "9018",
     expiry: "12/28",
-    cvv: "654",
     color: "#6358DC",
     gradient: "linear-gradient(135deg, #7c3aed 0%, #6366f1 50%, #4338ca 100%)",
   },
@@ -63,9 +62,8 @@ export const DEFAULT_CARDS = [
     network: "mastercard",
     holderName: "John Smith",
     subtitle: "Platinum Mastercard",
-    number: "5428 1254 0024 4328",
+    last4: "4328",
     expiry: "11/25",
-    cvv: "654",
     color: "#1e293b",
     gradient: "linear-gradient(135deg, #334155 0%, #1e293b 60%, #0f172a 100%)",
   },
@@ -77,9 +75,8 @@ export const DEFAULT_CARDS = [
     network: "mfs",
     holderName: "Personal Account",
     subtitle: "Personal Wallet",
-    number: "01712 345678",
+    last4: "01712 •••678",
     expiry: "",
-    cvv: "",
     color: "#e2136e",
     gradient: "linear-gradient(135deg, #e2136e 0%, #b80053 50%, #800038 100%)",
   },
@@ -91,9 +88,8 @@ export const DEFAULT_CARDS = [
     network: "visa",
     holderName: "Primary Debit",
     subtitle: "BRAC Platinum Visa",
-    number: "4756 8214 0024 9018",
+    last4: "9018",
     expiry: "12/28",
-    cvv: "349",
     color: "#002D62",
     gradient: "linear-gradient(135deg, #002D62 0%, #0b1d3a 65%, #182747 100%)",
   },
@@ -105,9 +101,8 @@ export const DEFAULT_CARDS = [
     network: "none",
     holderName: "Personal Savings",
     subtitle: "High-Yield Vault",
-    number: "SAV-8829-01",
+    last4: "SAV-8829-01",
     expiry: "",
-    cvv: "",
     color: "#047857",
     gradient:
       "linear-gradient(135deg, #065f46 0%, #047857 35%, #064e3b 70%, #022c22 100%)",
@@ -424,18 +419,24 @@ export function loadAccountData(
       }
 
       const existingMatch = DEFAULT_CARDS.find((d) => d.id === id);
+      const { cvv: _cvv, ...safeCard } = card || {};
+      const rawLast4 =
+        safeCard.last4 ||
+        (safeCard.number ? String(safeCard.number).replace(/\D/g, "").slice(-4) : "") ||
+        existingMatch?.last4 ||
+        "";
       cardMap.set(id, {
         ...(existingMatch || {}),
-        ...card,
+        ...safeCard,
         id,
         name: card.name || existingMatch?.name || id,
         holderName:
           card.holderName || existingMatch?.holderName || "Cardholder",
         type: card.type || existingMatch?.type || "credit",
         network: card.network || existingMatch?.network || "visa",
-        number: card.number || existingMatch?.number || "",
+        last4: rawLast4,
+        number: safeCard.number || (rawLast4 ? `•••• •••• •••• ${rawLast4}` : ""),
         expiry: card.expiry || existingMatch?.expiry || "",
-        cvv: card.cvv || existingMatch?.cvv || "",
         color: card.color || existingMatch?.color || "#1e293b",
         gradient: card.gradient || existingMatch?.gradient || "",
         createdAt,
@@ -496,9 +497,9 @@ export function loadAccountData(
             holderName: "Cardholder",
             type: "debit",
             network: "visa",
+            last4: "",
             number: "",
             expiry: "",
-            cvv: "",
             color: "#1e293b",
             gradient:
               "linear-gradient(135deg, #334155 0%, #1e293b 60%, #0f172a 100%)",

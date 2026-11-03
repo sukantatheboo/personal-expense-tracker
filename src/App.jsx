@@ -2679,9 +2679,15 @@ export default function App() {
   function handleAddCard(newCard) {
     const cardId = newCard.id || makeId();
     const now = Date.now();
+    const { cvv: _omittedCvv, ...safeCard } = newCard || {};
+    const last4 =
+      safeCard.last4 ||
+      (safeCard.number ? String(safeCard.number).replace(/\D/g, "").slice(-4) : "");
     const card = {
-      ...newCard,
+      ...safeCard,
       id: cardId,
+      last4,
+      number: safeCard.number || (last4 ? `•••• •••• •••• ${last4}` : ""),
       createdAt: now,
       updatedAt: now,
     };
@@ -2788,19 +2794,28 @@ export default function App() {
   function handleUpdateCard(updatedCard) {
     if (!updatedCard?.id) return updatedCard;
     const now = Date.now();
-    setRecordDeleted("cards", updatedCard.id, false);
+    const { cvv: _omittedCvv, ...safeCard } = updatedCard || {};
+    const last4 =
+      safeCard.last4 ||
+      (safeCard.number ? String(safeCard.number).replace(/\D/g, "").slice(-4) : "");
+    const cleanCard = {
+      ...safeCard,
+      last4,
+      number: safeCard.number || (last4 ? `•••• •••• •••• ${last4}` : ""),
+    };
+    setRecordDeleted("cards", cleanCard.id, false);
     setAccountData((current) => {
       const currentCards = Array.isArray(current.settings.cards)
         ? current.settings.cards
         : [];
-      const exists = currentCards.some((c) => c.id === updatedCard.id);
+      const exists = currentCards.some((c) => c.id === cleanCard.id);
       const newCards = exists
         ? currentCards.map((c) =>
-            c.id === updatedCard.id
-              ? { ...c, ...updatedCard, updatedAt: now }
+            c.id === cleanCard.id
+              ? { ...c, ...cleanCard, updatedAt: now }
               : c,
           )
-        : [...currentCards, { ...updatedCard, createdAt: now, updatedAt: now }];
+        : [...currentCards, { ...cleanCard, createdAt: now, updatedAt: now }];
       return {
         ...current,
         settings: {
@@ -2811,7 +2826,7 @@ export default function App() {
         },
       };
     });
-    return updatedCard;
+    return cleanCard;
   }
 
   function toggleMobileRecurring(scheduleId) {

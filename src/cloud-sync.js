@@ -1,5 +1,10 @@
 import { supabase } from "./push.js";
 import { emptyAccountData, loadAccountData } from "./data.js";
+import {
+  getSessionKey,
+  encryptDataWithPassphrase,
+  decryptDataWithPassphrase,
+} from "./security.js";
 
 export const CLOUD_SYNC_USER_KEY = "spend-cloud-sync-user-v1";
 
@@ -209,6 +214,7 @@ async function loadLegacyCloudData(userId) {
   if (snapshotResult.error) throw snapshotResult.error;
 
   const snapshot = snapshotResult.data;
+  const snapshotData = snapshot?.data ? await maybeDecryptSnapshot(snapshot.data) : null;
   const normalizedSchemaUnavailable =
     isNormalizedAccountSchemaUnavailable(settingsResult.error) ||
     isNormalizedAccountSchemaUnavailable(transactionsResult.error);
@@ -224,16 +230,16 @@ async function loadLegacyCloudData(userId) {
     };
   }
 
-  const legacyAccounts = snapshot.data?.accountData ?? emptyAccountData();
+  const legacyAccounts = snapshotData?.accountData ?? emptyAccountData();
   if (normalizedSchemaUnavailable) {
     return {
       ...snapshot,
       normalizedAccountSync: false,
       data: {
-        ...snapshot.data,
+        ...snapshotData,
         accountData: mergeAccountDataWithRawSnapshot(
           legacyAccounts,
-          snapshot.data,
+          snapshotData,
         ),
       },
     };
@@ -293,10 +299,10 @@ async function loadLegacyCloudData(userId) {
     ...snapshot,
     normalizedAccountSync: true,
     data: {
-      ...snapshot.data,
+      ...snapshotData,
       accountData: mergeAccountDataWithRawSnapshot(
         normalizedAccounts,
-        snapshot.data,
+        snapshotData,
       ),
     },
   };
@@ -317,19 +323,24 @@ export async function loadCloudData(userId) {
 
     if (!rpcResult.error && rpcResult.data) {
       const rpcData = rpcResult.data;
-      const rawData = rawSnapshotResult?.data?.data;
+      const rawData = rawSnapshotResult?.data?.data
+        ? await maybeDecryptSnapshot(rawSnapshotResult.data.data)
+        : null;
+      const effectiveRpcData = rpcData.data
+        ? await maybeDecryptSnapshot(rpcData.data)
+        : null;
       const rawUpdatedAt = rawSnapshotResult?.data?.updated_at;
       const effectiveUpdatedAt = rawUpdatedAt || rpcData.updated_at;
 
-      if (rpcData.data && rawData) {
+      if (effectiveRpcData && rawData) {
         return {
           ...rpcData,
           updated_at: effectiveUpdatedAt,
           data: {
             ...rawData,
-            ...rpcData.data,
+            ...effectiveRpcData,
             accountData: mergeAccountDataWithRawSnapshot(
-              rpcData.data.accountData,
+              effectiveRpcData.accountData,
               rawData,
             ),
           },
@@ -338,7 +349,7 @@ export async function loadCloudData(userId) {
       return {
         ...rpcData,
         updated_at: effectiveUpdatedAt,
-        data: rpcData.data || rawData || null,
+        data: effectiveRpcData || rawData || null,
       };
     }
   } catch {
@@ -388,12 +399,38 @@ async function executeSaveQuery(userId, payload, expectedUpdatedAt) {
     .single();
 }
 
+async function maybeDecryptSnapshot(payload) {
+  if (payload && typeof payload === "object" && payload._encrypted) {
+    const key = getSessionKey();
+    if (key) {
+      try {
+        return await decryptDataWithPassphrase(payload, key);
+      } catch (err) {
+        console.warn("Could not decrypt zero-knowledge cloud snapshot", err);
+        return { ...payload, _decryptionFailed: true };
+      }
+    }
+    return { ...payload, _decryptionPending: true };
+  }
+  return payload;
+}
+
 export async function saveCloudData(userId, data, expectedUpdatedAt = null) {
   if (!supabase) throw new Error("Cloud sync is not configured.");
 
+  const key = getSessionKey();
+  let payload = data;
+  if (key && data && !data._encrypted) {
+    try {
+      payload = await encryptDataWithPassphrase(data, key);
+    } catch (err) {
+      console.warn("Failed to encrypt cloud payload with session key, using unencrypted fallback", err);
+    }
+  }
+
   const { data: saved, error } = await executeSaveQuery(
     userId,
-    data,
+    payload,
     expectedUpdatedAt,
   );
   if (!error) return saved?.updated_at ?? null;

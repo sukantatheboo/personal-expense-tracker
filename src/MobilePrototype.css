@@ -6458,3 +6458,199 @@ a:active,
   letter-spacing: 0.06em;
   vertical-align: middle;
 }
+
+/* ───────────── Native App Lock Screen & Passcode Keypad ───────────── */
+.mobile-prototype .app-lock-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: calc(env(safe-area-inset-top, 24px) + 32px) 24px calc(env(safe-area-inset-bottom, 20px) + 24px);
+  background: var(--bg);
+  color: var(--ink);
+  animation: prototype-fade-in 220ms ease-out both;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.mobile-prototype .app-lock-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  margin-top: 16px;
+}
+
+.mobile-prototype .app-lock-icon-wrap {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 20px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+  margin-bottom: 20px;
+  color: var(--g);
+}
+
+.mobile-prototype .app-lock-icon-wrap svg {
+  width: 28px;
+  height: 28px;
+}
+
+.mobile-prototype .app-lock-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 850;
+  letter-spacing: -0.025em;
+  color: var(--ink);
+}
+
+.mobile-prototype .app-lock-subtitle {
+  margin: 6px 0 0;
+  font-size: 13.5px;
+  color: var(--mut);
+  font-weight: 600;
+}
+
+.mobile-prototype .app-lock-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin: 28px 0 10px;
+}
+
+.mobile-prototype .app-lock-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--mut);
+  background: transparent;
+  transition: all 180ms cubic-bezier(0.2, 0.85, 0.35, 1.2);
+}
+
+.mobile-prototype .app-lock-dot.is-filled {
+  background: var(--ink);
+  border-color: var(--ink);
+  transform: scale(1.15);
+}
+
+.mobile-prototype .app-lock-dots.is-error {
+  animation: app-lock-shake 400ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+.mobile-prototype .app-lock-dots.is-error .app-lock-dot {
+  border-color: var(--bad, #c0483a);
+  background: var(--bad, #c0483a);
+}
+
+.mobile-prototype .app-lock-error-msg {
+  color: var(--bad, #c0483a);
+  font-size: 13px;
+  font-weight: 750;
+  margin-top: 10px;
+  min-height: 18px;
+}
+
+.mobile-prototype .app-lock-keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px 24px;
+  width: 100%;
+  max-width: 290px;
+  margin-bottom: 8px;
+}
+
+.mobile-prototype .app-lock-key {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  margin: 0 auto;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.04);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 120ms ease, background-color 120ms ease;
+}
+
+.mobile-prototype .app-lock-key:active {
+  transform: scale(0.92);
+  background: var(--field);
+}
+
+.mobile-prototype .app-lock-key-num {
+  font-size: 26px;
+  font-weight: 750;
+  line-height: 1;
+}
+
+.mobile-prototype .app-lock-key-letters {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--mut);
+  margin-top: 2px;
+}
+
+.mobile-prototype .app-lock-action-key {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  margin: 0 auto;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 120ms ease;
+}
+
+.mobile-prototype .app-lock-action-key:active {
+  transform: scale(0.9);
+}
+
+.mobile-prototype .app-lock-action-key svg {
+  width: 24px;
+  height: 24px;
+}
+
+@keyframes app-lock-shake {
+  10%, 90% { transform: translate3d(-3px, 0, 0); }
+  20%, 80% { transform: translate3d(5px, 0, 0); }
+  30%, 50%, 70% { transform: translate3d(-6px, 0, 0); }
+  40%, 60% { transform: translate3d(6px, 0, 0); }
+}
+
+/* ───────────── Security & Privacy Settings Sheet ───────────── */
+.mobile-prototype .security-badge-e2e {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.28);
+  color: #10b981;
+  font-size: 11.5px;
+  font-weight: 800;
+}
+
+.mobile-prototype .security-badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
