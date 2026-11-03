@@ -5256,83 +5256,38 @@ function AppSettingsPage({
             onChange={(event) => onReminder(event.target.value)}
           />
         </div>
-        {pushBackendConfigured && profile?.connected ? (
-          <>
-            <button
-              className="ri settings-action"
-              type="button"
-              role="switch"
-              aria-checked={backgroundPushEnabled}
-              disabled={
-                !backgroundPushEnabled &&
-                (notificationBlocked || notificationUnavailable)
-              }
-              onClick={onToggleNotifications}
-            >
-              <i className="ic" style={{ "--c": "#2f9a6b" }}>
-                <Icon n="bell" />
-              </i>
-              <span className="nm">
-                <b>Background reminders</b>
-                <small>{notificationLabel}</small>
-              </span>
-              <span
-                className={"sw " + (backgroundPushEnabled ? "on" : "")}
-                aria-hidden="true"
-              />
-            </button>
-            {backgroundPushEnabled && onTestNotification && (
-              <button
-                className="ri settings-action"
-                type="button"
-                onClick={onTestNotification}
-              >
-                <i className="ic" style={{ "--c": "#3b82c4" }}>
-                  <Icon n="bell" />
-                </i>
-                <span className="nm">
-                  <b>Send test notification</b>
-                  <small>Fires in 3s (lock screen or switch apps)</small>
-                </span>
-                <span className="settings-chevron" aria-hidden="true">
-                  <Icon n="r" />
-                </span>
-              </button>
-            )}
-          </>
-        ) : pushBackendConfigured ? (
+        <button
+          className="ri settings-action"
+          type="button"
+          disabled={notificationBlocked || notificationUnavailable}
+          onClick={onToggleNotifications}
+        >
+          <i className="ic" style={{ "--c": "#2f9a6b" }}>
+            <Icon n="bell" />
+          </i>
+          <span className="nm">
+            <b>Built-in notifications</b>
+            <small>{notificationLabel}</small>
+          </span>
+          <span className="settings-inline-action">
+            {notificationPermission === "granted" ? "Active" : "Enable"}
+          </span>
+        </button>
+        {onTestNotification && (
           <button
             className="ri settings-action"
             type="button"
-            onClick={onSignIn}
+            onClick={onTestNotification}
           >
-            <i className="ic" style={{ "--c": "#2f9a6b" }}>
+            <i className="ic" style={{ "--c": "#3b82c4" }}>
               <Icon n="bell" />
             </i>
             <span className="nm">
-              <b>Background reminders</b>
-              <small>Sign in to enable push reminders</small>
+              <b>Send test notification</b>
+              <small>Tests built-in notification banner &amp; tone</small>
             </span>
             <span className="settings-chevron" aria-hidden="true">
               <Icon n="r" />
-            </span>
-          </button>
-        ) : (
-          <button
-            className="ri settings-action"
-            type="button"
-            disabled={notificationBlocked || notificationUnavailable}
-            onClick={onToggleNotifications}
-          >
-            <i className="ic" style={{ "--c": "#2f9a6b" }}>
-              <Icon n="bell" />
-            </i>
-            <span className="nm">
-              <b>System notifications</b>
-              <small>{notificationLabel}</small>
-            </span>
-            <span className="settings-inline-action">
-              {notificationPermission === "granted" ? "Test" : "Enable"}
             </span>
           </button>
         )}
@@ -5391,8 +5346,6 @@ export default function MobilePrototype({
   accountStatus,
   authBusy,
   onResumeSync,
-  inAppNotification,
-  onDismissNotification,
 }) {
   const [tab, setTab] = useState("home");
   const cards = Array.isArray(S.cards) ? S.cards : [];
@@ -6145,69 +6098,7 @@ export default function MobilePrototype({
         "--sheet-exit-from-opacity": sheetExitFromOpacity,
       }}
     >
-      {inAppNotification && (
-        <div
-          className="in-app-notification-banner"
-          role="alert"
-          aria-live="assertive"
-          onClick={() => {
-            triggerHaptic("selection");
-            if (inAppNotification.onAction) {
-              inAppNotification.onAction();
-            } else if (inAppNotification.tab) {
-              nav(inAppNotification.tab);
-            } else {
-              nav("activity");
-            }
-            onDismissNotification?.();
-          }}
-        >
-          <div
-            className={`in-app-notification-icon${
-              inAppNotification.iconType === "budget"
-                ? " is-budget"
-                : inAppNotification.iconType === "danger"
-                  ? " is-danger"
-                  : ""
-            }`}
-          >
-            {inAppNotification.icon || <Icon n="bell" />}
-          </div>
-          <div className="in-app-notification-content">
-            <span className="in-app-notification-title">
-              {inAppNotification.title}
-            </span>
-            <span className="in-app-notification-desc">
-              {inAppNotification.body}
-            </span>
-          </div>
-          {inAppNotification.actionLabel && (
-            <button
-              type="button"
-              className="in-app-notification-action"
-              onClick={(e) => {
-                e.stopPropagation();
-                triggerHaptic("selection");
-                inAppNotification.onAction?.();
-                onDismissNotification?.();
-              }}
-            >
-              {inAppNotification.actionLabel}
-            </button>
-          )}
-          <button
-            type="button"
-            className="in-app-notification-close"
-            aria-label="Dismiss notification"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDismissNotification?.();
-            }}
-          >
-            ×
-          </button>
-        </div>
-      )}
+      {/* All notifications delivered via native built-in notifications on iOS and Android */}
       <header
         className={`prototype-header${isScrolled ? " is-scrolled" : ""}${settingsRoute ? " is-settings-route" : ""}`}
       >

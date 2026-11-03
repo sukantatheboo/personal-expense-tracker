@@ -1,5 +1,12 @@
 {
   "appId": "com.sukantapal.spend",
   "appName": "Spend",
-  "webDir": "dist"
+  "webDir": "dist",
+  "plugins": {
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_icon_config_sample",
+      "iconColor": "#10b981",
+      "sound": "reminder.wav"
+    }
+  }
 }

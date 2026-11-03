@@ -41,6 +41,16 @@ import {
   saveCloudData,
   subscribeToCloudChanges,
 } from "./cloud-sync.js";
+import { Capacitor } from "@capacitor/core";
+import {
+  checkAndNotifyNewMonth,
+  checkNotificationPermission,
+  notifyNewUserSignedIn,
+  requestNotificationPermission,
+  sendNativeBuiltinNotification,
+  setupNativeNotificationChannels,
+  setupNotificationListeners,
+} from "./notifications.js";
 
 const CURRENCY_API = "https://api.frankfurter.dev/v2";
 const LOCAL_DATA_OWNER_KEY = "spend-local-data-owner-v1";
@@ -972,8 +982,6 @@ export default function App() {
   );
   const [conversionFailed, setConversionFailed] = useState(false);
   const [recurringReminder, setRecurringReminder] = useState("");
-  const [inAppNotification, setInAppNotification] = useState(null);
-  const inAppNotifTimerRef = useRef(null);
   const [notificationPermission, setNotificationPermission] = useState(() =>
     typeof window !== "undefined" && "Notification" in window
       ? window.Notification.permission
@@ -1339,6 +1347,17 @@ export default function App() {
   }, [reminderTime]);
 
   useEffect(() => {
+    setupNativeNotificationChannels();
+    checkNotificationPermission().then((perm) => {
+      setNotificationPermission(perm);
+    });
+    const cleanup = setupNotificationListeners((tab) => {
+      if (tab) navigateMobile(tab);
+    });
+    return cleanup;
+  }, []);
+
+  useEffect(() => {
     if (!supabase) return undefined;
     let active = true;
     supabase.auth.getSession().then(({ data, error }) => {
@@ -1348,6 +1367,9 @@ export default function App() {
       }
       if (active) {
         const user = data.session?.user || null;
+        if (user) {
+          notifyNewUserSignedIn(user);
+        }
         if (user && localDataOwnerRef.current !== user.id) {
           selectLocalDataForUser(user.id);
         }
@@ -1371,6 +1393,9 @@ export default function App() {
       const user = session?.user || null;
       const previousUserId = authUserIdRef.current || localDataOwnerRef.current;
       setPushUser(user);
+      if (user && event === "SIGNED_IN") {
+        notifyNewUserSignedIn(user);
+      }
       if (event === "PASSWORD_RECOVERY") {
         setAuthMode("update-password");
         setAuthStatus("");
@@ -2021,119 +2046,23 @@ export default function App() {
   }
 
   const dismissInAppNotification = useCallback(() => {
-    if (inAppNotifTimerRef.current) {
-      window.clearTimeout(inAppNotifTimerRef.current);
-      inAppNotifTimerRef.current = null;
-    }
-    setInAppNotification(null);
+    // Retained for backward-compatibility with consumers
   }, []);
 
   const showInAppNotification = useCallback(
-    ({
-      title,
-      body,
-      icon,
-      iconType = "bell",
-      actionLabel,
-      onAction,
-      tab = "activity",
-      duration = 6500,
-    }) => {
-      if (inAppNotifTimerRef.current) {
-        window.clearTimeout(inAppNotifTimerRef.current);
-        inAppNotifTimerRef.current = null;
-      }
-      setInAppNotification({
-        id: makeId(),
+    ({ title, body, tab = "activity" }) => {
+      // Replaced HUD banners: routes directly to native built-in notification
+      void sendNativeBuiltinNotification({
         title,
         body,
-        icon,
-        iconType,
-        actionLabel,
-        onAction,
         tab,
-        onDismiss: dismissInAppNotification,
+        tone: "reminder",
       });
-      inAppNotifTimerRef.current = window.setTimeout(() => {
-        setInAppNotification(null);
-        inAppNotifTimerRef.current = null;
-      }, duration);
     },
-    [dismissInAppNotification],
+    [],
   );
 
-  function sendSystemNotificationDirect({
-    title,
-    body,
-    tag,
-    tab = "activity",
-  }) {
-    if (
-      typeof document !== "undefined" &&
-      document.visibilityState === "visible"
-    ) {
-      return;
-    }
-    if (
-      !("Notification" in window) ||
-      window.Notification.permission !== "granted"
-    )
-      return;
-
-    const options = {
-      body,
-      icon: new URL("./icons/icon-192.png", window.location.origin).href,
-      badge: new URL("./icons/icon-180.png", window.location.origin).href,
-      tag: tag || "spend-notification",
-      renotify: true,
-      vibrate: [200, 100, 200],
-      data: {
-        url: window.location.origin + window.location.pathname,
-        tab,
-      },
-    };
-
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker
-        .getRegistration()
-        .then((registration) =>
-          registration
-            ? registration.showNotification(title, options)
-            : new window.Notification(title, options),
-        )
-        .catch((error) => {
-          setNotificationStatus(
-            `Could not show a system notification: ${error.message}`,
-          );
-        });
-    } else {
-      try {
-        new window.Notification(title, options);
-      } catch (error) {
-        setNotificationStatus(
-          `Could not show a system notification: ${error.message}`,
-        );
-      }
-    }
-  }
-
-  function sendSystemNotification(dueExpenses) {
-    if (!dueExpenses.length) return;
-    const details = dueExpenses
-      .map((expense) => `${expense.description} (${formatDate(expense.date)})`)
-      .join(", ");
-    sendSystemNotificationDirect({
-      title:
-        dueExpenses.length === 1
-          ? "Recurring expense due"
-          : "Recurring expenses due",
-      body: details,
-      tag: `spend-recurring-${localDate()}`,
-      tab: "activity",
-    });
-  }
-
-  function notifyDueExpenses(dueExpenses) {
+  async function notifyDueExpenses(dueExpenses) {
     if (!dueExpenses.length) return;
     pendingDueRef.current.push(...dueExpenses);
 
@@ -2169,28 +2098,17 @@ export default function App() {
         : `Recurring expenses due today or earlier were added: ${details}.`,
     );
 
-    // 1. Foreground: interactive in-app banner HUD
-    showInAppNotification({
+    // Native built-in notification for iOS and Android
+    await sendNativeBuiltinNotification({
       title,
       body,
-      iconType: "calendar",
-      actionLabel: "View in Activity",
+      tag: `spend-recurring-${localDate()}`,
       tab: "activity",
-      onAction: () => navigateMobile("activity"),
+      tone: "reminder",
     });
-
-    // 2. Background: OS notification
-    if (
-      typeof document !== "undefined" &&
-      document.visibilityState === "hidden" &&
-      notificationPermission === "granted" &&
-      !backgroundPushEnabled
-    ) {
-      sendSystemNotification(unnotified);
-    }
   }
 
-  const checkDailyReminder = useCallback(() => {
+  const checkDailyReminder = useCallback(async () => {
     const today = localDate();
     try {
       if (localStorage.getItem(LAST_DAILY_REMINDER_KEY) === today) return;
@@ -2214,28 +2132,17 @@ export default function App() {
     const body =
       "Don’t forget to track today's expenses to keep your budget on target.";
 
-    if (
-      typeof document !== "undefined" &&
-      document.visibilityState === "visible"
-    ) {
-      showInAppNotification({
-        title,
-        body,
-        iconType: "bell",
-        actionLabel: "Add expense",
-        tab: "home",
-      });
-    } else if (notificationPermission === "granted") {
-      sendSystemNotificationDirect({
-        title,
-        body,
-        tag: `spend-daily-${today}`,
-        tab: "home",
-      });
-    }
-  }, [expenses, reminderTime, notificationPermission, showInAppNotification]);
+    // Native built-in notification for iOS and Android
+    await sendNativeBuiltinNotification({
+      title,
+      body,
+      tag: `spend-daily-${today}`,
+      tab: "home",
+      tone: "reminder",
+    });
+  }, [expenses, reminderTime]);
 
-  const checkBudgetMilestones = useCallback(() => {
+  const checkBudgetMilestones = useCallback(async () => {
     const b = Number(budgets[selectedMonth] || 0);
     if (b <= 0) return;
     const pct = (monthlyTotal / b) * 100;
@@ -2251,58 +2158,28 @@ export default function App() {
       } catch {}
       const title = "Budget limit reached";
       const body = `You've spent ৳${monthlyTotal.toLocaleString("en-IN")} of your ৳${b.toLocaleString("en-IN")} monthly budget.`;
-      if (
-        typeof document !== "undefined" &&
-        document.visibilityState === "visible"
-      ) {
-        showInAppNotification({
-          title,
-          body,
-          iconType: "danger",
-          actionLabel: "View budget",
-          tab: "plans",
-        });
-      } else if (notificationPermission === "granted") {
-        sendSystemNotificationDirect({
-          title,
-          body,
-          tag: `spend-budget-${selectedMonth}-100`,
-          tab: "plans",
-        });
-      }
+      await sendNativeBuiltinNotification({
+        title,
+        body,
+        tag: `spend-budget-${selectedMonth}-100`,
+        tab: "plans",
+        tone: "reminder",
+      });
     } else if (pct >= 80 && alertedMilestone < 80) {
       try {
         localStorage.setItem(alertKey, "80");
       } catch {}
       const title = "Budget alert: 80% used";
       const body = `You've used ${Math.round(pct)}% of your ৳${b.toLocaleString("en-IN")} monthly limit.`;
-      if (
-        typeof document !== "undefined" &&
-        document.visibilityState === "visible"
-      ) {
-        showInAppNotification({
-          title,
-          body,
-          iconType: "budget",
-          actionLabel: "View budget",
-          tab: "plans",
-        });
-      } else if (notificationPermission === "granted") {
-        sendSystemNotificationDirect({
-          title,
-          body,
-          tag: `spend-budget-${selectedMonth}-80`,
-          tab: "plans",
-        });
-      }
+      await sendNativeBuiltinNotification({
+        title,
+        body,
+        tag: `spend-budget-${selectedMonth}-80`,
+        tab: "plans",
+        tone: "reminder",
+      });
     }
-  }, [
-    budgets,
-    monthlyTotal,
-    selectedMonth,
-    notificationPermission,
-    showInAppNotification,
-  ]);
+  }, [budgets, monthlyTotal, selectedMonth]);
 
   const processDueSchedules = useRef(null);
   processDueSchedules.current = () => {
@@ -2367,11 +2244,13 @@ export default function App() {
     processDueSchedules.current?.();
     checkDailyReminder();
     checkBudgetMilestones();
+    checkAndNotifyNewMonth(selectedMonth);
 
     const intervalTimer = window.setInterval(() => {
       processDueSchedules.current?.();
       checkDailyReminder();
       checkBudgetMilestones();
+      checkAndNotifyNewMonth(selectedMonth);
     }, 30_000);
 
     const handleVisibility = () => {
@@ -2379,6 +2258,7 @@ export default function App() {
         processDueSchedules.current?.();
         checkDailyReminder();
         checkBudgetMilestones();
+        checkAndNotifyNewMonth(selectedMonth);
       }
     };
     document.addEventListener("visibilitychange", handleVisibility);
@@ -2387,7 +2267,7 @@ export default function App() {
       window.clearInterval(intervalTimer);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, [checkDailyReminder, checkBudgetMilestones]);
+  }, [checkDailyReminder, checkBudgetMilestones, selectedMonth]);
 
   useEffect(() => {
     if (!conversionOpen) return undefined;
@@ -3468,6 +3348,10 @@ export default function App() {
           "Check your email to confirm your account, then sign in.",
         );
       } else {
+        const signedInUser = result.data?.session?.user || result.data?.user;
+        if (signedInUser) {
+          notifyNewUserSignedIn(signedInUser);
+        }
         setAuthStatus(
           authMode === "sign-up"
             ? "Account created. You can now enable background reminders."
@@ -3600,6 +3484,26 @@ export default function App() {
   }
 
   async function toggleNotifications() {
+    if (Capacitor.isNativePlatform()) {
+      const granted = await requestNotificationPermission();
+      const perm = await checkNotificationPermission();
+      setNotificationPermission(perm);
+      if (granted) {
+        setNotificationStatus("Native notifications are enabled.");
+        await sendNativeBuiltinNotification({
+          title: "Spend notifications enabled",
+          body: "Native built-in notifications are active on this device.",
+          tag: "spend-test-confirmation",
+          tone: "reminder",
+        });
+      } else {
+        setNotificationStatus(
+          "Allow notifications in device settings, then reload Spend.",
+        );
+      }
+      return;
+    }
+
     if (!pushBackendConfigured) {
       if (!("Notification" in window)) {
         setNotificationPermission("unsupported");
@@ -3629,8 +3533,14 @@ export default function App() {
         return;
       }
       setNotificationStatus(
-        "Notifications are allowed. Background reminders need backend setup.",
+        "Notifications are allowed.",
       );
+      await sendNativeBuiltinNotification({
+        title: "Spend notifications enabled",
+        body: "Built-in notifications are active on this device.",
+        tag: "spend-test-confirmation",
+        tone: "reminder",
+      });
       return;
     }
     if (!pushUser) {
@@ -3701,18 +3611,12 @@ export default function App() {
       setNotificationStatus(
         "Background reminders are enabled. You’ll get a push when a recurring expense is due.",
       );
-      if ("serviceWorker" in navigator) {
-        const registration = await navigator.serviceWorker.getRegistration();
-        if (registration) {
-          await registration.showNotification("Spend notifications enabled", {
-            body: "Background reminders are active on this device.",
-            icon: new URL("./icons/icon-192.png", window.location.origin).href,
-            badge: new URL("./icons/icon-180.png", window.location.origin).href,
-            tag: "spend-test-confirmation",
-            vibrate: [200, 100, 200],
-          });
-        }
-      }
+      await sendNativeBuiltinNotification({
+        title: "Spend notifications enabled",
+        body: "Background reminders are active on this device.",
+        tag: "spend-test-confirmation",
+        tone: "reminder",
+      });
     } catch (error) {
       setNotificationStatus(
         `Could not enable background reminders: ${error.message}`,
@@ -3722,51 +3626,51 @@ export default function App() {
 
   async function handleTestNotification() {
     setNotificationStatus(
-      "Test notification will fire in 3 seconds. Lock your screen or switch apps now.",
+      "Sending native test notification…",
     );
     window.setTimeout(async () => {
       try {
-        if ("serviceWorker" in navigator) {
-          const registration = await navigator.serviceWorker.getRegistration();
-          if (registration) {
-            await registration.showNotification("Spend test reminder", {
-              body: "Background push notifications are working properly!",
-              icon: new URL("./icons/icon-192.png", window.location.origin)
-                .href,
-              badge: new URL("./icons/icon-180.png", window.location.origin)
-                .href,
-              tag: "spend-manual-test",
-              vibrate: [200, 100, 200],
-            });
-            return;
-          }
-        }
-        if (
-          "Notification" in window &&
-          window.Notification.permission === "granted"
-        ) {
-          new window.Notification("Spend test reminder", {
-            body: "Background push notifications are working properly!",
-            icon: new URL("./icons/icon-192.png", window.location.origin).href,
-          });
+        const sent = await sendNativeBuiltinNotification({
+          title: "Spend test reminder",
+          body: "Built-in notifications with custom tones are working properly!",
+          tag: "spend-manual-test",
+          tone: "reminder",
+        });
+        if (sent) {
+          setNotificationStatus("Test notification sent successfully.");
+        } else {
+          setNotificationStatus(
+            "Could not trigger test notification. Check permissions.",
+          );
         }
       } catch (error) {
         setNotificationStatus(
           `Could not trigger test notification: ${error.message}`,
         );
       }
-    }, 3000);
+    }, 1500);
   }
 
   useEffect(() => {
     if (
-      typeof document !== "undefined" &&
-      document.visibilityState === "hidden" &&
-      notificationPermission === "granted" &&
       pendingDueRef.current.length &&
       !backgroundPushEnabled
     ) {
-      sendSystemNotification([...pendingDueRef.current]);
+      const due = [...pendingDueRef.current];
+      pendingDueRef.current = [];
+      const details = due
+        .map((expense) => `${expense.description} (${formatDate(expense.date)})`)
+        .join(", ");
+      void sendNativeBuiltinNotification({
+        title:
+          due.length === 1
+            ? "Recurring expense due"
+            : "Recurring expenses due",
+        body: details,
+        tag: `spend-recurring-${localDate()}`,
+        tab: "activity",
+        tone: "reminder",
+      });
     }
   }, [notificationPermission, backgroundPushEnabled]);
 
@@ -3911,8 +3815,6 @@ export default function App() {
         accountStatus={cloudSyncStatus || authStatus}
         authBusy={authBusy}
         onSignIn={openSignInModal}
-        inAppNotification={inAppNotification}
-        onDismissNotification={dismissInAppNotification}
       />
       {authModalOpen &&
         (!pushUser || authMode === "update-password" || authModalClosing) &&

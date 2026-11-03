@@ -9,12 +9,17 @@
     "preview": "vite preview",
     "build:ios": "vite build --base=./",
     "sync:ios": "npm run build:ios && cap sync ios",
-    "open:ios": "npm run sync:ios && cap open ios"
+    "open:ios": "npm run sync:ios && cap open ios",
+    "sync:android": "npm run build:ios && cap sync android",
+    "open:android": "npm run sync:android && cap open android",
+    "sync:all": "npm run build:ios && cap sync"
   },
   "dependencies": {
+    "@capacitor/android": "^8.6.0",
     "@capacitor/core": "^8.6.0",
     "@capacitor/haptics": "^8.0.2",
     "@capacitor/ios": "^8.6.0",
+    "@capacitor/local-notifications": "^8.3.1",
     "@supabase/supabase-js": "^2.118.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
