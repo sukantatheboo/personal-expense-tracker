@@ -1,12 +1,11 @@
 /**
- * Zero-Knowledge Client-Side Encryption & Native App Lock Engine
+ * Native App Lock & Biometrics Security Engine
  *
  * Implements:
- * 1. AES-GCM-256 authenticated encryption with PBKDF2 (100,000 rounds, SHA-256) key derivation.
- * 2. Device App Lock with PIN hashing (PBKDF2 + cryptographically random salt).
- * 3. Biometric Authentication via standard WebAuthn API (Face ID, Touch ID, Windows Hello, Android Biometrics).
- * 4. Auto-lock timeout management on background / visibilitychange.
- * 5. Dedicated End-to-End Cloud Encryption (decoupled from device-level 4-digit PIN).
+ * 1. Device App Lock with PIN hashing (PBKDF2 with 100,000 rounds + cryptographically random salt).
+ * 2. Biometric Authentication via standard WebAuthn API (Face ID, Touch ID, Windows Hello, Android Biometrics).
+ * 3. Auto-lock timeout management on background / visibilitychange.
+ * 4. Manual instant screen lock.
  */
 
 const PIN_STORAGE_KEY = "spend-security-pin-v1";
@@ -14,15 +13,39 @@ const PIN_SALT_KEY = "spend-security-salt-v1";
 const BIOMETRIC_KEY_ID = "spend-biometric-credential-v1";
 const LOCK_TIMEOUT_KEY = "spend-lock-timeout-v1";
 const LAST_ACTIVE_KEY = "spend-last-active-v1";
+const SESSION_UNLOCKED_KEY = "spend-session-unlocked-v1";
 
-// Dedicated End-to-End Cloud Encryption keys (distinct from 4-digit screen lock PIN)
-const CLOUD_E2E_VERIFIER_KEY = "spend-cloud-e2e-verifier-v1";
-const CLOUD_E2E_SALT_KEY = "spend-cloud-e2e-salt-v1";
-const CLOUD_E2E_ENABLED_KEY = "spend-cloud-e2e-enabled-v1";
+function isSessionUnlocked() {
+  try {
+    return sessionStorage.getItem(SESSION_UNLOCKED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
 
-// In-memory runtime state
-let cloudEncryptionPassphrase = null;
-let isAppUnlockedInSession = false;
+function setSessionUnlocked(unlocked) {
+  try {
+    if (unlocked) {
+      sessionStorage.setItem(SESSION_UNLOCKED_KEY, "1");
+    } else {
+      sessionStorage.removeItem(SESSION_UNLOCKED_KEY);
+    }
+  } catch {
+    // ignore
+  }
+}
+
+function ensureSubtleCrypto() {
+  if (
+    typeof globalThis === "undefined" ||
+    !globalThis.crypto ||
+    !globalThis.crypto.subtle
+  ) {
+    throw new Error(
+      "Web Cryptography API is unavailable. App Lock requires a secure context (HTTPS or localhost).",
+    );
+  }
+}
 
 /* ───────────── Helper ArrayBuffer / Base64 conversions ───────────── */
 function bufferToBase64(buffer) {
@@ -49,78 +72,12 @@ function getRandomBytes(length = 16) {
   return array;
 }
 
-/* ───────────── PBKDF2 Key Derivation ───────────── */
-export async function deriveKeyFromPassphrase(passphrase, saltBuffer) {
-  const encoder = new TextEncoder();
-  const passphraseKey = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(passphrase),
-    { name: "PBKDF2" },
-    false,
-    ["deriveKey", "deriveBits"],
-  );
-
-  return await crypto.subtle.deriveKey(
-    {
-      name: "PBKDF2",
-      salt: saltBuffer,
-      iterations: 100000,
-      hash: "SHA-256",
-    },
-    passphraseKey,
-    { name: "AES-GCM", length: 256 },
-    false,
-    ["encrypt", "decrypt"],
-  );
-}
-
-/* ───────────── AES-GCM-256 Encryption & Decryption ───────────── */
-export async function encryptDataWithPassphrase(data, passphrase) {
-  const salt = getRandomBytes(16);
-  const iv = getRandomBytes(12);
-  const key = await deriveKeyFromPassphrase(passphrase, salt);
-
-  const encoded = new TextEncoder().encode(JSON.stringify(data));
-  const ciphertext = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv },
-    key,
-    encoded,
-  );
-
-  return {
-    _encrypted: true,
-    v: 1,
-    salt: bufferToBase64(salt),
-    iv: bufferToBase64(iv),
-    ciphertext: bufferToBase64(ciphertext),
-  };
-}
-
-export async function decryptDataWithPassphrase(encryptedPayload, passphrase) {
-  if (!encryptedPayload || !encryptedPayload._encrypted) {
-    return encryptedPayload;
-  }
-
-  const salt = new Uint8Array(base64ToBuffer(encryptedPayload.salt));
-  const iv = new Uint8Array(base64ToBuffer(encryptedPayload.iv));
-  const ciphertext = base64ToBuffer(encryptedPayload.ciphertext);
-
-  const key = await deriveKeyFromPassphrase(passphrase, salt);
-  const decrypted = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv },
-    key,
-    ciphertext,
-  );
-
-  const decoded = new TextDecoder().decode(decrypted);
-  return JSON.parse(decoded);
-}
-
 /* ───────────── App Lock PIN Management (On-Device Screen Lock) ───────────── */
 export async function setAppPin(pin) {
   if (!pin || pin.length < 4) {
     throw new Error("PIN must be at least 4 digits");
   }
+  ensureSubtleCrypto();
   const salt = getRandomBytes(16);
   const encoder = new TextEncoder();
   const keyMaterial = await crypto.subtle.importKey(
@@ -145,7 +102,7 @@ export async function setAppPin(pin) {
   localStorage.setItem(PIN_STORAGE_KEY, bufferToBase64(hashBuffer));
   localStorage.setItem(PIN_SALT_KEY, bufferToBase64(salt));
 
-  isAppUnlockedInSession = true;
+  setSessionUnlocked(true);
   markActive();
   return true;
 }
@@ -155,6 +112,7 @@ export async function verifyAppPin(pin) {
   const storedSalt = localStorage.getItem(PIN_SALT_KEY);
   if (!storedHash || !storedSalt) return false;
 
+  ensureSubtleCrypto();
   const salt = new Uint8Array(base64ToBuffer(storedSalt));
   const encoder = new TextEncoder();
   const keyMaterial = await crypto.subtle.importKey(
@@ -178,7 +136,7 @@ export async function verifyAppPin(pin) {
 
   const computedHash = bufferToBase64(hashBuffer);
   if (computedHash === storedHash) {
-    isAppUnlockedInSession = true;
+    setSessionUnlocked(true);
     markActive();
     return true;
   }
@@ -196,102 +154,7 @@ export function removeAppPin() {
   localStorage.removeItem(PIN_STORAGE_KEY);
   localStorage.removeItem(PIN_SALT_KEY);
   localStorage.removeItem(BIOMETRIC_KEY_ID);
-  isAppUnlockedInSession = true;
-}
-
-/* ───────────── End-to-End Cloud Sync Encryption (Optional) ───────────── */
-export async function setCloudPassphrase(passphrase) {
-  if (!passphrase || passphrase.length < 8) {
-    throw new Error("Passphrase must be at least 8 characters");
-  }
-  const salt = getRandomBytes(16);
-  const encoder = new TextEncoder();
-  const keyMaterial = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(passphrase),
-    { name: "PBKDF2" },
-    false,
-    ["deriveBits"],
-  );
-
-  const hashBuffer = await crypto.subtle.deriveBits(
-    {
-      name: "PBKDF2",
-      salt,
-      iterations: 100000,
-      hash: "SHA-256",
-    },
-    keyMaterial,
-    256,
-  );
-
-  localStorage.setItem(CLOUD_E2E_VERIFIER_KEY, bufferToBase64(hashBuffer));
-  localStorage.setItem(CLOUD_E2E_SALT_KEY, bufferToBase64(salt));
-  localStorage.setItem(CLOUD_E2E_ENABLED_KEY, "true");
-  cloudEncryptionPassphrase = passphrase;
-  return true;
-}
-
-export async function verifyCloudPassphrase(passphrase) {
-  const storedVerifier = localStorage.getItem(CLOUD_E2E_VERIFIER_KEY);
-  const storedSalt = localStorage.getItem(CLOUD_E2E_SALT_KEY);
-  if (!storedVerifier || !storedSalt) return false;
-
-  const salt = new Uint8Array(base64ToBuffer(storedSalt));
-  const encoder = new TextEncoder();
-  const keyMaterial = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(passphrase),
-    { name: "PBKDF2" },
-    false,
-    ["deriveBits"],
-  );
-
-  const hashBuffer = await crypto.subtle.deriveBits(
-    {
-      name: "PBKDF2",
-      salt,
-      iterations: 100000,
-      hash: "SHA-256",
-    },
-    keyMaterial,
-    256,
-  );
-
-  const computed = bufferToBase64(hashBuffer);
-  if (computed === storedVerifier) {
-    cloudEncryptionPassphrase = passphrase;
-    return true;
-  }
-  return false;
-}
-
-export function isCloudEncryptionEnabled() {
-  return Boolean(
-    localStorage.getItem(CLOUD_E2E_VERIFIER_KEY) &&
-      localStorage.getItem(CLOUD_E2E_SALT_KEY) &&
-      localStorage.getItem(CLOUD_E2E_ENABLED_KEY) === "true",
-  );
-}
-
-export function getCloudEncryptionKey() {
-  return cloudEncryptionPassphrase;
-}
-
-export function clearCloudEncryptionKey() {
-  cloudEncryptionPassphrase = null;
-}
-
-export function disableCloudEncryption() {
-  localStorage.removeItem(CLOUD_E2E_VERIFIER_KEY);
-  localStorage.removeItem(CLOUD_E2E_SALT_KEY);
-  localStorage.removeItem(CLOUD_E2E_ENABLED_KEY);
-  cloudEncryptionPassphrase = null;
-}
-
-// Backward-compatible alias
-export function getSessionKey() {
-  return cloudEncryptionPassphrase;
+  setSessionUnlocked(true);
 }
 
 /* ───────────── Biometric Authentication (WebAuthn) ───────────── */
@@ -384,7 +247,7 @@ export async function authenticateWithBiometrics() {
     });
 
     if (assertion) {
-      isAppUnlockedInSession = true;
+      setSessionUnlocked(true);
       markActive();
       return true;
     }
@@ -411,14 +274,14 @@ export function markActive() {
 
 export function shouldLockApp() {
   if (!hasAppPin()) return false;
-  if (!isAppUnlockedInSession) return true;
+  if (!isSessionUnlocked()) return true;
 
   const timeoutMinutes = getLockTimeoutMinutes();
   const lastActive = Number(localStorage.getItem(LAST_ACTIVE_KEY)) || 0;
   const elapsedMinutes = (Date.now() - lastActive) / 60000;
 
   if (elapsedMinutes >= timeoutMinutes) {
-    isAppUnlockedInSession = false;
+    setSessionUnlocked(false);
     return true;
   }
   return false;
@@ -426,6 +289,6 @@ export function shouldLockApp() {
 
 export function lockAppManually() {
   if (hasAppPin()) {
-    isAppUnlockedInSession = false;
+    setSessionUnlocked(false);
   }
 }

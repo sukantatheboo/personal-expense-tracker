@@ -1151,16 +1151,6 @@ export default function App() {
 
         let snapshot = cloudSnapshotRef.current;
         if (
-          lastSyncedSnapshotRef.current?._decryptionPending ||
-          lastSyncedSnapshotRef.current?._decryptionFailed
-        ) {
-          setCloudSyncActivity("idle");
-          setCloudSyncStatus(
-            "Cloud sync paused: Enter end-to-end passphrase in Security settings to unlock.",
-          );
-          return;
-        }
-        if (
           lastSyncedSnapshotRef.current &&
           areCloudSnapshotsEqual(snapshot, lastSyncedSnapshotRef.current)
         ) {
@@ -1466,24 +1456,6 @@ export default function App() {
       setCloudSyncActivity("syncing");
       try {
         let remote = await loadCloudData(pushUser.id);
-        if (remote?.isDecryptionPending || remote?.data?._decryptionPending) {
-          if (!active) return;
-          setCloudSyncReady(false);
-          setCloudSyncActivity("idle");
-          setCloudSyncStatus(
-            "Cloud data is encrypted with an end-to-end passphrase. Enter your passphrase in Security settings to decrypt.",
-          );
-          return;
-        }
-        if (remote?.isDecryptionFailed || remote?.data?._decryptionFailed) {
-          if (!active) return;
-          setCloudSyncReady(false);
-          setCloudSyncActivity("error");
-          setCloudSyncStatus(
-            "Incorrect passphrase for cloud data. Update your passphrase in Security settings.",
-          );
-          return;
-        }
         setNormalizedAccountSync(remote?.normalizedAccountSync !== false);
         let merged;
         let savedVersion = null;

@@ -1,11 +1,5 @@
 import { supabase } from "./push.js";
 import { emptyAccountData, loadAccountData } from "./data.js";
-import {
-  getCloudEncryptionKey,
-  isCloudEncryptionEnabled,
-  encryptDataWithPassphrase,
-  decryptDataWithPassphrase,
-} from "./security.js";
 
 export const CLOUD_SYNC_USER_KEY = "spend-cloud-sync-user-v1";
 
@@ -51,6 +45,7 @@ function mergeAccountDataWithRawSnapshot(
   const normSettings = normalizedAccountData?.settings || {};
   const deletedRecords = rawSnapshotData?.deletedRecords || {};
   const deletedCardTombstones = deletedRecords.cards || {};
+  const deletedTxTombstones = deletedRecords.accountTransactions || {};
 
   const cardMap = new Map();
   if (Array.isArray(normSettings.cards)) {
@@ -120,18 +115,34 @@ function mergeAccountDataWithRawSnapshot(
 
   const txMap = new Map();
   for (const tx of normTransactions) {
-    if (tx?.id) txMap.set(tx.id, tx);
-  }
-  for (const tx of extraTransactions) {
-    if (tx?.id && !txMap.has(tx.id)) txMap.set(tx.id, tx);
-  }
-  for (const tx of rawTransactions) {
     if (!tx?.id) continue;
-    const existing = txMap.get(tx.id);
+    const tombstone = deletedTxTombstones[tx.id];
     const txTime =
       typeof tx.updatedAt === "number"
         ? tx.updatedAt
         : Date.parse(tx.updatedAt) || 0;
+    if (tombstone?.deleted && tombstone.updatedAt >= txTime) continue;
+    txMap.set(tx.id, tx);
+  }
+  for (const tx of extraTransactions) {
+    if (!tx?.id || txMap.has(tx.id)) continue;
+    const tombstone = deletedTxTombstones[tx.id];
+    const txTime =
+      typeof tx.updatedAt === "number"
+        ? tx.updatedAt
+        : Date.parse(tx.updatedAt) || 0;
+    if (tombstone?.deleted && tombstone.updatedAt >= txTime) continue;
+    txMap.set(tx.id, tx);
+  }
+  for (const tx of rawTransactions) {
+    if (!tx?.id) continue;
+    const tombstone = deletedTxTombstones[tx.id];
+    const txTime =
+      typeof tx.updatedAt === "number"
+        ? tx.updatedAt
+        : Date.parse(tx.updatedAt) || 0;
+    if (tombstone?.deleted && tombstone.updatedAt >= txTime) continue;
+    const existing = txMap.get(tx.id);
     const exTime =
       typeof existing?.updatedAt === "number"
         ? existing.updatedAt
@@ -169,23 +180,6 @@ function mergeAccountDataWithRawSnapshot(
     },
     deletedRecords,
   );
-}
-
-async function maybeDecryptSnapshot(payload) {
-  if (payload && typeof payload === "object" && payload._encrypted) {
-    const key = getCloudEncryptionKey();
-    if (key) {
-      try {
-        const decrypted = await decryptDataWithPassphrase(payload, key);
-        return decrypted;
-      } catch (err) {
-        console.warn("Could not decrypt zero-knowledge cloud snapshot", err);
-        return { ...payload, _decryptionFailed: true };
-      }
-    }
-    return { ...payload, _decryptionPending: true };
-  }
-  return payload;
 }
 
 async function loadLegacyCloudData(userId) {
@@ -232,21 +226,7 @@ async function loadLegacyCloudData(userId) {
   if (snapshotResult.error) throw snapshotResult.error;
 
   const snapshot = snapshotResult.data;
-  const snapshotData = snapshot?.data
-    ? await maybeDecryptSnapshot(snapshot.data)
-    : null;
-
-  // If payload is encrypted and cannot be decrypted yet, preserve ciphertext envelope safely
-  if (snapshotData?._decryptionPending || snapshotData?._decryptionFailed) {
-    return {
-      ...snapshot,
-      normalizedAccountSync: false,
-      data: snapshotData,
-      isEncrypted: true,
-      isDecryptionPending: Boolean(snapshotData._decryptionPending),
-      isDecryptionFailed: Boolean(snapshotData._decryptionFailed),
-    };
-  }
+  const snapshotData = snapshot?.data ?? null;
 
   const normalizedSchemaUnavailable =
     isNormalizedAccountSchemaUnavailable(settingsResult.error) ||
@@ -356,37 +336,10 @@ export async function loadCloudData(userId) {
 
     if (!rpcResult.error && rpcResult.data) {
       const rpcData = rpcResult.data;
-      const rawData = rawSnapshotResult?.data?.data
-        ? await maybeDecryptSnapshot(rawSnapshotResult.data.data)
-        : null;
-      const effectiveRpcData = rpcData.data
-        ? await maybeDecryptSnapshot(rpcData.data)
-        : null;
+      const rawData = rawSnapshotResult?.data?.data ?? null;
+      const effectiveRpcData = rpcData.data ?? null;
       const rawUpdatedAt = rawSnapshotResult?.data?.updated_at;
       const effectiveUpdatedAt = rawUpdatedAt || rpcData.updated_at;
-
-      // GUARD: If ciphertext requires passphrase, do not merge empty structures
-      if (rawData?._decryptionPending || rawData?._decryptionFailed) {
-        return {
-          ...rpcData,
-          updated_at: effectiveUpdatedAt,
-          data: rawData,
-          isEncrypted: true,
-          isDecryptionPending: Boolean(rawData._decryptionPending),
-          isDecryptionFailed: Boolean(rawData._decryptionFailed),
-        };
-      }
-
-      if (effectiveRpcData?._decryptionPending || effectiveRpcData?._decryptionFailed) {
-        return {
-          ...rpcData,
-          updated_at: effectiveUpdatedAt,
-          data: effectiveRpcData,
-          isEncrypted: true,
-          isDecryptionPending: Boolean(effectiveRpcData._decryptionPending),
-          isDecryptionFailed: Boolean(effectiveRpcData._decryptionFailed),
-        };
-      }
 
       if (effectiveRpcData && rawData) {
         return {
@@ -458,30 +411,9 @@ async function executeSaveQuery(userId, payload, expectedUpdatedAt) {
 export async function saveCloudData(userId, data, expectedUpdatedAt = null) {
   if (!supabase) throw new Error("Cloud sync is not configured.");
 
-  // CRITICAL GUARD: Never save an encrypted blob that couldn't be decrypted,
-  // as that would destroy local or remote state.
-  if (data && (data._decryptionPending || data._decryptionFailed)) {
-    throw new Error(
-      "Cannot save cloud snapshot while data is encrypted and pending decryption.",
-    );
-  }
-
-  const key = getCloudEncryptionKey();
-  let payload = data;
-  if (isCloudEncryptionEnabled() && key && data && !data._encrypted) {
-    try {
-      payload = await encryptDataWithPassphrase(data, key);
-    } catch (err) {
-      console.warn(
-        "Failed to encrypt cloud payload with passphrase key, using unencrypted fallback",
-        err,
-      );
-    }
-  }
-
   const { data: saved, error } = await executeSaveQuery(
     userId,
-    payload,
+    data,
     expectedUpdatedAt,
   );
   if (!error) return saved?.updated_at ?? null;
