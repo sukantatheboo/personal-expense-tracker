@@ -650,8 +650,8 @@ function mergeAccountSettings(
     configured: Boolean(localSettings.configured || cloudSettings.configured),
     cardsConfigured: Boolean(
       localSettings.cardsConfigured ||
-        cloudSettings.cardsConfigured ||
-        mergedCards.length > 0,
+      cloudSettings.cardsConfigured ||
+      mergedCards.length > 0,
     ),
     updatedAt: Math.max(localTime, cloudTime),
   };
@@ -1438,16 +1438,15 @@ export default function App() {
         for (let attempt = 0; attempt < 3; attempt += 1) {
           if (!active) return;
           const local = cloudSnapshotRef.current;
-          const localBelongsToUser =
-            localDataOwnerRef.current === pushUser.id;
+          const localBelongsToUser = localDataOwnerRef.current === pushUser.id;
           const hasSavedUserSnapshot = Boolean(
             loadLocalUserSnapshot(pushUser.id),
           );
           const hasCloudData = Boolean(
             remote?.data &&
-              (hasMeaningfulLocalData(remote.data) ||
-                (Array.isArray(remote.data.accountData?.settings?.cards) &&
-                  remote.data.accountData.settings.cards.length > 0)),
+            (hasMeaningfulLocalData(remote.data) ||
+              (Array.isArray(remote.data.accountData?.settings?.cards) &&
+                remote.data.accountData.settings.cards.length > 0)),
           );
           const preferLocal =
             !hasCloudData &&
@@ -1864,14 +1863,40 @@ export default function App() {
             .toLocaleLowerCase()
             .includes(normalizedQuery),
       )
-      .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
+      .map((expense, index) => ({ expense, index }))
+      .sort((x, y) => {
+        const a = x.expense;
+        const b = y.expense;
+        const timeDiff =
+          Math.max(Number(b.createdAt) || 0, Number(b.updatedAt) || 0) -
+          Math.max(Number(a.createdAt) || 0, Number(a.updatedAt) || 0);
+        return (
+          b.date.localeCompare(a.date) ||
+          timeDiff ||
+          y.index - x.index ||
+          String(b.id || "").localeCompare(String(a.id || ""))
+        );
+      })
+      .map(({ expense }) => expense);
   }, [monthExpenses, categoryFilter, query]);
   const recentExpenses = useMemo(
     () =>
       [...monthExpenses]
-        .sort(
-          (a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id),
-        )
+        .map((expense, index) => ({ expense, index }))
+        .sort((x, y) => {
+          const a = x.expense;
+          const b = y.expense;
+          const timeDiff =
+            Math.max(Number(b.createdAt) || 0, Number(b.updatedAt) || 0) -
+            Math.max(Number(a.createdAt) || 0, Number(a.updatedAt) || 0);
+          return (
+            b.date.localeCompare(a.date) ||
+            timeDiff ||
+            y.index - x.index ||
+            String(b.id || "").localeCompare(String(a.id || ""))
+          );
+        })
+        .map(({ expense }) => expense)
         .slice(0, 3),
     [monthExpenses],
   );
@@ -1896,7 +1921,21 @@ export default function App() {
       (transaction) => transaction.date >= accountData.settings.startDate,
     );
     return [...trackedTransactions, ...expenseActivity]
-      .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id))
+      .map((item, index) => ({ item, index }))
+      .sort((x, y) => {
+        const a = x.item;
+        const b = y.item;
+        const timeDiff =
+          Math.max(Number(b.createdAt) || 0, Number(b.updatedAt) || 0) -
+          Math.max(Number(a.createdAt) || 0, Number(a.updatedAt) || 0);
+        return (
+          b.date.localeCompare(a.date) ||
+          timeDiff ||
+          y.index - x.index ||
+          String(b.id || "").localeCompare(String(a.id || ""))
+        );
+      })
+      .map(({ item }) => item)
       .slice(0, 8);
   }, [expenses, accountData]);
 
@@ -2736,7 +2775,9 @@ export default function App() {
 
   function removeMobileTransaction(txOrId) {
     const txId = typeof txOrId === "object" ? txOrId?.id : txOrId;
-    const existingTx = accountData.transactions.find((item) => item.id === txId);
+    const existingTx = accountData.transactions.find(
+      (item) => item.id === txId,
+    );
     if (!existingTx) return undefined;
     setAccountData((current) => ({
       ...current,
@@ -3237,7 +3278,10 @@ export default function App() {
       const restoredDeletedRecords = normalizeDeletedRecords(
         data.deletedRecords,
       );
-      const restoredAccounts = loadAccountData(data.accountData, restoredDeletedRecords);
+      const restoredAccounts = loadAccountData(
+        data.accountData,
+        restoredDeletedRecords,
+      );
       setExpenses(
         loadExpenses(data.expenses, restoredAccounts).map((expense) => ({
           ...expense,

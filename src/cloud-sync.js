@@ -36,7 +36,10 @@ function isLegacyDbCompatibleTransaction(tx) {
   return false;
 }
 
-function mergeAccountDataWithRawSnapshot(normalizedAccountData, rawSnapshotData) {
+function mergeAccountDataWithRawSnapshot(
+  normalizedAccountData,
+  rawSnapshotData,
+) {
   const rawAccounts = rawSnapshotData?.accountData;
   const rawSettings = rawAccounts?.settings || {};
   const normSettings = normalizedAccountData?.settings || {};
@@ -141,22 +144,25 @@ function mergeAccountDataWithRawSnapshot(normalizedAccountData, rawSnapshotData)
       ? normSettings.updatedAt
       : Date.parse(normSettings.updatedAt) || 0;
 
-  return loadAccountData({
-    settings: {
-      ...rawSettings,
-      ...normSettings,
-      balances: mergedBalances,
-      cards: mergedCards,
-      cardsConfigured:
-        rawSettings.cardsConfigured === true ||
-        normSettings.cardsConfigured === true ||
-        mergedCards.length > 0,
-      configured:
-        rawSettings.configured === true || normSettings.configured === true,
-      updatedAt: Math.max(rawUpdatedAt, normUpdatedAt),
+  return loadAccountData(
+    {
+      settings: {
+        ...rawSettings,
+        ...normSettings,
+        balances: mergedBalances,
+        cards: mergedCards,
+        cardsConfigured:
+          rawSettings.cardsConfigured === true ||
+          normSettings.cardsConfigured === true ||
+          mergedCards.length > 0,
+        configured:
+          rawSettings.configured === true || normSettings.configured === true,
+        updatedAt: Math.max(rawUpdatedAt, normUpdatedAt),
+      },
+      transactions: Array.from(txMap.values()),
     },
-    transactions: Array.from(txMap.values()),
-  }, deletedRecords);
+    deletedRecords,
+  );
 }
 
 async function loadLegacyCloudData(userId) {

@@ -21,13 +21,29 @@ import contactlessImg from "./assets/payment-logos/contactless.png";
  */
 export function BkashLogo({ className = "", height = 24 }) {
   return (
-    <div className={`card-brand-cluster ${className}`} style={{ display: "inline-flex", alignItems: "center", gap: 7, height }}>
+    <div
+      className={`card-brand-cluster ${className}`}
+      style={{ display: "inline-flex", alignItems: "center", gap: 7, height }}
+    >
       <img
         src={bkashSvg}
         alt="bKash"
-        style={{ height: Math.round(height * 0.95), width: "auto", objectFit: "contain", filter: "brightness(0) invert(1)" }}
+        style={{
+          height: Math.round(height * 0.95),
+          width: "auto",
+          objectFit: "contain",
+          filter: "brightness(0) invert(1)",
+        }}
       />
-      <span style={{ color: "#ffffff", fontWeight: 850, fontSize: Math.round(height * 0.68), letterSpacing: "-0.03em", fontFamily: "system-ui, -apple-system, sans-serif" }}>
+      <span
+        style={{
+          color: "#ffffff",
+          fontWeight: 850,
+          fontSize: Math.round(height * 0.68),
+          letterSpacing: "-0.03em",
+          fontFamily: "system-ui, -apple-system, sans-serif",
+        }}
+      >
         bKash
       </span>
     </div>
@@ -70,7 +86,8 @@ export function RocketLogo({ className = "", height = 24 }) {
         maxHeight: height,
         objectFit: "contain",
         display: "block",
-        filter: "brightness(0) invert(1) drop-shadow(0 1px 3px rgba(0,0,0,0.35))",
+        filter:
+          "brightness(0) invert(1) drop-shadow(0 1px 3px rgba(0,0,0,0.35))",
       }}
     />
   );
@@ -112,7 +129,8 @@ export function BracBankLogo({ className = "", height = 24 }) {
         maxHeight: height,
         objectFit: "contain",
         display: "block",
-        filter: "brightness(0) invert(1) drop-shadow(0 1px 3px rgba(0,0,0,0.35))",
+        filter:
+          "brightness(0) invert(1) drop-shadow(0 1px 3px rgba(0,0,0,0.35))",
       }}
     />
   );
@@ -181,21 +199,46 @@ export function DbblLogo({ className = "", height = 24 }) {
   );
 }
 
-
 /**
  * Official Standard Chartered Bank Logo
  */
 export function StandardCharteredLogo({ className = "", height = 24 }) {
   return (
-    <div className={`card-brand-cluster ${className}`} style={{ display: "inline-flex", alignItems: "center", gap: 6, height }}>
+    <div
+      className={`card-brand-cluster ${className}`}
+      style={{ display: "inline-flex", alignItems: "center", gap: 6, height }}
+    >
       <img
         src={scbImg}
         alt="Standard Chartered"
-        style={{ height, width: "auto", maxHeight: height, objectFit: "contain" }}
+        style={{
+          height,
+          width: "auto",
+          maxHeight: height,
+          objectFit: "contain",
+        }}
       />
       <div style={{ display: "flex", flexDirection: "column", lineHeight: 1 }}>
-        <span style={{ color: "#ffffff", fontWeight: 800, fontSize: Math.round(height * 0.42), letterSpacing: "-0.01em" }}>standard</span>
-        <span style={{ color: "#ffffff", fontWeight: 800, fontSize: Math.round(height * 0.42), letterSpacing: "-0.01em" }}>chartered</span>
+        <span
+          style={{
+            color: "#ffffff",
+            fontWeight: 800,
+            fontSize: Math.round(height * 0.42),
+            letterSpacing: "-0.01em",
+          }}
+        >
+          standard
+        </span>
+        <span
+          style={{
+            color: "#ffffff",
+            fontWeight: 800,
+            fontSize: Math.round(height * 0.42),
+            letterSpacing: "-0.01em",
+          }}
+        >
+          chartered
+        </span>
       </div>
     </div>
   );
@@ -338,7 +381,12 @@ export function SavingsLogo({ className = "", height = 24 }) {
 /**
  * High-Res Official Visa Logo from payment-logos/visa.png
  */
-export function VisaBadge({ className = "", height = 18, width, variant = "auto" }) {
+export function VisaBadge({
+  className = "",
+  height = 18,
+  width,
+  variant = "auto",
+}) {
   const isAdaptive = variant === "adaptive";
   return (
     <img
@@ -442,13 +490,27 @@ export function EmvChip({ className = "", size = 30 }) {
         strokeWidth="1"
       />
       <defs>
-        <linearGradient id="emv-gold-grad" x1="0" y1="0" x2="52" y2="40" gradientUnits="userSpaceOnUse">
+        <linearGradient
+          id="emv-gold-grad"
+          x1="0"
+          y1="0"
+          x2="52"
+          y2="40"
+          gradientUnits="userSpaceOnUse"
+        >
           <stop stopColor="#F9E29D" />
           <stop offset="0.3" stopColor="#E4BA62" />
           <stop offset="0.7" stopColor="#D5A23C" />
           <stop offset="1" stopColor="#B38025" />
         </linearGradient>
-        <linearGradient id="emv-center-grad" x1="18" y1="12" x2="34" y2="28" gradientUnits="userSpaceOnUse">
+        <linearGradient
+          id="emv-center-grad"
+          x1="18"
+          y1="12"
+          x2="34"
+          y2="28"
+          gradientUnits="userSpaceOnUse"
+        >
           <stop stopColor="#FFECA8" />
           <stop offset="1" stopColor="#C99432" />
         </linearGradient>
@@ -460,7 +522,13 @@ export function EmvChip({ className = "", size = 30 }) {
 /**
  * Official Real Contactless Payment Waves Indicator (from contactless.png)
  */
-export function ContactlessWaves({ className = "", size = 18, height, width, style = {} }) {
+export function ContactlessWaves({
+  className = "",
+  size = 18,
+  height,
+  width,
+  style = {},
+}) {
   const h = height || size;
   return (
     <img
@@ -748,7 +816,8 @@ export const CARD_PROVIDERS = [
     defaultNetwork: "none",
     currency: "BDT",
     color: "#047857",
-    gradient: "linear-gradient(135deg, #065f46 0%, #047857 35%, #064e3b 70%, #022c22 100%)",
+    gradient:
+      "linear-gradient(135deg, #065f46 0%, #047857 35%, #064e3b 70%, #022c22 100%)",
     numberPrefix: "SAV",
     numberPlaceholder: "SAV-8829-01",
     isPhone: false,
@@ -776,7 +845,10 @@ export function getProviderMeta(providerId) {
   );
 }
 
-export function renderProviderLogo(providerId, { height = 24, className = "" } = {}) {
+export function renderProviderLogo(
+  providerId,
+  { height = 24, className = "" } = {},
+) {
   switch (providerId) {
     case "amazon":
       return <AmazonLogo height={height} className={className} />;
@@ -793,14 +865,30 @@ export function renderProviderLogo(providerId, { height = 24, className = "" } =
       return <StandardCharteredLogo height={height} className={className} />;
     case "gold_mc":
       return (
-        <span className={`card-generic-logo ${className}`} style={{ color: "#FDE68A", fontWeight: 900, letterSpacing: "0.08em", fontSize: 13 }}>
+        <span
+          className={`card-generic-logo ${className}`}
+          style={{
+            color: "#FDE68A",
+            fontWeight: 900,
+            letterSpacing: "0.08em",
+            fontSize: 13,
+          }}
+        >
           GOLD
         </span>
       );
     case "virtual_mc":
     case "virtual_visa":
       return (
-        <span className={`card-generic-logo ${className}`} style={{ color: "rgba(255,255,255,0.9)", fontWeight: 900, letterSpacing: "0.1em", fontSize: 11 }}>
+        <span
+          className={`card-generic-logo ${className}`}
+          style={{
+            color: "rgba(255,255,255,0.9)",
+            fontWeight: 900,
+            letterSpacing: "0.1em",
+            fontSize: 11,
+          }}
+        >
           VIRTUAL
         </span>
       );
@@ -826,7 +914,10 @@ export function renderProviderLogo(providerId, { height = 24, className = "" } =
       return <AmexBadge height={height} className={className} />;
     default:
       return (
-        <span className={`card-generic-logo ${className}`} style={{ color: "#ffffff", fontWeight: 800 }}>
+        <span
+          className={`card-generic-logo ${className}`}
+          style={{ color: "#ffffff", fontWeight: 800 }}
+        >
           BANK
         </span>
       );
@@ -840,17 +931,25 @@ export function renderProviderLogo(providerId, { height = 24, className = "" } =
  * and vector network emblems (Mastercard dual interlocking circles, Visa italic wordmark, etc.)
  */
 export function MiniCardPreview({ provider, card, className = "" }) {
-  const p = provider || (card ? getProviderMeta(card.provider) : null) || CARD_PROVIDERS[0];
+  const p =
+    provider ||
+    (card ? getProviderMeta(card.provider) : null) ||
+    CARD_PROVIDERS[0];
   const network = card?.network || p.defaultNetwork || "visa";
   const category = p.category || card?.category || "bank";
   const isMfs = category === "mfs" || network === "mfs" || p.isPhone;
   const isSavings = category === "savings" || p.id === "savings";
-  const gradient = card?.gradient || p.gradient || "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)";
+  const gradient =
+    card?.gradient ||
+    p.gradient ||
+    "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)";
 
   // Extract last 4 digits or masked identifier
   const rawNum = card?.number || p.numberPlaceholder || "4328";
   const cleanDigits = rawNum.replace(/\D/g, "");
-  const last4 = cleanDigits.slice(-4) || (p.numberPrefix ? p.numberPrefix.slice(-4) : "4328");
+  const last4 =
+    cleanDigits.slice(-4) ||
+    (p.numberPrefix ? p.numberPrefix.slice(-4) : "4328");
 
   return (
     <div
@@ -865,28 +964,84 @@ export function MiniCardPreview({ provider, card, className = "" }) {
         {isMfs ? (
           <div className="mini-card-mfs-brand">
             {p.id === "bkash" && (
-              <img src={bkashSvg} alt="bKash" style={{ height: 10, width: "auto", filter: "brightness(0) invert(1)" }} />
+              <img
+                src={bkashSvg}
+                alt="bKash"
+                style={{
+                  height: 10,
+                  width: "auto",
+                  filter: "brightness(0) invert(1)",
+                }}
+              />
             )}
             {p.id === "nagad" && (
-              <img src={nagadImg} alt="Nagad" style={{ height: 10, width: "auto" }} />
+              <img
+                src={nagadImg}
+                alt="Nagad"
+                style={{ height: 10, width: "auto" }}
+              />
             )}
             {p.id === "rocket" && (
-              <img src={rocketImg} alt="Rocket" style={{ height: 10, width: "auto", filter: "brightness(0) invert(1)" }} />
+              <img
+                src={rocketImg}
+                alt="Rocket"
+                style={{
+                  height: 10,
+                  width: "auto",
+                  filter: "brightness(0) invert(1)",
+                }}
+              />
             )}
             {p.id === "upay" && (
-              <img src={upayImg} alt="Upay" style={{ height: 10, width: "auto" }} />
+              <img
+                src={upayImg}
+                alt="Upay"
+                style={{ height: 10, width: "auto" }}
+              />
             )}
           </div>
         ) : isSavings ? (
           <div className="mini-card-savings-brand">
-            <img src={savingsPiggySvg} alt="Savings" style={{ height: 11, width: "auto" }} />
+            <img
+              src={savingsPiggySvg}
+              alt="Savings"
+              style={{ height: 11, width: "auto" }}
+            />
           </div>
         ) : (
           <div className="mini-card-chip-waves">
-            <svg className="mini-card-emv" width="10" height="7.5" viewBox="0 0 20 15" fill="none">
-              <rect x="0.5" y="0.5" width="19" height="14" rx="2.5" fill="#E5C158" stroke="#9A7B1C" strokeWidth="1" />
-              <path d="M0.5 5.5H7.5M0.5 9.5H7.5M12.5 5.5H19.5M12.5 9.5H19.5M9.5 0.5V5.5M9.5 9.5V14.5" stroke="#7A5612" strokeWidth="0.8" />
-              <rect x="7" y="4.5" width="6" height="6" rx="1" fill="#FFEAA0" stroke="#7A5612" strokeWidth="0.7" />
+            <svg
+              className="mini-card-emv"
+              width="10"
+              height="7.5"
+              viewBox="0 0 20 15"
+              fill="none"
+            >
+              <rect
+                x="0.5"
+                y="0.5"
+                width="19"
+                height="14"
+                rx="2.5"
+                fill="#E5C158"
+                stroke="#9A7B1C"
+                strokeWidth="1"
+              />
+              <path
+                d="M0.5 5.5H7.5M0.5 9.5H7.5M12.5 5.5H19.5M12.5 9.5H19.5M9.5 0.5V5.5M9.5 9.5V14.5"
+                stroke="#7A5612"
+                strokeWidth="0.8"
+              />
+              <rect
+                x="7"
+                y="4.5"
+                width="6"
+                height="6"
+                rx="1"
+                fill="#FFEAA0"
+                stroke="#7A5612"
+                strokeWidth="0.7"
+              />
             </svg>
             <ContactlessWaves size={8} className="mini-card-contactless" />
           </div>
@@ -903,7 +1058,13 @@ export function MiniCardPreview({ provider, card, className = "" }) {
           {network === "mastercard" && (
             <svg width="15" height="10" viewBox="0 0 30 20" fill="none">
               <circle cx="10" cy="10" r="9.5" fill="#EB001B" />
-              <circle cx="20" cy="10" r="9.5" fill="#F79E1B" fillOpacity="0.88" />
+              <circle
+                cx="20"
+                cy="10"
+                r="9.5"
+                fill="#F79E1B"
+                fillOpacity="0.88"
+              />
             </svg>
           )}
           {network === "visa" && (
@@ -912,12 +1073,8 @@ export function MiniCardPreview({ provider, card, className = "" }) {
           {network === "amex" && (
             <span className="mini-card-amex-text">AMEX</span>
           )}
-          {isMfs && (
-            <span className="mini-card-mfs-text">MFS</span>
-          )}
-          {isSavings && (
-            <span className="mini-card-vault-star">★</span>
-          )}
+          {isMfs && <span className="mini-card-mfs-text">MFS</span>}
+          {isSavings && <span className="mini-card-vault-star">★</span>}
         </div>
       </div>
     </div>

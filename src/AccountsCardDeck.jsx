@@ -216,9 +216,7 @@ export function WalletCard({
             {card.network === "mastercard" && (
               <MastercardBadge width={38} height={24} />
             )}
-            {card.network === "amex" && (
-              <AmexBadge width={42} height={20} />
-            )}
+            {card.network === "amex" && <AmexBadge width={42} height={20} />}
             {isMfs && (
               <span className="wallet-card-mfs-network-pill">
                 {(card.name || "WALLET").toUpperCase()}

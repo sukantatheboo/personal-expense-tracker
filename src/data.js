@@ -109,7 +109,8 @@ export const DEFAULT_CARDS = [
     expiry: "",
     cvv: "",
     color: "#047857",
-    gradient: "linear-gradient(135deg, #065f46 0%, #047857 35%, #064e3b 70%, #022c22 100%)",
+    gradient:
+      "linear-gradient(135deg, #065f46 0%, #047857 35%, #064e3b 70%, #022c22 100%)",
   },
 ];
 
@@ -143,8 +144,10 @@ export function hasSeededDemoBalances(balances) {
 export function isPureUnconfiguredDemoState(saved) {
   if (!saved || typeof saved !== "object") return false;
   const settings = saved.settings || {};
-  if (settings.configured === true || settings.cardsConfigured === true) return false;
-  if (Array.isArray(saved.transactions) && saved.transactions.length > 0) return false;
+  if (settings.configured === true || settings.cardsConfigured === true)
+    return false;
+  if (Array.isArray(saved.transactions) && saved.transactions.length > 0)
+    return false;
 
   const rawBalances = settings.balances || {};
   const isZeroOrDemoBalances =
@@ -454,9 +457,12 @@ export function loadAccountData(
       const acct = t?.account || t?.accountId;
       const fromAcct = t?.fromAccount || t?.from_account || t?.fromAccountId;
       const toAcct = t?.toAccount || t?.to_account || t?.toAccountId;
-      if (acct && !deletedCardTombstones[acct]?.deleted) allReferencedAccountIds.add(acct);
-      if (fromAcct && !deletedCardTombstones[fromAcct]?.deleted) allReferencedAccountIds.add(fromAcct);
-      if (toAcct && !deletedCardTombstones[toAcct]?.deleted) allReferencedAccountIds.add(toAcct);
+      if (acct && !deletedCardTombstones[acct]?.deleted)
+        allReferencedAccountIds.add(acct);
+      if (fromAcct && !deletedCardTombstones[fromAcct]?.deleted)
+        allReferencedAccountIds.add(fromAcct);
+      if (toAcct && !deletedCardTombstones[toAcct]?.deleted)
+        allReferencedAccountIds.add(toAcct);
     }
   }
 
@@ -464,8 +470,7 @@ export function loadAccountData(
     !settings.configured &&
     !settings.cardsConfigured &&
     rawCards.length === 0 &&
-    (!Array.isArray(saved.transactions) ||
-      saved.transactions.length === 0) &&
+    (!Array.isArray(saved.transactions) || saved.transactions.length === 0) &&
     Object.values(rawBalances).every((v) => Number(v) === 0);
 
   if (!isBrandNewAccount) {
@@ -508,13 +513,21 @@ export function loadAccountData(
   const cards = Array.from(cardMap.values());
 
   const initialBalances = {};
-  if (!deletedCardTombstones.bkash?.deleted) initialBalances.bkash = cleanBalance(rawBalances.bkash);
-  if (!deletedCardTombstones.bank?.deleted) initialBalances.bank = cleanBalance(rawBalances.bank);
-  if (!deletedCardTombstones.savings?.deleted) initialBalances.savings = cleanBalance(rawBalances.savings);
+  if (!deletedCardTombstones.bkash?.deleted)
+    initialBalances.bkash = cleanBalance(rawBalances.bkash);
+  if (!deletedCardTombstones.bank?.deleted)
+    initialBalances.bank = cleanBalance(rawBalances.bank);
+  if (!deletedCardTombstones.savings?.deleted)
+    initialBalances.savings = cleanBalance(rawBalances.savings);
 
   for (const [key, val] of Object.entries(rawBalances)) {
     if (deletedCardTombstones[key]?.deleted) continue;
-    if (cardMap.has(key) || key === "bkash" || key === "bank" || key === "savings") {
+    if (
+      cardMap.has(key) ||
+      key === "bkash" ||
+      key === "bank" ||
+      key === "savings"
+    ) {
       initialBalances[key] = cleanBalance(val);
     }
   }
@@ -539,8 +552,7 @@ export function loadAccountData(
       balances: initialBalances,
       cards,
       configured: settings.configured === true || cards.length > 0,
-      cardsConfigured:
-        settings.cardsConfigured === true || cards.length > 0,
+      cardsConfigured: settings.cardsConfigured === true || cards.length > 0,
       updatedAt:
         typeof settings.updatedAt === "number" &&
         Number.isFinite(settings.updatedAt)

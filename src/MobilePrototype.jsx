@@ -299,9 +299,20 @@ const tot = (S, m) =>
     .filter((e) => e.date.startsWith(m) && e.amt != null)
     .reduce((a, e) => a + e.amt, 0);
 const monthExp = (S) =>
-  S.exp
+  (S?.exp || [])
     .filter((e) => e.date.startsWith(S.m))
-    .sort((a, b) => b.date.localeCompare(a.date));
+    .map((e, index) => ({ e, index }))
+    .sort((x, y) => {
+      const a = x.e;
+      const b = y.e;
+      return (
+        b.date.localeCompare(a.date) ||
+        activityTime(b) - activityTime(a) ||
+        y.index - x.index ||
+        String(b.id || "").localeCompare(String(a.id || ""))
+      );
+    })
+    .map(({ e }) => e);
 function bal(S, id) {
   let b = Number(S?.start?.[id]) || 0;
   const savingsId = getSavingsAccountId(S?.cards);
@@ -1702,13 +1713,57 @@ function Home({
         ) : (
           <div className="emp-illustrated">
             <div className="emp-illustrated-icon">
-              <svg viewBox="0 0 48 48" fill="none" className="emp-svg" aria-hidden="true">
-                <rect x="11" y="8" width="26" height="32" rx="6" className="emp-doc" />
-                <line x1="17" y1="16" x2="31" y2="16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.85" />
-                <line x1="17" y1="22" x2="27" y2="22" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.55" />
-                <line x1="17" y1="28" x2="23" y2="28" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.35" />
+              <svg
+                viewBox="0 0 48 48"
+                fill="none"
+                className="emp-svg"
+                aria-hidden="true"
+              >
+                <rect
+                  x="11"
+                  y="8"
+                  width="26"
+                  height="32"
+                  rx="6"
+                  className="emp-doc"
+                />
+                <line
+                  x1="17"
+                  y1="16"
+                  x2="31"
+                  y2="16"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  opacity="0.85"
+                />
+                <line
+                  x1="17"
+                  y1="22"
+                  x2="27"
+                  y2="22"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  opacity="0.55"
+                />
+                <line
+                  x1="17"
+                  y1="28"
+                  x2="23"
+                  y2="28"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  opacity="0.35"
+                />
                 <circle cx="34" cy="34" r="8" className="emp-chip" />
-                <path d="M34 31V37M31 34H37" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                <path
+                  d="M34 31V37M31 34H37"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
               </svg>
             </div>
             <b>No expenses this month</b>
@@ -1784,10 +1839,37 @@ function Activity({
         {!l.length ? (
           <div className="emp-illustrated">
             <div className="emp-illustrated-icon">
-              <svg viewBox="0 0 48 48" fill="none" className="emp-svg" aria-hidden="true">
-                <circle cx="21" cy="21" r="10" stroke="currentColor" strokeWidth="2.2" />
-                <line x1="28.5" y1="28.5" x2="38" y2="38" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
-                <circle cx="21" cy="21" r="4.5" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2.5 2.5" opacity="0.5" />
+              <svg
+                viewBox="0 0 48 48"
+                fill="none"
+                className="emp-svg"
+                aria-hidden="true"
+              >
+                <circle
+                  cx="21"
+                  cy="21"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                />
+                <line
+                  x1="28.5"
+                  y1="28.5"
+                  x2="38"
+                  y2="38"
+                  stroke="currentColor"
+                  strokeWidth="2.4"
+                  strokeLinecap="round"
+                />
+                <circle
+                  cx="21"
+                  cy="21"
+                  r="4.5"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeDasharray="2.5 2.5"
+                  opacity="0.5"
+                />
               </svg>
             </div>
             <b>{q || cf ? "No matching expenses" : "No activity recorded"}</b>
@@ -2444,25 +2526,23 @@ function Plans({
                 style={{ width: 190, height: 190, transform: "rotate(-90deg)" }}
               >
                 <defs>
-                  <linearGradient id="budgetRingGrad" x1="0" y1="0" x2="1" y2="1">
+                  <linearGradient
+                    id="budgetRingGrad"
+                    x1="0"
+                    y1="0"
+                    x2="1"
+                    y2="1"
+                  >
                     <stop
                       offset="0%"
                       stopColor={
-                        pc > 1
-                          ? "#f43f5e"
-                          : pc > 0.75
-                            ? "#f59e0b"
-                            : "#10b981"
+                        pc > 1 ? "#f43f5e" : pc > 0.75 ? "#f59e0b" : "#10b981"
                       }
                     />
                     <stop
                       offset="100%"
                       stopColor={
-                        pc > 1
-                          ? "#e11d48"
-                          : pc > 0.75
-                            ? "#ea580c"
-                            : "#06b6d4"
+                        pc > 1 ? "#e11d48" : pc > 0.75 ? "#ea580c" : "#06b6d4"
                       }
                     />
                   </linearGradient>
@@ -2512,14 +2592,36 @@ function Plans({
         ) : (
           <div className="emp-illustrated">
             <div className="emp-illustrated-icon">
-              <svg viewBox="0 0 48 48" fill="none" className="emp-svg" aria-hidden="true">
-                <circle cx="24" cy="24" r="16" stroke="currentColor" strokeWidth="2.2" opacity="0.35" />
-                <circle cx="24" cy="24" r="10" stroke="currentColor" strokeWidth="2.2" opacity="0.65" />
+              <svg
+                viewBox="0 0 48 48"
+                fill="none"
+                className="emp-svg"
+                aria-hidden="true"
+              >
+                <circle
+                  cx="24"
+                  cy="24"
+                  r="16"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  opacity="0.35"
+                />
+                <circle
+                  cx="24"
+                  cy="24"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  opacity="0.65"
+                />
                 <circle cx="24" cy="24" r="4" fill="currentColor" />
               </svg>
             </div>
             <b>No budget set for {fM(S.m)}</b>
-            <small>Set a monthly spending limit to manage your budget and stay on track.</small>
+            <small>
+              Set a monthly spending limit to manage your budget and stay on
+              track.
+            </small>
           </div>
         )}
         <button className="btn" onClick={onBudget}>
@@ -2582,16 +2684,61 @@ function Plans({
         ) : (
           <div className="emp-illustrated">
             <div className="emp-illustrated-icon">
-              <svg viewBox="0 0 48 48" fill="none" className="emp-svg" aria-hidden="true">
-                <rect x="9" y="11" width="30" height="28" rx="6" stroke="currentColor" strokeWidth="2.2" />
-                <line x1="9" y1="20" x2="39" y2="20" stroke="currentColor" strokeWidth="2" opacity="0.4" />
-                <line x1="16" y1="8" x2="16" y2="13" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
-                <line x1="32" y1="8" x2="32" y2="13" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
-                <path d="M21 28H27M24 25V31" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              <svg
+                viewBox="0 0 48 48"
+                fill="none"
+                className="emp-svg"
+                aria-hidden="true"
+              >
+                <rect
+                  x="9"
+                  y="11"
+                  width="30"
+                  height="28"
+                  rx="6"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                />
+                <line
+                  x1="9"
+                  y1="20"
+                  x2="39"
+                  y2="20"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  opacity="0.4"
+                />
+                <line
+                  x1="16"
+                  y1="8"
+                  x2="16"
+                  y2="13"
+                  stroke="currentColor"
+                  strokeWidth="2.4"
+                  strokeLinecap="round"
+                />
+                <line
+                  x1="32"
+                  y1="8"
+                  x2="32"
+                  y2="13"
+                  stroke="currentColor"
+                  strokeWidth="2.4"
+                  strokeLinecap="round"
+                />
+                <path
+                  d="M21 28H27M24 25V31"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
               </svg>
             </div>
             <b>No recurring expenses</b>
-            <small>Schedule subscriptions, utilities, or rent payments to track automatically.</small>
+            <small>
+              Schedule subscriptions, utilities, or rent payments to track
+              automatically.
+            </small>
           </div>
         )}
       </div>

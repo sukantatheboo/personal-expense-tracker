@@ -132,12 +132,7 @@ export function getTransactionColor(type) {
   return TRANSACTION_COLORS[key] || "#8b5cf6";
 }
 
-export function CategorySymbol({
-  category,
-  className = "",
-  size,
-  style,
-}) {
+export function CategorySymbol({ category, className = "", size, style }) {
   const iconSrc = getCategoryIcon(category);
   const color = getCategoryColor(category);
   const inlineStyle = {
@@ -166,12 +161,7 @@ export function CategorySymbol({
   );
 }
 
-export function TransactionSymbol({
-  type,
-  className = "",
-  size,
-  style,
-}) {
+export function TransactionSymbol({ type, className = "", size, style }) {
   const iconSrc = getTransactionIcon(type);
   const color = getTransactionColor(type);
   const inlineStyle = {

@@ -2719,11 +2719,15 @@ a:active,
 }
 :root[data-theme="dark"] .mobile-prototype .tabs nav .fab,
 .mobile-prototype[data-theme="dark"] .tabs nav .fab {
-  box-shadow: 0 8px 24px rgba(255, 255, 255, 0.18), 0 3px 12px rgba(0, 0, 0, 0.6);
+  box-shadow:
+    0 8px 24px rgba(255, 255, 255, 0.18),
+    0 3px 12px rgba(0, 0, 0, 0.6);
 }
 :root[data-theme="dark"] .mobile-prototype .tabs nav .fab:active,
 .mobile-prototype[data-theme="dark"] .tabs nav .fab:active {
-  box-shadow: 0 4px 14px rgba(255, 255, 255, 0.12), 0 2px 6px rgba(0, 0, 0, 0.4);
+  box-shadow:
+    0 4px 14px rgba(255, 255, 255, 0.12),
+    0 2px 6px rgba(0, 0, 0, 0.4);
 }
 .mobile-prototype .fab svg {
   width: 24px;
@@ -5490,7 +5494,10 @@ a:active,
   filter: drop-shadow(0 0.5px 1.5px rgba(0, 0, 0, 0.3));
 }
 .mobile-prototype .mini-card-visa-text {
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
   font-size: 7.5px;
   font-weight: 900;
   font-style: italic;
@@ -5500,7 +5507,10 @@ a:active,
   text-shadow: 0 0.5px 2px rgba(0, 0, 0, 0.45);
 }
 .mobile-prototype .mini-card-amex-text {
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
   font-size: 6.5px;
   font-weight: 900;
   color: #ffffff;
@@ -5610,7 +5620,9 @@ a:active,
   border-color: var(--ink);
   background: var(--card);
   color: var(--ink);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08), 0 0 0 1px var(--ink);
+  box-shadow:
+    0 4px 14px rgba(0, 0, 0, 0.08),
+    0 0 0 1px var(--ink);
   transform: translateY(-1px);
 }
 [data-theme="dark"] .mobile-prototype .add-card-network-btn {
@@ -5621,13 +5633,18 @@ a:active,
   border-color: #f8fafc;
   background: #1e242a;
   color: #f8fafc;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.3);
+  box-shadow:
+    0 4px 18px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(255, 255, 255, 0.3);
   transform: translateY(-1px);
 }
 .mobile-prototype .add-card-network-btn .card-network-badge {
   --visa-badge-filter: brightness(0);
 }
-[data-theme="dark"] .mobile-prototype .add-card-network-btn .card-network-badge {
+[data-theme="dark"]
+  .mobile-prototype
+  .add-card-network-btn
+  .card-network-badge {
   --visa-badge-filter: brightness(0) invert(1);
 }
 .mobile-prototype .add-card-type-toggle {
