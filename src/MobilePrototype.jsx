@@ -55,6 +55,10 @@ import {
   markActive,
   shouldLockApp,
   lockAppManually,
+  isCloudEncryptionEnabled,
+  setCloudPassphrase,
+  verifyCloudPassphrase,
+  disableCloudEncryption,
 } from "./security.js";
 import "./MobilePrototype.css";
 
@@ -3563,7 +3567,15 @@ function SettingsSheet({
       <button className="ri" type="button" onClick={onSecurity}>
         <span className="nm">
           <b>Security &amp; App Lock</b>
-          <small>{hasAppPin() ? "Passcode active · Zero-knowledge sync" : "Set PIN passcode &amp; biometrics"}</small>
+          <small>
+            {hasAppPin()
+              ? isCloudEncryptionEnabled()
+                ? "Passcode active · Zero-knowledge sync"
+                : "Passcode active · Cloud sync ready"
+              : isCloudEncryptionEnabled()
+                ? "Zero-knowledge sync · Passcode off"
+                : "Set PIN passcode & biometrics"}
+          </small>
         </span>
         <span className="settings-chevron" aria-hidden="true">
           <Icon n="r" />
@@ -5305,6 +5317,9 @@ function AppSettingsPage({
 
 function SecuritySheet({ onClose, onLockNow }) {
   const [pinSet, setPinSet] = useState(() => hasAppPin());
+  const [cloudE2eEnabled, setCloudE2eEnabled] = useState(() =>
+    isCloudEncryptionEnabled(),
+  );
   const [biometricsAvailable, setBiometricsAvailable] = useState(false);
   const [biometricsConfigured, setBiometricsConfigured] = useState(() =>
     hasBiometricsConfigured(),
@@ -5312,10 +5327,13 @@ function SecuritySheet({ onClose, onLockNow }) {
   const [timeoutMinutes, setTimeoutMinutes] = useState(() =>
     getLockTimeoutMinutes(),
   );
-  const [step, setStep] = useState("overview"); // "overview" | "setup_pin" | "confirm_pin"
+  const [step, setStep] = useState("overview"); // "overview" | "setup_pin" | "confirm_pin" | "setup_passphrase" | "confirm_passphrase"
   const [pinDraft, setPinDraft] = useState("");
   const [pinConfirm, setPinConfirm] = useState("");
   const [pinError, setPinError] = useState("");
+  const [passphraseDraft, setPassphraseDraft] = useState("");
+  const [passphraseConfirm, setPassphraseConfirm] = useState("");
+  const [passphraseError, setPassphraseError] = useState("");
   const [statusMsg, setStatusMsg] = useState("");
 
   useEffect(() => {
@@ -5388,24 +5406,58 @@ function SecuritySheet({ onClose, onLockNow }) {
     triggerHaptic("selection");
   };
 
+  const handleStartSetPassphrase = () => {
+    setPassphraseDraft("");
+    setPassphraseConfirm("");
+    setPassphraseError("");
+    setStep("setup_passphrase");
+  };
+
+  const handleDraftPassphraseSubmit = (e) => {
+    e?.preventDefault();
+    if (passphraseDraft.length < 8) {
+      setPassphraseError("Passphrase must be at least 8 characters");
+      triggerHaptic("warning");
+      return;
+    }
+    setPassphraseError("");
+    setStep("confirm_passphrase");
+  };
+
+  const handleConfirmPassphraseSubmit = async (e) => {
+    e?.preventDefault();
+    if (passphraseConfirm !== passphraseDraft) {
+      setPassphraseError("Passphrases do not match. Please try again.");
+      triggerHaptic("warning");
+      setPassphraseConfirm("");
+      return;
+    }
+    await setCloudPassphrase(passphraseDraft);
+    setCloudE2eEnabled(true);
+    triggerHaptic("success");
+    setStatusMsg("Zero-knowledge cloud encryption enabled with master passphrase.");
+    setStep("overview");
+  };
+
+  const handleDisableCloudE2e = () => {
+    disableCloudEncryption();
+    setCloudE2eEnabled(false);
+    triggerHaptic("delete");
+    setStatusMsg("Zero-knowledge cloud encryption turned off. Standard Supabase RLS is active.");
+  };
+
   return (
     <Sheet onClose={onClose}>
       <h3 id="sheet-title">Security &amp; App Lock</h3>
 
       {step === "overview" && (
         <div className="security-sheet-content">
-          <div style={{ marginBottom: 16 }}>
-            <span className="security-badge-e2e">
-              <span className="security-badge-dot" />
-              AES-GCM-256 Zero-Knowledge Active
-            </span>
-            <p className="settings-note" style={{ marginTop: 8 }}>
-              Financial cards and cloud snapshots are encrypted client-side using WebCrypto PBKDF2 + AES-GCM before syncing to Supabase.
-            </p>
-          </div>
-
+          {/* Section 1: Device App Lock */}
           <div className="settings-menu-section">
-            <h4>App Lock Passcode</h4>
+            <h4>Device Passcode &amp; Biometrics</h4>
+            <p className="settings-note" style={{ marginBottom: 12 }}>
+              Requires authentication when opening Spend or unmasking sensitive account details on this device.
+            </p>
             {pinSet ? (
               <>
                 <div className="ri" style={{ justifyContent: "space-between" }}>
@@ -5535,6 +5587,86 @@ function SecuritySheet({ onClose, onLockNow }) {
             </div>
           )}
 
+          {/* Section 2: Cloud Data Protection */}
+          <div className="settings-menu-section" style={{ marginTop: 16 }}>
+            <h4>Cloud Data Protection</h4>
+            <div style={{ marginBottom: 12 }}>
+              {cloudE2eEnabled ? (
+                <>
+                  <span className="security-badge-e2e">
+                    <span className="security-badge-dot" />
+                    AES-GCM-256 Zero-Knowledge Active
+                  </span>
+                  <p className="settings-note" style={{ marginTop: 8 }}>
+                    Your cloud snapshots are encrypted client-side using WebCrypto PBKDF2 + AES-GCM before syncing to Supabase.
+                  </p>
+                  <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
+                    <button
+                      type="button"
+                      className="btn"
+                      style={{ flex: 1, padding: "10px 14px", fontSize: 13 }}
+                      onClick={handleStartSetPassphrase}
+                    >
+                      Change Passphrase
+                    </button>
+                    <button
+                      type="button"
+                      className="btn del"
+                      style={{ flex: 1, padding: "10px 14px", fontSize: 13 }}
+                      onClick={handleDisableCloudE2e}
+                    >
+                      Disable E2EE
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <span
+                    className="security-badge-e2e"
+                    style={{
+                      color: "#2563eb",
+                      background: "rgba(37,99,235,0.08)",
+                      borderColor: "rgba(37,99,235,0.2)",
+                    }}
+                  >
+                    Supabase PostgreSQL RLS Active
+                  </span>
+                  <p className="settings-note" style={{ marginTop: 8 }}>
+                    Authenticated cloud sync is securely protected by Supabase Row-Level Security (auth.uid() = user_id) with normalized tables and background push reminders.
+                  </p>
+                  <button
+                    className="ri settings-action"
+                    type="button"
+                    style={{ marginTop: 10 }}
+                    onClick={handleStartSetPassphrase}
+                  >
+                    <i className="ic" style={{ "--c": "#2563eb" }}>
+                      <svg
+                        viewBox="0 0 24 24"
+                        width="20"
+                        height="20"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                      </svg>
+                    </i>
+                    <span className="nm">
+                      <b>Enable Zero-Knowledge Passphrase</b>
+                      <small>Optional end-to-end encryption for cloud sync</small>
+                    </span>
+                    <span className="settings-chevron" aria-hidden="true">
+                      <Icon n="r" />
+                    </span>
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+
           {statusMsg && (
             <p
               className="settings-status"
@@ -5659,6 +5791,87 @@ function SecuritySheet({ onClose, onLockNow }) {
               disabled={pinConfirm.length !== 4}
             >
               Confirm &amp; Enable
+            </button>
+          </div>
+        </form>
+      )}
+
+      {step === "setup_passphrase" && (
+        <form onSubmit={handleDraftPassphraseSubmit}>
+          <p className="hint">
+            Enter a master passphrase (at least 8 characters) to encrypt cloud sync snapshots:
+          </p>
+          <div style={{ margin: "20px 0" }}>
+            <input
+              type="password"
+              className="in"
+              autoFocus
+              data-sheet-autofocus
+              placeholder="Enter master passphrase"
+              value={passphraseDraft}
+              onChange={(e) => setPassphraseDraft(e.target.value)}
+            />
+          </div>
+          {passphraseError && (
+            <p className="app-lock-error-msg" style={{ textAlign: "center" }}>
+              {passphraseError}
+            </p>
+          )}
+          <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+            <button
+              type="button"
+              className="btn del"
+              onClick={() => setStep("overview")}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="btn"
+              disabled={passphraseDraft.length < 8}
+            >
+              Continue
+            </button>
+          </div>
+        </form>
+      )}
+
+      {step === "confirm_passphrase" && (
+        <form onSubmit={handleConfirmPassphraseSubmit}>
+          <p className="hint">Re-enter your master cloud passphrase to confirm:</p>
+          <div style={{ margin: "20px 0" }}>
+            <input
+              type="password"
+              className="in"
+              autoFocus
+              data-sheet-autofocus
+              placeholder="Confirm master passphrase"
+              value={passphraseConfirm}
+              onChange={(e) => setPassphraseConfirm(e.target.value)}
+            />
+          </div>
+          {passphraseError && (
+            <p className="app-lock-error-msg" style={{ textAlign: "center" }}>
+              {passphraseError}
+            </p>
+          )}
+          <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+            <button
+              type="button"
+              className="btn del"
+              onClick={() => {
+                setStep("setup_passphrase");
+                setPassphraseConfirm("");
+              }}
+            >
+              Back
+            </button>
+            <button
+              type="submit"
+              className="btn"
+              disabled={passphraseConfirm.length < 8}
+            >
+              Enable E2EE
             </button>
           </div>
         </form>

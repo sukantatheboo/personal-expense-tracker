@@ -1,7 +1,8 @@
 import { supabase } from "./push.js";
 import { emptyAccountData, loadAccountData } from "./data.js";
 import {
-  getSessionKey,
+  getCloudEncryptionKey,
+  isCloudEncryptionEnabled,
   encryptDataWithPassphrase,
   decryptDataWithPassphrase,
 } from "./security.js";
@@ -170,6 +171,23 @@ function mergeAccountDataWithRawSnapshot(
   );
 }
 
+async function maybeDecryptSnapshot(payload) {
+  if (payload && typeof payload === "object" && payload._encrypted) {
+    const key = getCloudEncryptionKey();
+    if (key) {
+      try {
+        const decrypted = await decryptDataWithPassphrase(payload, key);
+        return decrypted;
+      } catch (err) {
+        console.warn("Could not decrypt zero-knowledge cloud snapshot", err);
+        return { ...payload, _decryptionFailed: true };
+      }
+    }
+    return { ...payload, _decryptionPending: true };
+  }
+  return payload;
+}
+
 async function loadLegacyCloudData(userId) {
   let settingsQuery = supabase
     .from("spend_account_settings")
@@ -214,7 +232,22 @@ async function loadLegacyCloudData(userId) {
   if (snapshotResult.error) throw snapshotResult.error;
 
   const snapshot = snapshotResult.data;
-  const snapshotData = snapshot?.data ? await maybeDecryptSnapshot(snapshot.data) : null;
+  const snapshotData = snapshot?.data
+    ? await maybeDecryptSnapshot(snapshot.data)
+    : null;
+
+  // If payload is encrypted and cannot be decrypted yet, preserve ciphertext envelope safely
+  if (snapshotData?._decryptionPending || snapshotData?._decryptionFailed) {
+    return {
+      ...snapshot,
+      normalizedAccountSync: false,
+      data: snapshotData,
+      isEncrypted: true,
+      isDecryptionPending: Boolean(snapshotData._decryptionPending),
+      isDecryptionFailed: Boolean(snapshotData._decryptionFailed),
+    };
+  }
+
   const normalizedSchemaUnavailable =
     isNormalizedAccountSchemaUnavailable(settingsResult.error) ||
     isNormalizedAccountSchemaUnavailable(transactionsResult.error);
@@ -332,6 +365,29 @@ export async function loadCloudData(userId) {
       const rawUpdatedAt = rawSnapshotResult?.data?.updated_at;
       const effectiveUpdatedAt = rawUpdatedAt || rpcData.updated_at;
 
+      // GUARD: If ciphertext requires passphrase, do not merge empty structures
+      if (rawData?._decryptionPending || rawData?._decryptionFailed) {
+        return {
+          ...rpcData,
+          updated_at: effectiveUpdatedAt,
+          data: rawData,
+          isEncrypted: true,
+          isDecryptionPending: Boolean(rawData._decryptionPending),
+          isDecryptionFailed: Boolean(rawData._decryptionFailed),
+        };
+      }
+
+      if (effectiveRpcData?._decryptionPending || effectiveRpcData?._decryptionFailed) {
+        return {
+          ...rpcData,
+          updated_at: effectiveUpdatedAt,
+          data: effectiveRpcData,
+          isEncrypted: true,
+          isDecryptionPending: Boolean(effectiveRpcData._decryptionPending),
+          isDecryptionFailed: Boolean(effectiveRpcData._decryptionFailed),
+        };
+      }
+
       if (effectiveRpcData && rawData) {
         return {
           ...rpcData,
@@ -399,32 +455,27 @@ async function executeSaveQuery(userId, payload, expectedUpdatedAt) {
     .single();
 }
 
-async function maybeDecryptSnapshot(payload) {
-  if (payload && typeof payload === "object" && payload._encrypted) {
-    const key = getSessionKey();
-    if (key) {
-      try {
-        return await decryptDataWithPassphrase(payload, key);
-      } catch (err) {
-        console.warn("Could not decrypt zero-knowledge cloud snapshot", err);
-        return { ...payload, _decryptionFailed: true };
-      }
-    }
-    return { ...payload, _decryptionPending: true };
-  }
-  return payload;
-}
-
 export async function saveCloudData(userId, data, expectedUpdatedAt = null) {
   if (!supabase) throw new Error("Cloud sync is not configured.");
 
-  const key = getSessionKey();
+  // CRITICAL GUARD: Never save an encrypted blob that couldn't be decrypted,
+  // as that would destroy local or remote state.
+  if (data && (data._decryptionPending || data._decryptionFailed)) {
+    throw new Error(
+      "Cannot save cloud snapshot while data is encrypted and pending decryption.",
+    );
+  }
+
+  const key = getCloudEncryptionKey();
   let payload = data;
-  if (key && data && !data._encrypted) {
+  if (isCloudEncryptionEnabled() && key && data && !data._encrypted) {
     try {
       payload = await encryptDataWithPassphrase(data, key);
     } catch (err) {
-      console.warn("Failed to encrypt cloud payload with session key, using unencrypted fallback", err);
+      console.warn(
+        "Failed to encrypt cloud payload with passphrase key, using unencrypted fallback",
+        err,
+      );
     }
   }
 
