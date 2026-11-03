@@ -425,6 +425,7 @@ a:active,
   --g: #111827;
   --h1: #111827;
   --h2: #1f2937;
+  --hero-border: transparent;
   --bad: #c0483a;
   --over: #f0a067;
   --on: #ffffff;
@@ -459,8 +460,9 @@ a:active,
     --mut: #aab4ae;
     --line: #30363a;
     --g: #f8fafc;
-    --h1: #f8fafc;
-    --h2: #e2e8f0;
+    --h1: #111827;
+    --h2: #1f2937;
+    --hero-border: rgba(255, 255, 255, 0.08);
     --bad: #ee8b7d;
     --on: #0f172a;
     --shadow: 0 8px 24px rgb(0 0 0 / 22%);
@@ -491,8 +493,9 @@ a:active,
   --mut: #aab4ae;
   --line: #30363a;
   --g: #f8fafc;
-  --h1: #f8fafc;
-  --h2: #e2e8f0;
+  --h1: #111827;
+  --h2: #1f2937;
+  --hero-border: rgba(255, 255, 255, 0.08);
   --bad: #ee8b7d;
   --over: #f2a16f;
   --on: #0f172a;
@@ -964,6 +967,7 @@ a:active,
   border-radius: 28px;
   padding: 22px;
   box-shadow: var(--shadow);
+  border: 1px solid var(--hero-border, transparent);
 }
 .mobile-prototype .row {
   display: flex;
