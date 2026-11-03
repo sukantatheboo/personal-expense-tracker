@@ -1700,10 +1700,19 @@ function Home({
               />
             ))
         ) : (
-          <div className="emp">
-            No expenses yet.
-            <br />
-            Tap + to add your first.
+          <div className="emp-illustrated">
+            <div className="emp-illustrated-icon">
+              <svg viewBox="0 0 48 48" fill="none" className="emp-svg" aria-hidden="true">
+                <rect x="11" y="8" width="26" height="32" rx="6" className="emp-doc" />
+                <line x1="17" y1="16" x2="31" y2="16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.85" />
+                <line x1="17" y1="22" x2="27" y2="22" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.55" />
+                <line x1="17" y1="28" x2="23" y2="28" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity="0.35" />
+                <circle cx="34" cy="34" r="8" className="emp-chip" />
+                <path d="M34 31V37M31 34H37" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            </div>
+            <b>No expenses this month</b>
+            <small>Tap + below to add your first expense</small>
           </div>
         )}
       </div>
@@ -1773,7 +1782,33 @@ function Activity({
       )}
       <div>
         {!l.length ? (
-          <div className="emp">Nothing matches.</div>
+          <div className="emp-illustrated">
+            <div className="emp-illustrated-icon">
+              <svg viewBox="0 0 48 48" fill="none" className="emp-svg" aria-hidden="true">
+                <circle cx="21" cy="21" r="10" stroke="currentColor" strokeWidth="2.2" />
+                <line x1="28.5" y1="28.5" x2="38" y2="38" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
+                <circle cx="21" cy="21" r="4.5" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2.5 2.5" opacity="0.5" />
+              </svg>
+            </div>
+            <b>{q || cf ? "No matching expenses" : "No activity recorded"}</b>
+            <small>
+              {q || cf
+                ? "Try searching another keyword or clearing your category filter."
+                : "Your expenses will show up here by date."}
+            </small>
+            {(q || cf) && (
+              <button
+                type="button"
+                className="emp-action-pill"
+                onClick={() => {
+                  setQ("");
+                  setCf("");
+                }}
+              >
+                Clear filter
+              </button>
+            )}
+          </div>
         ) : (
           Object.keys(g)
             .sort()
@@ -1878,6 +1913,7 @@ function Accounts({
   onOpenExpense,
   onOpenTransaction,
   onLockedCardNotice,
+  onAddExpense,
 }) {
   const cards = Array.isArray(S.cards) ? S.cards : [];
   const savingsAccountId = getSavingsAccountId(cards);
@@ -2139,24 +2175,26 @@ function Accounts({
       {/* Transactions Section matching Video Header & List */}
       <div className="accounts-transactions-header">
         <h2>Transactions</h2>
-        <button
-          type="button"
-          className="accounts-see-all-link"
-          onClick={() => {
-            triggerHaptic("selection");
-            if (filteredEvents.length > 8) {
-              setShowAllTx((prev) => !prev);
-            } else {
-              onTab?.("activity");
-            }
-          }}
-        >
-          {filteredEvents.length > 8
-            ? showAllTx
-              ? "Show less"
-              : `See all (${filteredEvents.length})`
-            : "See all"}
-        </button>
+        {filteredEvents.length > 0 && (
+          <button
+            type="button"
+            className="accounts-see-all-link"
+            onClick={() => {
+              triggerHaptic("selection");
+              if (filteredEvents.length > 8) {
+                setShowAllTx((prev) => !prev);
+              } else {
+                onTab?.("activity");
+              }
+            }}
+          >
+            {filteredEvents.length > 8
+              ? showAllTx
+                ? "Show less"
+                : `See all (${filteredEvents.length})`
+              : "See all"}
+          </button>
+        )}
       </div>
 
       <div className="accounts-transactions-card">
@@ -2218,17 +2256,153 @@ function Accounts({
             );
           })
         ) : (
-          <div className="accounts-tx-empty">
-            <span className="accounts-tx-empty-icon">
-              <Icon n="activity" />
-            </span>
-            <span>
-              <b>No transactions yet</b>
-              <small>
-                Activity for {activeCard?.name || "this card"} will show up
-                here.
-              </small>
-            </span>
+          <div
+            className="accounts-tx-empty"
+            style={{ "--card-accent": activeCard?.color || "#2563eb" }}
+          >
+            <div className="accounts-tx-empty-icon-wrap">
+              <div className="accounts-tx-empty-glow" />
+              <div className="accounts-tx-empty-badge">
+                <svg
+                  viewBox="0 0 52 52"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="accounts-tx-empty-svg"
+                  aria-hidden="true"
+                >
+                  <rect
+                    x="11"
+                    y="9"
+                    width="30"
+                    height="34"
+                    rx="7"
+                    className="accounts-tx-empty-doc"
+                  />
+                  <line
+                    x1="18"
+                    y1="18"
+                    x2="34"
+                    y2="18"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    opacity="0.85"
+                  />
+                  <line
+                    x1="18"
+                    y1="24"
+                    x2="30"
+                    y2="24"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    opacity="0.55"
+                  />
+                  <line
+                    x1="18"
+                    y1="30"
+                    x2="25"
+                    y2="30"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    opacity="0.35"
+                  />
+                  <circle
+                    cx="36"
+                    cy="36"
+                    r="9"
+                    className="accounts-tx-empty-bubble"
+                  />
+                  <path
+                    d="M36 32.5V39.5M32.5 36H39.5"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </div>
+            </div>
+
+            <div className="accounts-tx-empty-text">
+              <h4 className="accounts-tx-empty-title">No transactions yet</h4>
+              <p className="accounts-tx-empty-desc">
+                Activity for{" "}
+                <strong className="accounts-tx-empty-card-name">
+                  {activeCard?.name || "this card"}
+                </strong>{" "}
+                will show up here.
+              </p>
+            </div>
+
+            {activeCard?.frozen ? (
+              <div className="accounts-tx-empty-frozen">
+                <svg
+                  viewBox="0 0 24 24"
+                  width="14"
+                  height="14"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+                <span>Card is locked</span>
+                <button
+                  type="button"
+                  className="accounts-tx-empty-unlock-btn"
+                  onClick={() => {
+                    triggerHaptic("selection");
+                    onOpenCardOptions?.(selectedAccount);
+                  }}
+                >
+                  Manage
+                </button>
+              </div>
+            ) : (
+              <div className="accounts-tx-empty-actions">
+                <button
+                  type="button"
+                  className="accounts-tx-empty-btn is-primary"
+                  onClick={() => {
+                    triggerHaptic("light");
+                    if (onAddExpense) {
+                      onAddExpense(selectedAccount);
+                    } else {
+                      onTab?.("add");
+                    }
+                  }}
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                  <span>Add Expense</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="accounts-tx-empty-btn is-secondary"
+                  onClick={() => {
+                    triggerHaptic("light");
+                    onTx?.("income", selectedAccount);
+                  }}
+                >
+                  <span>Income</span>
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -2269,21 +2443,50 @@ function Plans({
                 viewBox="0 0 150 150"
                 style={{ width: 190, height: 190, transform: "rotate(-90deg)" }}
               >
+                <defs>
+                  <linearGradient id="budgetRingGrad" x1="0" y1="0" x2="1" y2="1">
+                    <stop
+                      offset="0%"
+                      stopColor={
+                        pc > 1
+                          ? "#f43f5e"
+                          : pc > 0.75
+                            ? "#f59e0b"
+                            : "#10b981"
+                      }
+                    />
+                    <stop
+                      offset="100%"
+                      stopColor={
+                        pc > 1
+                          ? "#e11d48"
+                          : pc > 0.75
+                            ? "#ea580c"
+                            : "#06b6d4"
+                      }
+                    />
+                  </linearGradient>
+                </defs>
                 <circle
                   cx="75"
                   cy="75"
                   r="62"
                   stroke="var(--line)"
-                  strokeWidth="14"
+                  strokeWidth="13"
                 />
                 <circle
                   cx="75"
                   cy="75"
                   r="62"
-                  stroke={pc > 1 ? "var(--bad)" : "var(--g)"}
-                  strokeWidth="14"
+                  stroke="url(#budgetRingGrad)"
+                  strokeWidth="13"
+                  strokeLinecap="round"
                   strokeDasharray={C}
                   strokeDashoffset={C * (1 - Math.min(pc, 1))}
+                  style={{
+                    transition:
+                      "stroke-dashoffset 600ms cubic-bezier(0.2, 0.8, 0.2, 1)",
+                  }}
                 />
               </svg>
               <b>
@@ -2307,7 +2510,17 @@ function Plans({
             </p>
           </>
         ) : (
-          <div className="emp">No budget for this month yet.</div>
+          <div className="emp-illustrated">
+            <div className="emp-illustrated-icon">
+              <svg viewBox="0 0 48 48" fill="none" className="emp-svg" aria-hidden="true">
+                <circle cx="24" cy="24" r="16" stroke="currentColor" strokeWidth="2.2" opacity="0.35" />
+                <circle cx="24" cy="24" r="10" stroke="currentColor" strokeWidth="2.2" opacity="0.65" />
+                <circle cx="24" cy="24" r="4" fill="currentColor" />
+              </svg>
+            </div>
+            <b>No budget set for {fM(S.m)}</b>
+            <small>Set a monthly spending limit to manage your budget and stay on track.</small>
+          </div>
         )}
         <button className="btn" onClick={onBudget}>
           {b ? "Edit budget" : "Set monthly budget"}
@@ -2367,7 +2580,19 @@ function Plans({
             </div>
           ))
         ) : (
-          <div className="emp">No recurring expenses.</div>
+          <div className="emp-illustrated">
+            <div className="emp-illustrated-icon">
+              <svg viewBox="0 0 48 48" fill="none" className="emp-svg" aria-hidden="true">
+                <rect x="9" y="11" width="30" height="28" rx="6" stroke="currentColor" strokeWidth="2.2" />
+                <line x1="9" y1="20" x2="39" y2="20" stroke="currentColor" strokeWidth="2" opacity="0.4" />
+                <line x1="16" y1="8" x2="16" y2="13" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
+                <line x1="32" y1="8" x2="32" y2="13" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
+                <path d="M21 28H27M24 25V31" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            </div>
+            <b>No recurring expenses</b>
+            <small>Schedule subscriptions, utilities, or rent payments to track automatically.</small>
+          </div>
         )}
       </div>
       <button className="btn" onClick={onAddRec}>
@@ -2406,16 +2631,21 @@ function AddSheet({
   categoryOrder,
   expenses,
   cards = [],
+  defaultAccount = "",
   onSave,
   onClose,
 }) {
   const spendableCards = cards.filter((c) => c.type !== "savings" && !c.frozen);
+  const initialAcct =
+    defaultAccount && spendableCards.some((c) => c.id === defaultAccount)
+      ? defaultAccount
+      : "";
   const [f, setF] = useState({
     amt: "",
     desc: "",
     cat: categoryOrder.find((category) => category !== "Savings") || "Food",
     date: ld(),
-    acct: "",
+    acct: initialAcct,
     iv: iv || "none",
   });
   const [categoryTouched, setCategoryTouched] = useState(false);
@@ -3134,7 +3364,7 @@ function SettingsSheet({
         aria-label="Open profile and sync settings"
         onClick={onProfileSettings}
       >
-        <i className="ic" style={{ "--c": "#2f7a5a" }}>
+        <i className="ic" style={{ "--c": "var(--g)" }}>
           {profile?.initial || "S"}
         </i>
         <span className="nm">
@@ -3660,7 +3890,7 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
                         handleFormChange("network", "visa");
                       }}
                     >
-                      <VisaBadge width={44} height={17} />
+                      <VisaBadge width={44} height={17} variant="adaptive" />
                       <span>Visa</span>
                     </button>
 
@@ -4304,7 +4534,7 @@ function CardOptionsSheet({
                         setFormData((prev) => ({ ...prev, network: "visa" }));
                       }}
                     >
-                      <VisaBadge width={44} height={17} />
+                      <VisaBadge width={44} height={17} variant="adaptive" />
                       <span>Visa</span>
                     </button>
 
@@ -4716,7 +4946,7 @@ function ProfileSettingsPage({
         <h2>Your profile</h2>
         {profile?.connected ? (
           <div className="ri settings-profile-row">
-            <i className="ic" style={{ "--c": "#2f7a5a" }}>
+            <i className="ic" style={{ "--c": "var(--g)" }}>
               {profile.initial || "S"}
             </i>
             <span className="nm">
@@ -4739,7 +4969,7 @@ function ProfileSettingsPage({
             aria-label="Sign in to edit your profile"
             onClick={onSignIn}
           >
-            <i className="ic" style={{ "--c": "#2f7a5a" }}>
+            <i className="ic" style={{ "--c": "var(--g)" }}>
               {profile?.initial || "S"}
             </i>
             <span className="nm">
@@ -6002,6 +6232,7 @@ export default function MobilePrototype({
                     `${cardName || "This card"} is locked. Unlock it in Card Options first.`,
                   )
                 }
+                onAddExpense={(acct) => openSheet({ type: "add", acct })}
               />
             )}
             {!appSettingsOpen && !profileSettingsOpen && tab === "plans" && (
@@ -6120,6 +6351,7 @@ export default function MobilePrototype({
           categoryOrder={categoryOrder}
           expenses={S.exp}
           cards={cards}
+          defaultAccount={sheet.acct}
           onSave={saveExpense}
           onClose={close}
         />

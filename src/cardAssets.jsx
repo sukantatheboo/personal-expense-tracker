@@ -338,7 +338,8 @@ export function SavingsLogo({ className = "", height = 24 }) {
 /**
  * High-Res Official Visa Logo from payment-logos/visa.png
  */
-export function VisaBadge({ className = "", height = 18, width }) {
+export function VisaBadge({ className = "", height = 18, width, variant = "auto" }) {
+  const isAdaptive = variant === "adaptive";
   return (
     <img
       src={visaImg}
@@ -350,7 +351,9 @@ export function VisaBadge({ className = "", height = 18, width }) {
         maxHeight: height,
         objectFit: "contain",
         display: "block",
-        filter: "brightness(0) invert(1) drop-shadow(0 1px 2px rgba(0,0,0,0.3))",
+        filter: isAdaptive
+          ? "var(--visa-badge-filter, brightness(0))"
+          : "brightness(0) invert(1) drop-shadow(0 1px 2px rgba(0,0,0,0.3))",
       }}
     />
   );
