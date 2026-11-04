@@ -295,10 +295,12 @@ export function StackedCardDeck({
   const [swapPhase, setSwapPhase] = useState("idle");
   const [dragY, setDragY] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [releaseY, setReleaseY] = useState(0);
   const dragStartRef = useRef(null);
   const animTimeoutRef = useRef(null);
   const passedHapticRef = useRef(false);
   const wheelCooldownRef = useRef(0);
+  const wasSwipeRef = useRef(false);
 
   const totalCards = cards.length;
   const safeActiveIndex =
@@ -339,10 +341,11 @@ export function StackedCardDeck({
     onDragOffsetChange?.(val);
   };
 
-  // Swap Next (Swipe UP): Front card glides UP, slips behind into top/rear slot, next card glides forward
-  const handleSwapNext = useCallback(() => {
+  // Swap Next (Swipe UP): Front card glides UP seamlessly from release position
+  const handleSwapNext = useCallback((fromY = 0) => {
     if (totalCards <= 1 || swapPhase !== "idle") return;
     triggerHaptic("light");
+    setReleaseY(fromY);
     setSwapPhase("swapping-next");
     updateDrag(0);
 
@@ -352,22 +355,26 @@ export function StackedCardDeck({
     animTimeoutRef.current = setTimeout(() => {
       setActiveIndex(nextIndex);
       setSwapPhase("idle");
+      setReleaseY(0);
     }, 360);
   }, [totalCards, swapPhase, safeActiveIndex, cards, onSelectCard]);
 
-  // Swap Prev (Swipe DOWN): Front card glides DOWN, previous card glides into front
-  const handleSwapPrev = useCallback(() => {
+  // Swap Down (Swipe DOWN): Front card glides DOWN, slips behind, and lands in LAST position
+  const handleSwapDown = useCallback((fromY = 0) => {
     if (totalCards <= 1 || swapPhase !== "idle") return;
     triggerHaptic("light");
-    setSwapPhase("swapping-prev");
+    setReleaseY(fromY);
+    setSwapPhase("swapping-down");
     updateDrag(0);
 
-    const prevIndex = (safeActiveIndex - 1 + totalCards) % totalCards;
-    onSelectCard?.(cards[prevIndex]?.id);
+    // Front card is placed in LAST position; next card advances to front
+    const nextIndex = (safeActiveIndex + 1) % totalCards;
+    onSelectCard?.(cards[nextIndex]?.id);
 
     animTimeoutRef.current = setTimeout(() => {
-      setActiveIndex(prevIndex);
+      setActiveIndex(nextIndex);
       setSwapPhase("idle");
+      setReleaseY(0);
     }, 360);
   }, [totalCards, swapPhase, safeActiveIndex, cards, onSelectCard]);
 
@@ -392,6 +399,10 @@ export function StackedCardDeck({
   // Direct card click
   const handleCardClick = (offset, card, cardIndex) => {
     if (swapPhase !== "idle" || !card) return;
+    if (wasSwipeRef.current) {
+      wasSwipeRef.current = false;
+      return;
+    }
     if (offset === 0) {
       triggerHaptic("selection");
       onOpenCardDetails?.(card);
@@ -406,6 +417,7 @@ export function StackedCardDeck({
     if (totalCards <= 1 || swapPhase !== "idle") return;
     if (e.button !== undefined && e.button !== 0) return;
     passedHapticRef.current = false;
+    wasSwipeRef.current = false;
     setIsDragging(true);
     dragStartRef.current = {
       startY: e.clientY,
@@ -424,6 +436,10 @@ export function StackedCardDeck({
     if (e.pointerId !== dragStartRef.current.pointerId) return;
 
     const dy = e.clientY - dragStartRef.current.startY;
+    const dx = e.clientX - dragStartRef.current.startX;
+    if (Math.abs(dy) > 8 || Math.abs(dx) > 8) {
+      wasSwipeRef.current = true;
+    }
 
     // Direct 1:1 finger tracking with soft rubber-band resistance beyond ±130px
     let effectiveDy = dy;
@@ -465,28 +481,17 @@ export function StackedCardDeck({
     const isSwipeDown = dy > 24 || (dy > 10 && velocity > 0.24);
 
     if (isSwipeUp) {
-      handleSwapNext();
+      wasSwipeRef.current = true;
+      handleSwapNext(dy);
     } else if (isSwipeDown) {
-      handleSwapPrev();
-    } else if (Math.abs(dy) <= 6 && Math.abs(dx) <= 6) {
-      // Tap detection on specific card slot
-      const clickedSlot = target?.closest?.(".cards-deck-slot");
-      const slotIndexAttr = clickedSlot?.getAttribute?.("data-card-index");
-      if (slotIndexAttr != null) {
-        const clickedIdx = parseInt(slotIndexAttr, 10);
-        if (!isNaN(clickedIdx) && clickedIdx !== safeActiveIndex) {
-          handleSelectCardIndex(clickedIdx);
-        } else if (cards[safeActiveIndex]) {
-          triggerHaptic("selection");
-          onOpenCardDetails?.(cards[safeActiveIndex]);
-        }
-      } else if (cards[safeActiveIndex]) {
-        triggerHaptic("selection");
-        onOpenCardDetails?.(cards[safeActiveIndex]);
-      }
+      wasSwipeRef.current = true;
+      handleSwapDown(dy);
     } else {
       // Release below threshold: smoothly spring back to 0
       updateDrag(0);
+      if (Math.abs(dy) <= 8 && Math.abs(dx) <= 8) {
+        wasSwipeRef.current = false;
+      }
     }
   };
 
@@ -508,7 +513,7 @@ export function StackedCardDeck({
       if (e.deltaY > 0) {
         handleSwapNext();
       } else {
-        handleSwapPrev();
+        handleSwapDown();
       }
     }
   };
@@ -554,6 +559,7 @@ export function StackedCardDeck({
     <div className="cards-deck-container" onWheel={onWheel}>
       {/* Deck Stage */}
       <div
+        style={{ "--drag-release-y": `${releaseY}px` }}
         className={`cards-deck-stage ${swapPhase !== "idle" ? `is-${swapPhase}` : ""} ${isDragging ? "is-dragging" : ""}`}
         tabIndex={0}
         aria-label="Stacked cards wallet. Tap or swipe to switch cards."
@@ -598,15 +604,14 @@ export function StackedCardDeck({
           }
 
           let slotAnimClass = "";
-          if (swapPhase === "swapping-next") {
+          if (swapPhase === "swapping-next" || swapPhase === "swapping-up") {
             if (offset === 0) slotAnimClass = "slot-swap-next-leave";
             else if (offset === 1) slotAnimClass = "slot-swap-next-incoming";
             else if (offset === 2) slotAnimClass = "slot-swap-next-advance";
-          } else if (swapPhase === "swapping-prev") {
-            if (offset === 0) slotAnimClass = "slot-swap-prev-leave";
-            else if (offset === totalCards - 1)
-              slotAnimClass = "slot-swap-prev-incoming";
-            else if (offset === 1) slotAnimClass = "slot-swap-prev-stepback";
+          } else if (swapPhase === "swapping-down" || swapPhase === "swapping-prev") {
+            if (offset === 0) slotAnimClass = "slot-swap-down-leave";
+            else if (offset === 1) slotAnimClass = "slot-swap-down-incoming";
+            else if (offset === 2) slotAnimClass = "slot-swap-down-advance";
           } else if (swapPhase === "swapping-select") {
             if (offset === 0) slotAnimClass = "slot-swap-select-incoming";
             else slotAnimClass = "slot-swap-select-tuck";

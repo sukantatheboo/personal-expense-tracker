@@ -4035,21 +4035,34 @@ a:active,
 
 /* Fluid Card Swapping Animations (Organic Spring Physics) */
 .mobile-prototype .cards-deck-slot.slot-swap-next-leave,
-.mobile-prototype .cards-deck-slot.slot-swap-down-leave {
+.mobile-prototype .cards-deck-slot.slot-swap-up-leave {
   animation: card-swap-next-leave 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 .mobile-prototype .cards-deck-slot.slot-swap-next-incoming,
-.mobile-prototype .cards-deck-slot.slot-swap-down-incoming {
+.mobile-prototype .cards-deck-slot.slot-swap-up-incoming {
   animation: card-swap-next-incoming 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 .mobile-prototype .cards-deck-slot.slot-swap-next-advance,
-.mobile-prototype .cards-deck-slot.slot-swap-down-advance {
+.mobile-prototype .cards-deck-slot.slot-swap-up-advance {
   animation: card-swap-next-advance 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.mobile-prototype .cards-deck-slot.slot-swap-down-leave,
+.mobile-prototype .cards-deck-slot.slot-swap-prev-leave {
+  animation: card-swap-down-leave 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.mobile-prototype .cards-deck-slot.slot-swap-down-incoming,
+.mobile-prototype .cards-deck-slot.slot-swap-prev-incoming {
+  animation: card-swap-down-incoming 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.mobile-prototype .cards-deck-slot.slot-swap-down-advance,
+.mobile-prototype .cards-deck-slot.slot-swap-prev-advance {
+  animation: card-swap-down-advance 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes card-swap-next-leave {
   0% {
-    transform: translate3d(0, 0, 0) scale(1);
+    transform: translate3d(0, var(--drag-release-y, 0px), 0) scale(1);
     filter: drop-shadow(0 22px 45px rgba(0, 0, 0, 0.44));
     z-index: 30;
     opacity: 1;
@@ -4117,9 +4130,9 @@ a:active,
   animation: card-swap-prev-stepback 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-@keyframes card-swap-prev-leave {
+@keyframes card-swap-down-leave {
   0% {
-    transform: translate3d(0, 0, 0) scale(1);
+    transform: translate3d(0, var(--drag-release-y, 0px), 0) scale(1);
     filter: drop-shadow(0 22px 45px rgba(0, 0, 0, 0.44));
     z-index: 30;
     opacity: 1;
@@ -4144,12 +4157,12 @@ a:active,
   }
 }
 
-@keyframes card-swap-prev-incoming {
+@keyframes card-swap-down-incoming {
   0% {
-    transform: translate3d(0, -78px, 0) scale(0.88);
-    filter: drop-shadow(0 7px 16px rgba(0, 0, 0, 0.18)) brightness(0.88);
-    z-index: 22;
-    opacity: 0.9;
+    transform: translate3d(0, -42px, 0) scale(0.94);
+    filter: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.26)) brightness(0.95);
+    z-index: 20;
+    opacity: 0.96;
   }
   100% {
     transform: translate3d(0, 0, 0) scale(1);
@@ -4159,12 +4172,12 @@ a:active,
   }
 }
 
-@keyframes card-swap-prev-stepback {
+@keyframes card-swap-down-advance {
   0% {
-    transform: translate3d(0, 0, 0) scale(1);
-    filter: drop-shadow(0 22px 45px rgba(0, 0, 0, 0.44));
-    z-index: 20;
-    opacity: 1;
+    transform: translate3d(0, -78px, 0) scale(0.88);
+    filter: drop-shadow(0 7px 16px rgba(0, 0, 0, 0.18)) brightness(0.88);
+    z-index: 14;
+    opacity: 0.9;
   }
   100% {
     transform: translate3d(0, -42px, 0) scale(0.94);
