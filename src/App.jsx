@@ -271,7 +271,17 @@ function normalizeDeletedRecords(value, now = Date.now()) {
             : 0;
           // Prune expired tombstones to protect against 512KB DB column limit
           if (updatedAt > 0 && updatedAt < cutoff) return [];
-          return [[id, { deleted: change.deleted, updatedAt }]];
+          return [
+            [
+              id,
+              {
+                deleted: change.deleted,
+                updatedAt,
+                ...(typeof change.name === "string" ? { name: change.name } : {}),
+                ...(typeof change.color === "string" ? { color: change.color } : {}),
+              },
+            ],
+          ];
         }
         return [];
       }),
@@ -2030,6 +2040,7 @@ export default function App() {
     cards: Array.isArray(accountData.settings.cards)
       ? accountData.settings.cards
       : [],
+    deletedCards: deletedRecords?.cards || {},
     tx: accountData.transactions.map((transaction) => ({
       id: transaction.id,
       createdAt: transaction.createdAt,
@@ -2723,14 +2734,6 @@ export default function App() {
       (safeCard.number
         ? String(safeCard.number).replace(/\D/g, "").slice(-4)
         : "");
-    const card = {
-      ...safeCard,
-      id: cardId,
-      last4,
-      number: safeCard.number || (last4 ? `•••• •••• •••• ${last4}` : ""),
-      createdAt: now,
-      updatedAt: now,
-    };
     const rawBal = Number(newCard.initialBalance);
     const initialBalance =
       Number.isFinite(rawBal) && rawBal >= 0 ? roundMoney(rawBal) : 0;
@@ -2739,6 +2742,17 @@ export default function App() {
       const currentCards = Array.isArray(current.settings.cards)
         ? current.settings.cards
         : [];
+      const isFirst = currentCards.length === 0;
+      const isPrimary = Boolean(newCard.isPrimary ?? isFirst);
+      const card = {
+        ...safeCard,
+        id: cardId,
+        last4,
+        number: safeCard.number || (last4 ? `•••• •••• •••• ${last4}` : ""),
+        isPrimary,
+        createdAt: now,
+        updatedAt: now,
+      };
       const exists = currentCards.some((c) => c.id === cardId);
       const nextCards = exists
         ? currentCards.map((c) => (c.id === cardId ? { ...c, ...card } : c))
@@ -2758,7 +2772,7 @@ export default function App() {
         },
       };
     });
-    return card;
+    return { ...safeCard, id: cardId, last4 };
   }
 
   function handleDeleteCard(cardId) {
@@ -2775,6 +2789,12 @@ export default function App() {
       const currentCards = Array.isArray(current.settings.cards)
         ? current.settings.cards
         : [];
+      const remainingCards = currentCards.filter((c) => c.id !== cardId);
+      // If we deleted the primary card, designate the first remaining card as primary
+      const wasPrimary = existingCard?.isPrimary || current.settings.primaryCardId === cardId;
+      const nextCards = remainingCards.map((c, idx) =>
+        wasPrimary && idx === 0 ? { ...c, isPrimary: true, updatedAt: now } : c,
+      );
       const nextBalances = { ...current.settings.balances };
       delete nextBalances[cardId];
       return {
@@ -2783,13 +2803,17 @@ export default function App() {
           ...current.settings,
           updatedAt: now,
           cardsConfigured: true,
-          cards: currentCards.filter((c) => c.id !== cardId),
+          primaryCardId: nextCards.find((c) => c.isPrimary)?.id || nextCards[0]?.id || "",
+          cards: nextCards,
           balances: nextBalances,
         },
       };
     });
 
-    setRecordDeleted("cards", cardId, true);
+    setRecordDeleted("cards", cardId, true, {
+      name: existingCard?.name,
+      color: existingCard?.color,
+    });
 
     if (existingCard) {
       const restore = () => {
@@ -2865,6 +2889,102 @@ export default function App() {
     return cleanCard;
   }
 
+  function handleSetPrimaryCard(cardId) {
+    if (!cardId) return undefined;
+    const now = Date.now();
+    const currentCards = Array.isArray(accountData.settings.cards)
+      ? accountData.settings.cards
+      : [];
+    const previousPrimaryId =
+      accountData.settings.primaryCardId ||
+      currentCards.find((c) => c.isPrimary)?.id ||
+      null;
+
+    const isCurrentlyPrimary =
+      currentCards.find((c) => c.id === cardId)?.isPrimary ||
+      previousPrimaryId === cardId;
+
+    // Toggle: if already primary, unset it; otherwise set it
+    const nextPrimaryId = isCurrentlyPrimary ? null : cardId;
+
+    setAccountData((current) => {
+      const cardsList = Array.isArray(current.settings.cards)
+        ? current.settings.cards
+        : [];
+      const nextCards = cardsList.map((c) => ({
+        ...c,
+        isPrimary: c.id === nextPrimaryId,
+        updatedAt:
+          c.id === cardId || c.id === previousPrimaryId ? now : c.updatedAt,
+      }));
+      return {
+        ...current,
+        settings: {
+          ...current.settings,
+          updatedAt: now,
+          cardsConfigured: true,
+          primaryCardId: nextPrimaryId || "",
+          cards: nextCards,
+        },
+      };
+    });
+
+    const restore = () => {
+      const restoreTime = Date.now();
+      setAccountData((current) => {
+        const cardsList = Array.isArray(current.settings.cards)
+          ? current.settings.cards
+          : [];
+        const nextCards = cardsList.map((c) => ({
+          ...c,
+          isPrimary: c.id === previousPrimaryId,
+          updatedAt:
+            c.id === cardId || c.id === previousPrimaryId
+              ? restoreTime
+              : c.updatedAt,
+        }));
+        return {
+          ...current,
+          settings: {
+            ...current.settings,
+            updatedAt: restoreTime,
+            cardsConfigured: true,
+            primaryCardId: previousPrimaryId || "",
+            cards: nextCards,
+          },
+        };
+      });
+    };
+
+    return {
+      isPrimary: !isCurrentlyPrimary,
+      undo: restore,
+    };
+  }
+
+  function handleMoveCardToFront(cardId) {
+    if (!cardId) return;
+    const now = Date.now();
+    setAccountData((current) => {
+      const currentCards = Array.isArray(current.settings.cards)
+        ? current.settings.cards
+        : [];
+      const target = currentCards.find((c) => c.id === cardId);
+      if (!target) return current;
+      const rest = currentCards.filter((c) => c.id !== cardId);
+      const nextCards = [{ ...target, updatedAt: now }, ...rest];
+      return {
+        ...current,
+        settings: {
+          ...current.settings,
+          updatedAt: now,
+          cardsConfigured: true,
+          cards: nextCards,
+        },
+      };
+    });
+  }
+
   function toggleMobileRecurring(scheduleId) {
     setRecurringSchedules((current) =>
       current.map((schedule) => {
@@ -2920,7 +3040,7 @@ export default function App() {
     setEditingAmount("");
   }
 
-  function setRecordDeleted(collection, id, isDeleted) {
+  function setRecordDeleted(collection, id, isDeleted, metadata = {}) {
     setDeletedRecords((current) => {
       const normalized = normalizeDeletedRecords(current);
       const existing = normalized[collection][id];
@@ -2933,6 +3053,7 @@ export default function App() {
           [id]: {
             deleted: isDeleted,
             updatedAt: Math.max(Date.now(), previous + 1),
+            ...metadata,
           },
         },
       };
@@ -3819,6 +3940,8 @@ export default function App() {
         onAddCard={handleAddCard}
         onUpdateCard={handleUpdateCard}
         onDeleteCard={handleDeleteCard}
+        onSetPrimaryCard={handleSetPrimaryCard}
+        onMoveCardToFront={handleMoveCardToFront}
         onToggleRec={toggleMobileRecurring}
         onRemoveRec={removeMobileRecurring}
         onTheme={() =>

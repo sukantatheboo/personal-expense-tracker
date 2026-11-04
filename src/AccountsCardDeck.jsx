@@ -198,6 +198,9 @@ export function WalletCard({
             </span>
             <span className="wallet-card-type-tag">
               {cardSubtitle}
+              {card.isPrimary && (
+                <span className="wallet-card-primary-badge">PRIMARY</span>
+              )}
               {isFrozen && (
                 <span className="wallet-card-locked-badge">LOCKED</span>
               )}
@@ -238,8 +241,11 @@ export function WalletCard({
             {showBalance && (
               <div className="wallet-card-balance-block">
                 <span className="wallet-card-meta-lbl">BALANCE</span>
-                <b className="wallet-card-balance-val">
+                <b className={`wallet-card-balance-val${balance < 0 && card.type !== "credit" ? " is-overdrawn" : ""}`}>
                   {formatMoney(balance || 0)}
+                  {balance < 0 && card.type !== "credit" && (
+                    <span className="wallet-card-overdrawn-badge">OVERDRAWN</span>
+                  )}
                 </b>
               </div>
             )}

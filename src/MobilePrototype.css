@@ -2096,6 +2096,99 @@ a:active,
   color: var(--ink);
   min-width: 0;
 }
+/* ───────────── Account Picker Horizontal Chips ───────────── */
+.mobile-prototype .account-picker-container {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--bg);
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  padding: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.mobile-prototype .account-picker-container::-webkit-scrollbar {
+  display: none;
+}
+.mobile-prototype .account-picker-track {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  width: max-content;
+  min-width: 100%;
+}
+.mobile-prototype .account-picker-container.is-few-options .account-picker-track {
+  width: 100%;
+}
+.mobile-prototype .account-picker-chip {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--sub);
+  font-size: 13.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.mobile-prototype .account-picker-container.is-few-options .account-picker-chip {
+  flex: 1 1 0px;
+}
+.mobile-prototype .account-picker-chip:active {
+  transform: scale(0.97);
+}
+.mobile-prototype .account-picker-chip.is-selected {
+  background: var(--card);
+  color: var(--ink);
+  font-weight: 800;
+  border-color: rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1.5px 5px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.03);
+}
+html[data-theme="dark"] .mobile-prototype .account-picker-chip.is-selected {
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 1.5px 5px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+.mobile-prototype .account-picker-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.1);
+}
+html[data-theme="dark"] .mobile-prototype .account-picker-dot {
+  box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.2);
+}
+.mobile-prototype .account-picker-name {
+  white-space: nowrap;
+  line-height: 1;
+}
+.mobile-prototype .account-picker-badge {
+  font-size: 11px;
+  color: #f59e0b;
+  margin-left: -2px;
+  flex-shrink: 0;
+}
+.mobile-prototype .account-picker-lock {
+  font-size: 11px;
+  opacity: 0.8;
+  margin-left: -2px;
+  flex-shrink: 0;
+}
 .mobile-prototype .acc {
   display: block;
   flex: 0 0 calc(50% - 6px);
@@ -6096,48 +6189,51 @@ a:active,
 }
 .mobile-prototype .card-options-quick-bar {
   display: flex;
+  flex-direction: column;
   gap: 8px;
   width: 100%;
-  margin: 0;
+  margin: 0 0 12px;
+}
+.mobile-prototype .card-options-quick-row {
+  display: flex;
+  gap: 8px;
+  width: 100%;
 }
 .mobile-prototype .card-options-bar-btn {
   flex: 1 1 0px;
   min-width: 0;
-  height: 40px;
-  min-height: 40px;
+  height: 42px;
+  min-height: 42px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  padding: 0 4px;
+  gap: 6px;
+  padding: 0 8px;
   border-radius: 12px;
   border: 1px solid var(--line);
   background: var(--bg);
   color: var(--ink);
-  font-size: clamp(10px, 2.7vw, 11.5px);
-  font-weight: 750;
+  font-size: 12.5px;
+  font-weight: 700;
   cursor: pointer;
   white-space: nowrap;
   letter-spacing: -0.01em;
   transition: all 140ms ease;
   box-sizing: border-box;
 }
-.mobile-prototype .card-options-bar-btn svg {
-  width: 14px;
-  height: 14px;
-  flex-shrink: 0;
-}
-.mobile-prototype .card-options-bar-btn span {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  line-height: 1;
-  text-align: center;
+.mobile-prototype .card-options-quick-row.is-wallet-row .card-options-bar-btn {
+  font-size: 13px;
+  font-weight: 750;
 }
 .mobile-prototype .card-options-bar-btn svg {
   width: 15px;
   height: 15px;
   flex-shrink: 0;
+}
+.mobile-prototype .card-options-bar-btn span {
+  white-space: nowrap;
+  line-height: 1;
+  text-align: center;
 }
 .mobile-prototype .card-options-bar-btn:active {
   transform: scale(0.96);
@@ -6518,6 +6614,45 @@ a:active,
   font-weight: 850;
   letter-spacing: 0.06em;
   vertical-align: middle;
+}
+.mobile-prototype .wallet-card-primary-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1.5px 6px;
+  border-radius: 6px;
+  background: rgba(16, 185, 129, 0.32);
+  border: 1px solid rgba(167, 243, 208, 0.5);
+  color: #a7f3d0;
+  font-size: 8px;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  vertical-align: middle;
+}
+.mobile-prototype .wallet-card-overdrawn-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1.5px 5px;
+  border-radius: 5px;
+  background: rgba(245, 158, 11, 0.35);
+  border: 1px solid rgba(253, 230, 138, 0.6);
+  color: #fef3c7;
+  font-size: 7.5px;
+  font-weight: 850;
+  letter-spacing: 0.05em;
+  vertical-align: middle;
+}
+.mobile-prototype .wallet-card-balance-val.is-overdrawn {
+  color: #fca5a5 !important;
+}
+.mobile-prototype .card-options-bar-btn.is-primary-card {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #059669;
+}
+html[data-theme="dark"] .mobile-prototype .card-options-bar-btn.is-primary-card {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: rgba(16, 185, 129, 0.45);
+  color: #6ee7b7;
 }
 
 /* ───────────── Native App Lock Screen & Passcode Keypad ───────────── */

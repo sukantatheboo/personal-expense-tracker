@@ -370,6 +370,80 @@ const Seg = ({ value, options, onPick }) => (
   </div>
 );
 
+function AccountPicker({ value, options, onPick, cards = [] }) {
+  const containerRef = useRef(null);
+  const selectedRef = useRef(null);
+
+  useEffect(() => {
+    if (selectedRef.current && containerRef.current) {
+      const container = containerRef.current;
+      const el = selectedRef.current;
+      const targetLeft =
+        el.offsetLeft -
+        container.offsetLeft -
+        (container.clientWidth - el.clientWidth) / 2;
+      container.scrollTo({ left: Math.max(0, targetLeft), behavior: "smooth" });
+    }
+  }, [value]);
+
+  const isFewOptions = options.length <= 2;
+
+  return (
+    <div
+      className={`account-picker-container ${isFewOptions ? "is-few-options" : ""}`}
+      ref={containerRef}
+      role="radiogroup"
+      aria-label="Select account"
+    >
+      <div className="account-picker-track">
+        {options.map(([id, label]) => {
+          const isSelected = value === id;
+          const card = cards.find((c) => c.id === id);
+          const isCash = id === "" || id === "cash";
+          const isPrimary = card?.isPrimary;
+          const isFrozen = card?.frozen;
+
+          const dotBackground = isCash
+            ? "#10b981"
+            : card?.gradient || card?.color || "#2563eb";
+
+          return (
+            <button
+              key={id}
+              type="button"
+              ref={isSelected ? selectedRef : null}
+              className={`account-picker-chip ${isSelected ? "is-selected" : ""} ${isCash ? "is-cash" : ""}`}
+              onClick={() => {
+                triggerHaptic("selection");
+                onPick(id);
+              }}
+              role="radio"
+              aria-checked={isSelected}
+            >
+              <span
+                className="account-picker-dot"
+                style={{ background: dotBackground }}
+                aria-hidden="true"
+              />
+              <span className="account-picker-name">{label}</span>
+              {isPrimary && (
+                <span className="account-picker-badge" title="Primary account">
+                  ★
+                </span>
+              )}
+              {isFrozen && (
+                <span className="account-picker-lock" title="Frozen account">
+                  🔒
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 const MonthSwitch = ({ m, onShift }) => (
   <div className="mon">
     <button
@@ -2050,8 +2124,13 @@ function Accounts({
     setSelectedAccount(accountId);
   };
 
-  const getAccountName = (id) =>
-    cards.find((c) => c.id === id)?.name || ACC[id]?.[0] || id || "Account";
+  const getAccountName = (id) => {
+    const card = cards.find((c) => c.id === id);
+    if (card?.name) return card.name;
+    const tombstone = S?.deletedCards?.[id];
+    if (tombstone?.name) return `${tombstone.name} (Archived)`;
+    return ACC[id]?.[0] || id || "Account";
+  };
 
   const events = [
     ...S.exp
@@ -2817,10 +2896,11 @@ function AddSheet({
   onClose,
 }) {
   const spendableCards = cards.filter((c) => c.type !== "savings" && !c.frozen);
+  const primaryCard = spendableCards.find((c) => c.isPrimary) || spendableCards[0];
   const initialAcct =
     defaultAccount && spendableCards.some((c) => c.id === defaultAccount)
       ? defaultAccount
-      : "";
+      : primaryCard?.id || "";
   const [f, setF] = useState({
     amt: "",
     desc: "",
@@ -2967,9 +3047,10 @@ function AddSheet({
       <span className="lbl">
         {f.cat === "Savings" ? "Transfer from" : "Paid from"}
       </span>
-      <Seg
+      <AccountPicker
         value={f.acct}
         onPick={(v) => set("acct", v)}
+        cards={cards}
         options={
           f.cat === "Savings" && spendableCards.length > 0
             ? spendableCards.map((c) => [c.id, c.name])
@@ -3093,7 +3174,7 @@ function TxSheet({ type, defaultAccount, cards = [], onSave, onClose }) {
       {tr && accountOptions.length >= 2 && (
         <>
           <span className="lbl">From</span>
-          <Seg
+          <AccountPicker
             value={g.fromAccount}
             onPick={(value) => {
               setG((current) => ({
@@ -3105,12 +3186,14 @@ function TxSheet({ type, defaultAccount, cards = [], onSave, onClose }) {
                     : current.toAccount,
               }));
             }}
+            cards={cards}
             options={transferFromOptions}
           />
           <span className="lbl">To</span>
-          <Seg
+          <AccountPicker
             value={g.toAccount}
             onPick={(value) => set("toAccount", value)}
+            cards={cards}
             options={accountOptions.filter(([id]) => id !== g.fromAccount)}
           />
         </>
@@ -3119,9 +3202,10 @@ function TxSheet({ type, defaultAccount, cards = [], onSave, onClose }) {
       {!tr && (
         <>
           <span className="lbl">Account</span>
-          <Seg
+          <AccountPicker
             value={g.acct}
             onPick={(v) => set("acct", v)}
+            cards={cards}
             options={accountOptions}
           />
         </>
@@ -3294,7 +3378,7 @@ function AccountTxDetailSheet({ tx, cards = [], onSave, onDelete, onClose }) {
       {tr ? (
         <>
           <span className="lbl">From</span>
-          <Seg
+          <AccountPicker
             value={g.fromAccount}
             onPick={(value) => {
               setG((current) => ({
@@ -3306,21 +3390,24 @@ function AccountTxDetailSheet({ tx, cards = [], onSave, onDelete, onClose }) {
                     : current.toAccount,
               }));
             }}
+            cards={cards}
             options={allFromOptions}
           />
           <span className="lbl">To</span>
-          <Seg
+          <AccountPicker
             value={g.toAccount}
             onPick={(value) => set("toAccount", value)}
+            cards={cards}
             options={allToOptions}
           />
         </>
       ) : (
         <>
           <span className="lbl">Account</span>
-          <Seg
+          <AccountPicker
             value={g.acct}
             onPick={(v) => set("acct", v)}
+            cards={cards}
             options={singleAccountOptions}
           />
         </>
@@ -3466,9 +3553,10 @@ function DetailSheet({ e, suggestion, cards = [], onSave, onDelete, onClose }) {
         onChange={(event) => set("date", event.target.value)}
       />
       <span className="lbl">Paid from</span>
-      <Seg
+      <AccountPicker
         value={f.acct}
         onPick={(value) => set("acct", value)}
+        cards={cards}
         options={[
           ["", "Cash"],
           ...cards
@@ -4387,6 +4475,8 @@ function CardOptionsSheet({
   onDeleteCard,
   onAddCardClick,
   onAdjustBalance,
+  onSetPrimaryCard,
+  onMoveCardToFront,
 }) {
   const [selectedId, setSelectedId] = useState(
     () => initialCardId || cards[0]?.id || "",
@@ -4587,7 +4677,10 @@ function CardOptionsSheet({
                     className="card-options-pill-dot"
                     style={{ background: c.color || "#2563eb" }}
                   />
-                  <span className="card-options-pill-name">{c.name}</span>
+                  <span className="card-options-pill-name">
+                    {c.name}
+                    {c.isPrimary ? " ★" : ""}
+                  </span>
                 </button>
               );
             })}
@@ -4622,82 +4715,144 @@ function CardOptionsSheet({
 
           {/* Quick Action Badges Bar */}
           <div className="card-options-quick-bar">
-            <button
-              type="button"
-              className={`card-options-bar-btn ${showSecrets ? "is-active" : ""}`}
-              onClick={() => {
-                triggerHaptic("selection");
-                setShowSecrets((prev) => !prev);
-              }}
-              aria-label={
-                showSecrets ? "Hide card details" : "Show card details"
-              }
-            >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
+            <div className="card-options-quick-row">
+              <button
+                type="button"
+                className={`card-options-bar-btn ${showSecrets ? "is-active" : ""}`}
+                onClick={() => {
+                  triggerHaptic("selection");
+                  setShowSecrets((prev) => !prev);
+                }}
+                aria-label={
+                  showSecrets ? "Hide card details" : "Show card details"
+                }
               >
-                {showSecrets ? (
-                  <>
-                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
-                    <line x1="1" y1="1" x2="23" y2="23" />
-                  </>
-                ) : (
-                  <>
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                    <circle cx="12" cy="12" r="3" />
-                  </>
-                )}
-              </svg>
-              <span>{showSecrets ? "Hide Details" : "Show Details"}</span>
-            </button>
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  {showSecrets ? (
+                    <>
+                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                      <line x1="1" y1="1" x2="23" y2="23" />
+                    </>
+                  ) : (
+                    <>
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </>
+                  )}
+                </svg>
+                <span>{showSecrets ? "Hide" : "Details"}</span>
+              </button>
 
-            <button
-              type="button"
-              className={`card-options-bar-btn ${copied ? "is-copied" : ""}`}
-              onClick={handleCopyNumber}
-              aria-label="Copy card number to clipboard"
-            >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
+              <button
+                type="button"
+                className={`card-options-bar-btn ${copied ? "is-copied" : ""}`}
+                onClick={handleCopyNumber}
+                aria-label="Copy card number to clipboard"
               >
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-              </svg>
-              <span>{copied ? "Copied! ✓" : "Copy Number"}</span>
-            </button>
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </svg>
+                <span>{copied ? "Copied! ✓" : "Copy"}</span>
+              </button>
 
-            <button
-              type="button"
-              className={`card-options-bar-btn ${isFrozen ? "is-frozen" : ""}`}
-              onClick={handleToggleFreeze}
-              aria-label={isFrozen ? "Unlock card" : "Lock card"}
-            >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
+              <button
+                type="button"
+                className={`card-options-bar-btn ${isFrozen ? "is-frozen" : ""}`}
+                onClick={handleToggleFreeze}
+                aria-label={isFrozen ? "Unlock card" : "Lock card"}
               >
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-              </svg>
-              <span>{isFrozen ? "Locked" : "Lock Card"}</span>
-            </button>
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+                <span>{isFrozen ? "Locked" : "Lock"}</span>
+              </button>
+            </div>
+
+            <div className="card-options-quick-row is-wallet-row">
+              <button
+                type="button"
+                className={`card-options-bar-btn ${selectedCard?.isPrimary ? "is-primary-card" : ""}`}
+                onClick={() => {
+                  if (selectedCard?.id) {
+                    triggerHaptic("success");
+                    onSetPrimaryCard?.(selectedCard.id);
+                  }
+                }}
+                aria-label={
+                  selectedCard?.isPrimary
+                    ? "Primary card (Tap to undo)"
+                    : "Set as primary card"
+                }
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill={selectedCard?.isPrimary ? "currentColor" : "none"}
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                </svg>
+                <span>{selectedCard?.isPrimary ? "Primary Card ★" : "Set as Primary"}</span>
+              </button>
+
+              {cards.length > 1 && cards[0]?.id !== selectedCard?.id && (
+                <button
+                  type="button"
+                  className="card-options-bar-btn"
+                  onClick={() => {
+                    if (selectedCard?.id) {
+                      triggerHaptic("selection");
+                      onMoveCardToFront?.(selectedCard.id);
+                    }
+                  }}
+                  aria-label="Move card to front of deck"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <polygon points="12 2 2 7 12 12 22 7 12 2" />
+                    <polyline points="2 17 12 22 22 17" />
+                    <polyline points="2 12 12 17 22 12" />
+                  </svg>
+                  <span>Move to Top</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -5953,6 +6108,8 @@ export default function MobilePrototype({
   onAddCard,
   onUpdateCard,
   onDeleteCard,
+  onSetPrimaryCard,
+  onMoveCardToFront,
   onToggleRec,
   onRemoveRec,
   onTheme,
@@ -7027,16 +7184,27 @@ export default function MobilePrototype({
           onAdjustBalance={(cardId) =>
             openSheet({ type: "tx", t: "adjust", acct: cardId })
           }
+          onSetPrimaryCard={(cardId) => {
+            const res = onSetPrimaryCard?.(cardId);
+            if (res && typeof res === "object") {
+              const msg = res.isPrimary
+                ? "Set as primary card ★"
+                : "Removed primary card";
+              toast(msg, res.undo);
+            } else {
+              toast("Primary card updated ★");
+            }
+          }}
+          onMoveCardToFront={(cardId) => {
+            onMoveCardToFront?.(cardId);
+            toast("Card moved to top");
+          }}
         />
       )}
       {sheet?.type === "addCard" && (
         <AddCardSheet
           onClose={close}
-          onAddCard={(newCard) => {
-            const added = onAddCard?.(newCard);
-            toast(`Card ${newCard.name} added`);
-            return added;
-          }}
+          onAddCard={(newCard) => onAddCard?.(newCard)}
           userProfileName={profile?.hasName ? profile.name : ""}
         />
       )}
