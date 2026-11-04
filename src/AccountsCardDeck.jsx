@@ -25,6 +25,56 @@ import {
 
 export { renderProviderLogo };
 
+/* ───────────── Native & Web Haptics Engine ───────────── */
+function triggerSafariWebHaptic() {
+  if (typeof document === "undefined") return;
+  try {
+    let trigger = document.getElementById("safari-haptic-trigger");
+    if (!trigger) {
+      trigger = document.createElement("input");
+      trigger.id = "safari-haptic-trigger";
+      trigger.type = "checkbox";
+      trigger.setAttribute("switch", "");
+      trigger.setAttribute("aria-hidden", "true");
+      trigger.tabIndex = -1;
+      trigger.style.cssText =
+        "position:fixed;opacity:0;pointer-events:none;left:-9999px;width:0;height:0;";
+      document.body.appendChild(trigger);
+    }
+    trigger.click();
+  } catch {
+    // ignore
+  }
+}
+
+export function triggerHaptic(type = "light") {
+  try {
+    // Web / PWA fallback tuned for mobile vibration
+    if (
+      typeof navigator !== "undefined" &&
+      typeof navigator.vibrate === "function"
+    ) {
+      const patterns = {
+        selection: 12,
+        light: 20,
+        medium: 35,
+        heavy: 55,
+        success: [25, 45, 30],
+        warning: [35, 40, 20],
+        delete: [35, 40, 20],
+      };
+      const pattern =
+        typeof type === "number" ? Math.max(10, type) : patterns[type] || 20;
+      navigator.vibrate(pattern);
+      return true;
+    }
+  } catch {}
+
+  // iOS Safari Web / WebKit Taptic Engine tick fallback (iOS 17.4+)
+  triggerSafariWebHaptic();
+  return true;
+}
+
 /* ───────────── Currency & Number Formatters ───────────── */
 export const formatMoney = (n) =>
   "৳" +
@@ -234,23 +284,27 @@ export function StackedCardDeck({
   onSelectCard,
   onAddCardClick,
   onOpenCardDetails,
+  onDragOffsetChange,
 }) {
   const [activeIndex, setActiveIndex] = useState(() => {
     const idx = cards.findIndex((c) => c.id === selectedId);
     return idx >= 0 ? idx : 0;
   });
 
-  // 'idle' | 'swapping-down' | 'swapping-up'
+  // 'idle' | 'swapping-next' | 'swapping-prev' | 'swapping-select'
   const [swapPhase, setSwapPhase] = useState("idle");
   const [dragY, setDragY] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
   const dragStartRef = useRef(null);
   const animTimeoutRef = useRef(null);
+  const passedHapticRef = useRef(false);
+  const wheelCooldownRef = useRef(0);
 
   const totalCards = cards.length;
   const safeActiveIndex =
     totalCards > 0 ? Math.min(activeIndex, totalCards - 1) : 0;
 
-  // Clamp activeIndex if cards array shrinks (e.g. after deleting the last card)
+  // Clamp activeIndex if cards array shrinks
   useEffect(() => {
     if (totalCards === 0) {
       if (activeIndex !== 0) setActiveIndex(0);
@@ -280,11 +334,17 @@ export function StackedCardDeck({
     };
   }, []);
 
-  // Swap Down: Front card glides down, tucks behind, middle card glides to front
-  const handleSwapDown = useCallback(() => {
+  const updateDrag = (val) => {
+    setDragY(val);
+    onDragOffsetChange?.(val);
+  };
+
+  // Swap Next (Swipe UP): Front card glides UP, slips behind into top/rear slot, next card glides forward
+  const handleSwapNext = useCallback(() => {
     if (totalCards <= 1 || swapPhase !== "idle") return;
-    setSwapPhase("swapping-down");
-    setDragY(0);
+    triggerHaptic("light");
+    setSwapPhase("swapping-next");
+    updateDrag(0);
 
     const nextIndex = (safeActiveIndex + 1) % totalCards;
     onSelectCard?.(cards[nextIndex]?.id);
@@ -292,14 +352,15 @@ export function StackedCardDeck({
     animTimeoutRef.current = setTimeout(() => {
       setActiveIndex(nextIndex);
       setSwapPhase("idle");
-    }, 380);
+    }, 360);
   }, [totalCards, swapPhase, safeActiveIndex, cards, onSelectCard]);
 
-  // Swap Up: Back card glides up into front
-  const handleSwapUp = useCallback(() => {
+  // Swap Prev (Swipe DOWN): Front card glides DOWN, previous card glides into front
+  const handleSwapPrev = useCallback(() => {
     if (totalCards <= 1 || swapPhase !== "idle") return;
-    setSwapPhase("swapping-up");
-    setDragY(0);
+    triggerHaptic("light");
+    setSwapPhase("swapping-prev");
+    updateDrag(0);
 
     const prevIndex = (safeActiveIndex - 1 + totalCards) % totalCards;
     onSelectCard?.(cards[prevIndex]?.id);
@@ -307,27 +368,48 @@ export function StackedCardDeck({
     animTimeoutRef.current = setTimeout(() => {
       setActiveIndex(prevIndex);
       setSwapPhase("idle");
-    }, 380);
+    }, 360);
   }, [totalCards, swapPhase, safeActiveIndex, cards, onSelectCard]);
 
+  // Direct card selection (Phase 3: Forefront Swapping & Expansion)
+  const handleSelectCardIndex = useCallback(
+    (targetIndex) => {
+      if (swapPhase !== "idle" || targetIndex === safeActiveIndex) return;
+      triggerHaptic("selection");
+      setSwapPhase("swapping-select");
+      updateDrag(0);
+
+      onSelectCard?.(cards[targetIndex]?.id);
+
+      animTimeoutRef.current = setTimeout(() => {
+        setActiveIndex(targetIndex);
+        setSwapPhase("idle");
+      }, 360);
+    },
+    [swapPhase, safeActiveIndex, cards, onSelectCard],
+  );
+
   // Direct card click
-  const handleCardClick = (offset, card) => {
+  const handleCardClick = (offset, card, cardIndex) => {
     if (swapPhase !== "idle" || !card) return;
     if (offset === 0) {
+      triggerHaptic("selection");
       onOpenCardDetails?.(card);
-    } else if (offset === 1) {
-      handleSwapDown();
     } else {
-      handleSwapUp();
+      // Tap any background tabbed header to expand it into forefront
+      handleSelectCardIndex(cardIndex);
     }
   };
 
-  // Pointer drag gestures for realistic finger tracking
+  // Pointer drag gestures with 1:1 finger tracking & tactile haptic tick
   const onPointerDown = (e) => {
     if (totalCards <= 1 || swapPhase !== "idle") return;
     if (e.button !== undefined && e.button !== 0) return;
+    passedHapticRef.current = false;
+    setIsDragging(true);
     dragStartRef.current = {
       startY: e.clientY,
+      startX: e.clientX,
       startTime: performance.now(),
       pointerId: e.pointerId,
       target: e.target,
@@ -342,44 +424,93 @@ export function StackedCardDeck({
     if (e.pointerId !== dragStartRef.current.pointerId) return;
 
     const dy = e.clientY - dragStartRef.current.startY;
-    const resistedDy = dy > 0 ? dy * 0.88 : dy * 0.38;
-    setDragY(resistedDy);
+
+    // Direct 1:1 finger tracking with soft rubber-band resistance beyond ±130px
+    let effectiveDy = dy;
+    if (effectiveDy > 130) {
+      effectiveDy = 130 + (effectiveDy - 130) * 0.35;
+    } else if (effectiveDy < -130) {
+      effectiveDy = -130 + (effectiveDy - -130) * 0.35;
+    }
+    updateDrag(effectiveDy);
+
+    // Tactile haptic feedback when crossing the swap threshold
+    const THRESHOLD = 32;
+    if (Math.abs(effectiveDy) >= THRESHOLD && !passedHapticRef.current) {
+      passedHapticRef.current = true;
+      triggerHaptic("selection");
+    } else if (Math.abs(effectiveDy) < THRESHOLD && passedHapticRef.current) {
+      passedHapticRef.current = false;
+    }
   };
 
   const onPointerUp = (e) => {
     if (!dragStartRef.current) return;
-    const { startY, startTime, pointerId, target } = dragStartRef.current;
+    const { startY, startX, startTime, pointerId, target } = dragStartRef.current;
     dragStartRef.current = null;
+    passedHapticRef.current = false;
+    setIsDragging(false);
 
     try {
       e.currentTarget.releasePointerCapture(pointerId);
     } catch {}
 
     const dy = e.clientY - startY;
+    const dx = e.clientX - startX;
     const dt = Math.max(1, performance.now() - startTime);
     const velocity = dy / dt;
 
-    if (dy > 36 || (dy > 12 && velocity > 0.35)) {
-      handleSwapDown();
-    } else if (dy < -36 || (dy < -12 && velocity < -0.35)) {
-      handleSwapUp();
-    } else if (Math.abs(dy) <= 8) {
+    // Fluid threshold & flick detection (Swipe UP = Next, Swipe DOWN = Prev)
+    const isSwipeUp = dy < -24 || (dy < -10 && velocity < -0.24);
+    const isSwipeDown = dy > 24 || (dy > 10 && velocity > 0.24);
+
+    if (isSwipeUp) {
+      handleSwapNext();
+    } else if (isSwipeDown) {
+      handleSwapPrev();
+    } else if (Math.abs(dy) <= 6 && Math.abs(dx) <= 6) {
+      // Tap detection on specific card slot
       const clickedSlot = target?.closest?.(".cards-deck-slot");
-      if (clickedSlot?.classList?.contains("offset-1")) {
-        handleSwapDown();
-      } else if (clickedSlot?.classList?.contains("offset-2")) {
-        handleSwapUp();
+      const slotIndexAttr = clickedSlot?.getAttribute?.("data-card-index");
+      if (slotIndexAttr != null) {
+        const clickedIdx = parseInt(slotIndexAttr, 10);
+        if (!isNaN(clickedIdx) && clickedIdx !== safeActiveIndex) {
+          handleSelectCardIndex(clickedIdx);
+        } else if (cards[safeActiveIndex]) {
+          triggerHaptic("selection");
+          onOpenCardDetails?.(cards[safeActiveIndex]);
+        }
       } else if (cards[safeActiveIndex]) {
+        triggerHaptic("selection");
         onOpenCardDetails?.(cards[safeActiveIndex]);
       }
     } else {
-      setDragY(0);
+      // Release below threshold: smoothly spring back to 0
+      updateDrag(0);
     }
   };
 
   const onPointerCancel = () => {
     dragStartRef.current = null;
-    setDragY(0);
+    passedHapticRef.current = false;
+    setIsDragging(false);
+    updateDrag(0);
+  };
+
+  // Mouse wheel / trackpad vertical scroll gesture support
+  const onWheel = (e) => {
+    if (totalCards <= 1 || swapPhase !== "idle") return;
+    const now = performance.now();
+    if (now - wheelCooldownRef.current < 360) return;
+
+    if (Math.abs(e.deltaY) > 18) {
+      wheelCooldownRef.current = now;
+      if (e.deltaY > 0) {
+        handleSwapNext();
+      } else {
+        handleSwapPrev();
+      }
+    }
   };
 
   if (totalCards === 0) {
@@ -420,10 +551,10 @@ export function StackedCardDeck({
   }
 
   return (
-    <div className="cards-deck-container">
+    <div className="cards-deck-container" onWheel={onWheel}>
       {/* Deck Stage */}
       <div
-        className={`cards-deck-stage ${swapPhase !== "idle" ? `is-${swapPhase}` : ""}`}
+        className={`cards-deck-stage ${swapPhase !== "idle" ? `is-${swapPhase}` : ""} ${isDragging ? "is-dragging" : ""}`}
         tabIndex={0}
         aria-label="Stacked cards wallet. Tap or swipe to switch cards."
         onPointerDown={onPointerDown}
@@ -437,47 +568,54 @@ export function StackedCardDeck({
 
           let y = 0;
           let scale = 1;
-          let zIndex = 25 - offset * 6;
+          let zIndex = 30 - offset * 6;
           let opacity = 1;
 
-          if (offset === 0) {
-            y = dragY > 0 ? dragY : dragY * 0.4;
-            scale = 1;
-            zIndex = 25;
-            opacity = 1;
-          } else if (offset === 1) {
-            const dragProgress = Math.min(1, Math.max(0, dragY / 90));
-            y = -26 + dragProgress * 26;
-            scale = 0.94 + dragProgress * 0.06;
-            zIndex = 18;
-            opacity = 0.96;
-          } else if (offset === 2) {
-            const dragProgress = Math.min(1, Math.max(0, dragY / 90));
-            y = -48 + dragProgress * 22;
-            scale = 0.88 + dragProgress * 0.06;
-            zIndex = 12;
-            opacity = 0.9;
-          } else {
-            y = -64;
-            scale = 0.82;
-            zIndex = 5;
-            opacity = 0;
+          if (swapPhase === "idle") {
+            if (offset === 0) {
+              y = dragY;
+              scale = 1 - Math.min(0.04, Math.abs(dragY) / 1200);
+              zIndex = 30;
+              opacity = 1;
+            } else if (offset === 1) {
+              const progress = dragY < 0 ? Math.min(1, Math.max(0, -dragY / 85)) : 0;
+              y = -42 + progress * 42;
+              scale = 0.94 + progress * 0.06;
+              zIndex = 20;
+              opacity = 0.96 + progress * 0.04;
+            } else if (offset === 2) {
+              const progress = dragY < 0 ? Math.min(1, Math.max(0, -dragY / 85)) : 0;
+              y = -78 + progress * 36;
+              scale = 0.88 + progress * 0.06;
+              zIndex = 14;
+              opacity = 0.9 + progress * 0.06;
+            } else {
+              y = -106;
+              scale = 0.82;
+              zIndex = 6;
+              opacity = 0;
+            }
           }
 
           let slotAnimClass = "";
-          if (swapPhase === "swapping-down") {
-            if (offset === 0) slotAnimClass = "slot-swap-down-leave";
-            else if (offset === 1) slotAnimClass = "slot-swap-down-incoming";
-            else if (offset === 2) slotAnimClass = "slot-swap-down-advance";
-          } else if (swapPhase === "swapping-up") {
-            if (offset === 0) slotAnimClass = "slot-swap-up-front";
+          if (swapPhase === "swapping-next") {
+            if (offset === 0) slotAnimClass = "slot-swap-next-leave";
+            else if (offset === 1) slotAnimClass = "slot-swap-next-incoming";
+            else if (offset === 2) slotAnimClass = "slot-swap-next-advance";
+          } else if (swapPhase === "swapping-prev") {
+            if (offset === 0) slotAnimClass = "slot-swap-prev-leave";
             else if (offset === totalCards - 1)
-              slotAnimClass = "slot-swap-up-enter";
+              slotAnimClass = "slot-swap-prev-incoming";
+            else if (offset === 1) slotAnimClass = "slot-swap-prev-stepback";
+          } else if (swapPhase === "swapping-select") {
+            if (offset === 0) slotAnimClass = "slot-swap-select-incoming";
+            else slotAnimClass = "slot-swap-select-tuck";
           }
 
           return (
             <div
               key={card.id}
+              data-card-index={index}
               className={`cards-deck-slot offset-${offset} ${isFront ? "is-front" : "is-back"} ${slotAnimClass}`}
               style={{
                 "--target-y": `${y}px`,
@@ -489,7 +627,7 @@ export function StackedCardDeck({
                 zIndex,
                 opacity,
               }}
-              onClick={() => handleCardClick(offset, card)}
+              onClick={() => handleCardClick(offset, card, index)}
             >
               <WalletCard
                 card={card}
@@ -514,6 +652,7 @@ export function StackedCardDeck({
             onClick={(e) => {
               e.stopPropagation();
               if (swapPhase !== "idle") return;
+              triggerHaptic("selection");
               setActiveIndex(idx);
               onSelectCard?.(card.id);
             }}

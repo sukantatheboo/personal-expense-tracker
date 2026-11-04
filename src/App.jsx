@@ -2682,7 +2682,9 @@ export default function App() {
     const { cvv: _omittedCvv, ...safeCard } = newCard || {};
     const last4 =
       safeCard.last4 ||
-      (safeCard.number ? String(safeCard.number).replace(/\D/g, "").slice(-4) : "");
+      (safeCard.number
+        ? String(safeCard.number).replace(/\D/g, "").slice(-4)
+        : "");
     const card = {
       ...safeCard,
       id: cardId,
@@ -2797,7 +2799,9 @@ export default function App() {
     const { cvv: _omittedCvv, ...safeCard } = updatedCard || {};
     const last4 =
       safeCard.last4 ||
-      (safeCard.number ? String(safeCard.number).replace(/\D/g, "").slice(-4) : "");
+      (safeCard.number
+        ? String(safeCard.number).replace(/\D/g, "").slice(-4)
+        : "");
     const cleanCard = {
       ...safeCard,
       last4,
@@ -2811,9 +2815,7 @@ export default function App() {
       const exists = currentCards.some((c) => c.id === cleanCard.id);
       const newCards = exists
         ? currentCards.map((c) =>
-            c.id === cleanCard.id
-              ? { ...c, ...cleanCard, updatedAt: now }
-              : c,
+            c.id === cleanCard.id ? { ...c, ...cleanCard, updatedAt: now } : c,
           )
         : [...currentCards, { ...cleanCard, createdAt: now, updatedAt: now }];
       return {
@@ -3547,9 +3549,7 @@ export default function App() {
         );
         return;
       }
-      setNotificationStatus(
-        "Notifications are allowed.",
-      );
+      setNotificationStatus("Notifications are allowed.");
       await sendNativeBuiltinNotification({
         title: "Spend notifications enabled",
         body: "Built-in notifications are active on this device.",
@@ -3640,9 +3640,7 @@ export default function App() {
   }
 
   async function handleTestNotification() {
-    setNotificationStatus(
-      "Sending native test notification…",
-    );
+    setNotificationStatus("Sending native test notification…");
     window.setTimeout(async () => {
       try {
         const sent = await sendNativeBuiltinNotification({
@@ -3667,20 +3665,17 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (
-      pendingDueRef.current.length &&
-      !backgroundPushEnabled
-    ) {
+    if (pendingDueRef.current.length && !backgroundPushEnabled) {
       const due = [...pendingDueRef.current];
       pendingDueRef.current = [];
       const details = due
-        .map((expense) => `${expense.description} (${formatDate(expense.date)})`)
+        .map(
+          (expense) => `${expense.description} (${formatDate(expense.date)})`,
+        )
         .join(", ");
       void sendNativeBuiltinNotification({
         title:
-          due.length === 1
-            ? "Recurring expense due"
-            : "Recurring expenses due",
+          due.length === 1 ? "Recurring expense due" : "Recurring expenses due",
         body: details,
         tag: `spend-recurring-${localDate()}`,
         tab: "activity",

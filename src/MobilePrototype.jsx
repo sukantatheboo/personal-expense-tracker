@@ -479,7 +479,6 @@ function ExpenseRow({
   const suppressClickRef = useRef(false);
   const dragFrameRef = useRef(null);
   const pendingOffsetRef = useRef(0);
-  const wasPastThresholdRef = useRef(false);
   const [swipe, setSwipe] = useState({ offset: 0, phase: "idle" });
   const [duplicatePress, setDuplicatePress] = useState(false);
   const swipeRef = useRef(swipe);
@@ -502,18 +501,42 @@ function ExpenseRow({
     }, 500);
   };
 
-  const beginDelete = (commit = onDelete, direction = "left") => {
-    if (!commit) return;
-    if (dragFrameRef.current) {
-      cancelAnimationFrame(dragFrameRef.current);
-      dragFrameRef.current = null;
-    }
-    updateSwipe({ offset: 0, phase: "idle" });
-    if (rowRef.current) {
-      rowRef.current.style.transform = "translate3d(0, 0, 0)";
-    }
-    commit(e.id);
-  };
+  // Senior Native Dev Swipe-to-Delete Pipeline
+  const executeDeleteAnimation = useCallback(
+    (commitAction) => {
+      const commit = commitAction || (e.rec && onSkip ? onSkip : onDelete);
+      if (!commit) return;
+
+      if (dragFrameRef.current) {
+        cancelAnimationFrame(dragFrameRef.current);
+        dragFrameRef.current = null;
+      }
+
+      // Haptic confirmation
+      triggerHaptic("delete");
+
+      // Phase 1: Fluid slide out of viewport
+      updateSwipe({ offset: -350, phase: "deleting" });
+      if (rowRef.current) {
+        rowRef.current.style.transition =
+          "transform 220ms cubic-bezier(0.2, 0.9, 0.28, 1)";
+        rowRef.current.style.transform = "translate3d(-105%, 0, 0)";
+      }
+
+      // Phase 2: Height collapses smoothly to 0 so list beneath slides up
+      clearTimeout(swipeTimerRef.current);
+      swipeTimerRef.current = setTimeout(() => {
+        updateSwipe({ offset: -350, phase: "collapsing" });
+
+        // Phase 3: Commit state deletion cleanly after height animation finishes
+        clearTimeout(collapseTimerRef.current);
+        collapseTimerRef.current = setTimeout(() => {
+          commit(e.id);
+        }, 220);
+      }, 190);
+    },
+    [e.id, e.rec, onDelete, onSkip],
+  );
 
   useEffect(
     () => () => {
@@ -540,6 +563,8 @@ function ExpenseRow({
       ) {
         updateSwipe({ offset: 0, phase: "idle" });
         if (rowRef.current) {
+          rowRef.current.style.transition =
+            "transform 240ms cubic-bezier(0.2, 0.9, 0.28, 1)";
           rowRef.current.style.transform = "translate3d(0, 0, 0)";
         }
       }
@@ -617,9 +642,9 @@ function ExpenseRow({
     }
 
     if (!gesture.horizontal && onDelete) {
-      // Support swiping left (dx < -6) or right (dx > 6)
+      // Intent check: swiping horizontally
       const isHorizontalIntent =
-        (absDx > 6 && absDx > absDy * 1.05) ||
+        (absDx > 6 && absDx > absDy * 1.1) ||
         (gesture.initialOffset !== 0 && absDx > 5);
 
       if (isHorizontalIntent) {
@@ -629,16 +654,13 @@ function ExpenseRow({
         shellRef.current?.classList.add("is-swipe-dragging");
         try {
           event.currentTarget.setPointerCapture(gesture.pointerId);
-        } catch {
-          // Pointer capture is an enhancement
-        }
+        } catch {}
         if (!gesture.draggingStateApplied) {
           gesture.draggingStateApplied = true;
-          swipeRef.current = {
+          updateSwipe({
             offset: gesture.initialOffset,
             phase: "dragging",
-          };
-          setSwipe((prev) => ({ ...prev, phase: "dragging" }));
+          });
         }
       }
     }
@@ -649,26 +671,32 @@ function ExpenseRow({
 
       let targetOffset = gesture.initialOffset + dx;
 
-      // Soft rubber-band resistance when dragging beyond width bounds
-      const maxDrag = gesture.width * 0.8;
-      if (targetOffset > maxDrag) {
-        targetOffset = maxDrag + (targetOffset - maxDrag) * 0.2;
-      } else if (targetOffset < -maxDrag) {
-        targetOffset = -maxDrag + (targetOffset - -maxDrag) * 0.2;
+      // Real iOS/Android swipe mechanics:
+      // Swiping right-to-left (dx < 0) reveals the red delete box
+      if (targetOffset < 0) {
+        // Soft rubber-band resistance beyond -140px
+        if (targetOffset < -140) {
+          targetOffset = -140 + (targetOffset - -140) * 0.25;
+        }
+      } else {
+        // Soft rubber-band resistance when pulling right
+        targetOffset = targetOffset * 0.25;
       }
 
       // Check deletion threshold for haptic cue
-      const deleteThreshold = Math.max(110, gesture.width * 0.38);
-      const isPastThreshold = Math.abs(targetOffset) >= deleteThreshold;
+      const deleteThreshold = Math.max(92, gesture.width * 0.32);
+      const isPastThreshold = targetOffset <= -deleteThreshold;
       if (isPastThreshold && !gesture.passedHaptic) {
         gesture.passedHaptic = true;
         triggerHaptic("selection");
+        shellRef.current?.setAttribute("data-threshold", "true");
       } else if (!isPastThreshold && gesture.passedHaptic) {
         gesture.passedHaptic = false;
+        shellRef.current?.removeAttribute("data-threshold");
       }
 
-      swipeRef.current.offset = targetOffset;
       pendingOffsetRef.current = targetOffset;
+      swipeRef.current.offset = targetOffset;
 
       if (!dragFrameRef.current) {
         dragFrameRef.current = requestAnimationFrame(() => {
@@ -676,15 +704,6 @@ function ExpenseRow({
           const offset = pendingOffsetRef.current;
           if (rowRef.current) {
             rowRef.current.style.transform = `translate3d(${offset}px, 0, 0)`;
-          }
-          const past = Math.abs(offset) >= deleteThreshold;
-          if (past !== wasPastThresholdRef.current) {
-            wasPastThresholdRef.current = past;
-            if (past) {
-              shellRef.current?.setAttribute("data-threshold", "true");
-            } else {
-              shellRef.current?.removeAttribute("data-threshold");
-            }
           }
         });
       }
@@ -706,23 +725,21 @@ function ExpenseRow({
       if (event?.currentTarget?.hasPointerCapture?.(gesture.pointerId)) {
         event.currentTarget.releasePointerCapture(gesture.pointerId);
       }
-    } catch {
-      // ignore
-    }
+    } catch {}
 
     rowRef.current?.classList.remove("is-swipe-dragging");
     shellRef.current?.classList.remove("is-swipe-dragging");
     shellRef.current?.removeAttribute("data-threshold");
-    wasPastThresholdRef.current = false;
 
     if (event?.type === "pointercancel") {
-      const resetOffset =
-        Math.abs(gesture.initialOffset) === 76 ? gesture.initialOffset : 0;
+      const resetOffset = gesture.initialOffset === -80 ? -80 : 0;
       updateSwipe({
         offset: resetOffset,
         phase: resetOffset === 0 ? "idle" : "revealed",
       });
       if (rowRef.current) {
+        rowRef.current.style.transition =
+          "transform 240ms cubic-bezier(0.2, 0.9, 0.28, 1)";
         rowRef.current.style.transform = `translate3d(${resetOffset}px, 0, 0)`;
       }
       return;
@@ -730,36 +747,34 @@ function ExpenseRow({
 
     if (gesture.horizontal && onDelete) {
       const dx = (event?.clientX ?? gesture.lastX) - gesture.startX;
-      const currentOffset = swipeRef.current.offset;
+      const currentOffset = pendingOffsetRef.current;
       const elapsed = Math.max(1, performance.now() - gesture.startedAt);
       const velocity = dx / elapsed;
-      const deleteThreshold = Math.max(110, gesture.width * 0.38);
-      const revealThreshold = 48;
+      const deleteThreshold = Math.max(95, gesture.width * 0.32);
+      const revealThreshold = 40;
 
       suppressNextClick();
 
-      const shouldDeleteRight =
-        currentOffset >= deleteThreshold || (dx > 45 && velocity > 0.55);
-      const shouldDeleteLeft =
-        currentOffset <= -deleteThreshold || (dx < -45 && velocity < -0.55);
+      // Case 1: Full swipe left to delete directly
+      const shouldFullDelete =
+        currentOffset <= -deleteThreshold || (dx < -36 && velocity < -0.42);
 
-      if (shouldDeleteRight) {
-        beginDelete(e.rec && onSkip ? onSkip : onDelete, "right");
-      } else if (shouldDeleteLeft) {
-        beginDelete(e.rec && onSkip ? onSkip : onDelete, "left");
-      } else if (currentOffset >= revealThreshold) {
-        updateSwipe({ offset: 76, phase: "revealed" });
-        if (rowRef.current) {
-          rowRef.current.style.transform = "translate3d(76px, 0, 0)";
-        }
+      if (shouldFullDelete) {
+        executeDeleteAnimation();
       } else if (currentOffset <= -revealThreshold) {
-        updateSwipe({ offset: -76, phase: "revealed" });
+        // Case 2: Partial swipe left reveals Delete action button
+        updateSwipe({ offset: -80, phase: "revealed" });
         if (rowRef.current) {
-          rowRef.current.style.transform = "translate3d(-76px, 0, 0)";
+          rowRef.current.style.transition =
+            "transform 260ms cubic-bezier(0.2, 0.9, 0.28, 1)";
+          rowRef.current.style.transform = "translate3d(-80px, 0, 0)";
         }
       } else {
+        // Case 3: Released below threshold -> smoothly springs back closed
         updateSwipe({ offset: 0, phase: "idle" });
         if (rowRef.current) {
+          rowRef.current.style.transition =
+            "transform 260ms cubic-bezier(0.2, 0.9, 0.28, 1)";
           rowRef.current.style.transform = "translate3d(0, 0, 0)";
         }
       }
@@ -777,9 +792,10 @@ function ExpenseRow({
   const gestureHint =
     onDelete && onDuplicate
       ? e.rec
-        ? "Tap to edit, swipe left or right to skip this occurrence, or press and hold to duplicate."
-        : "Tap to edit, swipe left or right to delete, or press and hold to duplicate."
+        ? "Tap to edit, swipe left to skip this occurrence, or press and hold to duplicate."
+        : "Tap to edit, swipe left to delete, or press and hold to duplicate."
       : "Tap to edit.";
+
   const rowClasses = [
     "ri",
     "expense-row",
@@ -818,6 +834,8 @@ function ExpenseRow({
         if (swipeRef.current.phase === "revealed") {
           updateSwipe({ offset: 0, phase: "idle" });
           if (rowRef.current) {
+            rowRef.current.style.transition =
+              "transform 240ms cubic-bezier(0.2, 0.9, 0.28, 1)";
             rowRef.current.style.transform = "translate3d(0, 0, 0)";
           }
           return;
@@ -855,49 +873,22 @@ function ExpenseRow({
 
   if (!onDelete) return row;
 
-  const isSwipeRight = swipe.offset > 0;
-  const isSwipeLeft = swipe.offset < 0;
-
   return (
     <div
       ref={shellRef}
-      className={`expense-swipe-shell${swipe.phase === "dragging" ? " is-dragging" : ""}${swipe.phase === "revealed" ? " is-revealed" : ""}${["deleting", "collapsing"].includes(swipe.phase) ? " is-deleting" : ""}${swipe.phase === "collapsing" ? " is-collapsing" : ""}${isSwipeRight ? " is-swipe-right" : isSwipeLeft ? " is-swipe-left" : ""}${e.rec ? " is-skip-shell" : ""}`}
+      className={`expense-swipe-shell${swipe.phase === "dragging" ? " is-dragging" : ""}${swipe.phase === "revealed" ? " is-revealed" : ""}${["deleting", "collapsing"].includes(swipe.phase) ? " is-deleting" : ""}${swipe.phase === "collapsing" ? " is-collapsing" : ""}${e.rec ? " is-skip-shell" : ""}`}
     >
-      {/* Revealed when swiping left-to-right (button on the left) */}
-      <button
-        className={`expense-swipe-delete is-left${e.rec ? " is-skip" : ""}`}
-        type="button"
-        aria-label={
-          e.rec ? `Skip ${e.desc} for this occurrence` : `Delete ${e.desc}`
-        }
-        aria-hidden={swipe.phase !== "revealed" || swipe.offset <= 0}
-        disabled={swipe.phase !== "revealed" || swipe.offset <= 0}
-        tabIndex={swipe.phase === "revealed" && swipe.offset > 0 ? 0 : -1}
-        onClick={() =>
-          beginDelete(e.rec && onSkip ? onSkip : onDelete, "right")
-        }
-      >
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          {e.rec ? (
-            <path d="M4 5h16v15H4zM8 3v4m8-4v4M4 10h16m-8 3v4m-2-2h4" />
-          ) : (
-            <path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 3v6m4-6v6" />
-          )}
-        </svg>
-        <span>{e.rec ? "Skip" : "Delete"}</span>
-      </button>
-
-      {/* Revealed when swiping right-to-left (button on the right) */}
+      {/* Real-App Right-to-Left Swipe Delete Action Button */}
       <button
         className={`expense-swipe-delete is-right${e.rec ? " is-skip" : ""}`}
         type="button"
         aria-label={
           e.rec ? `Skip ${e.desc} for this occurrence` : `Delete ${e.desc}`
         }
-        aria-hidden={swipe.phase !== "revealed" || swipe.offset >= 0}
-        disabled={swipe.phase !== "revealed" || swipe.offset >= 0}
-        tabIndex={swipe.phase === "revealed" && swipe.offset < 0 ? 0 : -1}
-        onClick={() => beginDelete(e.rec && onSkip ? onSkip : onDelete, "left")}
+        onClick={(event) => {
+          event.stopPropagation();
+          executeDeleteAnimation();
+        }}
       >
         <svg viewBox="0 0 24 24" aria-hidden="true">
           {e.rec ? (
@@ -1289,7 +1280,7 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
             overlayRef.current.style.transition = "none";
           }
         }
-        if (isPulling) {
+        if (isPulling && e.cancelable) {
           e.preventDefault();
           const now = performance.now();
           if (dragRef.current) {
@@ -2020,6 +2011,7 @@ function Accounts({
     () => cards[0]?.id || "",
   );
   const [showAllTx, setShowAllTx] = useState(false);
+  const [deckDragY, setDeckDragY] = useState(0);
   const prevCardCountRef = useRef(cards.length);
 
   useEffect(() => {
@@ -2185,10 +2177,22 @@ function Accounts({
         onSelectCard={chooseAccount}
         onAddCardClick={onAddCardClick}
         onOpenCardDetails={(card) => card && onOpenCardOptions?.(card.id)}
+        onDragOffsetChange={setDeckDragY}
       />
 
-      {/* 2×2 Quick Action Buttons Grid (Income, Transfer, Adjust, Card Options - Preserving Whole App Functionality) */}
-      <div className="accounts-actions-grid">
+      {/* Reactive Layout Reflow: Quick Actions & Transactions translate in tandem with card gesture */}
+      <div
+        className={`accounts-reactive-body${deckDragY !== 0 ? " is-dragging" : ""}`}
+        style={
+          deckDragY !== 0
+            ? {
+                transform: `translate3d(0, ${deckDragY < 0 ? deckDragY * 0.35 : deckDragY * 0.15}px, 0)`,
+              }
+            : undefined
+        }
+      >
+        {/* 2×2 Quick Action Buttons Grid (Income, Transfer, Adjust, Card Options - Preserving Whole App Functionality) */}
+        <div className="accounts-actions-grid">
         <button
           type="button"
           className="accounts-action-card"
@@ -2503,6 +2507,7 @@ function Accounts({
             )}
           </div>
         )}
+      </div>
       </div>
     </>
   );
