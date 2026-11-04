@@ -23,6 +23,7 @@ import {
   localDate,
   makeId,
   nextOccurrenceDate,
+  readStorage,
   roundMoney,
   writeStorage,
 } from "./data.js";
@@ -123,7 +124,7 @@ function accountName(accountId, cards = []) {
     ? cards.find((c) => c?.id === accountId)
     : null;
   if (customCard?.name) return customCard.name;
-  return ACCOUNT_OPTIONS.find(([id]) => id === accountId)?.[1] || "Account";
+  return accountId || "Account";
 }
 
 function userDisplayName(user) {
@@ -244,7 +245,10 @@ function emptyDeletedRecords() {
   };
 }
 
-function normalizeDeletedRecords(value) {
+const TOMBSTONE_MAX_AGE_MS = 60 * 24 * 60 * 60 * 1000; // 60 days
+
+function normalizeDeletedRecords(value, now = Date.now()) {
+  const cutoff = now - TOMBSTONE_MAX_AGE_MS;
   const cleanChanges = (changes) => {
     if (Array.isArray(changes))
       return Object.fromEntries(
@@ -254,25 +258,23 @@ function normalizeDeletedRecords(value) {
       );
     if (!changes || typeof changes !== "object") return {};
     return Object.fromEntries(
-      Object.entries(changes).flatMap(([id, change]) =>
-        typeof id === "string" &&
-        id &&
-        change &&
-        typeof change === "object" &&
-        typeof change.deleted === "boolean"
-          ? [
-              [
-                id,
-                {
-                  deleted: change.deleted,
-                  updatedAt: Number.isFinite(Number(change.updatedAt))
-                    ? Number(change.updatedAt)
-                    : 0,
-                },
-              ],
-            ]
-          : [],
-      ),
+      Object.entries(changes).flatMap(([id, change]) => {
+        if (
+          typeof id === "string" &&
+          id &&
+          change &&
+          typeof change === "object" &&
+          typeof change.deleted === "boolean"
+        ) {
+          const updatedAt = Number.isFinite(Number(change.updatedAt))
+            ? Number(change.updatedAt)
+            : 0;
+          // Prune expired tombstones to protect against 512KB DB column limit
+          if (updatedAt > 0 && updatedAt < cutoff) return [];
+          return [[id, { deleted: change.deleted, updatedAt }]];
+        }
+        return [];
+      }),
     );
   };
   return {
@@ -616,13 +618,21 @@ function mergeAccountSettings(
     if (mergedBalances[id] === undefined) {
       mergedBalances[id] = val;
     } else {
-      const localTime = recordUpdatedAt(localSettings);
-      const cloudTime = recordUpdatedAt(cloudSettings);
-      if (
-        (preferLocal && (localTime >= cloudTime || mergedBalances[id] === 0)) ||
-        localTime > cloudTime
-      ) {
-        mergedBalances[id] = val;
+      const localCard = (localSettings.cards || []).find((c) => c?.id === id);
+      const cloudCard = (cloudSettings.cards || []).find((c) => c?.id === id);
+      if (localCard && cloudCard) {
+        if (preferLocalRecord(localCard, cloudCard, preferLocal)) {
+          mergedBalances[id] = val;
+        }
+      } else {
+        const localTime = recordUpdatedAt(localSettings);
+        const cloudTime = recordUpdatedAt(cloudSettings);
+        if (
+          (preferLocal && (localTime >= cloudTime || mergedBalances[id] === 0)) ||
+          localTime > cloudTime
+        ) {
+          mergedBalances[id] = val;
+        }
       }
     }
   }
@@ -630,11 +640,7 @@ function mergeAccountSettings(
   // Prune tombstoned cards from mergedBalances
   for (const [id, tombstone] of Object.entries(deletedCardTombstones)) {
     if (tombstone?.deleted && !cardMap.has(id)) {
-      if (["bkash", "bank", "savings"].includes(id)) {
-        mergedBalances[id] = 0;
-      } else {
-        delete mergedBalances[id];
-      }
+      delete mergedBalances[id];
     }
   }
 
@@ -691,9 +697,9 @@ function mergeCloudSnapshots(
   );
   const budgetData = mergeBudgetValues(
     cloudBudgets,
-    preferLocal ? local.budgets : {},
+    local.budgets,
     normalizeBudgetUpdatedAt(cloud.budgetUpdatedAt),
-    normalizeBudgetUpdatedAt(preferLocal ? local.budgetUpdatedAt : {}),
+    normalizeBudgetUpdatedAt(local.budgetUpdatedAt),
     deletedRecords.budgets,
     Boolean(preferLocal),
   );
@@ -826,6 +832,7 @@ function clearSharedFinancialData() {
     BUDGET_UPDATED_AT_KEY,
     STORAGE_KEYS.recurring,
     STORAGE_KEYS.accounts,
+    STORAGE_KEYS.deletedRecords,
   ]) {
     try {
       localStorage.removeItem(key);
@@ -932,11 +939,21 @@ export default function App() {
   const [recurringSchedules, setRecurringSchedules] = useState(
     loadRecurringSchedules,
   );
-  const [accountData, setAccountData] = useState(loadAccountData);
   const [deletedRecords, setDeletedRecords] = useState(() => {
+    const saved = readStorage(STORAGE_KEYS.deletedRecords, null);
+    if (saved) return normalizeDeletedRecords(saved);
     const owner = loadLocalDataOwner();
     const snapshot = owner ? readLocalUserSnapshots()[owner] : null;
     return normalizeDeletedRecords(snapshot?.deletedRecords);
+  });
+  const [accountData, setAccountData] = useState(() => {
+    const savedDeleted = readStorage(STORAGE_KEYS.deletedRecords, null);
+    const owner = loadLocalDataOwner();
+    const snapshot = owner ? readLocalUserSnapshots()[owner] : null;
+    const effectiveDeleted = normalizeDeletedRecords(
+      savedDeleted || snapshot?.deletedRecords,
+    );
+    return loadAccountData(undefined, effectiveDeleted);
   });
   const [theme, setTheme] = useState(loadTheme);
   const [targetCurrency, setTargetCurrency] = useState(loadCurrency);
@@ -1245,6 +1262,19 @@ export default function App() {
 
         const remote = await loadCloudData(userId);
         if (!remote?.data) return null;
+
+        // Break realtime echo loop if remote matches what this client just uploaded
+        if (
+          source === "live" &&
+          cloudVersionRef.current &&
+          remote.updated_at === cloudVersionRef.current &&
+          lastSyncedSnapshotRef.current &&
+          areCloudSnapshotsEqual(remote.data, lastSyncedSnapshotRef.current)
+        ) {
+          setCloudSyncActivity("synced");
+          return lastSyncedSnapshotRef.current;
+        }
+
         const local = cloudSnapshotRef.current;
         const previousCloud = lastSyncedSnapshotRef.current;
         const hasPendingChanges =
@@ -1315,6 +1345,9 @@ export default function App() {
   useEffect(() => {
     writeStorage(STORAGE_KEYS.accounts, accountData);
   }, [accountData]);
+  useEffect(() => {
+    writeStorage(STORAGE_KEYS.deletedRecords, deletedRecords);
+  }, [deletedRecords]);
   useEffect(() => {
     const owner = localDataOwnerRef.current;
     if (!owner || owner !== pushUser?.id) return;
@@ -2556,7 +2589,8 @@ export default function App() {
     setTransactionForm((current) => {
       const updated = { ...current, [field]: value };
       if (updated.fromAccount === updated.toAccount) {
-        const fallback = ACCOUNT_OPTIONS.find(([id]) => id !== value)?.[0];
+        const cards = accountData?.settings?.cards || [];
+        const fallback = cards.find((c) => c.id !== value)?.id || "";
         if (field === "fromAccount") updated.toAccount = fallback;
         else updated.fromAccount = fallback;
       }
@@ -2588,12 +2622,14 @@ export default function App() {
       transaction.account = form.acct;
       transaction.direction = form.dir === "up" ? "increase" : "decrease";
     } else if (type === "transfer") {
-      transaction.fromAccount = form.fromAccount;
-      transaction.toAccount = form.toAccount;
+      const from = form.fromAccount || form.acct;
+      const to = form.toAccount || form.to;
+      transaction.fromAccount = from;
+      transaction.toAccount = to;
       if (
-        !isAccountId(transaction.fromAccount, accountData) ||
-        !isAccountId(transaction.toAccount, accountData) ||
-        transaction.fromAccount === transaction.toAccount
+        !isAccountId(from, accountData) ||
+        !isAccountId(to, accountData) ||
+        from === to
       )
         return false;
     } else {
@@ -2616,10 +2652,12 @@ export default function App() {
     if (type === "income" || type === "adjustment") {
       if (!isAccountId(form.acct, accountData)) return false;
     } else if (type === "transfer") {
+      const from = form.fromAccount || form.acct;
+      const to = form.toAccount || form.to;
       if (
-        !isAccountId(form.fromAccount, accountData) ||
-        !isAccountId(form.toAccount, accountData) ||
-        form.fromAccount === form.toAccount
+        !isAccountId(from, accountData) ||
+        !isAccountId(to, accountData) ||
+        from === to
       )
         return false;
     } else {
@@ -2644,8 +2682,8 @@ export default function App() {
           updated.account = form.acct;
           updated.direction = form.dir === "up" ? "increase" : "decrease";
         } else if (type === "transfer") {
-          updated.fromAccount = form.fromAccount;
-          updated.toAccount = form.toAccount;
+          updated.fromAccount = form.fromAccount || form.acct;
+          updated.toAccount = form.toAccount || form.to;
         }
         return updated;
       }),
@@ -2738,11 +2776,7 @@ export default function App() {
         ? current.settings.cards
         : [];
       const nextBalances = { ...current.settings.balances };
-      if (!["bkash", "bank", "savings"].includes(cardId)) {
-        delete nextBalances[cardId];
-      } else {
-        nextBalances[cardId] = 0;
-      }
+      delete nextBalances[cardId];
       return {
         ...current,
         settings: {

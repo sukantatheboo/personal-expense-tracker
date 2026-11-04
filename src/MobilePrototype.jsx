@@ -342,14 +342,17 @@ function bal(S, id) {
   for (const t of S.tx) {
     if (t.date > ld()) continue;
     if (t.type === "income" && t.acct === id) b += t.amt;
-    if (t.type === "adjust" && t.acct === id)
-      b += t.dir === "up" ? t.amt : -t.amt;
+    if ((t.type === "adjust" || t.type === "adjustment") && t.acct === id) {
+      const isUp =
+        t.dir === "up" || t.dir === "increase" || t.direction === "increase";
+      b += isUp ? t.amt : -t.amt;
+    }
     if (t.type === "transfer") {
       if (t.acct === id) b -= t.amt;
       if (t.to === id) b += t.amt;
     }
   }
-  return b;
+  return Math.round(b * 100) / 100;
 }
 
 /* ───────────── small shared pieces ───────────── */
@@ -2085,9 +2088,9 @@ function Accounts({
         d: transaction.date,
         title:
           capitalizeFirstLetter(transaction.note) ||
-          { income: "Income", transfer: "Transfer", adjust: "Adjustment" }[
+          { income: "Income", transfer: "Transfer", adjust: "Adjustment", adjustment: "Adjustment" }[
             transaction.type
-          ],
+          ] || "Transaction",
         type: transaction.type,
         cat:
           transaction.type === "income"
@@ -2115,15 +2118,19 @@ function Accounts({
     const changes = {};
     if (event.type === "expense") changes[event.account] = -event.amount;
     else if (event.type === "income") changes[event.account] = event.amount;
-    else if (event.type === "adjust") {
-      changes[event.account] =
-        event.direction === "up" ? event.amount : -event.amount;
+    else if (event.type === "adjust" || event.type === "adjustment") {
+      const isUp =
+        event.direction === "up" ||
+        event.direction === "increase" ||
+        event.dir === "up" ||
+        event.dir === "increase";
+      changes[event.account] = isUp ? event.amount : -event.amount;
     } else if (event.type === "transfer") {
       changes[event.from] = (changes[event.from] || 0) - event.amount;
       changes[event.to] = (changes[event.to] || 0) + event.amount;
     }
 
-    if (event.type === "adjust") {
+    if (event.type === "adjust" || event.type === "adjustment") {
       const before = runningBalances[event.account] || 0;
       adjustmentBalances.set(event.id, {
         before,
@@ -2154,11 +2161,17 @@ function Accounts({
   const displayAmount = (event) => {
     if (event.type === "expense") return { value: -event.amount, signed: true };
     if (event.type === "income") return { value: event.amount, signed: true };
-    if (event.type === "adjust")
+    if (event.type === "adjust" || event.type === "adjustment") {
+      const isUp =
+        event.direction === "up" ||
+        event.direction === "increase" ||
+        event.dir === "up" ||
+        event.dir === "increase";
       return {
-        value: event.direction === "up" ? event.amount : -event.amount,
+        value: isUp ? event.amount : -event.amount,
         signed: true,
       };
+    }
     if (selectedAccount) {
       const value =
         event.from === selectedAccount ? -event.amount : event.amount;
@@ -3196,10 +3209,10 @@ function AccountTxDetailSheet({ tx, cards = [], onSave, onDelete, onClose }) {
     return [...accountOptions, [id, getAccountDisplay(id, cards)[0]]];
   };
   const [g, setG] = useState({
-    type: tx.type || "income",
+    type: tx.type === "adjustment" ? "adjust" : tx.type || "income",
     amt: tx.amt ?? "",
     acct: tx.acct || cards[0]?.id || "",
-    dir: tx.dir || "up",
+    dir: tx.dir || (tx.direction === "decrease" ? "down" : "up"),
     note: tx.note || "",
     date: tx.date || ld(),
     fromAccount: tx.acct || cards[0]?.id || "",

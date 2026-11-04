@@ -4,6 +4,7 @@ export const STORAGE_KEYS = {
   budgetUpdatedAt: "spend-budget-updated-at-v1",
   recurring: "spend-recurring-expenses-v1",
   accounts: "spend-account-balances-v1",
+  deletedRecords: "spend-deleted-records-v1",
   theme: "spend-theme-v1",
   currency: "spend-target-currency-v1",
   reminderTime: "spend-reminder-time-v1",
@@ -40,82 +41,9 @@ export const CURRENCIES = [
   ["THB", "Thai Baht"],
 ];
 
-export const DEFAULT_CARDS = [
-  {
-    id: "amazon",
-    name: "Amazon Platinum",
-    provider: "amazon",
-    type: "credit",
-    network: "mastercard",
-    holderName: "John Smith",
-    subtitle: "Amazon Platinum",
-    last4: "9018",
-    expiry: "12/28",
-    color: "#6358DC",
-    gradient: "linear-gradient(135deg, #7c3aed 0%, #6366f1 50%, #4338ca 100%)",
-  },
-  {
-    id: "citi",
-    name: "Citi Master Card",
-    provider: "citi_mc",
-    type: "credit",
-    network: "mastercard",
-    holderName: "John Smith",
-    subtitle: "Platinum Mastercard",
-    last4: "4328",
-    expiry: "11/25",
-    color: "#1e293b",
-    gradient: "linear-gradient(135deg, #334155 0%, #1e293b 60%, #0f172a 100%)",
-  },
-  {
-    id: "bkash",
-    name: "bKash",
-    provider: "bkash",
-    type: "mfs",
-    network: "mfs",
-    holderName: "Personal Account",
-    subtitle: "Personal Wallet",
-    last4: "01712 •••678",
-    expiry: "",
-    color: "#e2136e",
-    gradient: "linear-gradient(135deg, #e2136e 0%, #b80053 50%, #800038 100%)",
-  },
-  {
-    id: "bank",
-    name: "Bank",
-    provider: "brac",
-    type: "debit",
-    network: "visa",
-    holderName: "Primary Debit",
-    subtitle: "BRAC Platinum Visa",
-    last4: "9018",
-    expiry: "12/28",
-    color: "#002D62",
-    gradient: "linear-gradient(135deg, #002D62 0%, #0b1d3a 65%, #182747 100%)",
-  },
-  {
-    id: "savings",
-    name: "Savings",
-    provider: "savings",
-    type: "savings",
-    network: "none",
-    holderName: "Personal Savings",
-    subtitle: "High-Yield Vault",
-    last4: "SAV-8829-01",
-    expiry: "",
-    color: "#047857",
-    gradient:
-      "linear-gradient(135deg, #065f46 0%, #047857 35%, #064e3b 70%, #022c22 100%)",
-  },
-];
+export const DEFAULT_CARDS = [];
 
-export const ACCOUNT_OPTIONS = [
-  ["amazon", "Amazon Platinum"],
-  ["citi", "Citi Master Card"],
-  ["bkash", "bKash"],
-  ["bank", "Bank"],
-  ["savings", "Savings"],
-];
+export const ACCOUNT_OPTIONS = [];
 
 export function getAccountOptions(accountData) {
   const cards = accountData?.settings?.cards;
@@ -151,19 +79,12 @@ export function isPureUnconfiguredDemoState(saved) {
   if (!isZeroOrDemoBalances) return false;
 
   const rawCards = Array.isArray(settings.cards) ? settings.cards : [];
-  if (rawCards.length === 0) return false;
+  if (rawCards.length === 0) return true;
 
-  const isAllDefaultCards = rawCards.every(
-    (c) =>
-      DEFAULT_CARDS.some((d) => d.id === c?.id) &&
-      (!c?.holderName ||
-        c.holderName === "John Smith" ||
-        c.holderName === "Cardholder" ||
-        DEFAULT_CARDS.some(
-          (d) => d.id === c?.id && d.holderName === c?.holderName,
-        )),
+  const isLegacyDemoCards = rawCards.every((c) =>
+    ["amazon", "citi", "bkash", "bank", "savings"].includes(c?.id),
   );
-  return isAllDefaultCards;
+  return isLegacyDemoCards;
 }
 
 export const PRIMARY_CURRENCY = "BDT";
@@ -257,6 +178,7 @@ export function isAccountId(value, accountData = null) {
   if (ACCOUNT_OPTIONS.some(([id]) => id === trimmed)) return true;
   if (DEFAULT_CARDS.some((c) => c.id === trimmed)) return true;
   if (trimmed.startsWith("card_")) return true;
+  if (Array.isArray(accountData) && accountData.some((c) => (c?.id || c?.[0]) === trimmed)) return true;
   if (accountData?.settings?.cards?.some((c) => c.id === trimmed)) return true;
   if (
     accountData?.settings?.balances &&
@@ -335,7 +257,7 @@ export function emptyAccountData() {
   return {
     settings: {
       startDate: localDate(),
-      balances: { bkash: 0, bank: 0, savings: 0 },
+      balances: {},
       cards: [],
       configured: false,
       cardsConfigured: false,
@@ -474,6 +396,9 @@ export function loadAccountData(
     (!Array.isArray(saved.transactions) || saved.transactions.length === 0) &&
     Object.values(rawBalances).every((v) => Number(v) === 0);
 
+  const cardsAlreadyConfigured =
+    settings.cardsConfigured === true || rawCards.length > 0;
+
   if (!isBrandNewAccount) {
     const stableTime = settings.updatedAt
       ? typeof settings.updatedAt === "number"
@@ -482,6 +407,10 @@ export function loadAccountData(
       : 0;
     for (const accountId of allReferencedAccountIds) {
       if (deletedCardTombstones[accountId]?.deleted) continue;
+      // If cards are already configured, only reconstruct if there is a positive balance to prevent losing funds
+      if (cardsAlreadyConfigured && !(Number(rawBalances[accountId]) > 0)) {
+        continue;
+      }
       if (!cardMap.has(accountId)) {
         const defaultMatch = DEFAULT_CARDS.find((d) => d.id === accountId);
         if (defaultMatch) {
@@ -514,21 +443,9 @@ export function loadAccountData(
   const cards = Array.from(cardMap.values());
 
   const initialBalances = {};
-  if (!deletedCardTombstones.bkash?.deleted)
-    initialBalances.bkash = cleanBalance(rawBalances.bkash);
-  if (!deletedCardTombstones.bank?.deleted)
-    initialBalances.bank = cleanBalance(rawBalances.bank);
-  if (!deletedCardTombstones.savings?.deleted)
-    initialBalances.savings = cleanBalance(rawBalances.savings);
-
   for (const [key, val] of Object.entries(rawBalances)) {
     if (deletedCardTombstones[key]?.deleted) continue;
-    if (
-      cardMap.has(key) ||
-      key === "bkash" ||
-      key === "bank" ||
-      key === "savings"
-    ) {
+    if (cardMap.has(key)) {
       initialBalances[key] = cleanBalance(val);
     }
   }
@@ -701,19 +618,27 @@ export function calculateAccountBalance(accountId, expenses, accountData) {
   }
 
   for (const transaction of accountData.transactions) {
-    if (transaction.date > today) continue;
-    if (transaction.type === "income" && transaction.account === accountId)
-      balance += Number(transaction.amount);
-    if (transaction.type === "adjustment" && transaction.account === accountId)
-      balance +=
-        transaction.direction === "increase"
-          ? Number(transaction.amount)
-          : -Number(transaction.amount);
-    if (transaction.type === "transfer") {
-      if (transaction.fromAccount === accountId)
-        balance -= Number(transaction.amount);
-      if (transaction.toAccount === accountId)
-        balance += Number(transaction.amount);
+    if (!transaction || typeof transaction !== "object") continue;
+    const txDate = transaction.date;
+    if (txDate > today) continue;
+    const amount = Number(transaction.amount ?? transaction.amt ?? 0);
+    const txType = transaction.type;
+    const account = transaction.account ?? transaction.acct;
+
+    if (txType === "income" && account === accountId) {
+      balance += amount;
+    } else if ((txType === "adjustment" || txType === "adjust") && account === accountId) {
+      const isUp =
+        transaction.direction === "increase" ||
+        transaction.direction === "up" ||
+        transaction.dir === "up" ||
+        transaction.dir === "increase";
+      balance += isUp ? amount : -amount;
+    } else if (txType === "transfer") {
+      const fromAcct = transaction.fromAccount ?? transaction.acct;
+      const toAcct = transaction.toAccount ?? transaction.to;
+      if (fromAcct === accountId) balance -= amount;
+      if (toAcct === accountId) balance += amount;
     }
   }
 

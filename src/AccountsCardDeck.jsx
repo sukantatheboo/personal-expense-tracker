@@ -303,6 +303,8 @@ export function StackedCardDeck({
   const phaseTimerRef = useRef(null);
   const passedHapticRef = useRef(false);
   const wasSwipeRef = useRef(false);
+  const isDraggingRef = useRef(false);
+  const hasCapturedPointerRef = useRef(false);
   const wheelCooldownRef = useRef(0);
 
   const totalCards = cards.length;
@@ -419,7 +421,7 @@ export function StackedCardDeck({
 
   // Click on card
   const handleCardClick = (depth, card, cardIndex) => {
-    if (phase !== "idle" || !card) return;
+    if (phase.startsWith("commit") || !card) return;
     if (wasSwipeRef.current) {
       wasSwipeRef.current = false;
       return;
@@ -440,6 +442,8 @@ export function StackedCardDeck({
 
     passedHapticRef.current = false;
     wasSwipeRef.current = false;
+    isDraggingRef.current = false;
+    hasCapturedPointerRef.current = false;
     dragReleasePRef.current = 0;
     dragStartRef.current = {
       startY: e.clientY,
@@ -447,9 +451,6 @@ export function StackedCardDeck({
       startTime: performance.now(),
       pointerId: e.pointerId,
     };
-    try {
-      e.currentTarget.setPointerCapture(e.pointerId);
-    } catch {}
   };
 
   const onPointerMove = (e) => {
@@ -458,8 +459,19 @@ export function StackedCardDeck({
 
     const dy = e.clientY - dragStartRef.current.startY;
     const dx = e.clientX - dragStartRef.current.startX;
-    if (Math.abs(dy) > 6 || Math.abs(dx) > 6) {
-      wasSwipeRef.current = true;
+
+    if (!isDraggingRef.current) {
+      // Tap slop threshold: only initiate drag gesture if movement exceeds 10px
+      if (Math.abs(dy) > 10 || Math.abs(dx) > 10) {
+        isDraggingRef.current = true;
+        wasSwipeRef.current = true;
+        try {
+          e.currentTarget.setPointerCapture(e.pointerId);
+          hasCapturedPointerRef.current = true;
+        } catch {}
+      } else {
+        return; // Movement is within tap slop; keep as tap
+      }
     }
 
     if (dy >= 0) {
@@ -493,9 +505,22 @@ export function StackedCardDeck({
     dragStartRef.current = null;
     passedHapticRef.current = false;
 
-    try {
-      e.currentTarget.releasePointerCapture(pointerId);
-    } catch {}
+    if (hasCapturedPointerRef.current) {
+      try {
+        e.currentTarget.releasePointerCapture(pointerId);
+      } catch {}
+      hasCapturedPointerRef.current = false;
+    }
+
+    // If movement never exceeded tap slop, this was a tap/click!
+    if (!isDraggingRef.current) {
+      wasSwipeRef.current = false;
+      isDraggingRef.current = false;
+      // Do not run executeSnapBack() because no drag took place and phase is already 'idle'
+      return;
+    }
+
+    isDraggingRef.current = false;
 
     const dy = e.clientY - startY;
     const dt = Math.max(1, performance.now() - startTime);
@@ -510,10 +535,8 @@ export function StackedCardDeck({
         wasSwipeRef.current = true;
         executeCommit();
       } else {
+        wasSwipeRef.current = true;
         executeSnapBack();
-        if (dy <= 6) {
-          wasSwipeRef.current = false;
-        }
       }
     } else {
       // Upward release: flick up cycles to previous card
@@ -521,18 +544,26 @@ export function StackedCardDeck({
         wasSwipeRef.current = true;
         executeCommitPrev();
       } else {
+        wasSwipeRef.current = true;
         executeSnapBack();
-        if (Math.abs(dy) <= 6) {
-          wasSwipeRef.current = false;
-        }
       }
     }
   };
 
-  const onPointerCancel = () => {
+  const onPointerCancel = (e) => {
+    if (dragStartRef.current && hasCapturedPointerRef.current) {
+      try {
+        e.currentTarget.releasePointerCapture(dragStartRef.current.pointerId);
+      } catch {}
+    }
     dragStartRef.current = null;
     passedHapticRef.current = false;
-    executeSnapBack();
+    hasCapturedPointerRef.current = false;
+    if (isDraggingRef.current) {
+      isDraggingRef.current = false;
+      wasSwipeRef.current = true;
+      executeSnapBack();
+    }
   };
 
   // Mouse wheel / trackpad scroll
@@ -684,6 +715,15 @@ export function StackedCardDeck({
               data-card-index={index}
               data-card-depth={depth}
               className={`cards-deck-slot depth-${depth} ${isFront ? "is-front" : "is-back"}`}
+              role="button"
+              tabIndex={0}
+              aria-label={isFront ? `Card options for ${card.name}` : `Switch to ${card.name}`}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  handleCardClick(depth, card, index);
+                }
+              }}
               style={{
                 transform: transformStyle,
                 transition: transitionStyle,
@@ -691,6 +731,7 @@ export function StackedCardDeck({
                 opacity,
                 filter: filterStyle,
                 pointerEvents,
+                cursor: isFront ? "pointer" : "default",
               }}
               onClick={() => handleCardClick(depth, card, index)}
             >

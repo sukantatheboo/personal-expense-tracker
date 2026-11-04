@@ -121,7 +121,8 @@ export async function syncBackgroundSchedules(userId, schedules, reminderTime) {
     throw new Error("Choose a valid reminder time.");
   }
 
-  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const timezone =
+    Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
   const deviceId = getDeviceId();
   const [hours, minutes] = reminderTime.split(":").map(Number);
   const reminders = schedules.map((schedule) => {

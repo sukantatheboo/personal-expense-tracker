@@ -23,14 +23,18 @@ function isLegacyAccountConstraintError(error) {
 
 function isLegacyDbCompatibleTransaction(tx) {
   if (!tx || typeof tx !== "object") return false;
-  if (tx.type === "income" || tx.type === "adjustment") {
-    return LEGACY_DB_ACCOUNTS.has(tx.account);
+  const type = tx.type === "adjust" ? "adjustment" : tx.type;
+  const account = tx.account ?? tx.acct;
+  const fromAccount = tx.fromAccount ?? tx.acct;
+  const toAccount = tx.toAccount ?? tx.to;
+  if (type === "income" || type === "adjustment") {
+    return LEGACY_DB_ACCOUNTS.has(account);
   }
-  if (tx.type === "transfer") {
+  if (type === "transfer") {
     return (
-      LEGACY_DB_ACCOUNTS.has(tx.fromAccount) &&
-      LEGACY_DB_ACCOUNTS.has(tx.toAccount) &&
-      tx.fromAccount !== tx.toAccount
+      LEGACY_DB_ACCOUNTS.has(fromAccount) &&
+      LEGACY_DB_ACCOUNTS.has(toAccount) &&
+      fromAccount !== toAccount
     );
   }
   return false;
@@ -93,11 +97,7 @@ function mergeAccountDataWithRawSnapshot(
   // Prune tombstoned cards from mergedBalances
   for (const [id, tombstone] of Object.entries(deletedCardTombstones)) {
     if (tombstone?.deleted && !cardMap.has(id)) {
-      if (["bkash", "bank", "savings"].includes(id)) {
-        mergedBalances[id] = 0;
-      } else {
-        delete mergedBalances[id];
-      }
+      delete mergedBalances[id];
     }
   }
 
@@ -134,21 +134,24 @@ function mergeAccountDataWithRawSnapshot(
     if (tombstone?.deleted && tombstone.updatedAt >= txTime) continue;
     txMap.set(tx.id, tx);
   }
-  for (const tx of rawTransactions) {
-    if (!tx?.id) continue;
-    const tombstone = deletedTxTombstones[tx.id];
-    const txTime =
-      typeof tx.updatedAt === "number"
-        ? tx.updatedAt
-        : Date.parse(tx.updatedAt) || 0;
-    if (tombstone?.deleted && tombstone.updatedAt >= txTime) continue;
-    const existing = txMap.get(tx.id);
-    const exTime =
-      typeof existing?.updatedAt === "number"
-        ? existing.updatedAt
-        : Date.parse(existing?.updatedAt) || 0;
-    if (!existing || txTime > exTime) {
-      txMap.set(tx.id, tx);
+  // Only fall back to raw snapshot transactions if normalized transactions are completely absent
+  if (normTransactions.length === 0 && !normalizedAccountData) {
+    for (const tx of rawTransactions) {
+      if (!tx?.id) continue;
+      const tombstone = deletedTxTombstones[tx.id];
+      const txTime =
+        typeof tx.updatedAt === "number"
+          ? tx.updatedAt
+          : Date.parse(tx.updatedAt) || 0;
+      if (tombstone?.deleted && tombstone.updatedAt >= txTime) continue;
+      const existing = txMap.get(tx.id);
+      const exTime =
+        typeof existing?.updatedAt === "number"
+          ? existing.updatedAt
+          : Date.parse(existing?.updatedAt) || 0;
+      if (!existing || txTime > exTime) {
+        txMap.set(tx.id, tx);
+      }
     }
   }
 
@@ -260,19 +263,25 @@ async function loadLegacyCloudData(userId) {
   if (settingsResult.error) throw settingsResult.error;
   if (transactionsResult.error) throw transactionsResult.error;
 
+  const hasCards =
+    Array.isArray(legacyAccounts?.settings?.cards) &&
+    legacyAccounts.settings.cards.length > 0;
+  const legacyBalances = legacyAccounts?.settings?.balances || {};
+  const baseBalances = { ...legacyBalances };
+  if (!hasCards && !legacyAccounts?.settings?.cardsConfigured) {
+    if (settingsResult.data.bkash_balance != null)
+      baseBalances.bkash = settingsResult.data.bkash_balance;
+    if (settingsResult.data.bank_balance != null)
+      baseBalances.bank = settingsResult.data.bank_balance;
+    if (settingsResult.data.savings_balance != null)
+      baseBalances.savings = settingsResult.data.savings_balance;
+  }
+
   const normalizedAccounts = settingsResult.data
     ? {
         settings: {
           startDate: settingsResult.data.start_date,
-          balances: {
-            ...(legacyAccounts?.settings?.balances || {}),
-            bkash: settingsResult.data.bkash_balance,
-            bank: settingsResult.data.bank_balance,
-            savings:
-              settingsResult.data.savings_balance ??
-              legacyAccounts?.settings?.balances?.savings ??
-              0,
-          },
+          balances: baseBalances,
           cards: Array.isArray(legacyAccounts?.settings?.cards)
             ? legacyAccounts.settings.cards
             : [],
@@ -368,10 +377,92 @@ export async function loadCloudData(userId) {
   return loadLegacyCloudData(userId);
 }
 
+function sanitizeCloudPayload(data) {
+  if (!data || typeof data !== "object") return data;
+  if (!data.accountData || typeof data.accountData !== "object") return data;
+
+  const rawTx = Array.isArray(data.accountData.transactions)
+    ? data.accountData.transactions
+    : [];
+
+  const sanitizedTx = [];
+  for (const tx of rawTx) {
+    if (!tx || typeof tx !== "object") continue;
+    const id = typeof tx.id === "string" ? tx.id.trim().slice(0, 120) : "";
+    const amount = Math.round(Number(tx.amount) * 100) / 100;
+    const date =
+      typeof tx.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(tx.date)
+        ? tx.date
+        : "";
+    if (!id || !Number.isFinite(amount) || amount <= 0 || !date) continue;
+
+    let type = tx.type;
+    if (type === "adjust") type = "adjustment";
+    if (!["income", "adjustment", "transfer"].includes(type)) continue;
+
+    let direction = tx.direction || tx.dir;
+    if (direction === "up" || direction === "increase") direction = "increase";
+    else if (direction === "down" || direction === "decrease") direction = "decrease";
+
+    const account =
+      typeof tx.account === "string"
+        ? tx.account.trim().slice(0, 120)
+        : typeof tx.acct === "string"
+          ? tx.acct.trim().slice(0, 120)
+          : null;
+    const fromAccount =
+      typeof tx.fromAccount === "string"
+        ? tx.fromAccount.trim().slice(0, 120)
+        : typeof tx.acct === "string"
+          ? tx.acct.trim().slice(0, 120)
+          : null;
+    const toAccount =
+      typeof tx.toAccount === "string"
+        ? tx.toAccount.trim().slice(0, 120)
+        : typeof tx.to === "string"
+          ? tx.to.trim().slice(0, 120)
+          : null;
+
+    if (type === "income" && !account) continue;
+    if (
+      type === "adjustment" &&
+      (!account || !["increase", "decrease"].includes(direction))
+    )
+      continue;
+    if (
+      type === "transfer" &&
+      (!fromAccount || !toAccount || fromAccount === toAccount)
+    )
+      continue;
+
+    sanitizedTx.push({
+      ...tx,
+      id,
+      type,
+      amount,
+      date,
+      description:
+        typeof tx.description === "string" ? tx.description.slice(0, 80) : "",
+      ...(account ? { account } : {}),
+      ...(type === "adjustment" && direction ? { direction } : {}),
+      ...(fromAccount ? { fromAccount } : {}),
+      ...(toAccount ? { toAccount } : {}),
+    });
+  }
+
+  return {
+    ...data,
+    accountData: {
+      ...data.accountData,
+      transactions: sanitizedTx,
+    },
+  };
+}
+
 async function executeSaveQuery(userId, payload, expectedUpdatedAt) {
-  const query = supabase.from("spend_user_data");
   if (expectedUpdatedAt) {
-    const updateResult = await query
+    const updateResult = await supabase
+      .from("spend_user_data")
       .update({ data: payload })
       .eq("user_id", userId)
       .eq("updated_at", expectedUpdatedAt)
@@ -391,7 +482,8 @@ async function executeSaveQuery(userId, payload, expectedUpdatedAt) {
     if (checkError) return { data: null, error: checkError };
     if (!existing) {
       // Row doesn't exist yet, insert safely with upsert
-      return await query
+      return await supabase
+        .from("spend_user_data")
         .upsert({ user_id: userId, data: payload }, { onConflict: "user_id" })
         .select("updated_at")
         .single();
@@ -402,7 +494,8 @@ async function executeSaveQuery(userId, payload, expectedUpdatedAt) {
   }
 
   // Without expectedUpdatedAt, upsert guarantees no duplicate key 23505 crashes
-  return await query
+  return await supabase
+    .from("spend_user_data")
     .upsert({ user_id: userId, data: payload }, { onConflict: "user_id" })
     .select("updated_at")
     .single();
@@ -411,16 +504,17 @@ async function executeSaveQuery(userId, payload, expectedUpdatedAt) {
 export async function saveCloudData(userId, data, expectedUpdatedAt = null) {
   if (!supabase) throw new Error("Cloud sync is not configured.");
 
+  const sanitized = sanitizeCloudPayload(data);
   const { data: saved, error } = await executeSaveQuery(
     userId,
-    data,
+    sanitized,
     expectedUpdatedAt,
   );
   if (!error) return saved?.updated_at ?? null;
 
-  if (isLegacyAccountConstraintError(error) && data?.accountData) {
-    const allTransactions = Array.isArray(data.accountData.transactions)
-      ? data.accountData.transactions
+  if (isLegacyAccountConstraintError(error) && sanitized?.accountData) {
+    const allTransactions = Array.isArray(sanitized.accountData.transactions)
+      ? sanitized.accountData.transactions
       : [];
     const legacyCompatible = allTransactions
       .filter(isLegacyDbCompatibleTransaction)
@@ -438,10 +532,10 @@ export async function saveCloudData(userId, data, expectedUpdatedAt = null) {
       (tx) => !isLegacyDbCompatibleTransaction(tx),
     );
     const fallbackPayload = {
-      ...data,
+      ...sanitized,
       customAccountTransactions: customOnly,
       accountData: {
-        ...data.accountData,
+        ...sanitized.accountData,
         transactions: legacyCompatible,
       },
     };
