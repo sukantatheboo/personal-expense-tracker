@@ -90,8 +90,8 @@ const TABS = [
   ["accounts", "Accounts"],
   ["plans", "Plans"],
 ];
-const SHEET_EXIT_MS = 360;
-const SHEET_REDUCED_EXIT_MS = 180;
+const SHEET_EXIT_MS = 280;
+const SHEET_REDUCED_EXIT_MS = 160;
 
 const BK =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 128 122'%3E%3Cg fill='none'%3E%3Cpath fill='%23D12053' d='M96.58 62.45l-53.03-8.31 7.03 31.6z'/%3E%3Cpath fill='%23E2136E' d='M96.58 62.45L56.62 6.93 43.56 54.15z'/%3E%3Cpath fill='%23D12053' d='M42.32 53.51L.45 0l54.83 6.55z'/%3E%3Cpath fill='%239E1638' d='M23.25 31.15L0 9.24h6.12z'/%3E%3Cpath fill='%23D12053' d='M107.89 35.46l-9.84 26.69L82.1 40.09z'/%3E%3Cpath fill='%23E2136E' d='M56.77 84.14l38.61-15.51L97 63.7z'/%3E%3Cpath fill='%239E1638' d='M25.89 113.41l16.54-58.02 8.39 37.75z'/%3E%3Cpath fill='%23E2136E' d='M109.43 35.67l-4.06 11.02 14.64-.24z'/%3E%3C/g%3E%3C/svg%3E";
@@ -999,39 +999,7 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
   }, []);
 
   useLayoutEffect(() => {
-    const sheetNode = sheetRef.current;
-    if (!sheetNode) return;
-    const initialFocus = sheetNode.querySelector("[data-sheet-autofocus]");
-    if (initialFocus instanceof HTMLElement) {
-      if (document.activeElement !== initialFocus)
-        initialFocus.focus({ preventScroll: true });
-    } else {
-      sheetNode.focus({ preventScroll: true });
-    }
-  }, []);
-
-  useEffect(() => {
-    const sheetNode = sheetRef.current;
-    const initialFocus = sheetNode?.querySelector("[data-sheet-autofocus]");
-    const scrollNode =
-      scrollRef.current || sheetNode?.querySelector(".sheet-content");
-    if (!scrollNode || !initialFocus) return undefined;
-
-    const resetInitialFocusScroll = () => {
-      if (document.activeElement === initialFocus) scrollNode.scrollTop = 0;
-    };
-    const viewport = window.visualViewport;
-    const frame = window.requestAnimationFrame(resetInitialFocusScroll);
-    viewport?.addEventListener("resize", resetInitialFocusScroll);
-    const releaseViewportListener = window.setTimeout(() => {
-      viewport?.removeEventListener("resize", resetInitialFocusScroll);
-    }, 650);
-
-    return () => {
-      window.cancelAnimationFrame(frame);
-      window.clearTimeout(releaseViewportListener);
-      viewport?.removeEventListener("resize", resetInitialFocusScroll);
-    };
+    sheetRef.current?.focus({ preventScroll: true });
   }, []);
 
   useEffect(() => {
@@ -1088,106 +1056,74 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
     return () => window.removeEventListener("keydown", handleKeyDown, true);
   }, [onClose]);
 
-  const applyDragFrame = () => {
-    rAFRef.current = null;
-    const drag = dragRef.current;
-    if (!drag || !drag.active) return;
+  const suppressClickRef = useRef(false);
 
-    let offset = pendingDyRef.current;
-    if (offset < 0) {
-      // Elastic rubber-band resistance when pulling up
-      offset = offset * 0.2;
-    }
-    drag.currentOffset = offset;
-
-    // DIRECT DOM TRANSFORM: Sheet dynamically follows your finger 1:1 in real time
-    if (sheetRef.current) {
-      sheetRef.current.style.transform = `translate3d(0, ${offset}px, 0)`;
-    }
-
-    // Dynamic backdrop opacity fading on GPU compositor layer
-    if (overlayRef.current) {
-      const progress = Math.max(
-        0,
-        Math.min(1, 1 - offset / (drag.sheetHeight * 0.85)),
-      );
-      overlayRef.current.style.opacity = progress.toFixed(3);
-    }
-  };
-
-  const updateDragPosition = (rawDy) => {
-    pendingDyRef.current = rawDy;
-    if (!rAFRef.current) {
-      rAFRef.current = requestAnimationFrame(applyDragFrame);
-    }
-  };
-
-  const onDragStart = (event) => {
-    if (event.pointerType === "mouse" && event.button !== 0) return;
-
-    const target = event.target;
-    // Don't drag if tapping interactive elements
-    if (
-      target.closest(
-        'input, textarea, select, button, a, [role="button"], [role="switch"]',
-      )
-    ) {
-      return;
-    }
-
+  const startDrag = useCallback((clientY) => {
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
     }
-
-    try {
-      event.currentTarget.setPointerCapture(event.pointerId);
-    } catch {
-      // ignore
-    }
+    const sheetNode = sheetRef.current;
+    const overlayNode = overlayRef.current;
+    if (!sheetNode) return;
 
     if (rAFRef.current) {
       cancelAnimationFrame(rAFRef.current);
       rAFRef.current = null;
     }
 
-    const sheetHeight = sheetRef.current?.offsetHeight || 440;
-
+    const sheetHeight = sheetNode.offsetHeight || 440;
     dragRef.current = {
-      pointerId: event.pointerId,
-      target: event.currentTarget,
-      startY: event.clientY,
+      startY: clientY,
       currentOffset: 0,
-      recentPoints: [{ y: event.clientY, t: performance.now() }],
+      recentPoints: [{ y: clientY, t: performance.now() }],
       sheetHeight,
       active: true,
     };
 
-    if (sheetRef.current) {
-      sheetRef.current.setAttribute("data-dragging", "true");
-      sheetRef.current.style.animation = "none";
-      sheetRef.current.style.transition = "none";
-    }
-    if (overlayRef.current) {
-      overlayRef.current.style.transition = "none";
-    }
-  };
+    sheetNode.setAttribute("data-dragging", "true");
+    sheetNode.style.animation = "none";
+    sheetNode.style.transition = "none";
+    if (overlayNode) overlayNode.style.transition = "none";
+  }, []);
 
-  const onDragMove = (event) => {
+  const moveDrag = useCallback((clientY) => {
     const drag = dragRef.current;
     if (!drag || !drag.active) return;
-    if (event.pointerId !== drag.pointerId) return;
 
     const now = performance.now();
-    drag.recentPoints.push({ y: event.clientY, t: now });
+    drag.recentPoints.push({ y: clientY, t: now });
     if (drag.recentPoints.length > 5) {
       drag.recentPoints.shift();
     }
 
-    const dy = event.clientY - drag.startY;
-    updateDragPosition(dy);
-  };
+    let offset = clientY - drag.startY;
+    if (offset < 0) {
+      offset = offset * 0.18;
+    }
+    drag.currentOffset = offset;
+    pendingDyRef.current = offset;
 
-  const onDragEnd = () => {
+    if (!rAFRef.current) {
+      rAFRef.current = requestAnimationFrame(() => {
+        rAFRef.current = null;
+        if (!dragRef.current?.active) return;
+        const currentOffset = pendingDyRef.current;
+        if (sheetRef.current) {
+          sheetRef.current.style.transform = `translate3d(0, ${currentOffset}px, 0)`;
+        }
+        if (overlayRef.current) {
+          const progress = Math.max(
+            0,
+            Math.min(1, 1 - currentOffset / (drag.sheetHeight * 0.85)),
+          );
+          overlayRef.current.style.opacity = progress.toFixed(3);
+        }
+        
+      });
+    }
+  }, []);
+
+  const endDrag = useCallback(() => {
     if (rAFRef.current) {
       cancelAnimationFrame(rAFRef.current);
       rAFRef.current = null;
@@ -1195,14 +1131,6 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
     const drag = dragRef.current;
     dragRef.current = null;
     if (!drag || !drag.active) return;
-
-    try {
-      if (drag.target?.hasPointerCapture?.(drag.pointerId)) {
-        drag.target.releasePointerCapture(drag.pointerId);
-      }
-    } catch {
-      // ignore
-    }
 
     let velocity = 0;
     if (drag.recentPoints.length >= 2) {
@@ -1215,101 +1143,102 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
     const distance = drag.currentOffset;
     const sheetHeight = drag.sheetHeight;
 
-    // Real-app dismissal conditions:
-    // User must deliberately pull down past 95px (or 22% of sheet height),
-    // or flick down with positive distance and downward velocity!
     const shouldClose =
-      distance >= 95 ||
-      distance >= sheetHeight * 0.22 ||
-      (distance >= 45 && velocity > 0.45);
+      distance >= 70 ||
+      distance >= sheetHeight * 0.18 ||
+      (distance >= 25 && velocity > 0.35);
+
+    const sheetNode = sheetRef.current;
+    const overlayNode = overlayRef.current;
 
     if (shouldClose) {
-      // Smooth animated dismissal gliding off the screen
-      if (sheetRef.current) {
-        sheetRef.current.removeAttribute("data-dragging");
-        sheetRef.current.style.transition =
+      triggerHaptic("selection");
+      
+      if (sheetNode) {
+        sheetNode.removeAttribute("data-dragging");
+        sheetNode.style.transition =
           "transform 260ms cubic-bezier(0.2, 0.9, 0.28, 1)";
-        sheetRef.current.style.transform = "translate3d(0, 105%, 0)";
+        sheetNode.style.transform = "translate3d(0, 100%, 0)";
       }
-      if (overlayRef.current) {
-        overlayRef.current.style.transition =
+      if (overlayNode) {
+        overlayNode.style.transition =
           "opacity 240ms cubic-bezier(0.2, 0.9, 0.28, 1)";
-        overlayRef.current.style.opacity = "0";
+        overlayNode.style.opacity = "0";
       }
 
       window.setTimeout(() => {
         onClose({ kind: "drag", distance, velocity });
-      }, 250);
+      }, 240);
     } else {
-      // Spring back up to top (0px)
-      if (sheetRef.current) {
-        sheetRef.current.removeAttribute("data-dragging");
-        sheetRef.current.style.transition =
-          "transform 280ms cubic-bezier(0.2, 0.9, 0.28, 1)";
-        sheetRef.current.style.transform = "translate3d(0, 0, 0)";
+      
+      if (sheetNode) {
+        sheetNode.removeAttribute("data-dragging");
+        sheetNode.style.transition =
+          "transform 260ms cubic-bezier(0.2, 0.9, 0.28, 1)";
+        sheetNode.style.transform = "translate3d(0, 0, 0)";
       }
-      if (overlayRef.current) {
-        overlayRef.current.style.transition =
-          "opacity 260ms cubic-bezier(0.2, 0.9, 0.28, 1)";
-        overlayRef.current.style.opacity = "1";
+      if (overlayNode) {
+        overlayNode.style.transition =
+          "opacity 240ms cubic-bezier(0.2, 0.9, 0.28, 1)";
+        overlayNode.style.opacity = "1";
       }
 
       window.setTimeout(() => {
-        if (sheetRef.current && !dragRef.current?.active) {
-          sheetRef.current.style.transition = "";
-          sheetRef.current.style.transform = "";
+        if (sheetNode && !dragRef.current?.active) {
+          sheetNode.style.transition = "";
+          sheetNode.style.transform = "";
         }
-        if (overlayRef.current && !dragRef.current?.active) {
-          overlayRef.current.style.transition = "";
-          overlayRef.current.style.opacity = "";
+        if (overlayNode && !dragRef.current?.active) {
+          overlayNode.style.transition = "";
+          overlayNode.style.opacity = "";
         }
-      }, 290);
+        
+      }, 270);
     }
-  };
+  }, [onClose]);
 
-  // Wire header drag zone
-  useEffect(() => {
-    const sheetNode = sheetRef.current;
-    if (!sheetNode) return undefined;
-    const dragZoneNode = sheetNode.querySelector(".sheet-drag-zone");
-    if (!dragZoneNode) return undefined;
+  const onTopPointerDown = useCallback(
+    (event) => {
+      if (event.pointerType === "mouse" && event.button !== 0) return;
+      if (event.target.closest("button, input, textarea, select")) return;
 
-    dragZoneNode.addEventListener("pointerdown", onDragStart);
-    dragZoneNode.addEventListener("pointermove", onDragMove);
-    dragZoneNode.addEventListener("pointerup", onDragEnd);
-    dragZoneNode.addEventListener("pointercancel", onDragEnd);
+      const pointerId = event.pointerId;
+      startDrag(event.clientY);
 
-    return () => {
-      dragZoneNode.removeEventListener("pointerdown", onDragStart);
-      dragZoneNode.removeEventListener("pointermove", onDragMove);
-      dragZoneNode.removeEventListener("pointerup", onDragEnd);
-      dragZoneNode.removeEventListener("pointercancel", onDragEnd);
-    };
-  }, []);
+      const onPointerMove = (e) => {
+        if (e.pointerId !== pointerId) return;
+        moveDrag(e.clientY);
+      };
 
-  // Support pull-down from top of scrollable content only when gesture started at scrollTop <= 0
+      const onPointerUp = (e) => {
+        if (e.pointerId !== pointerId) return;
+        window.removeEventListener("pointermove", onPointerMove);
+        window.removeEventListener("pointerup", onPointerUp);
+        window.removeEventListener("pointercancel", onPointerUp);
+        endDrag();
+      };
+
+      window.addEventListener("pointermove", onPointerMove, { passive: true });
+      window.addEventListener("pointerup", onPointerUp, { passive: true });
+      window.addEventListener("pointercancel", onPointerUp, { passive: true });
+    },
+    [startDrag, moveDrag, endDrag],
+  );
+
   useEffect(() => {
     const scrollNode = scrollRef.current;
     if (!scrollNode) return undefined;
 
     let touchStartY = 0;
     let touchStartX = 0;
-    let touchStartScrollTop = 0;
+    let initialScrollTop = 0;
     let isPulling = false;
 
     const onTouchStart = (e) => {
       if (e.touches.length !== 1) return;
-      const target = e.target;
-      if (
-        target.closest(
-          'input, textarea, select, button, a, [role="button"], [role="switch"]',
-        )
-      ) {
-        return;
-      }
       touchStartY = e.touches[0].clientY;
       touchStartX = e.touches[0].clientX;
-      touchStartScrollTop = scrollNode.scrollTop;
+      initialScrollTop = scrollNode.scrollTop;
       isPulling = false;
     };
 
@@ -1320,65 +1249,32 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
       const dy = clientY - touchStartY;
       const dx = clientX - touchStartX;
 
-      // Only engage pull-down if gesture started at the very top (touchStartScrollTop <= 0),
-      // scroll position remains at top, gesture is downwards (dy > 0), strictly vertical,
-      // and passes an intentional deadband threshold (dy > 20px) without interrupting normal scrolls!
+      if (isPulling) {
+        if (e.cancelable) e.preventDefault();
+        moveDrag(clientY);
+        return;
+      }
+
       if (
-        touchStartScrollTop <= 0 &&
+        initialScrollTop <= 0 &&
         scrollNode.scrollTop <= 0 &&
-        dy > 0 &&
-        Math.abs(dy) > Math.abs(dx) * 1.6
+        dy > 8 &&
+        dy > Math.abs(dx) * 1.1
       ) {
-        if (!isPulling && dy > 20) {
-          isPulling = true;
-          if (document.activeElement instanceof HTMLElement) {
-            document.activeElement.blur();
-          }
-          if (rAFRef.current) {
-            cancelAnimationFrame(rAFRef.current);
-            rAFRef.current = null;
-          }
-          const sheetHeight = sheetRef.current?.offsetHeight || 440;
-          dragRef.current = {
-            pointerId: -1,
-            target: null,
-            startY: touchStartY + 20,
-            currentOffset: 0,
-            recentPoints: [{ y: clientY, t: performance.now() }],
-            sheetHeight,
-            active: true,
-          };
-          if (sheetRef.current) {
-            sheetRef.current.setAttribute("data-dragging", "true");
-            sheetRef.current.style.animation = "none";
-            sheetRef.current.style.transition = "none";
-          }
-          if (overlayRef.current) {
-            overlayRef.current.style.transition = "none";
-          }
-        }
-        if (isPulling && e.cancelable) {
-          e.preventDefault();
-          const now = performance.now();
-          if (dragRef.current) {
-            dragRef.current.recentPoints.push({ y: clientY, t: now });
-            if (dragRef.current.recentPoints.length > 5) {
-              dragRef.current.recentPoints.shift();
-            }
-          }
-          updateDragPosition(dy - 20);
-        }
-      } else {
-        if (!isPulling) {
-          // Allow full fluid native scrolling up and down without interruption
-        }
+        isPulling = true;
+        suppressClickRef.current = true;
+        if (e.cancelable) e.preventDefault();
+        startDrag(clientY);
       }
     };
 
     const onTouchEnd = () => {
       if (isPulling) {
         isPulling = false;
-        onDragEnd();
+        endDrag();
+        setTimeout(() => {
+          suppressClickRef.current = false;
+        }, 250);
       }
     };
 
@@ -1393,7 +1289,7 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
       scrollNode.removeEventListener("touchend", onTouchEnd);
       scrollNode.removeEventListener("touchcancel", onTouchEnd);
     };
-  }, []);
+  }, [startDrag, moveDrag, endDrag]);
 
   return (
     <div
@@ -1410,18 +1306,35 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
         aria-modal="true"
         aria-labelledby="sheet-title"
         tabIndex={-1}
+        onClickCapture={(e) => {
+          if (suppressClickRef.current) {
+            e.stopPropagation();
+            e.preventDefault();
+          }
+        }}
       >
         <div
           className="sheet-drag-zone"
           aria-hidden="true"
-          onPointerDown={onDragStart}
-          onPointerMove={onDragMove}
-          onPointerUp={onDragEnd}
-          onPointerCancel={onDragEnd}
+          onPointerDown={onTopPointerDown}
         >
           <div className="grab" />
         </div>
-        <div ref={scrollRef} className="sheet-content">
+        <div
+          ref={scrollRef}
+          className="sheet-content"
+          onPointerDown={(e) => {
+            if (
+              e.target.closest(
+                "#sheet-title, .add-card-header-bar, .card-options-sheet-header",
+              )
+            ) {
+              if (!e.target.closest("button, input, textarea, select")) {
+                onTopPointerDown(e);
+              }
+            }
+          }}
+        >
           {children}
         </div>
         {actions && (
@@ -2938,8 +2851,6 @@ function AddSheet({
         <span>৳</span>
         <input
           inputMode="decimal"
-          autoFocus
-          data-sheet-autofocus
           enterKeyHint="next"
           aria-label={
             f.cat === "Savings" ? "Savings transfer amount" : "Expense amount"
@@ -3156,8 +3067,6 @@ function TxSheet({ type, defaultAccount, cards = [], onSave, onClose }) {
         <span>৳</span>
         <input
           inputMode="decimal"
-          autoFocus
-          data-sheet-autofocus
           aria-label={`${g.type === "adjust" ? "Adjustment" : g.type === "transfer" ? "Transfer" : "Income"} amount in taka`}
           placeholder="0"
           value={g.amt}
@@ -3598,8 +3507,6 @@ function BudgetSheet({ S, onSave, onClear, onClose }) {
         <span>৳</span>
         <input
           inputMode="decimal"
-          autoFocus
-          data-sheet-autofocus
           aria-label="Monthly budget amount in taka"
           placeholder="20000"
           value={v}
@@ -4052,7 +3959,6 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
               placeholder="Search by bank, card, or wallet..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              autoFocus
             />
             {searchQuery && (
               <button
@@ -6536,34 +6442,11 @@ export default function MobilePrototype({
     setSheetClosing(true);
     const prefersReducedMotion =
       window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
-    const sheetNode = mobileRootRef.current?.querySelector(".sh");
-    const sheetStyle = sheetNode ? window.getComputedStyle(sheetNode) : null;
-    const sheetHeight = sheetNode?.getBoundingClientRect().height ?? 0;
-    setSheetExitFromTransform(
-      exit?.kind === "drag"
-        ? `translate3d(0, ${exit.distance}px, 0)`
-        : sheetStyle?.transform || "translate3d(0, 0, 0)",
-    );
-    setSheetExitFromOpacity(sheetStyle?.opacity || "1");
-    const remaining =
-      exit?.kind === "drag" && sheetHeight > 0
-        ? Math.max(0.08, 1 - exit.distance / sheetHeight)
-        : 1;
-    const velocity =
-      exit?.kind === "drag"
-        ? Math.max(0, Math.min(exit.velocity || 0, 2.4))
-        : 0;
     const exitDuration = prefersReducedMotion
       ? SHEET_REDUCED_EXIT_MS
-      : exit?.kind === "drag"
-        ? Math.max(
-            150,
-            Math.round(
-              (SHEET_EXIT_MS * Math.sqrt(remaining)) / (1 + velocity * 0.12),
-            ),
-          )
-        : SHEET_EXIT_MS;
+      : SHEET_EXIT_MS;
     setSheetExitDuration(exitDuration);
+    
     sheetCloseTimer.current = window.setTimeout(() => {
       const returnFocus = sheetReturnFocusRef.current;
       sheetReturnFocusRef.current = null;
@@ -7108,9 +6991,7 @@ export default function MobilePrototype({
         data-scrolled={isScrolled ? "true" : undefined}
         data-minimized={dockMinimized ? "true" : undefined}
         data-keyboard-open={keyboardOpen ? "true" : undefined}
-        data-hidden={
-          keyboardOpen || Boolean(sheet) || settingsRoute ? "true" : undefined
-        }
+        data-hidden={keyboardOpen || settingsRoute ? "true" : undefined}
         onPointerDownCapture={onDockPointerDownCapture}
         onClickCapture={() =>
           setIsScrolled((screenScrollRef.current?.scrollTop ?? 0) > 60)
