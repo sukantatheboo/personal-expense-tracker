@@ -276,7 +276,9 @@ export function WalletCard({
   );
 }
 
-/* ───────────── Smooth Vertical Swapping Card Deck ───────────── */
+/* ───────────── Smooth Vertical Swapping Card Deck (3D Tipping Stack Engine) ───────────── */
+const SLIVER_OFFSET = 14 + 170 * 0.06; // = 24.2px, keeps visible tab sliver at exactly 14px
+
 export function StackedCardDeck({
   cards = [],
   balances = {},
@@ -291,26 +293,26 @@ export function StackedCardDeck({
     return idx >= 0 ? idx : 0;
   });
 
-  // 'idle' | 'swapping-next' | 'swapping-prev' | 'swapping-select'
-  const [swapPhase, setSwapPhase] = useState("idle");
-  const [dragY, setDragY] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
-  const [releaseY, setReleaseY] = useState(0);
+  // \x27idle\x27 | \x27dragging\x27 | \x27commit-phase1\x27 | \x27commit-phase2\x27 | \x27snap-back\x27
+  const [phase, setPhase] = useState("idle");
+  const [dragProgress, setDragProgress] = useState(0); // p from 0 to 1
+  const [rawDy, setRawDy] = useState(0);
+
   const dragStartRef = useRef(null);
-  const animTimeoutRef = useRef(null);
+  const dragReleasePRef = useRef(0);
+  const phaseTimerRef = useRef(null);
   const passedHapticRef = useRef(false);
-  const wheelCooldownRef = useRef(0);
   const wasSwipeRef = useRef(false);
+  const wheelCooldownRef = useRef(0);
 
   const totalCards = cards.length;
-  const safeActiveIndex =
-    totalCards > 0 ? Math.min(activeIndex, totalCards - 1) : 0;
+  const safeActiveIndex = totalCards > 0 ? Math.min(activeIndex, totalCards - 1) : 0;
 
   // Clamp activeIndex if cards array shrinks
   useEffect(() => {
     if (totalCards === 0) {
       if (activeIndex !== 0) setActiveIndex(0);
-      if (swapPhase !== "idle") setSwapPhase("idle");
+      if (phase !== "idle") setPhase("idle");
       return;
     }
     if (activeIndex >= totalCards) {
@@ -318,113 +320,132 @@ export function StackedCardDeck({
       setActiveIndex(clamped);
       onSelectCard?.(cards[clamped]?.id);
     }
-  }, [totalCards, activeIndex, cards, onSelectCard, swapPhase]);
+  }, [totalCards, activeIndex, cards, onSelectCard, phase]);
 
-  // Sync activeIndex if selectedId changes from external filter
+  // Sync activeIndex if selectedId changes externally
   useEffect(() => {
-    if (selectedId && swapPhase === "idle" && totalCards > 0) {
+    if (selectedId && phase === "idle" && totalCards > 0) {
       const idx = cards.findIndex((c) => c.id === selectedId);
       if (idx >= 0 && idx !== activeIndex) {
         setActiveIndex(idx);
       }
     }
-  }, [selectedId, cards, activeIndex, swapPhase, totalCards]);
+  }, [selectedId, cards, activeIndex, phase, totalCards]);
 
   useEffect(() => {
     return () => {
-      if (animTimeoutRef.current) clearTimeout(animTimeoutRef.current);
+      if (phaseTimerRef.current) clearTimeout(phaseTimerRef.current);
     };
   }, []);
 
-  const updateDrag = (val) => {
-    setDragY(val);
-    onDragOffsetChange?.(val);
+  const updateDrag = (pVal, dyVal) => {
+    setDragProgress(pVal);
+    setRawDy(dyVal);
+    onDragOffsetChange?.(dyVal);
   };
 
-  // Swap Next (Swipe UP): Front card glides UP seamlessly from release position
-  const handleSwapNext = useCallback((fromY = 0) => {
-    if (totalCards <= 1 || swapPhase !== "idle") return;
+  // ──── Two-Phase Commit Execution (Exact User Spec) ────
+  // Phase 1 (180ms ease-in): Front card tips forward edge-on to p = 1. Background cards hold apex.
+  // Phase 2 (500ms spring overshoot): Order array rotates. New front card & stack ease into resting slots with cubic-bezier(.34, 1.45, .5, 1). Old card slides under stack to the back.
+  const executeCommit = useCallback(() => {
+    if (totalCards <= 1 || phase.startsWith("commit")) return;
     triggerHaptic("light");
-    setReleaseY(fromY);
-    setSwapPhase("swapping-next");
-    updateDrag(0);
+    setPhase("commit-phase1");
+    setDragProgress(1);
+    updateDrag(1, 60);
 
-    const nextIndex = (safeActiveIndex + 1) % totalCards;
-    onSelectCard?.(cards[nextIndex]?.id);
-
-    animTimeoutRef.current = setTimeout(() => {
+    // Phase 1: 180ms ease-in
+    phaseTimerRef.current = setTimeout(() => {
+      const nextIndex = (safeActiveIndex + 1) % totalCards;
       setActiveIndex(nextIndex);
-      setSwapPhase("idle");
-      setReleaseY(0);
-    }, 360);
-  }, [totalCards, swapPhase, safeActiveIndex, cards, onSelectCard]);
+      onSelectCard?.(cards[nextIndex]?.id);
 
-  // Swap Down (Swipe DOWN): Front card glides DOWN, slips behind, and lands in LAST position
-  const handleSwapDown = useCallback((fromY = 0) => {
-    if (totalCards <= 1 || swapPhase !== "idle") return;
+      setPhase("commit-phase2");
+      setDragProgress(0);
+      updateDrag(0, 0);
+
+      // Phase 2: 500ms spring overshoot settle
+      phaseTimerRef.current = setTimeout(() => {
+        setPhase("idle");
+      }, 500);
+    }, 180);
+  }, [totalCards, phase, safeActiveIndex, cards, onSelectCard]);
+
+  // Reverse swap (Flick up to bring previous card to front)
+  const executeCommitPrev = useCallback(() => {
+    if (totalCards <= 1 || phase.startsWith("commit")) return;
     triggerHaptic("light");
-    setReleaseY(fromY);
-    setSwapPhase("swapping-down");
-    updateDrag(0);
+    const prevIndex = (safeActiveIndex - 1 + totalCards) % totalCards;
+    setActiveIndex(prevIndex);
+    onSelectCard?.(cards[prevIndex]?.id);
 
-    // Front card is placed in LAST position; next card advances to front
-    const nextIndex = (safeActiveIndex + 1) % totalCards;
-    onSelectCard?.(cards[nextIndex]?.id);
+    setPhase("commit-phase2");
+    setDragProgress(0);
+    updateDrag(0, 0);
 
-    animTimeoutRef.current = setTimeout(() => {
-      setActiveIndex(nextIndex);
-      setSwapPhase("idle");
-      setReleaseY(0);
-    }, 360);
-  }, [totalCards, swapPhase, safeActiveIndex, cards, onSelectCard]);
+    phaseTimerRef.current = setTimeout(() => {
+      setPhase("idle");
+    }, 500);
+  }, [totalCards, phase, safeActiveIndex, cards, onSelectCard]);
 
-  // Direct card selection (Phase 3: Forefront Swapping & Expansion)
+  // Snap back when drag is released below threshold
+  const executeSnapBack = useCallback(() => {
+    setPhase("snap-back");
+    setDragProgress(0);
+    updateDrag(0, 0);
+
+    phaseTimerRef.current = setTimeout(() => {
+      setPhase("idle");
+    }, 260);
+  }, []);
+
+  // Direct card selection (Tap any card in the stack)
   const handleSelectCardIndex = useCallback(
     (targetIndex) => {
-      if (swapPhase !== "idle" || targetIndex === safeActiveIndex) return;
+      if (phase !== "idle" || targetIndex === safeActiveIndex) return;
       triggerHaptic("selection");
-      setSwapPhase("swapping-select");
-      updateDrag(0);
 
       onSelectCard?.(cards[targetIndex]?.id);
+      setActiveIndex(targetIndex);
+      setPhase("commit-phase2");
+      updateDrag(0, 0);
 
-      animTimeoutRef.current = setTimeout(() => {
-        setActiveIndex(targetIndex);
-        setSwapPhase("idle");
-      }, 360);
+      phaseTimerRef.current = setTimeout(() => {
+        setPhase("idle");
+      }, 500);
     },
-    [swapPhase, safeActiveIndex, cards, onSelectCard],
+    [phase, safeActiveIndex, cards, onSelectCard],
   );
 
-  // Direct card click
-  const handleCardClick = (offset, card, cardIndex) => {
-    if (swapPhase !== "idle" || !card) return;
+  // Click on card
+  const handleCardClick = (depth, card, cardIndex) => {
+    if (phase !== "idle" || !card) return;
     if (wasSwipeRef.current) {
       wasSwipeRef.current = false;
       return;
     }
-    if (offset === 0) {
+    if (depth === 0) {
       triggerHaptic("selection");
       onOpenCardDetails?.(card);
     } else {
-      // Tap any background tabbed header to expand it into forefront
       handleSelectCardIndex(cardIndex);
     }
   };
 
-  // Pointer drag gestures with 1:1 finger tracking & tactile haptic tick
+  // ──── Pointer Drag Gestures ────
   const onPointerDown = (e) => {
-    if (totalCards <= 1 || swapPhase !== "idle") return;
+    if (totalCards <= 1 || phase.startsWith("commit")) return;
     if (e.button !== undefined && e.button !== 0) return;
+    if (phaseTimerRef.current) clearTimeout(phaseTimerRef.current);
+
     passedHapticRef.current = false;
     wasSwipeRef.current = false;
-    setIsDragging(true);
+    dragReleasePRef.current = 0;
     dragStartRef.current = {
       startY: e.clientY,
       startX: e.clientX,
       startTime: performance.now(),
       pointerId: e.pointerId,
-      target: e.target,
     };
     try {
       e.currentTarget.setPointerCapture(e.pointerId);
@@ -432,65 +453,78 @@ export function StackedCardDeck({
   };
 
   const onPointerMove = (e) => {
-    if (!dragStartRef.current || swapPhase !== "idle") return;
+    if (!dragStartRef.current || phase.startsWith("commit")) return;
     if (e.pointerId !== dragStartRef.current.pointerId) return;
 
     const dy = e.clientY - dragStartRef.current.startY;
     const dx = e.clientX - dragStartRef.current.startX;
-    if (Math.abs(dy) > 8 || Math.abs(dx) > 8) {
+    if (Math.abs(dy) > 6 || Math.abs(dx) > 6) {
       wasSwipeRef.current = true;
     }
 
-    // Direct 1:1 finger tracking with soft rubber-band resistance beyond ±130px
-    let effectiveDy = dy;
-    if (effectiveDy > 130) {
-      effectiveDy = 130 + (effectiveDy - 130) * 0.35;
-    } else if (effectiveDy < -130) {
-      effectiveDy = -130 + (effectiveDy - -130) * 0.35;
-    }
-    updateDrag(effectiveDy);
+    if (dy >= 0) {
+      // Drag down: map distance to p from 0 to 1 (p = dy / 120)
+      const p = Math.min(1, dy / 120);
+      if (phase !== "dragging") {
+        setPhase("dragging");
+      }
+      updateDrag(p, dy);
 
-    // Tactile haptic feedback when crossing the swap threshold
-    const THRESHOLD = 32;
-    if (Math.abs(effectiveDy) >= THRESHOLD && !passedHapticRef.current) {
-      passedHapticRef.current = true;
-      triggerHaptic("selection");
-    } else if (Math.abs(effectiveDy) < THRESHOLD && passedHapticRef.current) {
-      passedHapticRef.current = false;
+      // Haptic tick when passing commit threshold (p >= 0.35)
+      if (p >= 0.35 && !passedHapticRef.current) {
+        passedHapticRef.current = true;
+        triggerHaptic("selection");
+      } else if (p < 0.35 && passedHapticRef.current) {
+        passedHapticRef.current = false;
+      }
+    } else {
+      // Drag up: soft rubber-band resistance in direction of movement
+      const pullUp = Math.max(-28, dy * 0.25);
+      if (phase !== "dragging") {
+        setPhase("dragging");
+      }
+      updateDrag(0, pullUp);
     }
   };
 
   const onPointerUp = (e) => {
     if (!dragStartRef.current) return;
-    const { startY, startX, startTime, pointerId, target } = dragStartRef.current;
+    const { startY, startTime, pointerId } = dragStartRef.current;
     dragStartRef.current = null;
     passedHapticRef.current = false;
-    setIsDragging(false);
 
     try {
       e.currentTarget.releasePointerCapture(pointerId);
     } catch {}
 
     const dy = e.clientY - startY;
-    const dx = e.clientX - startX;
     const dt = Math.max(1, performance.now() - startTime);
-    const velocity = dy / dt;
+    const velocity = dy / dt; // px/ms (positive = down, negative = up)
 
-    // Fluid threshold & flick detection (Swipe UP = Next, Swipe DOWN = Prev)
-    const isSwipeUp = dy < -24 || (dy < -10 && velocity < -0.24);
-    const isSwipeDown = dy > 24 || (dy > 10 && velocity > 0.24);
-
-    if (isSwipeUp) {
-      wasSwipeRef.current = true;
-      handleSwapNext(dy);
-    } else if (isSwipeDown) {
-      wasSwipeRef.current = true;
-      handleSwapDown(dy);
+    if (dy >= 0) {
+      const p = Math.min(1, dy / 120);
+      dragReleasePRef.current = p;
+      // Commit condition: p > 0.35 OR downward flick velocity > 0.45 px/ms
+      const shouldCommit = p > 0.35 || (dy > 18 && velocity > 0.45);
+      if (shouldCommit) {
+        wasSwipeRef.current = true;
+        executeCommit();
+      } else {
+        executeSnapBack();
+        if (dy <= 6) {
+          wasSwipeRef.current = false;
+        }
+      }
     } else {
-      // Release below threshold: smoothly spring back to 0
-      updateDrag(0);
-      if (Math.abs(dy) <= 8 && Math.abs(dx) <= 8) {
-        wasSwipeRef.current = false;
+      // Upward release: flick up cycles to previous card
+      if (dy < -28 && velocity < -0.45) {
+        wasSwipeRef.current = true;
+        executeCommitPrev();
+      } else {
+        executeSnapBack();
+        if (Math.abs(dy) <= 6) {
+          wasSwipeRef.current = false;
+        }
       }
     }
   };
@@ -498,23 +532,22 @@ export function StackedCardDeck({
   const onPointerCancel = () => {
     dragStartRef.current = null;
     passedHapticRef.current = false;
-    setIsDragging(false);
-    updateDrag(0);
+    executeSnapBack();
   };
 
-  // Mouse wheel / trackpad vertical scroll gesture support
+  // Mouse wheel / trackpad scroll
   const onWheel = (e) => {
-    if (totalCards <= 1 || swapPhase !== "idle") return;
+    if (totalCards <= 1 || phase !== "idle") return;
     const now = performance.now();
-    if (now - wheelCooldownRef.current < 360) return;
+    if (now - wheelCooldownRef.current < 450) return;
 
-    if (Math.abs(e.deltaY) > 18) {
+    if (e.deltaY > 18) {
       wheelCooldownRef.current = now;
-      if (e.deltaY > 0) {
-        handleSwapNext();
-      } else {
-        handleSwapDown();
-      }
+      dragReleasePRef.current = 0.35;
+      executeCommit();
+    } else if (e.deltaY < -18) {
+      wheelCooldownRef.current = now;
+      executeCommitPrev();
     }
   };
 
@@ -545,9 +578,7 @@ export function StackedCardDeck({
           </div>
           <div className="wallet-card-empty-copy">
             <strong>No cards or wallets yet</strong>
-            <span>
-              Tap to add a bank card, bKash/Nagad wallet, or savings vault
-            </span>
+            <span>Tap to add a bank card, bKash/Nagad wallet, or savings vault</span>
           </div>
           <span className="wallet-card-empty-cta">+ Add Card</span>
         </button>
@@ -555,84 +586,113 @@ export function StackedCardDeck({
     );
   }
 
+  const p = dragProgress;
+
   return (
     <div className="cards-deck-container" onWheel={onWheel}>
-      {/* Deck Stage */}
+      {/* 3D Stack Stage (perspective: 900px) */}
       <div
-        style={{ "--drag-release-y": `${releaseY}px` }}
-        className={`cards-deck-stage ${swapPhase !== "idle" ? `is-${swapPhase}` : ""} ${isDragging ? "is-dragging" : ""}`}
+        className={`cards-deck-stage phase-${phase} ${phase === "dragging" ? "is-dragging" : ""}`}
         tabIndex={0}
-        aria-label="Stacked cards wallet. Tap or swipe to switch cards."
+        aria-label="Stacked cards wallet. Swipe down or tap to cycle cards."
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerCancel}
       >
         {cards.map((card, index) => {
-          const offset = (index - safeActiveIndex + totalCards) % totalCards;
-          const isFront = offset === 0;
+          // Order array depth: index 0 is front card
+          const depth = (index - safeActiveIndex + totalCards) % totalCards;
+          const isFront = depth === 0;
 
-          let y = 0;
-          let scale = 1;
-          let zIndex = 30 - offset * 6;
-          let opacity = 1;
+          // ──── Core Transform Equations (from User Specification) ────
+          let transformStyle = "";
+          let transitionStyle = "";
+          let zIndex = 30 - depth * 5;
+          let opacity = depth >= 3 ? 0 : 1;
 
-          if (swapPhase === "idle") {
-            if (offset === 0) {
-              y = dragY;
-              scale = 1 - Math.min(0.04, Math.abs(dragY) / 1200);
-              zIndex = 30;
-              opacity = 1;
-            } else if (offset === 1) {
-              const progress = dragY < 0 ? Math.min(1, Math.max(0, -dragY / 85)) : 0;
-              y = -42 + progress * 42;
-              scale = 0.94 + progress * 0.06;
-              zIndex = 20;
-              opacity = 0.96 + progress * 0.04;
-            } else if (offset === 2) {
-              const progress = dragY < 0 ? Math.min(1, Math.max(0, -dragY / 85)) : 0;
-              y = -78 + progress * 36;
-              scale = 0.88 + progress * 0.06;
-              zIndex = 14;
-              opacity = 0.9 + progress * 0.06;
+          if (phase === "dragging") {
+            transitionStyle = "none";
+            if (rawDy >= 0) {
+              if (depth === 0) {
+                transformStyle = `translateY(${p * 60}px) rotateX(${-p * 78}deg) scale(1)`;
+                opacity = 1 - p * 0.25;
+                zIndex = 30;
+              } else {
+                const d = depth - p;
+                transformStyle = `translateY(${-SLIVER_OFFSET * d}px) rotateX(0deg) scale(${1 - 0.06 * d})`;
+                zIndex = 30 - depth * 5;
+              }
             } else {
-              y = -106;
-              scale = 0.82;
-              zIndex = 6;
-              opacity = 0;
+              // Pulling up: slight elastic translation for front card
+              if (depth === 0) {
+                transformStyle = `translateY(${rawDy}px) rotateX(0deg) scale(1)`;
+              } else {
+                transformStyle = `translateY(${-SLIVER_OFFSET * depth}px) rotateX(0deg) scale(${1 - 0.06 * depth})`;
+              }
             }
+          } else if (phase === "commit-phase1") {
+            // Phase 1: Front card leaves to p = 1 in 180ms ease-in
+            if (depth === 0) {
+              transitionStyle = "transform 180ms ease-in, opacity 180ms ease-in";
+              transformStyle = `translateY(60px) rotateX(-78deg) scale(1)`;
+              opacity = 0.25;
+              zIndex = 30;
+            } else {
+              // Background cards hold position at apex so Phase 2 delivers full spring overshoot
+              transitionStyle = "none";
+              const releaseProgress = Math.max(0.35, dragReleasePRef.current);
+              const d = Math.max(0, depth - releaseProgress);
+              transformStyle = `translateY(${-SLIVER_OFFSET * d}px) rotateX(0deg) scale(${1 - 0.06 * d})`;
+              zIndex = 30 - depth * 5;
+            }
+          } else if (phase === "commit-phase2") {
+            // Phase 2: Order rotated, incoming front card and stack ease into resting slots over 0.5s with spring overshoot
+            transitionStyle = "transform 500ms cubic-bezier(.34, 1.45, .5, 1), opacity 380ms ease, filter 500ms ease";
+            transformStyle = `translateY(${-SLIVER_OFFSET * depth}px) rotateX(0deg) scale(${1 - 0.06 * depth})`;
+            zIndex = 30 - depth * 5;
+            opacity = depth >= 3 ? 0 : 1;
+          } else if (phase === "snap-back") {
+            // Spring back to resting positions
+            transitionStyle = "transform 260ms cubic-bezier(.34, 1.45, .5, 1), opacity 260ms ease";
+            transformStyle = `translateY(${-SLIVER_OFFSET * depth}px) rotateX(0deg) scale(${1 - 0.06 * depth})`;
+            zIndex = 30 - depth * 5;
+          } else {
+            // Resting idle state
+            transitionStyle = "transform 500ms cubic-bezier(.34, 1.45, .5, 1), filter 380ms ease, opacity 280ms ease";
+            transformStyle = `translateY(${-SLIVER_OFFSET * depth}px) rotateX(0deg) scale(${1 - 0.06 * depth})`;
+            zIndex = 30 - depth * 5;
+            opacity = depth >= 3 ? 0 : 1;
           }
 
-          let slotAnimClass = "";
-          if (swapPhase === "swapping-next" || swapPhase === "swapping-up") {
-            if (offset === 0) slotAnimClass = "slot-swap-next-leave";
-            else if (offset === 1) slotAnimClass = "slot-swap-next-incoming";
-            else if (offset === 2) slotAnimClass = "slot-swap-next-advance";
-          } else if (swapPhase === "swapping-down" || swapPhase === "swapping-prev") {
-            if (offset === 0) slotAnimClass = "slot-swap-down-leave";
-            else if (offset === 1) slotAnimClass = "slot-swap-down-incoming";
-            else if (offset === 2) slotAnimClass = "slot-swap-down-advance";
-          } else if (swapPhase === "swapping-select") {
-            if (offset === 0) slotAnimClass = "slot-swap-select-incoming";
-            else slotAnimClass = "slot-swap-select-tuck";
+          // Dynamic Depth Shadow & Brightness
+          let filterStyle = "";
+          if (depth === 0) {
+            filterStyle = "drop-shadow(0 20px 42px rgba(0, 0, 0, 0.40)) brightness(1)";
+          } else if (depth === 1) {
+            filterStyle = "drop-shadow(0 10px 22px rgba(0, 0, 0, 0.22)) brightness(0.96)";
+          } else {
+            filterStyle = "drop-shadow(0 6px 14px rgba(0, 0, 0, 0.16)) brightness(0.90)";
           }
+
+          const pointerEvents =
+            depth >= 3 || phase.startsWith("commit") ? "none" : "auto";
 
           return (
             <div
               key={card.id}
               data-card-index={index}
-              className={`cards-deck-slot offset-${offset} ${isFront ? "is-front" : "is-back"} ${slotAnimClass}`}
+              data-card-depth={depth}
+              className={`cards-deck-slot depth-${depth} ${isFront ? "is-front" : "is-back"}`}
               style={{
-                "--target-y": `${y}px`,
-                "--target-scale": scale,
-                transform:
-                  swapPhase === "idle"
-                    ? `translate3d(0, ${y}px, 0) scale(${scale})`
-                    : undefined,
+                transform: transformStyle,
+                transition: transitionStyle,
                 zIndex,
                 opacity,
+                filter: filterStyle,
+                pointerEvents,
               }}
-              onClick={() => handleCardClick(offset, card, index)}
+              onClick={() => handleCardClick(depth, card, index)}
             >
               <WalletCard
                 card={card}
@@ -656,10 +716,9 @@ export function StackedCardDeck({
             aria-label={`Switch to ${card.name}`}
             onClick={(e) => {
               e.stopPropagation();
-              if (swapPhase !== "idle") return;
+              if (phase !== "idle") return;
               triggerHaptic("selection");
-              setActiveIndex(idx);
-              onSelectCard?.(card.id);
+              handleSelectCardIndex(idx);
             }}
           />
         ))}

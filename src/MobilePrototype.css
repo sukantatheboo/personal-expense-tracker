@@ -3974,8 +3974,8 @@ a:active,
   display: flex;
   justify-content: center;
   align-items: flex-end;
-  perspective: 1200px;
-  perspective-origin: center top;
+  perspective: 900px;
+  perspective-origin: 50% 50%;
   touch-action: none !important;
   cursor: grab;
   user-select: none;
@@ -3992,14 +3992,11 @@ a:active,
   width: 100%;
   max-width: 326px;
   margin: 0 auto;
-  transform-origin: center bottom;
+  transform-origin: 50% 100%;
+  transform-style: preserve-3d;
   will-change: transform, opacity, filter;
   user-select: none;
   -webkit-user-select: none;
-  transition:
-    transform 380ms cubic-bezier(0.22, 1, 0.36, 1),
-    filter 380ms cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 280ms ease;
 }
 .mobile-prototype .cards-deck-stage.is-dragging .cards-deck-slot {
   transition: none !important;
@@ -4033,201 +4030,150 @@ a:active,
   transition: none !important;
 }
 
-/* Fluid Card Swapping Animations (Organic Spring Physics) */
-.mobile-prototype .cards-deck-slot.slot-swap-next-leave,
-.mobile-prototype .cards-deck-slot.slot-swap-up-leave {
-  animation: card-swap-next-leave 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+/* Senior Native UI Card Deck Exchange Animations (Matching Reference Video) */
+
+/* 1. SWAP NEXT (Swipe UP):
+   - Active card slides UP into the stack (-78px)
+   - Next card slides DOWN into the active slot (0px)
+   - Back card steps forward to middle (-42px)
+*/
+.mobile-prototype .cards-deck-slot.slot-swap-next-leave {
+  animation: card-slide-up-into-stack 340ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
-.mobile-prototype .cards-deck-slot.slot-swap-next-incoming,
-.mobile-prototype .cards-deck-slot.slot-swap-up-incoming {
-  animation: card-swap-next-incoming 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+.mobile-prototype .cards-deck-slot.slot-swap-next-incoming {
+  animation: card-slide-down-into-focus 340ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
-.mobile-prototype .cards-deck-slot.slot-swap-next-advance,
-.mobile-prototype .cards-deck-slot.slot-swap-up-advance {
-  animation: card-swap-next-advance 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+.mobile-prototype .cards-deck-slot.slot-swap-next-advance {
+  animation: card-step-forward-in-stack 340ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-.mobile-prototype .cards-deck-slot.slot-swap-down-leave,
+/* 2. SWAP PREV (Swipe DOWN):
+   - Active card slides UP into middle slot (-42px)
+   - Previous card slides DOWN into active slot (0px)
+   - Middle card steps back to -78px
+*/
 .mobile-prototype .cards-deck-slot.slot-swap-prev-leave {
-  animation: card-swap-down-leave 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: card-slide-up-to-middle 340ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
-.mobile-prototype .cards-deck-slot.slot-swap-down-incoming,
 .mobile-prototype .cards-deck-slot.slot-swap-prev-incoming {
-  animation: card-swap-down-incoming 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: card-slide-down-from-back 340ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
-.mobile-prototype .cards-deck-slot.slot-swap-down-advance,
-.mobile-prototype .cards-deck-slot.slot-swap-prev-advance {
-  animation: card-swap-down-advance 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-@keyframes card-swap-next-leave {
-  0% {
-    transform: translate3d(0, var(--drag-release-y, 0px), 0) scale(1);
-    filter: drop-shadow(0 22px 45px rgba(0, 0, 0, 0.44));
-    z-index: 30;
-    opacity: 1;
-  }
-  42% {
-    transform: translate3d(0, -96px, 0) scale(0.96) rotateX(-5deg);
-    filter: drop-shadow(0 16px 32px rgba(0, 0, 0, 0.34));
-    z-index: 30;
-    opacity: 0.98;
-  }
-  55% {
-    transform: translate3d(0, -96px, 0) scale(0.93) rotateX(-2deg);
-    filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.24));
-    z-index: 8;
-    opacity: 0.92;
-  }
-  100% {
-    transform: translate3d(0, -78px, 0) scale(0.88);
-    filter: drop-shadow(0 7px 16px rgba(0, 0, 0, 0.18)) brightness(0.88);
-    z-index: 8;
-    opacity: 0.9;
-  }
+.mobile-prototype .cards-deck-slot.slot-swap-prev-stepback {
+  animation: card-step-back-in-stack 340ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-@keyframes card-swap-next-incoming {
-  0% {
-    transform: translate3d(0, -42px, 0) scale(0.94);
-    filter: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.26)) brightness(0.95);
-    z-index: 20;
-    opacity: 0.96;
-  }
-  100% {
-    transform: translate3d(0, 0, 0) scale(1);
-    filter: drop-shadow(0 22px 45px rgba(0, 0, 0, 0.44)) brightness(1);
-    z-index: 30;
-    opacity: 1;
-  }
-}
-
-@keyframes card-swap-next-advance {
-  0% {
-    transform: translate3d(0, -78px, 0) scale(0.88);
-    filter: drop-shadow(0 7px 16px rgba(0, 0, 0, 0.18)) brightness(0.88);
-    z-index: 14;
-    opacity: 0.9;
-  }
-  100% {
-    transform: translate3d(0, -42px, 0) scale(0.94);
-    filter: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.26)) brightness(0.95);
-    z-index: 20;
-    opacity: 0.96;
-  }
-}
-
-/* Swiping Prev (Swipe DOWN): Front card glides DOWN smoothly, slips behind, tucks into rear */
-.mobile-prototype .cards-deck-slot.slot-swap-prev-leave {
-  animation: card-swap-prev-leave 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-.mobile-prototype .cards-deck-slot.slot-swap-prev-incoming,
-.mobile-prototype .cards-deck-slot.slot-swap-up-enter {
-  animation: card-swap-prev-incoming 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-.mobile-prototype .cards-deck-slot.slot-swap-prev-stepback,
-.mobile-prototype .cards-deck-slot.slot-swap-up-front {
-  animation: card-swap-prev-stepback 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-@keyframes card-swap-down-leave {
-  0% {
-    transform: translate3d(0, var(--drag-release-y, 0px), 0) scale(1);
-    filter: drop-shadow(0 22px 45px rgba(0, 0, 0, 0.44));
-    z-index: 30;
-    opacity: 1;
-  }
-  42% {
-    transform: translate3d(0, 96px, 0) scale(0.96) rotateX(5deg);
-    filter: drop-shadow(0 16px 32px rgba(0, 0, 0, 0.34));
-    z-index: 30;
-    opacity: 0.98;
-  }
-  55% {
-    transform: translate3d(0, 96px, 0) scale(0.93) rotateX(2deg);
-    filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.24));
-    z-index: 8;
-    opacity: 0.92;
-  }
-  100% {
-    transform: translate3d(0, -78px, 0) scale(0.88);
-    filter: drop-shadow(0 7px 16px rgba(0, 0, 0, 0.18)) brightness(0.88);
-    z-index: 8;
-    opacity: 0.9;
-  }
-}
-
-@keyframes card-swap-down-incoming {
-  0% {
-    transform: translate3d(0, -42px, 0) scale(0.94);
-    filter: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.26)) brightness(0.95);
-    z-index: 20;
-    opacity: 0.96;
-  }
-  100% {
-    transform: translate3d(0, 0, 0) scale(1);
-    filter: drop-shadow(0 22px 45px rgba(0, 0, 0, 0.44)) brightness(1);
-    z-index: 30;
-    opacity: 1;
-  }
-}
-
-@keyframes card-swap-down-advance {
-  0% {
-    transform: translate3d(0, -78px, 0) scale(0.88);
-    filter: drop-shadow(0 7px 16px rgba(0, 0, 0, 0.18)) brightness(0.88);
-    z-index: 14;
-    opacity: 0.9;
-  }
-  100% {
-    transform: translate3d(0, -42px, 0) scale(0.94);
-    filter: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.26)) brightness(0.95);
-    z-index: 20;
-    opacity: 0.96;
-  }
-}
-
-/* Phase 3: Selection & Forefront Swapping (Direct Tap on Header) */
+/* 3. DIRECT SELECTION (Tap any card in stack):
+   - Tapped card slides DOWN into active slot (0px)
+   - Current active card slides UP into stack
+*/
 .mobile-prototype .cards-deck-slot.slot-swap-select-incoming {
-  animation: card-swap-select-incoming 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: card-slide-down-into-focus 340ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 .mobile-prototype .cards-deck-slot.slot-swap-select-tuck {
-  animation: card-swap-select-tuck 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: card-slide-up-into-stack 340ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-@keyframes card-swap-select-incoming {
+/* --- Precision Native Keyframe Definitions (Pure Vertical Motion, Zero Screen Overshoot) --- */
+
+/* Card Swapping DOWN into focus (from -42px down to 0px) */
+@keyframes card-slide-down-into-focus {
   0% {
-    transform: translate3d(0, -56px, 0) scale(0.92);
-    filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.22)) brightness(0.92);
+    transform: translate3d(0, -42px, 0) scale(0.94);
+    filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.22)) brightness(0.96);
     z-index: 30;
-    opacity: 0.95;
+    opacity: 0.96;
   }
   100% {
     transform: translate3d(0, 0, 0) scale(1);
-    filter: drop-shadow(0 22px 45px rgba(0, 0, 0, 0.44)) brightness(1);
+    filter: drop-shadow(0 20px 40px rgba(0, 0, 0, 0.40)) brightness(1);
     z-index: 30;
     opacity: 1;
   }
 }
 
-@keyframes card-swap-select-tuck {
+/* Card Swapping UP into stack (from 0px up to -78px) */
+@keyframes card-slide-up-into-stack {
   0% {
-    transform: translate3d(0, 0, 0) scale(1);
-    filter: drop-shadow(0 22px 45px rgba(0, 0, 0, 0.44));
-    z-index: 22;
+    transform: translate3d(0, var(--drag-release-y, 0px), 0) scale(1);
+    filter: drop-shadow(0 20px 40px rgba(0, 0, 0, 0.40));
+    z-index: 25;
     opacity: 1;
   }
   40% {
-    transform: translate3d(0, -90px, 0) scale(0.96) rotateX(-4deg);
-    filter: drop-shadow(0 14px 28px rgba(0, 0, 0, 0.3));
+    z-index: 8;
+  }
+  100% {
+    transform: translate3d(0, -78px, 0) scale(0.88);
+    filter: drop-shadow(0 7px 16px rgba(0, 0, 0, 0.18)) brightness(0.90);
+    z-index: 8;
+    opacity: 0.90;
+  }
+}
+
+/* Card Swapping UP to middle slot (from 0px up to -42px) */
+@keyframes card-slide-up-to-middle {
+  0% {
+    transform: translate3d(0, var(--drag-release-y, 0px), 0) scale(1);
+    filter: drop-shadow(0 20px 40px rgba(0, 0, 0, 0.40));
+    z-index: 25;
+    opacity: 1;
+  }
+  40% {
+    z-index: 18;
+  }
+  100% {
+    transform: translate3d(0, -42px, 0) scale(0.94);
+    filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.22)) brightness(0.96);
+    z-index: 18;
+    opacity: 0.96;
+  }
+}
+
+/* Card Swapping DOWN from back slot (-78px down to 0px) */
+@keyframes card-slide-down-from-back {
+  0% {
+    transform: translate3d(0, -78px, 0) scale(0.88);
+    filter: drop-shadow(0 7px 16px rgba(0, 0, 0, 0.18)) brightness(0.90);
+    z-index: 30;
+    opacity: 0.90;
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    filter: drop-shadow(0 20px 40px rgba(0, 0, 0, 0.40)) brightness(1);
+    z-index: 30;
+    opacity: 1;
+  }
+}
+
+/* Stack step forward (-78px to -42px) */
+@keyframes card-step-forward-in-stack {
+  0% {
+    transform: translate3d(0, -78px, 0) scale(0.88);
+    filter: drop-shadow(0 7px 16px rgba(0, 0, 0, 0.18)) brightness(0.90);
+    z-index: 14;
+    opacity: 0.90;
+  }
+  100% {
+    transform: translate3d(0, -42px, 0) scale(0.94);
+    filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.22)) brightness(0.96);
+    z-index: 18;
+    opacity: 0.96;
+  }
+}
+
+/* Stack step back (-42px to -78px) */
+@keyframes card-step-back-in-stack {
+  0% {
+    transform: translate3d(0, -42px, 0) scale(0.94);
+    filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.22)) brightness(0.96);
     z-index: 18;
     opacity: 0.96;
   }
   100% {
-    transform: translate3d(0, -42px, 0) scale(0.94);
-    filter: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.26)) brightness(0.95);
-    z-index: 20;
-    opacity: 0.96;
+    transform: translate3d(0, -78px, 0) scale(0.88);
+    filter: drop-shadow(0 7px 16px rgba(0, 0, 0, 0.18)) brightness(0.90);
+    z-index: 10;
+    opacity: 0.90;
   }
 }
 
