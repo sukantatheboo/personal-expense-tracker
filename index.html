@@ -45,118 +45,52 @@
     <style>
       :root {
         --bg: #f4f3ee;
-        --ink: #18201b;
-        --mut: #626e66;
+        --sk: #e6e4dc;
         color-scheme: light;
       }
       @media (prefers-color-scheme: dark) {
         html:not([data-theme="light"]) {
           --bg: #0e1411;
-          --ink: #f0f3f1;
-          --mut: #93a398;
+          --sk: #26322c;
           color-scheme: dark;
         }
       }
       html[data-theme="dark"] {
         --bg: #0e1411;
-        --ink: #f0f3f1;
-        --mut: #93a398;
+        --sk: #26322c;
         color-scheme: dark;
       }
       html[data-theme="light"] {
         --bg: #f4f3ee;
-        --ink: #18201b;
-        --mut: #626e66;
+        --sk: #e6e4dc;
         color-scheme: light;
       }
       html,
       body {
         margin: 0;
         background: var(--bg);
-        font-family:
-          Manrope,
-          -apple-system,
-          BlinkMacSystemFont,
-          "Segoe UI",
-          sans-serif;
       }
-      .spend-splash-overlay {
-        position: fixed;
-        inset: 0;
-        z-index: 9999;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        background-color: var(--bg);
-        color: var(--ink);
-        overflow: hidden;
-      }
-      .spend-splash-ambient {
-        position: absolute;
-        width: 380px;
-        height: 380px;
-        border-radius: 50%;
-        background: radial-gradient(
-          circle,
-          rgba(47, 122, 90, 0.22) 0%,
-          rgba(47, 122, 90, 0.08) 45%,
-          transparent 72%
-        );
-        filter: blur(48px);
-        transform: translate3d(0, -20px, 0);
-      }
-      .spend-splash-content {
-        position: relative;
-        z-index: 2;
-        display: flex;
-        flex-direction: column;
-        align-items: flex-start;
-        width: 100%;
-        max-width: 320px;
-        padding: 0 24px;
+      .boot {
+        min-height: 100dvh;
         box-sizing: border-box;
+        padding: calc(env(safe-area-inset-top) + 18px) 16px 0;
+        max-width: 480px;
+        margin: 0 auto;
       }
-      .spend-splash-badge {
-        width: 68px;
-        height: 68px;
-        border-radius: 20px;
-        background: linear-gradient(135deg, #3aa376 0%, #206848 100%);
-        color: #ffffff;
-        display: grid;
-        place-items: center;
-        margin-bottom: 28px;
-        box-shadow:
-          inset 0 1px 1px rgba(255, 255, 255, 0.4),
-          0 14px 34px -6px rgba(47, 122, 90, 0.45);
+      .sk {
+        background: var(--sk);
+        border-radius: 12px;
+        animation: pulse 1.4s ease-in-out infinite;
       }
-      .spend-splash-badge svg {
-        width: 34px;
-        height: 34px;
-        stroke: #ffffff;
-        stroke-width: 4.8;
-        stroke-linecap: round;
-        stroke-linejoin: round;
-        fill: none;
+      @keyframes pulse {
+        50% {
+          opacity: 0.5;
+        }
       }
-      .spend-splash-label {
-        font-size: 15px;
-        font-weight: 600;
-        color: var(--mut);
-        margin: 0 0 6px 0;
-      }
-      .spend-splash-amount-row {
-        display: inline-flex;
-        align-items: baseline;
-        font-size: clamp(48px, 13vw, 58px);
-        font-weight: 800;
-        letter-spacing: -0.035em;
-        line-height: 1.05;
-      }
-      .spend-splash-currency {
-        font-size: 0.88em;
-        font-weight: 750;
-        margin-right: 1px;
+      @media (prefers-reduced-motion: reduce) {
+        .sk {
+          animation: none;
+        }
       }
     </style>
     <script>
@@ -193,24 +127,26 @@
       style="position:fixed;opacity:0;pointer-events:none;left:-9999px;width:0;height:0;"
     />
     <div id="root">
-      <div class="spend-splash-overlay" aria-hidden="true">
-        <div class="spend-splash-ambient"></div>
-        <div class="spend-splash-content">
-          <div class="spend-splash-icon-wrapper">
-            <div class="spend-splash-badge">
-              <svg viewBox="0 0 64 64">
-                <path d="M22 43 43 22M28 22h15v15" />
-              </svg>
-            </div>
-          </div>
-          <div class="spend-splash-text-group">
-            <p class="spend-splash-label">Spent this month</p>
-            <div class="spend-splash-amount-row">
-              <span class="spend-splash-currency">$</span>
-              <span class="spend-splash-digits">1,284</span>
-            </div>
-          </div>
+      <div class="boot" aria-hidden="true">
+        <div class="sk" style="width: 120px; height: 28px"></div>
+        <div
+          class="sk"
+          style="height: 150px; border-radius: 24px; margin-top: 20px"
+        ></div>
+        <div style="display: flex; gap: 12px; margin-top: 12px">
+          <div
+            class="sk"
+            style="flex: 1; height: 84px; border-radius: 20px"
+          ></div>
+          <div
+            class="sk"
+            style="flex: 1; height: 84px; border-radius: 20px"
+          ></div>
         </div>
+        <div
+          class="sk"
+          style="height: 200px; border-radius: 24px; margin-top: 12px"
+        ></div>
       </div>
     </div>
     <script type="module" src="/src/main.jsx"></script>

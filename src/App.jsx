@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import MobilePrototype from "./MobilePrototype";
-import SpendSplash from "./SpendSplash.jsx";
 import {
   ACCOUNT_OPTIONS,
   CATEGORIES,
@@ -945,7 +944,6 @@ function usePopupPresence() {
 }
 
 export default function App() {
-  const [showSplash, setShowSplash] = useState(true);
   const [expenses, setExpenses] = useState(loadExpenses);
   const [budgets, setBudgets] = useState(loadBudgets);
   const [budgetUpdatedAt, setBudgetUpdatedAt] = useState(loadBudgetUpdatedAt);
@@ -3986,17 +3984,9 @@ export default function App() {
 
   return (
     <>
-      {showSplash && (
-        <SpendSplash
-          totalSpent={monthlyTotal > 0 ? monthlyTotal : 1284}
-          currencySymbol={targetCurrency === "BDT" ? "৳" : "$"}
-          onComplete={() => setShowSplash(false)}
-        />
-      )}
       <MobilePrototype
         S={mobilePrototypeData}
         onShift={addMonth}
-        onReplaySplash={() => setShowSplash(true)}
         onExpenseSave={saveMobileExpense}
         onExpenseUpdate={saveMobileExpenseUpdate}
         onExpenseDelete={removeExpense}
