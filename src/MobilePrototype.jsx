@@ -1561,7 +1561,7 @@ function Home({
       daysRemaining,
       paceDiff,
       dailyRemainingBudget,
-      isOverPace: paceDiff > 50,
+      isOverPace: t > b || paceDiff > 50,
     };
   }
   const list = monthExp(S);
@@ -1722,11 +1722,23 @@ function Home({
                 >
                   {homeVelocity.isOverPace ? (
                     <>
-                      ⚡ ৳{amountFormatter.format(Math.round(homeVelocity.paceDiff))} over pace
+                      ⚡ ৳
+                      <Amount
+                        value={amountFormatter.format(Math.round(homeVelocity.paceDiff))}
+                        mask={3}
+                        shown={shown}
+                      />{" "}
+                      over pace
                     </>
                   ) : (
                     <>
-                      ✓ ৳{amountFormatter.format(homeVelocity.dailyRemainingBudget)}/day safe pace
+                      ✓ ৳
+                      <Amount
+                        value={amountFormatter.format(homeVelocity.dailyRemainingBudget)}
+                        mask={3}
+                        shown={shown}
+                      />
+                      /day safe pace
                     </>
                   )}
                 </span>
@@ -3173,8 +3185,8 @@ function Plans({
       paceDiff,
       dailyRemainingBudget,
       currentDailyBurn,
-      isOverPace: paceDiff > 50,
-      isUnderPace: paceDiff < -50,
+      isOverPace: t > b || paceDiff > 50,
+      isUnderPace: t <= b && paceDiff < -50,
     };
   }
 
@@ -3260,11 +3272,11 @@ function Plans({
                   >
                     {velocity.isOverPace ? (
                       <>
-                        ⚡ ৳{amountFormatter.format(Math.round(velocity.paceDiff))} ahead of pace
+                        ⚡ {M(Math.round(velocity.paceDiff))} ahead of pace
                       </>
                     ) : velocity.isUnderPace ? (
                       <>
-                        ✓ ৳{amountFormatter.format(Math.round(Math.abs(velocity.paceDiff)))} under pace
+                        ✓ {M(Math.round(Math.abs(velocity.paceDiff)))} under pace
                       </>
                     ) : (
                       <>🎯 Exactly on pace</>
@@ -3278,11 +3290,11 @@ function Plans({
                 <div className="budget-velocity-stats">
                   <div className="velocity-stat">
                     <span className="lbl">Safe Daily Spend</span>
-                    <b>৳{amountFormatter.format(velocity.dailyRemainingBudget)}/day</b>
+                    <b>{M(velocity.dailyRemainingBudget)}/day</b>
                   </div>
                   <div className="velocity-stat">
                     <span className="lbl">Actual Daily Burn</span>
-                    <b>৳{amountFormatter.format(velocity.currentDailyBurn)}/day</b>
+                    <b>{M(velocity.currentDailyBurn)}/day</b>
                   </div>
                 </div>
               </div>
