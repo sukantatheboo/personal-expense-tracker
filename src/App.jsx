@@ -2288,29 +2288,26 @@ export default function App() {
   };
 
   useEffect(() => {
-    processDueSchedules.current?.();
-    checkDailyReminder();
-    checkBudgetMilestones();
-    checkAndNotifyNewMonth(selectedMonth);
-
-    const intervalTimer = window.setInterval(() => {
+    const runChecks = () => {
       processDueSchedules.current?.();
       checkDailyReminder();
       checkBudgetMilestones();
       checkAndNotifyNewMonth(selectedMonth);
-    }, 30_000);
+    };
+
+    const initialTimer = window.setTimeout(runChecks, 800);
+
+    const intervalTimer = window.setInterval(runChecks, 30_000);
 
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
-        processDueSchedules.current?.();
-        checkDailyReminder();
-        checkBudgetMilestones();
-        checkAndNotifyNewMonth(selectedMonth);
+        runChecks();
       }
     };
     document.addEventListener("visibilitychange", handleVisibility);
 
     return () => {
+      window.clearTimeout(initialTimer);
       window.clearInterval(intervalTimer);
       document.removeEventListener("visibilitychange", handleVisibility);
     };

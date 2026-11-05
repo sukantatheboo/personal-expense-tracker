@@ -73,9 +73,15 @@ export default function SpendSplash({
         .split(",")[0]
         .replace(/['"]/g, "")
         .trim();
+      if (
+        document.fonts.check &&
+        document.fonts.check(`600 1em ${firstFamily || "Outfit"}`)
+      ) {
+        return Promise.resolve();
+      }
       return Promise.race([
         document.fonts.load(`600 1em ${firstFamily || "Outfit"}`),
-        new Promise((resolve) => setTimeout(resolve, 900)),
+        new Promise((resolve) => setTimeout(resolve, 300)),
       ]).catch(() => {});
     }
 
@@ -130,17 +136,29 @@ export default function SpendSplash({
         tile,
         [
           {
-            transform: "scale(0)",
-            borderRadius: "50%",
+            transform: "scale(0) translateZ(0)",
             easing: "cubic-bezier(.2,.8,.3,1)",
           },
           {
-            transform: "scale(.07)",
+            transform: "scale(.07) translateZ(0)",
+            offset: 0.2,
+            easing: "cubic-bezier(.34,1.3,.64,1)",
+          },
+          { transform: "scale(1) translateZ(0)" },
+        ],
+        { duration: t(800) },
+      );
+
+      run(
+        tile,
+        [
+          { borderRadius: "50%", easing: "cubic-bezier(.2,.8,.3,1)" },
+          {
             borderRadius: "50%",
             offset: 0.2,
             easing: "cubic-bezier(.34,1.3,.64,1)",
           },
-          { transform: "scale(1)", borderRadius: "25%" },
+          { borderRadius: "25%" },
         ],
         { duration: t(800) },
       );
@@ -157,8 +175,8 @@ export default function SpendSplash({
       run(
         lockup,
         [
-          { transform: `translateX(${shift}px)` },
-          { transform: "translateX(0)" },
+          { transform: `translateX(${shift}px) translateZ(0)` },
+          { transform: "translateX(0) translateZ(0)" },
         ],
         { delay: t(T.shift), duration: t(720), easing: EASE.out },
       );
@@ -167,8 +185,20 @@ export default function SpendSplash({
         run(
           l,
           [
-            { opacity: 0, transform: "translateX(-.16em)", color: mist },
-            { opacity: 1, transform: "translateX(0)", color: ink },
+            { opacity: 0, transform: "translateX(-.16em) translateZ(0)" },
+            { opacity: 1, transform: "translateX(0) translateZ(0)" },
+          ],
+          {
+            delay: t(T.letters + i * 60),
+            duration: t(480),
+            easing: EASE.out,
+          },
+        );
+        run(
+          l,
+          [
+            { color: mist },
+            { color: ink },
           ],
           {
             delay: t(T.letters + i * 60),
@@ -216,8 +246,8 @@ export default function SpendSplash({
           run(
             stage,
             [
-              { transform: "scale(1)" },
-              { transform: reduce ? "scale(1)" : "scale(.94)" },
+              { transform: "scale(1) translateZ(0)" },
+              { transform: reduce ? "scale(1) translateZ(0)" : "scale(.94) translateZ(0)" },
             ],
             { duration: d, easing: "cubic-bezier(.4,0,1,1)" },
           );
@@ -289,26 +319,50 @@ export default function SpendSplash({
           display: grid; place-items: center;
           background: linear-gradient(180deg, var(--sp-top) 35%, var(--sp-bot));
           cursor: pointer; overflow: hidden;
+          contain: strict;
+          isolation: isolate;
+          transform: translateZ(0);
+          will-change: transform, opacity;
+          backface-visibility: hidden;
+          -webkit-backface-visibility: hidden;
         }
         #spend-splash[hidden] { display: none; }
-        .sp-lockup { display: flex; align-items: center; gap: calc(var(--tile) * .2); }
+        .sp-stage {
+          transform: translateZ(0);
+          will-change: transform;
+          backface-visibility: hidden;
+        }
+        .sp-lockup {
+          display: flex; align-items: center; gap: calc(var(--tile) * .2);
+          transform: translateZ(0);
+          will-change: transform;
+          backface-visibility: hidden;
+        }
         .sp-tile {
           flex: none; width: var(--tile); height: var(--tile);
           background: var(--sp-green); border-radius: 25%;
-          transform: scale(0); will-change: transform;
+          transform: scale(0) translateZ(0);
+          will-change: transform;
+          backface-visibility: hidden;
         }
         .sp-tile svg { display: block; width: 100%; height: 100%; overflow: visible; }
         .sp-draw {
           fill: none; stroke: #fff; stroke-width: 4.5;
           stroke-linecap: round; stroke-linejoin: round;
           stroke-dasharray: 1; stroke-dashoffset: 1; opacity: 0;
+          will-change: stroke-dashoffset, opacity;
         }
         .sp-word {
           display: flex; padding-bottom: .05em;
           font: 600 calc(var(--tile) * .68) / 1 var(--sp-font);
           letter-spacing: -.025em; color: var(--sp-ink);
         }
-        .sp-word span { display: inline-block; opacity: 0; }
+        .sp-word span {
+          display: inline-block; opacity: 0;
+          transform: translateZ(0);
+          will-change: transform, opacity;
+          backface-visibility: hidden;
+        }
       `}</style>
       <div id="spend-splash" ref={rootRef} role="img" aria-label="Spend">
         <div className="sp-stage">

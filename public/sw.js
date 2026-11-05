@@ -1,4 +1,4 @@
-const CACHE_NAME = "spend-app-v7";
+const CACHE_NAME = "spend-app-v8";
 const APP_FILES = [
   "./",
   "./manifest.webmanifest",
@@ -109,6 +109,28 @@ self.addEventListener("fetch", (event) => {
   const request = event.request;
   const url = new URL(request.url);
   const appPath = new URL(self.registration.scope).pathname;
+
+  // 0. Google Fonts caching (Cache-First) for 0ms startup & offline play
+  if (
+    request.method === "GET" &&
+    (url.origin === "https://fonts.googleapis.com" ||
+      url.origin === "https://fonts.gstatic.com")
+  ) {
+    event.respondWith(
+      caches.match(request).then((cached) => {
+        if (cached) return cached;
+        return fetch(request).then((response) => {
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+          }
+          return response;
+        });
+      }),
+    );
+    return;
+  }
+
   if (
     request.method !== "GET" ||
     url.origin !== self.location.origin ||
