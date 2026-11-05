@@ -4215,6 +4215,7 @@ function SettingsSheet({
   onEncryptedBackupDownload,
   onExpensesCsv,
   onBackupRestore,
+  onReplaySplash,
   onClose,
 }) {
   const dark = S.theme === "dark";
@@ -4250,6 +4251,24 @@ function SettingsSheet({
         </span>
         <span className={"sw " + (dark ? "on" : "")} aria-hidden="true" />
       </button>
+      {onReplaySplash && (
+        <button
+          className="ri"
+          type="button"
+          onClick={() => {
+            onClose?.();
+            onReplaySplash();
+          }}
+        >
+          <span className="nm">
+            <b>Opening animation</b>
+            <small>Replay splash screen</small>
+          </span>
+          <span className="settings-chevron" aria-hidden="true">
+            <Icon n="r" />
+          </span>
+        </button>
+      )}
       <button className="ri" type="button" onClick={onAdvanced}>
         <span className="nm">
           <b>App settings</b>
@@ -6888,6 +6907,7 @@ export default function MobilePrototype({
   accountStatus,
   authBusy,
   onResumeSync,
+  onReplaySplash,
 }) {
   const [tab, setTab] = useState("home");
   const cards = Array.isArray(S.cards) ? S.cards : [];
@@ -8035,6 +8055,7 @@ export default function MobilePrototype({
           onEncryptedBackupDownload={onEncryptedBackupDownload}
           onExpensesCsv={onExpensesCsv}
           onBackupRestore={onBackupRestore}
+          onReplaySplash={onReplaySplash}
         />
       )}
       {sheet?.type === "sec" && (
