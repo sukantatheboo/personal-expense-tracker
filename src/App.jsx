@@ -42,6 +42,7 @@ import {
   saveCloudData,
   subscribeToCloudChanges,
 } from "./cloud-sync.js";
+import { encryptBackup, decryptBackup } from "./security.js";
 import { Capacitor } from "@capacitor/core";
 import {
   checkAndNotifyNewMonth,
@@ -3251,6 +3252,51 @@ export default function App() {
     setBackupStatus("Backup downloaded. Keep it somewhere safe.");
   }
 
+  async function downloadEncryptedBackup() {
+    const password = window.prompt(
+      "Enter a password or PIN to encrypt your backup (AES-256):",
+    );
+    if (!password) {
+      setBackupStatus("Encrypted backup canceled.");
+      return;
+    }
+    try {
+      const exportedAt = new Date().toISOString();
+      const backupData = {
+        expenses,
+        budgets,
+        budgetUpdatedAt,
+        recurringSchedules,
+        accountData,
+        deletedRecords,
+        theme,
+        targetCurrency,
+        reminderTime,
+      };
+      const encryptedPayload = await encryptBackup(backupData, password);
+      const url = URL.createObjectURL(
+        new Blob([JSON.stringify(encryptedPayload, null, 2)], {
+          type: "application/json;charset=utf-8",
+        }),
+      );
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `spend-encrypted-backup-${localDate()}.json`;
+      document.body.append(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setLastBackupAt(exportedAt);
+      try {
+        localStorage.setItem(LAST_BACKUP_AT_KEY, exportedAt);
+      } catch {}
+      setBackupStatus("Encrypted backup (AES-256) downloaded securely.");
+    } catch (e) {
+      alert("Failed to encrypt backup: " + (e?.message || e));
+      setBackupStatus("Encryption failed.");
+    }
+  }
+
   function exportAllExpensesCsv() {
     const data = [
       [
@@ -3295,7 +3341,31 @@ export default function App() {
     const file = input.files?.[0];
     if (!file) return;
     try {
-      const backup = JSON.parse(await file.text());
+      let backup = JSON.parse(await file.text());
+      if (backup?.format === "spend-encrypted-backup") {
+        const password = window.prompt(
+          "This backup is protected with AES-256 encryption. Enter password or PIN to decrypt:",
+        );
+        if (!password) {
+          setBackupStatus("Restore canceled (password required).");
+          input.value = "";
+          return;
+        }
+        try {
+          const decryptedData = await decryptBackup(backup, password);
+          backup = {
+            format: "spend-backup",
+            version: 1,
+            exportedAt: backup.exportedAt,
+            data: decryptedData,
+          };
+        } catch {
+          alert("Decryption failed: Incorrect password or corrupted backup file.");
+          setBackupStatus("Decryption failed. Incorrect password.");
+          input.value = "";
+          return;
+        }
+      }
       const data = backup?.data;
       if (
         backup?.format !== "spend-backup" ||
@@ -3975,6 +4045,7 @@ export default function App() {
         backupStatus={backupStatus}
         lastBackupAt={lastBackupAt}
         onBackupDownload={downloadBackup}
+        onEncryptedBackupDownload={downloadEncryptedBackup}
         onExpensesCsv={exportAllExpensesCsv}
         onBackupRestore={() => backupFileInputRef.current?.click()}
         onSignOut={signOutOfPush}

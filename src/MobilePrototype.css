@@ -6956,3 +6956,89 @@ html[data-theme="dark"] .mobile-prototype .card-options-bar-btn.is-primary-card 
   border-radius: 50%;
   background: currentColor;
 }
+
+/* ───────────── Budget Velocity & Daily Burn Rate ───────────── */
+.mobile-prototype .budget-velocity-card {
+  margin-top: 14px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px 14px;
+  text-align: left;
+}
+.mobile-prototype .budget-velocity-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.mobile-prototype .velocity-tag {
+  font-size: 12px;
+  font-weight: 750;
+  padding: 3px 8px;
+  border-radius: 99px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.mobile-prototype .velocity-tag.is-good {
+  background: color-mix(in srgb, var(--g, #10b981) 15%, transparent);
+  color: var(--g, #10b981);
+}
+.mobile-prototype .velocity-tag.is-over {
+  background: color-mix(in srgb, #f43f5e 15%, transparent);
+  color: #f43f5e;
+}
+.mobile-prototype .budget-velocity-days {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--mut);
+}
+.mobile-prototype .budget-velocity-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.mobile-prototype .velocity-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mobile-prototype .velocity-stat .lbl {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--mut);
+}
+.mobile-prototype .velocity-stat b {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.mobile-prototype .hero-velocity-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed color-mix(in srgb, var(--ink) 12%, transparent);
+}
+.mobile-prototype .hero-velocity-badge {
+  font-size: 12px;
+  font-weight: 750;
+  padding: 2px 7px;
+  border-radius: 99px;
+}
+.mobile-prototype .hero-velocity-badge.is-good {
+  background: color-mix(in srgb, var(--g, #10b981) 15%, transparent);
+  color: var(--g, #10b981);
+}
+.mobile-prototype .hero-velocity-badge.is-over {
+  background: color-mix(in srgb, #f43f5e 15%, transparent);
+  color: #f43f5e;
+}
+.mobile-prototype .hero-velocity-sub {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mut);
+}

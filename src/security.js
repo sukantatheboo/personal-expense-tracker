@@ -347,3 +347,106 @@ export function lockAppManually() {
     setSessionUnlocked(false);
   }
 }
+
+/* ───────────── AES-256-GCM Backup Encryption ───────────── */
+export async function encryptBackup(plainData, password) {
+  if (!password || typeof password !== "string") {
+    throw new Error("A password is required to encrypt the backup.");
+  }
+  ensureSubtleCrypto();
+
+  const salt = getRandomBytes(16);
+  const iv = getRandomBytes(12); // Standard 96-bit IV for AES-GCM
+  const encoder = new TextEncoder();
+
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(password),
+    { name: "PBKDF2" },
+    false,
+    ["deriveKey"],
+  );
+
+  const aesKey = await crypto.subtle.deriveKey(
+    {
+      name: "PBKDF2",
+      salt,
+      iterations: 100000,
+      hash: "SHA-256",
+    },
+    keyMaterial,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt"],
+  );
+
+  const plaintextBytes = encoder.encode(JSON.stringify(plainData));
+  const ciphertextBuffer = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    aesKey,
+    plaintextBytes,
+  );
+
+  return {
+    format: "spend-encrypted-backup",
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    salt: bufferToBase64(salt),
+    iv: bufferToBase64(iv),
+    ciphertext: bufferToBase64(ciphertextBuffer),
+  };
+}
+
+export async function decryptBackup(encryptedPayload, password) {
+  if (!password || typeof password !== "string") {
+    throw new Error("Password is required to decrypt backup.");
+  }
+  if (
+    !encryptedPayload ||
+    encryptedPayload.format !== "spend-encrypted-backup" ||
+    !encryptedPayload.salt ||
+    !encryptedPayload.iv ||
+    !encryptedPayload.ciphertext
+  ) {
+    throw new Error("Invalid encrypted backup format.");
+  }
+
+  ensureSubtleCrypto();
+  const salt = new Uint8Array(base64ToBuffer(encryptedPayload.salt));
+  const iv = new Uint8Array(base64ToBuffer(encryptedPayload.iv));
+  const ciphertext = base64ToBuffer(encryptedPayload.ciphertext);
+  const encoder = new TextEncoder();
+
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(password),
+    { name: "PBKDF2" },
+    false,
+    ["deriveKey"],
+  );
+
+  const aesKey = await crypto.subtle.deriveKey(
+    {
+      name: "PBKDF2",
+      salt,
+      iterations: 100000,
+      hash: "SHA-256",
+    },
+    keyMaterial,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["decrypt"],
+  );
+
+  try {
+    const decryptedBuffer = await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv },
+      aesKey,
+      ciphertext,
+    );
+    const decoder = new TextDecoder();
+    return JSON.parse(decoder.decode(decryptedBuffer));
+  } catch {
+    throw new Error("Incorrect password or corrupted encrypted backup.");
+  }
+}

@@ -1539,6 +1539,31 @@ function Home({
   const d = t - p;
   const overBudget = b > 0 && t > b;
   const overflowShare = overBudget ? ((t - b) / t) * 100 : 0;
+  const todayStr = ld();
+  const isCurrentMonth = S.m === todayStr.slice(0, 7);
+  let homeVelocity = null;
+  if (b > 0 && isCurrentMonth) {
+    const [y, mNum] = S.m.split("-").map(Number);
+    const daysInMonth = new Date(y, mNum, 0).getDate();
+    const currentDay = Math.min(
+      daysInMonth,
+      Number(todayStr.split("-")[2]) || 1,
+    );
+    const daysPassed = Math.max(1, currentDay);
+    const daysRemaining = Math.max(1, daysInMonth - currentDay + 1);
+    const expectedSpent = (b / daysInMonth) * daysPassed;
+    const paceDiff = t - expectedSpent;
+    const dailyRemainingBudget = Math.max(
+      0,
+      Math.round((b - t) / daysRemaining),
+    );
+    homeVelocity = {
+      daysRemaining,
+      paceDiff,
+      dailyRemainingBudget,
+      isOverPace: paceDiff > 50,
+    };
+  }
   const list = monthExp(S);
   const by = {};
   list.forEach((e) => {
@@ -1690,6 +1715,27 @@ function Home({
                 />
               </span>
             </div>
+            {homeVelocity && (
+              <div className="hero-velocity-row">
+                <span
+                  className={`hero-velocity-badge ${homeVelocity.isOverPace ? "is-over" : "is-good"}`}
+                >
+                  {homeVelocity.isOverPace ? (
+                    <>
+                      ⚡ ৳{amountFormatter.format(Math.round(homeVelocity.paceDiff))} over pace
+                    </>
+                  ) : (
+                    <>
+                      ✓ ৳{amountFormatter.format(homeVelocity.dailyRemainingBudget)}/day safe pace
+                    </>
+                  )}
+                </span>
+                <span className="hero-velocity-sub">
+                  {homeVelocity.daysRemaining}{" "}
+                  {homeVelocity.daysRemaining === 1 ? "day" : "days"} left
+                </span>
+              </div>
+            )}
           </>
         ) : (
           <button className="ghost" onClick={onBudget}>
@@ -3099,6 +3145,39 @@ function Plans({
     .filter((schedule) => schedule.cat !== "Savings")
     .reduce((a, r) => a + r.amt * (r.iv === "weekly" ? 4 : 1), 0);
 
+  const todayStr = ld();
+  const isCurrentMonth = S.m === todayStr.slice(0, 7);
+  let velocity = null;
+  if (b > 0 && isCurrentMonth) {
+    const [y, mNum] = S.m.split("-").map(Number);
+    const daysInMonth = new Date(y, mNum, 0).getDate();
+    const currentDay = Math.min(
+      daysInMonth,
+      Number(todayStr.split("-")[2]) || 1,
+    );
+    const daysPassed = Math.max(1, currentDay);
+    const daysRemaining = Math.max(1, daysInMonth - currentDay + 1);
+    const expectedSpent = (b / daysInMonth) * daysPassed;
+    const paceDiff = t - expectedSpent;
+    const dailyRemainingBudget = Math.max(
+      0,
+      Math.round((b - t) / daysRemaining),
+    );
+    const currentDailyBurn = Math.round(t / daysPassed);
+    velocity = {
+      daysInMonth,
+      currentDay,
+      daysRemaining,
+      daysPassed,
+      expectedSpent,
+      paceDiff,
+      dailyRemainingBudget,
+      currentDailyBurn,
+      isOverPace: paceDiff > 50,
+      isUnderPace: paceDiff < -50,
+    };
+  }
+
   const budget = (
     <>
       <MonthSwitch m={S.m} onShift={onShift} />
@@ -3173,6 +3252,41 @@ function Plans({
                 ? M(b - t) + " left — you’re within your limit."
                 : M(t - b) + " over — spending is above your limit."}
             </p>
+            {velocity && (
+              <div className="budget-velocity-card">
+                <div className="budget-velocity-header">
+                  <span
+                    className={`velocity-tag ${velocity.isOverPace ? "is-over" : "is-good"}`}
+                  >
+                    {velocity.isOverPace ? (
+                      <>
+                        ⚡ ৳{amountFormatter.format(Math.round(velocity.paceDiff))} ahead of pace
+                      </>
+                    ) : velocity.isUnderPace ? (
+                      <>
+                        ✓ ৳{amountFormatter.format(Math.round(Math.abs(velocity.paceDiff)))} under pace
+                      </>
+                    ) : (
+                      <>🎯 Exactly on pace</>
+                    )}
+                  </span>
+                  <span className="budget-velocity-days">
+                    {velocity.daysRemaining}{" "}
+                    {velocity.daysRemaining === 1 ? "day" : "days"} left
+                  </span>
+                </div>
+                <div className="budget-velocity-stats">
+                  <div className="velocity-stat">
+                    <span className="lbl">Safe Daily Spend</span>
+                    <b>৳{amountFormatter.format(velocity.dailyRemainingBudget)}/day</b>
+                  </div>
+                  <div className="velocity-stat">
+                    <span className="lbl">Actual Daily Burn</span>
+                    <b>৳{amountFormatter.format(velocity.currentDailyBurn)}/day</b>
+                  </div>
+                </div>
+              </div>
+            )}
           </>
         ) : (
           <div className="emp-illustrated">
@@ -4086,6 +4200,7 @@ function SettingsSheet({
   backupStatus,
   lastBackupAt,
   onBackupDownload,
+  onEncryptedBackupDownload,
   onExpensesCsv,
   onBackupRestore,
   onClose,
@@ -4156,6 +4271,35 @@ function SettingsSheet({
           <span className="nm">
             <b>Export JSON backup</b>
             <small>All expenses, budgets, and settings</small>
+          </span>
+          <span className="settings-chevron" aria-hidden="true">
+            <Icon n="r" />
+          </span>
+        </button>
+        <button
+          className="ri settings-action"
+          type="button"
+          onClick={onEncryptedBackupDownload}
+        >
+          <i className="ic" style={{ "--c": "#10b981" }}>
+            <svg
+              viewBox="0 0 24 24"
+              width="18"
+              height="18"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+          </i>
+          <span className="nm">
+            <b>Export encrypted backup</b>
+            <small>Protected with AES-256-GCM encryption</small>
           </span>
           <span className="settings-chevron" aria-hidden="true">
             <Icon n="r" />
@@ -6726,6 +6870,7 @@ export default function MobilePrototype({
   backupStatus,
   lastBackupAt,
   onBackupDownload,
+  onEncryptedBackupDownload,
   onExpensesCsv,
   onBackupRestore,
   accountStatus,
@@ -6823,6 +6968,9 @@ export default function MobilePrototype({
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const targetTab = params.get("tab");
+      const action = params.get("action");
+      let urlChanged = false;
+
       if (
         targetTab &&
         ["home", "activity", "accounts", "plans"].includes(targetTab)
@@ -6830,6 +6978,23 @@ export default function MobilePrototype({
         setAppSettingsOpen(false);
         setProfileSettingsOpen(false);
         setTab(targetTab);
+        urlChanged = true;
+      }
+
+      if (action === "add-expense" || action === "add") {
+        setAppSettingsOpen(false);
+        setProfileSettingsOpen(false);
+        openSheet({ type: "add", iv: "none" });
+        urlChanged = true;
+      } else if (action === "add-tx" || action === "tx") {
+        setAppSettingsOpen(false);
+        setProfileSettingsOpen(false);
+        setTab("accounts");
+        openSheet({ type: "tx", t: "transfer" });
+        urlChanged = true;
+      }
+
+      if (urlChanged) {
         const cleanUrl = window.location.pathname + window.location.hash;
         window.history.replaceState({}, "", cleanUrl);
       }
@@ -7855,6 +8020,7 @@ export default function MobilePrototype({
           backupStatus={backupStatus}
           lastBackupAt={lastBackupAt}
           onBackupDownload={onBackupDownload}
+          onEncryptedBackupDownload={onEncryptedBackupDownload}
           onExpensesCsv={onExpensesCsv}
           onBackupRestore={onBackupRestore}
         />
