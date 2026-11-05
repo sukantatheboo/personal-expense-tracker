@@ -1,52 +1,28 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Capacitor } from "@capacitor/core";
-import { Haptics, ImpactStyle } from "@capacitor/haptics";
+import { useEffect, useRef } from "react";
 
-/**
- * Triggers light haptic feedback on native or Web vibration
- */
-function triggerSplashHaptic() {
-  if (Capacitor.isNativePlatform()) {
-    try {
-      void Haptics.impact({ style: ImpactStyle.Light }).catch(() => {});
-      return;
-    } catch {
-      // fallback
-    }
-  }
-  if (
-    typeof navigator !== "undefined" &&
-    typeof navigator.vibrate === "function"
-  ) {
-    try {
-      navigator.vibrate(18);
-    } catch {
-      // ignore
-    }
-  }
-}
+const EASE = {
+  out: "cubic-bezier(.22,1,.36,1)",
+  inOut: "cubic-bezier(.65,0,.35,1)",
+};
 
-/**
- * SpendSplash Component
- * App-opening splash animation matching the Spend UI:
- * - Brand squircle icon with white arrow (↗) entering with spring dynamics
- * - "Spent this month" title sliding up
- * - Rolling count-up number counter to total amount
- * - Smooth dissolve/exit morph into dashboard
- * - Tap anywhere or press Esc/Enter/Space to skip instantly
- * - Session storage gating for one-time play per session
- */
+const T = {
+  shaft: 640,
+  arms: 980,
+  shift: 1340,
+  letters: 1400,
+  hold: 2750,
+  exit: 450,
+};
+
 export default function SpendSplash({
   onDone,
-  onComplete,
   once = true,
   storageKey = "spend-splash",
-  totalSpent = 1284,
-  currencySymbol = "৳",
-  autoDismissMs = 2800,
-  fontFamily = "Manrope, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
-  fontUrl = null,
+  fontFamily = '"Outfit", "Nunito Sans", ui-rounded, system-ui, sans-serif',
+  fontUrl = "https://fonts.googleapis.com/css2?family=Outfit:wght@600&display=swap",
 }) {
+  const rootRef = useRef(null);
+
   const isAlreadySeen = () => {
     try {
       return Boolean(once && sessionStorage.getItem(storageKey));
@@ -57,528 +33,303 @@ export default function SpendSplash({
 
   const alreadySeen = useRef(typeof window !== "undefined" && isAlreadySeen());
 
-  const targetNumber = Number(totalSpent) > 0 ? Number(totalSpent) : 1284;
-  const [displayedAmount, setDisplayedAmount] = useState(0);
-  const [isExiting, setIsExiting] = useState(false);
-
-  const isExitingRef = useRef(false);
-  const animFrameRef = useRef(null);
-  const exitTimerRef = useRef(null);
-  const dismissTimerRef = useRef(null);
-  const hasTriggeredCompleteRef = useRef(false);
-
-  const completeCallback = useCallback(() => {
-    if (hasTriggeredCompleteRef.current) return;
-    hasTriggeredCompleteRef.current = true;
-    try {
-      sessionStorage.setItem(storageKey, "1");
-    } catch {}
-    document.dispatchEvent(new CustomEvent("spend:splash-done"));
-    if (onDone) onDone();
-    else if (onComplete) onComplete();
-  }, [onDone, onComplete, storageKey]);
-
-  const handleDismiss = useCallback(() => {
-    if (isExitingRef.current || hasTriggeredCompleteRef.current) return;
-    isExitingRef.current = true;
-    setIsExiting(true);
-    triggerSplashHaptic();
-
-    exitTimerRef.current = setTimeout(() => {
-      completeCallback();
-    }, 400);
-  }, [completeCallback]);
-
-  // Clean up exit timer on unmount
-  useEffect(() => {
-    return () => {
-      clearTimeout(exitTimerRef.current);
-    };
-  }, []);
-
-  // Handle immediate skip when already seen
   useEffect(() => {
     if (alreadySeen.current) {
-      completeCallback();
-    }
-  }, [completeCallback]);
-
-  // Optional font loading if provided
-  useEffect(() => {
-    if (!fontUrl || typeof document === "undefined") return;
-    if (!document.querySelector(`link[href="${fontUrl}"]`)) {
-      const link = document.createElement("link");
-      link.rel = "stylesheet";
-      link.href = fontUrl;
-      document.head.appendChild(link);
-    }
-  }, [fontUrl]);
-
-  // Rolling Number Counter Animation (Starts at 280ms, runs for ~680ms)
-  useEffect(() => {
-    if (alreadySeen.current) return undefined;
-
-    const prefersReducedMotion =
-      window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
-
-    if (prefersReducedMotion) {
-      setDisplayedAmount(targetNumber);
+      onDone?.();
       return undefined;
     }
 
-    let isCancelled = false;
-    const startDelayTimer = setTimeout(() => {
-      if (isCancelled) return;
-      const startTime = performance.now();
-      const countDuration = 680;
+    let active = true;
+    const anims = [];
+    let holdTimer = null;
+    let cleanListeners = () => {};
 
-      const updateCounter = (now) => {
-        if (isCancelled) return;
-        const elapsed = now - startTime;
-        const progress = Math.min(1, elapsed / countDuration);
-
-        // Quintic ease-out: 1 - (1 - progress)^5
-        const eased = 1 - Math.pow(1 - progress, 5);
-        const current = Math.round(eased * targetNumber);
-
-        setDisplayedAmount(current);
-
-        if (progress < 1) {
-          animFrameRef.current = requestAnimationFrame(updateCounter);
-        } else {
-          setDisplayedAmount(targetNumber);
-          triggerSplashHaptic();
+    // Load font stylesheet if requested and not already present
+    if (fontUrl && typeof document !== "undefined") {
+      if (!document.querySelector(`link[href="${fontUrl}"]`)) {
+        if (!document.querySelector('link[href="https://fonts.googleapis.com"]')) {
+          const pre1 = document.createElement("link");
+          pre1.rel = "preconnect";
+          pre1.href = "https://fonts.googleapis.com";
+          document.head.appendChild(pre1);
         }
+        if (!document.querySelector('link[href="https://fonts.gstatic.com"]')) {
+          const pre2 = document.createElement("link");
+          pre2.rel = "preconnect";
+          pre2.href = "https://fonts.gstatic.com";
+          pre2.crossOrigin = "anonymous";
+          document.head.appendChild(pre2);
+        }
+        const link = document.createElement("link");
+        link.rel = "stylesheet";
+        link.href = fontUrl;
+        document.head.appendChild(link);
+      }
+    }
+
+    function checkFontsReady() {
+      if (!document.fonts || !document.fonts.load) return Promise.resolve();
+      const firstFamily = (fontFamily || "Outfit")
+        .split(",")[0]
+        .replace(/['"]/g, "")
+        .trim();
+      return Promise.race([
+        document.fonts.load(`600 1em ${firstFamily || "Outfit"}`),
+        new Promise((resolve) => setTimeout(resolve, 900)),
+      ]).catch(() => {});
+    }
+
+    const root = rootRef.current;
+    if (!root) return undefined;
+
+    checkFontsReady().then(() => {
+      if (!active || !rootRef.current) return;
+      const el = rootRef.current;
+      el.hidden = false;
+
+      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const t = (ms) => (reduce ? 0 : ms);
+      const cs = getComputedStyle(el);
+      const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      const ink =
+        cs.getPropertyValue("--sp-ink").trim() || (isDark ? "#eef6f1" : "#12261d");
+      const mist =
+        cs.getPropertyValue("--sp-mist").trim() || (isDark ? "#5f7468" : "#a3b5ab");
+
+      const q = (s) => el.querySelector(s);
+      const tile = q(".sp-tile");
+      const stage = q(".sp-stage");
+      const lockup = q(".sp-lockup");
+      const word = q(".sp-word");
+      const shaft = q(".sp-shaft");
+      const arms = el.querySelectorAll(".sp-arm");
+      const letters = Array.prototype.slice.call(el.querySelectorAll(".sp-word span"));
+
+      if (!tile || !stage || !lockup || !word || !shaft) return;
+
+      function run(target, kf, o) {
+        const a = target.animate(kf, Object.assign({ fill: "both" }, o));
+        anims.push(a);
+        return a;
+      }
+
+      function draw(target, delay, dur, easing) {
+        run(
+          target,
+          [
+            { strokeDashoffset: 1, opacity: 0, offset: 0 },
+            { strokeDashoffset: 1, opacity: 1, offset: 0.001 },
+            { strokeDashoffset: 0, opacity: 1, offset: 1 },
+          ],
+          { delay: t(delay), duration: t(dur), easing },
+        );
+      }
+
+      // 1. Dot pops in, then swells into the rounded tile (circle -> 25% radius)
+      run(
+        tile,
+        [
+          {
+            transform: "scale(0)",
+            borderRadius: "50%",
+            easing: "cubic-bezier(.2,.8,.3,1)",
+          },
+          {
+            transform: "scale(.07)",
+            borderRadius: "50%",
+            offset: 0.2,
+            easing: "cubic-bezier(.34,1.3,.64,1)",
+          },
+          { transform: "scale(1)", borderRadius: "25%" },
+        ],
+        { duration: t(800) },
+      );
+
+      // 2. Arrow draws itself: shaft first, then the head opens out from the tip
+      draw(shaft, T.shaft, 400, EASE.inOut);
+      Array.prototype.forEach.call(arms, (a) => {
+        draw(a, T.arms, 300, EASE.out);
+      });
+
+      // 3. Tile slides left as the wordmark arrives; lockup ends perfectly centred
+      const gap = parseFloat(getComputedStyle(lockup).columnGap) || 0;
+      const shift = (word.offsetWidth + gap) / 2;
+      run(
+        lockup,
+        [
+          { transform: `translateX(${shift}px)` },
+          { transform: "translateX(0)" },
+        ],
+        { delay: t(T.shift), duration: t(720), easing: EASE.out },
+      );
+
+      letters.forEach((l, i) => {
+        run(
+          l,
+          [
+            { opacity: 0, transform: "translateX(-.16em)", color: mist },
+            { opacity: 1, transform: "translateX(0)", color: ink },
+          ],
+          {
+            delay: t(T.letters + i * 60),
+            duration: t(480),
+            easing: EASE.out,
+          },
+        );
+      });
+
+      // 4. Hold, then exit. Tap, click, Esc, Enter or Space skips the hold.
+      let isReleased = false;
+      let releaseResolver;
+      const held = new Promise((resolve) => {
+        releaseResolver = resolve;
+      });
+
+      function triggerRelease() {
+        if (isReleased) return;
+        isReleased = true;
+        if (releaseResolver) releaseResolver();
+      }
+
+      holdTimer = setTimeout(triggerRelease, reduce ? 900 : T.hold);
+
+      function onKey(e) {
+        if (e.key === "Escape" || e.key === "Enter" || e.key === " ") {
+          triggerRelease();
+        }
+      }
+
+      el.addEventListener("pointerdown", triggerRelease);
+      window.addEventListener("keydown", onKey);
+
+      cleanListeners = () => {
+        clearTimeout(holdTimer);
+        el.removeEventListener("pointerdown", triggerRelease);
+        window.removeEventListener("keydown", onKey);
       };
 
-      animFrameRef.current = requestAnimationFrame(updateCounter);
-    }, 280);
+      held
+        .then(() => {
+          if (!active || !rootRef.current) return undefined;
+          cleanListeners();
+          const d = reduce ? 200 : T.exit;
+          run(
+            stage,
+            [
+              { transform: "scale(1)" },
+              { transform: reduce ? "scale(1)" : "scale(.94)" },
+            ],
+            { duration: d, easing: "cubic-bezier(.4,0,1,1)" },
+          );
+          const fadeAnim = run(
+            el,
+            [{ opacity: 1 }, { opacity: 0 }],
+            { duration: d, easing: "ease-out" },
+          );
+          return fadeAnim.finished;
+        })
+        .then(() => {
+          if (!active) return;
+          anims.forEach((a) => {
+            try {
+              a.cancel();
+            } catch {}
+          });
+          if (rootRef.current) {
+            rootRef.current.hidden = true;
+          }
+          try {
+            sessionStorage.setItem(storageKey, "1");
+          } catch {}
+          document.dispatchEvent(new CustomEvent("spend:splash-done"));
+          onDone?.();
+        });
+    });
 
     return () => {
-      isCancelled = true;
-      clearTimeout(startDelayTimer);
-      if (animFrameRef.current) {
-        cancelAnimationFrame(animFrameRef.current);
-      }
+      active = false;
+      cleanListeners();
+      anims.forEach((a) => {
+        try {
+          a.cancel();
+        } catch {}
+      });
     };
-  }, [targetNumber]);
-
-  // Keyboard skip handler (Esc, Enter, Space)
-  useEffect(() => {
-    if (alreadySeen.current) return undefined;
-
-    const onKey = (e) => {
-      if (e.key === "Escape" || e.key === "Enter" || e.key === " ") {
-        if (e.key === " ") e.preventDefault();
-        handleDismiss();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [handleDismiss]);
-
-  // Auto-dismiss sequence
-  useEffect(() => {
-    if (alreadySeen.current) return undefined;
-
-    dismissTimerRef.current = setTimeout(() => {
-      handleDismiss();
-    }, autoDismissMs);
-
-    return () => {
-      clearTimeout(dismissTimerRef.current);
-    };
-  }, [autoDismissMs, handleDismiss]);
+  }, [once, storageKey, fontFamily, fontUrl, onDone]);
 
   if (alreadySeen.current) {
     return null;
   }
 
-  const formattedDigits = new Intl.NumberFormat("en-US", {
-    maximumFractionDigits: 0,
-  }).format(displayedAmount);
+  const effectiveFont =
+    fontFamily || '"Outfit", "Nunito Sans", ui-rounded, system-ui, sans-serif';
 
   return (
     <>
       <style>{`
-        .spend-splash-overlay {
-          position: fixed;
-          inset: 0;
-          z-index: 9999;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          background-color: var(--page-bg, #f4f3ee);
-          color: var(--ink, #18201b);
-          font-family: ${fontFamily};
-          user-select: none;
-          -webkit-user-select: none;
-          touch-action: manipulation;
-          overflow: hidden;
-          cursor: pointer;
-          will-change: transform, opacity, filter;
-          transition:
-            opacity 400ms cubic-bezier(0.22, 1, 0.36, 1),
-            transform 400ms cubic-bezier(0.22, 1, 0.36, 1),
-            filter 400ms cubic-bezier(0.22, 1, 0.36, 1);
+        :root, #spend-splash {
+          --sp-green: #39785d;
+          --sp-ink: #12261d;
+          --sp-mist: #a3b5ab;
+          --sp-top: #ffffff;
+          --sp-bot: #e3efe8;
+          --sp-font: ${effectiveFont};
         }
-
-        :root[data-theme="dark"] .spend-splash-overlay,
-        html[data-theme="dark"] .spend-splash-overlay,
-        .mobile-prototype[data-theme="dark"] ~ .spend-splash-overlay {
-          background-color: var(--page-bg, #0e1411);
-          color: var(--ink, #f0f3f1);
-        }
-
         @media (prefers-color-scheme: dark) {
-          html:not([data-theme="light"]) .spend-splash-overlay {
-            background-color: var(--page-bg, #0e1411);
-            color: var(--ink, #f0f3f1);
+          :root, #spend-splash {
+            --sp-ink: #eef6f1;
+            --sp-mist: #5f7468;
+            --sp-top: #0d1511;
+            --sp-bot: #14271e;
           }
         }
-
-        /* Ambient Radial Glow */
-        .spend-splash-ambient {
-          position: absolute;
-          width: 380px;
-          height: 380px;
-          border-radius: 50%;
-          pointer-events: none;
-          background: radial-gradient(
-            circle,
-            rgba(57, 120, 93, 0.22) 0%,
-            rgba(57, 120, 93, 0.08) 45%,
-            transparent 72%
-          );
-          filter: blur(48px);
-          transform: translate3d(0, -20px, 0);
-          animation: splash-ambient-pulse 2.4s ease-in-out infinite alternate;
+        #spend-splash {
+          --tile: clamp(76px, 24vw, 112px);
+          position: fixed; inset: 0; z-index: 9999;
+          display: grid; place-items: center;
+          background: linear-gradient(180deg, var(--sp-top) 35%, var(--sp-bot));
+          cursor: pointer; overflow: hidden;
         }
-
-        html[data-theme="light"] .spend-splash-ambient {
-          background: radial-gradient(
-            circle,
-            rgba(57, 120, 93, 0.16) 0%,
-            rgba(57, 120, 93, 0.04) 50%,
-            transparent 72%
-          );
-          filter: blur(40px);
+        #spend-splash[hidden] { display: none; }
+        .sp-lockup { display: flex; align-items: center; gap: calc(var(--tile) * .2); }
+        .sp-tile {
+          flex: none; width: var(--tile); height: var(--tile);
+          background: var(--sp-green); border-radius: 25%;
+          transform: scale(0); will-change: transform;
         }
-
-        /* Main Content Wrapper */
-        .spend-splash-content {
-          position: relative;
-          z-index: 2;
-          display: flex;
-          flex-direction: column;
-          align-items: flex-start;
-          width: 100%;
-          max-width: 320px;
-          padding: 0 24px;
-          box-sizing: border-box;
+        .sp-tile svg { display: block; width: 100%; height: 100%; overflow: visible; }
+        .sp-draw {
+          fill: none; stroke: #fff; stroke-width: 4.5;
+          stroke-linecap: round; stroke-linejoin: round;
+          stroke-dasharray: 1; stroke-dashoffset: 1; opacity: 0;
         }
-
-        /* Brand Icon Badge (Squircle + Arrow) */
-        .spend-splash-icon-wrapper {
-          position: relative;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          margin-bottom: 28px;
-          animation: splash-icon-spring 680ms cubic-bezier(0.16, 1, 0.3, 1) both;
+        .sp-word {
+          display: flex; padding-bottom: .05em;
+          font: 600 calc(var(--tile) * .68) / 1 var(--sp-font);
+          letter-spacing: -.025em; color: var(--sp-ink);
         }
-
-        .spend-splash-badge {
-          position: relative;
-          width: 68px;
-          height: 68px;
-          border-radius: 20px;
-          background: linear-gradient(135deg, #3aa376 0%, #206848 100%);
-          color: #ffffff;
-          display: grid;
-          place-items: center;
-          box-shadow:
-            inset 0 1px 1px rgba(255, 255, 255, 0.4),
-            0 14px 34px -6px rgba(47, 122, 90, 0.45),
-            0 4px 14px rgba(0, 0, 0, 0.16);
-          overflow: hidden;
-        }
-
-        .spend-splash-badge-sheen {
-          position: absolute;
-          inset: 0;
-          pointer-events: none;
-          background: linear-gradient(
-            135deg,
-            rgba(255, 255, 255, 0.28) 0%,
-            rgba(255, 255, 255, 0.05) 45%,
-            transparent 65%
-          );
-        }
-
-        .spend-splash-badge svg {
-          width: 34px;
-          height: 34px;
-          stroke: #ffffff;
-          stroke-width: 4.8;
-          stroke-linecap: round;
-          stroke-linejoin: round;
-          fill: none;
-          transform: translate3d(0, 0, 0);
-          filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
-          animation: splash-arrow-entrance 720ms cubic-bezier(0.16, 1, 0.3, 1) 120ms both;
-        }
-
-        /* Subtle Badge Halo Pulse on Entry */
-        .spend-splash-halo {
-          position: absolute;
-          inset: -6px;
-          border-radius: 24px;
-          background: rgba(58, 163, 118, 0.25);
-          filter: blur(8px);
-          pointer-events: none;
-          animation: splash-halo-pulse 900ms cubic-bezier(0.16, 1, 0.3, 1) 100ms both;
-        }
-
-        /* Text & Counter Section */
-        .spend-splash-text-group {
-          display: flex;
-          flex-direction: column;
-          align-items: flex-start;
-          gap: 6px;
-        }
-
-        .spend-splash-label {
-          font-size: 15px;
-          font-weight: 600;
-          color: var(--mut, #626e66);
-          letter-spacing: -0.01em;
-          line-height: 1.25;
-          margin: 0;
-          opacity: 0;
-          transform: translate3d(0, 16px, 0);
-          animation: splash-fade-up 520ms cubic-bezier(0.2, 0.9, 0.28, 1) 220ms forwards;
-        }
-
-        :root[data-theme="dark"] .spend-splash-label,
-        html[data-theme="dark"] .spend-splash-label {
-          color: var(--mut, #aab4ae);
-        }
-
-        @media (prefers-color-scheme: dark) {
-          html:not([data-theme="light"]) .spend-splash-label {
-            color: var(--mut, #aab4ae);
-          }
-        }
-
-        .spend-splash-amount-row {
-          display: inline-flex;
-          align-items: baseline;
-          gap: 3px;
-          font-size: clamp(48px, 13vw, 58px);
-          font-weight: 800;
-          color: var(--ink, #18201b);
-          letter-spacing: -0.035em;
-          line-height: 1.05;
-          font-variant-numeric: tabular-nums;
-          opacity: 0;
-          transform: translate3d(0, 20px, 0);
-          animation: splash-fade-up 560ms cubic-bezier(0.16, 1, 0.3, 1) 320ms forwards;
-        }
-
-        :root[data-theme="dark"] .spend-splash-amount-row,
-        html[data-theme="dark"] .spend-splash-amount-row {
-          color: var(--ink, #f0f3f1);
-        }
-
-        @media (prefers-color-scheme: dark) {
-          html:not([data-theme="light"]) .spend-splash-amount-row {
-            color: var(--ink, #f0f3f1);
-          }
-        }
-
-        .spend-splash-currency {
-          font-size: 0.88em;
-          font-weight: 750;
-          margin-right: 1px;
-          opacity: 0.95;
-        }
-
-        .spend-splash-digits {
-          display: inline-block;
-          font-variant-numeric: tabular-nums;
-        }
-
-        /* Bottom Brand Signature */
-        .spend-splash-footer {
-          position: absolute;
-          bottom: calc(28px + env(safe-area-inset-bottom, 0px));
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          color: var(--mut, #626e66);
-          font-size: 11.5px;
-          font-weight: 650;
-          letter-spacing: 0.05em;
-          text-transform: uppercase;
-          opacity: 0;
-          animation: splash-fade-up 600ms ease 600ms forwards;
-        }
-
-        :root[data-theme="dark"] .spend-splash-footer,
-        html[data-theme="dark"] .spend-splash-footer {
-          color: var(--mut, #aab4ae);
-        }
-
-        @media (prefers-color-scheme: dark) {
-          html:not([data-theme="light"]) .spend-splash-footer {
-            color: var(--mut, #aab4ae);
-          }
-        }
-
-        .spend-splash-footer-dot {
-          width: 4px;
-          height: 4px;
-          border-radius: 50%;
-          background: #39785d;
-        }
-
-        /* Exit Morph Transition Phase */
-        .spend-splash-overlay.is-exiting {
-          opacity: 0;
-          transform: scale(1.04) translate3d(0, -8px, 0);
-          filter: blur(8px);
-          pointer-events: none;
-        }
-
-        .spend-splash-overlay.is-exiting .spend-splash-badge {
-          transform: scale(0.92);
-          transition: transform 380ms cubic-bezier(0.4, 0, 0.8, 1);
-        }
-
-        @keyframes splash-icon-spring {
-          0% {
-            opacity: 0;
-            transform: scale(0.45) translate3d(0, 18px, 0);
-          }
-          65% {
-            opacity: 1;
-            transform: scale(1.06) translate3d(0, -3px, 0);
-          }
-          100% {
-            opacity: 1;
-            transform: scale(1) translate3d(0, 0, 0);
-          }
-        }
-
-        @keyframes splash-arrow-entrance {
-          0% {
-            opacity: 0;
-            transform: translate3d(-6px, 6px, 0) scale(0.85);
-          }
-          100% {
-            opacity: 1;
-            transform: translate3d(0, 0, 0) scale(1);
-          }
-        }
-
-        @keyframes splash-halo-pulse {
-          0% {
-            opacity: 0;
-            transform: scale(0.7);
-          }
-          50% {
-            opacity: 0.85;
-            transform: scale(1.18);
-          }
-          100% {
-            opacity: 0;
-            transform: scale(1.4);
-          }
-        }
-
-        @keyframes splash-fade-up {
-          0% {
-            opacity: 0;
-            transform: translate3d(0, 16px, 0);
-          }
-          100% {
-            opacity: 1;
-            transform: translate3d(0, 0, 0);
-          }
-        }
-
-        @keyframes splash-ambient-pulse {
-          0% {
-            opacity: 0.7;
-            transform: scale(0.92) translate3d(0, -20px, 0);
-          }
-          100% {
-            opacity: 1;
-            transform: scale(1.08) translate3d(0, -10px, 0);
-          }
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-          .spend-splash-overlay {
-            transition: opacity 220ms ease !important;
-            transform: none !important;
-            filter: none !important;
-          }
-          .spend-splash-overlay.is-exiting {
-            transform: none !important;
-            filter: none !important;
-          }
-          .spend-splash-icon-wrapper,
-          .spend-splash-badge,
-          .spend-splash-badge svg,
-          .spend-splash-halo,
-          .spend-splash-label,
-          .spend-splash-amount-row,
-          .spend-splash-ambient,
-          .spend-splash-footer {
-            animation: none !important;
-            opacity: 1 !important;
-            transform: none !important;
-          }
-        }
+        .sp-word span { display: inline-block; opacity: 0; }
       `}</style>
-      <aside
-        className={`spend-splash-overlay${isExiting ? " is-exiting" : ""}`}
-        onClick={handleDismiss}
-        aria-label="Spend is opening. Tap anywhere to skip."
-        role="dialog"
-        aria-modal="true"
-      >
-        <div className="spend-splash-ambient" aria-hidden="true" />
-
-        <div className="spend-splash-content">
-          <div className="spend-splash-icon-wrapper">
-            <div className="spend-splash-halo" aria-hidden="true" />
-            <div className="spend-splash-badge">
-              <div className="spend-splash-badge-sheen" aria-hidden="true" />
-              <svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">
-                <path d="M22 43 43 22M28 22h15v15" />
+      <div id="spend-splash" ref={rootRef} role="img" aria-label="Spend">
+        <div className="sp-stage">
+          <div className="sp-lockup">
+            <div className="sp-tile">
+              <svg viewBox="0 0 64 64" aria-hidden="true">
+                <path className="sp-draw sp-shaft" pathLength="1" d="M22 43 43 22" />
+                <path className="sp-draw sp-arm" pathLength="1" d="M43 22H28" />
+                <path className="sp-draw sp-arm" pathLength="1" d="M43 22V37" />
               </svg>
             </div>
-          </div>
-
-          <div className="spend-splash-text-group">
-            <p className="spend-splash-label">Spent this month</p>
-            <div className="spend-splash-amount-row" aria-live="polite">
-              <span className="spend-splash-currency">{currencySymbol}</span>
-              <span className="spend-splash-digits">{formattedDigits}</span>
+            <div className="sp-word" aria-hidden="true">
+              <span>s</span>
+              <span>p</span>
+              <span>e</span>
+              <span>n</span>
+              <span>d</span>
             </div>
           </div>
         </div>
-
-        <div className="spend-splash-footer" aria-hidden="true">
-          <span>Spend</span>
-          <span className="spend-splash-footer-dot" />
-          <span>Private &amp; Offline</span>
-        </div>
-      </aside>
+      </div>
     </>
   );
 }

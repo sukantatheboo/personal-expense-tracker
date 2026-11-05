@@ -13,7 +13,18 @@ if (import.meta.env.PROD && "serviceWorker" in navigator) {
     .register(`${import.meta.env.BASE_URL}sw.js`, {
       scope: import.meta.env.BASE_URL,
     })
+    .then((registration) => {
+      registration.update();
+    })
     .catch((error) => {
       console.error("Service worker registration failed:", error);
     });
+
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!refreshing) {
+      refreshing = true;
+      window.location.reload();
+    }
+  });
 }

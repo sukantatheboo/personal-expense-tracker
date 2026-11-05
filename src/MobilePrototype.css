@@ -5272,7 +5272,7 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
 .mobile-prototype .card-info-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 9999;
+  z-index: 9990;
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -6765,7 +6765,7 @@ html[data-theme="dark"] .mobile-prototype .card-options-bar-btn.is-primary-card 
 .mobile-prototype .app-lock-overlay {
   position: fixed;
   inset: 0;
-  z-index: 9999;
+  z-index: 9990;
   display: flex;
   flex-direction: column;
   align-items: center;
