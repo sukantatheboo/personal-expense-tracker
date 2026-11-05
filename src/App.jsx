@@ -3986,7 +3986,14 @@ export default function App() {
 
   return (
     <>
-      {!ready && <SpendSplash once onDone={() => setReady(true)} />}
+      {!ready && (
+        <SpendSplash
+          once
+          onDone={() => setReady(true)}
+          totalSpent={monthlyTotal}
+          currencySymbol={PRIMARY_CURRENCY === "BDT" ? "৳" : "$"}
+        />
+      )}
       <MobilePrototype
         S={mobilePrototypeData}
         onShift={addMonth}
