@@ -4818,6 +4818,10 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
             >
               Add Card
             </button>
+
+            <p className="add-card-safe-disclaimer">
+              🔒 <b>Privacy Notice:</b> Spend is a client-side personal expense tracker. Data is stored on your device. Never enter real CVV, PIN, or full card credentials.
+            </p>
           </div>
         </div>
       )}
