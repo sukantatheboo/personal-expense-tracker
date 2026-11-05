@@ -283,8 +283,13 @@ const fM = (m) => {
   });
 };
 const fD = (d) => {
-  const [y, m, x] = d.split("-").map(Number);
-  return new Date(y, m - 1, x).toLocaleDateString("en-GB", {
+  if (!d || typeof d !== "string") return "";
+  const parts = d.split("-").map(Number);
+  if (parts.length < 3 || parts.some(isNaN)) return String(d);
+  const [y, m, x] = parts;
+  const dateObj = new Date(y, m - 1, x);
+  if (isNaN(dateObj.getTime())) return String(d);
+  return dateObj.toLocaleDateString("en-GB", {
     weekday: "short",
     day: "numeric",
     month: "short",
@@ -299,6 +304,7 @@ const capitalizeFirstLetter = (value) => {
   return characters.join("");
 };
 const activityTime = (item) => {
+  if (!item) return 0;
   const parse = (value) => {
     if (typeof value === "number" && Number.isFinite(value)) return value;
     if (typeof value === "string") {
@@ -311,18 +317,18 @@ const activityTime = (item) => {
 };
 
 const tot = (S, m) =>
-  S.exp
-    .filter((e) => e.date.startsWith(m) && e.amt != null)
+  (S?.exp || [])
+    .filter((e) => typeof e?.date === "string" && e.date.startsWith(m) && e.amt != null)
     .reduce((a, e) => a + e.amt, 0);
 const monthExp = (S) =>
   (S?.exp || [])
-    .filter((e) => e.date.startsWith(S.m))
+    .filter((e) => typeof e?.date === "string" && e.date.startsWith(S?.m || ""))
     .map((e, index) => ({ e, index }))
     .sort((x, y) => {
       const a = x.e;
       const b = y.e;
       return (
-        b.date.localeCompare(a.date) ||
+        String(b.date || "").localeCompare(String(a.date || "")) ||
         activityTime(b) - activityTime(a) ||
         y.index - x.index ||
         String(b.id || "").localeCompare(String(a.id || ""))
@@ -469,7 +475,7 @@ const MonthSwitch = ({ m, onShift }) => (
   </div>
 );
 
-function suggestedCategory(description, expenses = []) {
+function suggestedCategory(description, expenses = [], excludeId = null) {
   const title = String(description || "")
     .trim()
     .toLocaleLowerCase();
@@ -520,7 +526,7 @@ function suggestedCategory(description, expenses = []) {
   );
   let best = { score: 0, category: "" };
   for (const expense of expenses) {
-    if (expense.cat === "Savings") continue;
+    if (!expense || expense.id === excludeId || expense.cat === "Savings") continue;
     const pastWords = new Set(
       String(expense.desc || "")
         .toLocaleLowerCase()
@@ -541,10 +547,20 @@ function ExpenseRow({
   onDelete,
   onSkip,
   onDuplicate,
+  onOpenTransaction,
+  onDeleteTransaction,
   suggestion = "",
   isNew = false,
 }) {
-  const [, c] = CAT[e.cat];
+  const isTx = e?.sourceType === "tx";
+  const [, c] = CAT[e?.cat] || CAT.Other || ["", "#64748b"];
+  const txColors = {
+    income: "#10b981",
+    transfer: "#2563eb",
+    adjust: "#8b5cf6",
+    adjustment: "#8b5cf6",
+  };
+  const iconColor = isTx ? txColors[e?.type] || "#8b5cf6" : c;
   const pointerRef = useRef(null);
   const rowRef = useRef(null);
   const shellRef = useRef(null);
@@ -581,7 +597,13 @@ function ExpenseRow({
   // Senior Native Dev Swipe-to-Delete Pipeline
   const executeDeleteAnimation = useCallback(
     (commitAction) => {
-      const commit = commitAction || (e.rec && onSkip ? onSkip : onDelete);
+      const commit =
+        commitAction ||
+        (isTx
+          ? onDeleteTransaction || onDelete
+          : e.rec && onSkip
+            ? onSkip
+            : onDelete);
       if (!commit) return;
 
       if (dragFrameRef.current) {
@@ -612,7 +634,7 @@ function ExpenseRow({
         }, 220);
       }, 190);
     },
-    [e.id, e.rec, onDelete, onSkip],
+    [e.id, e.rec, isTx, onDelete, onDeleteTransaction, onSkip],
   );
 
   useEffect(
@@ -662,6 +684,10 @@ function ExpenseRow({
       dragFrameRef.current = null;
     }
 
+    if (rowRef.current) {
+      rowRef.current.style.transition = "none";
+    }
+
     const initialOffset = swipeRef.current.offset;
     const width = rowRef.current?.offsetWidth || 320;
 
@@ -683,7 +709,7 @@ function ExpenseRow({
     };
     suppressClickRef.current = false;
 
-    if (event.pointerType === "touch" && onDuplicate) {
+    if (onDuplicate && !isTx) {
       holdTimerRef.current = setTimeout(() => {
         const gesture = pointerRef.current;
         if (!gesture || gesture.moved) return;
@@ -858,19 +884,37 @@ function ExpenseRow({
     }
   };
 
-  const isPositive =
-    e.type === "income" || e.type === "refund" || Boolean(e.refund);
+  const isPositive = isTx
+    ? e.type === "income" ||
+      ((e.type === "adjust" || e.type === "adjustment") &&
+        (e.dir === "up" || e.direction === "increase"))
+    : e.type === "income" || e.type === "refund" || Boolean(e.refund);
+
+  const isNeutral = isTx ? e.type === "transfer" : e.cat === "Savings";
   const amountClass = isPositive
     ? "am is-positive"
-    : e.cat === "Savings"
+    : isNeutral
       ? "am is-neutral"
       : "am";
-  const amountPrefix = isPositive ? "+" : "";
+  const amountPrefix = isPositive ? "+" : isNeutral ? "" : "−";
+
+  const title = isTx
+    ? e.note ||
+      e.title ||
+      (e.type === "income"
+        ? "Income"
+        : e.type === "transfer"
+          ? "Transfer"
+          : "Adjustment")
+    : e.desc || "Untitled expense";
+
   const gestureHint =
-    onDelete && onDuplicate
+    onDelete && (onDuplicate || isTx)
       ? e.rec
         ? "Tap to edit, swipe left to skip this occurrence, or press and hold to duplicate."
-        : "Tap to edit, swipe left to delete, or press and hold to duplicate."
+        : isTx
+          ? "Tap to edit or swipe left to delete."
+          : "Tap to edit, swipe left to delete, or press and hold to duplicate."
       : "Tap to edit.";
 
   const rowClasses = [
@@ -895,13 +939,30 @@ function ExpenseRow({
           ? { transform: `translate3d(${swipe.offset}px, 0, 0)` }
           : undefined
       }
-      aria-label={`${e.desc}, ${M(e.amt || 0)}${e.cat === "Savings" ? ", savings transfer" : ""}. ${gestureHint}`}
+      aria-label={
+        isTx
+          ? `${title}, ${amountPrefix}${M(e?.amt || 0)}. ${gestureHint}`
+          : `${e?.desc || "Untitled expense"}, ${e?.amt != null ? M(e.amt) : "No amount"}${e?.cat === "Savings" ? ", savings transfer" : ""}. ${gestureHint}`
+      }
       onPointerDown={startGesture}
       onPointerMove={moveGesture}
       onPointerUp={endGesture}
       onPointerCancel={endGesture}
       onLostPointerCapture={endGesture}
       onContextMenu={(event) => event.preventDefault()}
+      onKeyDown={(event) => {
+        if (event.key === "Delete" || event.key === "Backspace") {
+          if (onDelete) {
+            event.preventDefault();
+            executeDeleteAnimation();
+          }
+        } else if (event.key === "d" || event.key === "D") {
+          if (onDuplicate && !isTx && !event.metaKey && !event.ctrlKey) {
+            event.preventDefault();
+            onDuplicate(e);
+          }
+        }
+      }}
       onClick={() => {
         if (suppressClickRef.current) {
           suppressClickRef.current = false;
@@ -917,24 +978,45 @@ function ExpenseRow({
           }
           return;
         }
-        onOpen(e.id);
+        if (isTx) {
+          if (onOpenTransaction) onOpenTransaction(e.id);
+          else onOpen?.(e.id);
+        } else {
+          onOpen?.(e.id);
+        }
       }}
     >
-      <i className="ic" style={{ "--c": c }}>
-        <CategorySymbol category={e.cat} />
+      <i className="ic" style={{ "--c": iconColor }}>
+        {isTx ? (
+          <TransactionSymbol type={e.type} />
+        ) : (
+          <CategorySymbol category={e.cat} />
+        )}
       </i>
       <span className="nm">
-        <b>{e.desc}</b>
+        <b>{title}</b>
         <small>
-          {e.cat}
-          {e.acct ? " · " + getAccountDisplay(e.acct, cards)[0] : ""}
-          {e.rec ? " · Recurring" : ""}
-          {suggestion && suggestion !== e.cat ? (
-            <span className="category-suggestion-inline">
-              <span> · Suggested:</span>
-              <CategorySuggestionValue category={suggestion} />
-            </span>
-          ) : null}
+          {isTx ? (
+            e.type === "transfer" ? (
+              `Transfer · ${getAccountDisplay(e.from || e.acct, cards)[0]} → ${getAccountDisplay(e.to, cards)[0]}`
+            ) : e.type === "income" ? (
+              `Income · ${getAccountDisplay(e.acct, cards)[0]}`
+            ) : (
+              `${e.dir === "up" || e.direction === "increase" ? "Balance increased" : "Balance decreased"} · ${getAccountDisplay(e.acct, cards)[0]}`
+            )
+          ) : (
+            <>
+              {e.cat}
+              {e.acct ? " · " + getAccountDisplay(e.acct, cards)[0] : ""}
+              {e.rec ? " · Recurring" : ""}
+              {suggestion && suggestion !== e.cat ? (
+                <span className="category-suggestion-inline">
+                  <span> · Suggested:</span>
+                  <CategorySuggestionValue category={suggestion} />
+                </span>
+              ) : null}
+            </>
+          )}
         </small>
       </span>
       {e.amt == null ? (
@@ -948,7 +1030,7 @@ function ExpenseRow({
     </button>
   );
 
-  if (!onDelete) return row;
+  if (!onDelete && !onDeleteTransaction) return row;
 
   return (
     <div
@@ -960,7 +1042,7 @@ function ExpenseRow({
         className={`expense-swipe-delete is-right${e.rec ? " is-skip" : ""}`}
         type="button"
         aria-label={
-          e.rec ? `Skip ${e.desc} for this occurrence` : `Delete ${e.desc}`
+          e.rec ? `Skip ${title} for this occurrence` : `Delete ${title}`
         }
         onClick={(event) => {
           event.stopPropagation();
@@ -1782,16 +1864,229 @@ function Activity({
   onDelete,
   onSkip,
   onDuplicate,
+  onOpenTransaction,
+  onDeleteTransaction,
   searchRef,
   highlightedExpenseId,
+  highlightedTransactionId,
 }) {
-  const l = monthExp(S).filter(
-    (e) =>
-      (!cf || e.cat === cf) &&
-      (!q || e.desc.toLowerCase().includes(q.toLowerCase())),
-  );
+  const [feedType, setFeedType] = useState("all"); // "all" | "expenses" | "income" | "transfers"
+  const [quickFilter, setQuickFilter] = useState(""); // "" | "needs-amount" | "recurring" | "cash" | "high-value"
+
+  // Automatically switch to expenses if user selected a category filter
+  useEffect(() => {
+    if (cf && feedType !== "all" && feedType !== "expenses") {
+      setFeedType("expenses");
+    }
+  }, [cf, feedType]);
+
+  const query = String(q || "").trim().toLowerCase();
+
+  // 1. Month Expenses
+  const monthExpenses = useMemo(() => {
+    return (S?.exp || [])
+      .filter((e) => typeof e?.date === "string" && e.date.startsWith(S?.m || ""))
+      .map((e, index) => ({
+        ...e,
+        sourceType: "expense",
+        index,
+      }));
+  }, [S?.exp, S?.m]);
+
+  // 2. Month Transactions (Income, Transfers, Adjustments)
+  const monthTransactions = useMemo(() => {
+    return (S?.tx || [])
+      .filter((t) => typeof t?.date === "string" && t.date.startsWith(S?.m || ""))
+      .map((t, index) => ({
+        ...t,
+        sourceType: "tx",
+        desc:
+          t.note ||
+          (t.type === "income"
+            ? "Income"
+            : t.type === "transfer"
+              ? "Transfer"
+              : "Balance adjustment"),
+        title:
+          t.note ||
+          (t.type === "income"
+            ? "Income"
+            : t.type === "transfer"
+              ? "Transfer"
+              : "Balance adjustment"),
+        amt: t.amt,
+        amount: t.amt,
+        index,
+      }));
+  }, [S?.tx, S?.m]);
+
+  // 3. Combined & Sorted Unified Feed
+  const allMonthItems = useMemo(() => {
+    return [...monthExpenses, ...monthTransactions].sort((x, y) => {
+      return (
+        String(y.date || "").localeCompare(String(x.date || "")) ||
+        activityTime(y) - activityTime(x) ||
+        y.index - x.index ||
+        String(y.id || "").localeCompare(String(x.id || ""))
+      );
+    });
+  }, [monthExpenses, monthTransactions]);
+
+  // Counts for Segmented Tabs
+  const countExpenses = monthExpenses.length;
+  const countIncome = monthTransactions.filter((t) => t.type === "income").length;
+  const countTransfers = monthTransactions.filter(
+    (t) =>
+      t.type === "transfer" || t.type === "adjust" || t.type === "adjustment",
+  ).length;
+  const countAll = monthExpenses.length + monthTransactions.length;
+
+  // Counts for Quick Filter Badges
+  const needsAmountCount = monthExpenses.filter((e) => e.amt == null).length;
+  const recurringCount = monthExpenses.filter((e) => Boolean(e.rec)).length;
+  const cashCount = allMonthItems.filter((item) => {
+    if (item.sourceType === "expense") return !item.acct || item.acct === "cash";
+    if (item.type === "transfer")
+      return item.from === "cash" || item.to === "cash" || item.acct === "cash";
+    return item.acct === "cash";
+  }).length;
+  const highValueCount = allMonthItems.filter(
+    (item) => Number(item.amt || 0) >= 1000,
+  ).length;
+
+  // Filtered List
+  const filteredItems = useMemo(() => {
+    return allMonthItems.filter((item) => {
+      // 1. Feed Type Filter
+      if (feedType === "expenses" && item.sourceType !== "expense") return false;
+      if (
+        feedType === "income" &&
+        (item.sourceType !== "tx" || item.type !== "income")
+      )
+        return false;
+      if (
+        feedType === "transfers" &&
+        (item.sourceType !== "tx" ||
+          (item.type !== "transfer" &&
+            item.type !== "adjust" &&
+            item.type !== "adjustment"))
+      )
+        return false;
+
+      // 2. Category Filter (applicable to expenses)
+      if (cf && (item.sourceType !== "expense" || item.cat !== cf)) return false;
+
+      // 3. Quick Filter Pills
+      if (
+        quickFilter === "needs-amount" &&
+        (item.sourceType !== "expense" || item.amt != null)
+      )
+        return false;
+      if (
+        quickFilter === "recurring" &&
+        (item.sourceType !== "expense" || !item.rec)
+      )
+        return false;
+      if (quickFilter === "cash") {
+        if (item.sourceType === "expense") {
+          if (item.acct && item.acct !== "cash") return false;
+        } else if (item.sourceType === "tx") {
+          if (item.type === "transfer") {
+            if (
+              item.from !== "cash" &&
+              item.to !== "cash" &&
+              item.acct !== "cash"
+            )
+              return false;
+          } else {
+            if (item.acct !== "cash") return false;
+          }
+        }
+      }
+      if (quickFilter === "high-value" && Number(item.amt || 0) < 1000)
+        return false;
+
+      // 4. Search Query
+      if (!query) return true;
+      const desc = String(
+        item.desc || item.title || item.note || "",
+      ).toLowerCase();
+      const cat = String(item.cat || "").toLowerCase();
+      const amtStr = item.amt != null ? String(item.amt) : "";
+      const [accountName] = getAccountDisplay(item.acct || item.from, S?.cards);
+      const acctStr = String(accountName || "").toLowerCase();
+      const [toAccountName] = item.to
+        ? getAccountDisplay(item.to, S?.cards)
+        : [""];
+      const toAcctStr = String(toAccountName || "").toLowerCase();
+      const isCash =
+        item.sourceType === "expense"
+          ? !item.acct || item.acct === "cash"
+          : item.type === "transfer"
+            ? item.from === "cash" || item.to === "cash" || item.acct === "cash"
+            : item.acct === "cash";
+      return (
+        desc.includes(query) ||
+        cat.includes(query) ||
+        amtStr.includes(query) ||
+        acctStr.includes(query) ||
+        toAcctStr.includes(query) ||
+        (isCash && "cash".includes(query)) ||
+        (item.type && String(item.type).toLowerCase().includes(query))
+      );
+    });
+  }, [allMonthItems, feedType, cf, quickFilter, query, S?.cards]);
+
+  // Day grouping
   const g = {};
-  l.forEach((e) => (g[e.date] = g[e.date] || []).push(e));
+  filteredItems.forEach((item) => {
+    const key = item.date || item.d || "";
+    (g[key] = g[key] || []).push(item);
+  });
+  const sortedDates = Object.keys(g).sort((a, b) => b.localeCompare(a));
+
+  // Totals for filter summary
+  const totalExpenses = filteredItems
+    .filter((item) => item.sourceType === "expense" || item.type === "expense")
+    .reduce((sum, item) => sum + (item.amt || 0), 0);
+  const totalIncome = filteredItems
+    .filter((item) => item.type === "income")
+    .reduce((sum, item) => sum + (item.amt || 0), 0);
+  const totalTransfers = filteredItems
+    .filter(
+      (item) =>
+        item.type === "transfer" ||
+        item.type === "adjust" ||
+        item.type === "adjustment",
+    )
+    .reduce((sum, item) => sum + (item.amt || 0), 0);
+
+  const hasFilter =
+    feedType !== "all" || Boolean(quickFilter) || Boolean(cf) || Boolean(query);
+
+  const clearAllFilters = () => {
+    triggerHaptic("light");
+    setFeedType("all");
+    setQuickFilter("");
+    setCf("");
+    setQ("");
+  };
+
+  const matchesInOtherMonths =
+    query && !filteredItems.length
+      ? [...(S?.exp || []), ...(S?.tx || [])].some((item) => {
+          const desc = String(
+            item.desc || item.title || item.note || item.description || "",
+          ).toLowerCase();
+          const cat = String(item.cat || "").toLowerCase();
+          const [acct] = getAccountDisplay(item.acct || item.from, S?.cards);
+          return (
+            desc.includes(query) ||
+            cat.includes(query) ||
+            String(acct || "").toLowerCase().includes(query)
+          );
+        })
+      : false;
 
   return (
     <>
@@ -1799,41 +2094,267 @@ function Activity({
         <Icon n="s" />
         <input
           ref={searchRef}
-          placeholder="Search expenses"
+          type="search"
+          aria-label="Search expenses"
+          placeholder="Search activity, categories, or accounts"
           value={q}
           onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              setQ("");
+              e.currentTarget.blur();
+            }
+          }}
         />
+        {q && (
+          <button
+            type="button"
+            className="srch-clear-btn"
+            aria-label="Clear search"
+            onClick={(e) => {
+              e.preventDefault();
+              setQ("");
+              searchRef?.current?.focus();
+            }}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="16"
+              height="16"
+              stroke="currentColor"
+              strokeWidth="2.4"
+              fill="none"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        )}
       </label>
-      <div className="chips" data-dock-scroll-lock>
-        <button className={cf ? "" : "on"} onClick={() => setCf("")}>
+
+      {/* 1. Unified Feed Type Segmented Control */}
+      <div className="seg activity-type-seg" role="tablist" aria-label="Activity type">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={feedType === "all"}
+          className={feedType === "all" ? "on" : ""}
+          onClick={() => {
+            triggerHaptic("selection");
+            setFeedType("all");
+          }}
+        >
+          <span>All</span>
+          {countAll > 0 && <span className="chip-badge">{countAll}</span>}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={feedType === "expenses"}
+          className={feedType === "expenses" ? "on" : ""}
+          onClick={() => {
+            triggerHaptic("selection");
+            setFeedType("expenses");
+          }}
+        >
+          <span>Expenses</span>
+          {countExpenses > 0 && <span className="chip-badge">{countExpenses}</span>}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={feedType === "income"}
+          className={feedType === "income" ? "on" : ""}
+          onClick={() => {
+            triggerHaptic("selection");
+            setFeedType("income");
+            setCf("");
+          }}
+        >
+          <span>Income</span>
+          {countIncome > 0 && <span className="chip-badge">{countIncome}</span>}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={feedType === "transfers"}
+          className={feedType === "transfers" ? "on" : ""}
+          onClick={() => {
+            triggerHaptic("selection");
+            setFeedType("transfers");
+            setCf("");
+          }}
+        >
+          <span>Transfers</span>
+          {countTransfers > 0 && <span className="chip-badge">{countTransfers}</span>}
+        </button>
+      </div>
+
+      {/* 2. Quick Filter Pills Bar */}
+      <div className="chips" data-dock-scroll-lock role="toolbar" aria-label="Activity filter chips">
+        <button
+          type="button"
+          className={!cf && !quickFilter ? "on" : ""}
+          aria-pressed={!cf && !quickFilter}
+          onClick={() => {
+            triggerHaptic("selection");
+            setQuickFilter("");
+            setCf("");
+          }}
+        >
           All
         </button>
-        {Object.keys(CAT).map((c) => (
-          <button
-            key={c}
-            className={cf === c ? "on" : ""}
-            onClick={() => setCf(c)}
-          >
-            <CategorySymbol category={c} />
-            <span>{c}</span>
-          </button>
-        ))}
+
+        {(feedType === "all" || feedType === "expenses") && (
+          <>
+            <button
+              type="button"
+              className={quickFilter === "needs-amount" ? "on" : ""}
+              aria-pressed={quickFilter === "needs-amount"}
+              onClick={() => {
+                triggerHaptic("selection");
+                setQuickFilter(quickFilter === "needs-amount" ? "" : "needs-amount");
+                setCf("");
+              }}
+            >
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+              <span>Needs amount</span>
+              {needsAmountCount > 0 && <span className="chip-badge">{needsAmountCount}</span>}
+            </button>
+
+            <button
+              type="button"
+              className={quickFilter === "recurring" ? "on" : ""}
+              aria-pressed={quickFilter === "recurring"}
+              onClick={() => {
+                triggerHaptic("selection");
+                setQuickFilter(quickFilter === "recurring" ? "" : "recurring");
+                setCf("");
+              }}
+            >
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+              </svg>
+              <span>Recurring</span>
+              {recurringCount > 0 && <span className="chip-badge">{recurringCount}</span>}
+            </button>
+          </>
+        )}
+
+        <button
+          type="button"
+          className={quickFilter === "cash" ? "on" : ""}
+          aria-pressed={quickFilter === "cash"}
+          onClick={() => {
+            triggerHaptic("selection");
+            setQuickFilter(quickFilter === "cash" ? "" : "cash");
+            setCf("");
+          }}
+        >
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect width="20" height="12" x="2" y="6" rx="2" />
+            <circle cx="12" cy="12" r="2" />
+          </svg>
+          <span>Cash only</span>
+          {cashCount > 0 && <span className="chip-badge">{cashCount}</span>}
+        </button>
+
+        <button
+          type="button"
+          className={quickFilter === "high-value" ? "on" : ""}
+          aria-pressed={quickFilter === "high-value"}
+          onClick={() => {
+            triggerHaptic("selection");
+            setQuickFilter(quickFilter === "high-value" ? "" : "high-value");
+            setCf("");
+          }}
+        >
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+          </svg>
+          <span>≥ ৳1,000</span>
+          {highValueCount > 0 && (
+            <span className="chip-badge">{highValueCount}</span>
+          )}
+        </button>
+
+        {(feedType === "all" || feedType === "expenses") && (
+          <>
+            <span className="chips-divider" aria-hidden="true" />
+            {Object.keys(CAT).map((c) => (
+              <button
+                key={c}
+                type="button"
+                className={cf === c ? "on" : ""}
+                aria-pressed={cf === c}
+                onClick={() => {
+                  triggerHaptic("selection");
+                  setCf(cf === c ? "" : c);
+                  setQuickFilter("");
+                }}
+              >
+                <CategorySymbol category={c} />
+                <span>{c}</span>
+              </button>
+            ))}
+          </>
+        )}
       </div>
-      {cf && (
+
+      {/* 3. Filter Summary Banner */}
+      {hasFilter && (
         <div className="activity-filter-summary" role="status">
-          <b>{cf}</b>
+          {feedType !== "all" && (
+            <b>{feedType.charAt(0).toUpperCase() + feedType.slice(1)}</b>
+          )}
+          {feedType !== "all" && (quickFilter || cf || query) && <span>·</span>}
+          {quickFilter === "needs-amount" && <b>Needs amount</b>}
+          {quickFilter === "recurring" && <b>Recurring</b>}
+          {quickFilter === "cash" && <b>Cash only</b>}
+          {quickFilter === "high-value" && <b>≥ ৳1,000</b>}
+          {quickFilter && (cf || query) && <span>·</span>}
+          {cf && <b>{cf}</b>}
+          {cf && query && <span>·</span>}
+          {query && <span>&ldquo;{query}&rdquo;</span>}
           <span>·</span>
-          <strong>
-            {M(l.reduce((sum, expense) => sum + (expense.amt || 0), 0))}
-          </strong>
+          {feedType === "income" ? (
+            <strong className="is-positive">+{M(totalIncome)}</strong>
+          ) : feedType === "transfers" ? (
+            <strong>{M(totalTransfers)}</strong>
+          ) : totalIncome > 0 && totalExpenses > 0 ? (
+            <>
+              <strong>{M(totalExpenses)}</strong>
+              <span>·</span>
+              <strong className="is-positive">+{M(totalIncome)}</strong>
+            </>
+          ) : (
+            <strong>{M(totalExpenses || totalIncome || totalTransfers)}</strong>
+          )}
           <span>·</span>
           <span>
-            {l.length} {l.length === 1 ? "item" : "items"}
+            {filteredItems.length} {filteredItems.length === 1 ? "item" : "items"}
           </span>
+          <button
+            type="button"
+            className="activity-filter-clear-link"
+            onClick={clearAllFilters}
+            aria-label="Clear all filters"
+          >
+            Clear
+          </button>
         </div>
       )}
+
+      {/* 4. Activity List */}
       <div>
-        {!l.length ? (
+        {!filteredItems.length ? (
           <div className="emp-illustrated">
             <div className="emp-illustrated-icon">
               <svg
@@ -1869,59 +2390,96 @@ function Activity({
                 />
               </svg>
             </div>
-            <b>{q || cf ? "No matching expenses" : "No activity recorded"}</b>
+            <b>
+              {hasFilter
+                ? `No matching ${feedType === "income" ? "income" : feedType === "transfers" ? "transfers" : "activity"}`
+                : countAll === 0
+                  ? `No activity in ${fM(S.m)}`
+                  : `No ${feedType} in ${fM(S.m)}`}
+            </b>
             <small>
-              {q || cf
-                ? "Try searching another keyword or clearing your category filter."
-                : "Your expenses will show up here by date."}
+              {hasFilter
+                ? matchesInOtherMonths
+                  ? `No matches in ${fM(S.m)}. Matching items found in other months — switch months above to view them.`
+                  : "Try searching another keyword or clearing your filter."
+                : `${feedType === "income" ? "Income" : feedType === "transfers" ? "Transfers and adjustments" : "Activity"} for this month will show up here by date.`}
             </small>
-            {(q || cf) && (
+            {hasFilter && (
               <button
                 type="button"
                 className="emp-action-pill"
-                onClick={() => {
-                  setQ("");
-                  setCf("");
-                }}
+                onClick={clearAllFilters}
               >
                 Clear filter
               </button>
             )}
           </div>
         ) : (
-          Object.keys(g)
-            .sort()
-            .reverse()
-            .map((d) => (
-              <Fragment key={d}>
+          sortedDates.map((d) => {
+            const dayExpenses = g[d] || [];
+            const dayExpenseSum = dayExpenses
+              .filter((e) => e.sourceType === "expense" || e.type === "expense")
+              .reduce((acc, e) => acc + (e.amt || 0), 0);
+            const dayIncomeSum = dayExpenses
+              .filter((e) => e.type === "income")
+              .reduce((acc, e) => acc + (e.amt || 0), 0);
+            const hasAmount = dayExpenses.some((e) => e.amt != null);
+            const dayLabel = !d
+              ? "Undated"
+              : d === ld()
+                ? "Today"
+                : d === ago(1)
+                  ? "Yesterday"
+                  : fD(d);
+
+            return (
+              <Fragment key={d || "undated"}>
                 <div className="day">
-                  <span>
-                    {d === ld() ? "Today" : d === ago(1) ? "Yesterday" : fD(d)}
-                  </span>
-                  {g[d].length >= 2 && (
-                    <span>{M(g[d].reduce((a, e) => a + (e.amt || 0), 0))}</span>
+                  <span>{dayLabel}</span>
+                  {dayExpenses.length >= 2 && hasAmount && (
+                    <span>
+                      {feedType === "income" ? (
+                        <span className="is-positive">+{M(dayIncomeSum)}</span>
+                      ) : dayIncomeSum > 0 && dayExpenseSum > 0 ? (
+                        <>
+                          <span>-{M(dayExpenseSum)} </span>
+                          <span className="is-positive">(+{M(dayIncomeSum)})</span>
+                        </>
+                      ) : dayIncomeSum > 0 ? (
+                        <span className="is-positive">+{M(dayIncomeSum)}</span>
+                      ) : (
+                        <span>-{M(dayExpenseSum || dayExpenses.reduce((acc, e) => acc + (e.amt || 0), 0))}</span>
+                      )}
+                    </span>
                   )}
                 </div>
                 <div className="card expense-day-card">
-                  {g[d].map((e) => (
+                  {dayExpenses.map((e) => (
                     <ExpenseRow
-                      key={e.id}
+                      key={`${e.sourceType || "exp"}-${e.id}`}
                       e={e}
                       cards={S.cards}
                       onOpen={onOpen}
                       onDelete={onDelete}
                       onSkip={onSkip}
                       onDuplicate={onDuplicate}
-                      suggestion={suggestedCategory(
-                        e.desc,
-                        S.exp.filter((pastExpense) => pastExpense.id !== e.id),
-                      )}
-                      isNew={highlightedExpenseId === e.id}
+                      onOpenTransaction={onOpenTransaction}
+                      onDeleteTransaction={onDeleteTransaction}
+                      suggestion={
+                        e.sourceType !== "tx"
+                          ? suggestedCategory(e.desc, S.exp, e.id)
+                          : ""
+                      }
+                      isNew={
+                        highlightedExpenseId === e.id ||
+                        highlightedTransactionId === e.id
+                      }
                     />
                   ))}
                 </div>
               </Fragment>
-            ))
+            );
+          })
         )}
       </div>
     </>
@@ -6592,25 +7150,35 @@ export default function MobilePrototype({
     toast("Expense removed", undo);
   };
 
+  const deleteExpenseDirectly = (id) => {
+    const expense = S.exp.find((item) => item.id === id);
+    if (!expense) return;
+    const undo = onExpenseDelete(expense);
+    close();
+    triggerHaptic("delete");
+    toast("Expense removed", undo);
+  };
+
   const deleteExpense = (id) => {
     requestDeleteExpense(id);
   };
 
   const skipRecurringExpense = (id) => {
     const expense = S.exp.find((item) => item.id === id);
-    if (!expense?.rec) return requestDeleteExpense(id);
+    if (!expense?.rec) return deleteExpenseDirectly(id);
     const undo = onExpenseDelete(expense);
     close();
     triggerHaptic("warning");
     toast("Skipped this recurring occurrence", undo);
   };
   const duplicateExpense = (expense) => {
+    const targetDate = expense?.date || ld();
     const saved = onExpenseSave({
-      description: expense.desc,
-      amount: expense.amt,
-      category: expense.cat,
-      date: ld(),
-      account: expense.acct,
+      description: expense?.desc || "Expense",
+      amount: expense?.amt,
+      category: expense?.cat || "Other",
+      date: targetDate,
+      account: expense?.acct,
       interval: "none",
     });
     if (!saved) {
@@ -6632,11 +7200,16 @@ export default function MobilePrototype({
   const updateExpense = (id, form) => {
     const amountText = String(form.amt ?? "").trim();
     const amount = amountText ? Number(amountText) : null;
+    const isSavings = form.cat === "Savings";
     if (
       !form.desc.trim() ||
       !form.date ||
-      (amount !== null && (!Number.isFinite(amount) || amount <= 0))
+      (amount !== null && (!Number.isFinite(amount) || amount <= 0)) ||
+      (isSavings && (amount === null || amount <= 0))
     ) {
+      if (isSavings && (amount === null || amount <= 0)) {
+        return toast("Savings transfer requires an amount.");
+      }
       return toast("Check the description, amount, and date.");
     }
     if (
@@ -6937,11 +7510,14 @@ export default function MobilePrototype({
                 cf={cf}
                 setCf={setCf}
                 onOpen={openExpense}
-                onDelete={deleteExpense}
+                onDelete={deleteExpenseDirectly}
                 onSkip={skipRecurringExpense}
                 onDuplicate={duplicateExpense}
+                onOpenTransaction={openTransaction}
+                onDeleteTransaction={deleteTransaction}
                 searchRef={activitySearchRef}
                 highlightedExpenseId={highlightedExpenseId}
+                highlightedTransactionId={highlightedTransactionId}
               />
             )}
             {!appSettingsOpen && !profileSettingsOpen && tab === "accounts" && (
@@ -7111,6 +7687,7 @@ export default function MobilePrototype({
       )}
       {txDetail && (
         <AccountTxDetailSheet
+          key={txDetail.id}
           tx={txDetail}
           cards={cards}
           onSave={updateTransaction}
@@ -7120,11 +7697,9 @@ export default function MobilePrototype({
       )}
       {detail && (
         <DetailSheet
+          key={detail.id}
           e={detail}
-          suggestion={suggestedCategory(
-            detail.desc,
-            S.exp.filter((pastExpense) => pastExpense.id !== detail.id),
-          )}
+          suggestion={suggestedCategory(detail.desc, S.exp, detail.id)}
           cards={cards}
           onSave={updateExpense}
           onDelete={deleteExpense}

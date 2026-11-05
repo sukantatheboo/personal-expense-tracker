@@ -1921,6 +1921,26 @@ a:active,
   color: var(--ink);
   font-weight: 800;
 }
+.mobile-prototype .activity-filter-summary strong.is-positive,
+.mobile-prototype .day .is-positive {
+  color: var(--g, #10b981);
+}
+.mobile-prototype .activity-filter-clear-link {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  color: var(--g, #10b981);
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+  padding: 3px 8px;
+  border-radius: 8px;
+  transition: opacity 160ms ease, background-color 160ms ease;
+}
+.mobile-prototype .activity-filter-clear-link:hover,
+.mobile-prototype .activity-filter-clear-link:focus-visible {
+  background: color-mix(in srgb, var(--g, #10b981) 12%, transparent);
+}
 .mobile-prototype .srch {
   display: flex;
   align-items: center;
@@ -1957,6 +1977,33 @@ a:active,
 .mobile-prototype .srch input::placeholder {
   color: var(--mut);
   opacity: 1;
+}
+.mobile-prototype .srch input[type="search"]::-webkit-search-decoration,
+.mobile-prototype .srch input[type="search"]::-webkit-search-cancel-button,
+.mobile-prototype .srch input[type="search"]::-webkit-search-results-button,
+.mobile-prototype .srch input[type="search"]::-webkit-search-results-decoration {
+  display: none;
+}
+.mobile-prototype .srch-clear-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  padding: 6px;
+  margin-right: -4px;
+  color: var(--mut);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: color 150ms ease, background-color 150ms ease, transform 150ms ease;
+}
+.mobile-prototype .srch-clear-btn:hover,
+.mobile-prototype .srch-clear-btn:focus-visible {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+}
+.mobile-prototype .srch-clear-btn:active {
+  transform: scale(0.92);
 }
 .mobile-prototype .chips {
   display: flex;
@@ -2095,6 +2142,57 @@ a:active,
   font-size: 16px;
   color: var(--ink);
   min-width: 0;
+}
+.mobile-prototype .activity-type-seg {
+  margin: 10px 0 4px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+.mobile-prototype .activity-type-seg button {
+  padding: 8px 3px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--mut);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.mobile-prototype .activity-type-seg button.on {
+  color: var(--g);
+  background: var(--bg);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+:root[data-theme="dark"] .mobile-prototype .activity-type-seg button.on {
+  background: color-mix(in srgb, var(--card) 85%, #fff 15%);
+  color: #ffffff;
+}
+.mobile-prototype .chips-divider {
+  width: 1px;
+  height: 22px;
+  background: var(--line);
+  align-self: center;
+  flex-shrink: 0;
+  margin: 0 2px;
+}
+.mobile-prototype .chip-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 99px;
+  margin-left: 2px;
+  line-height: 1.2;
+}
+.mobile-prototype .chips button.on .chip-badge,
+.mobile-prototype .activity-type-seg button.on .chip-badge {
+  background: rgba(255, 255, 255, 0.35);
+  color: inherit;
 }
 /* ───────────── Account Picker Horizontal Chips ───────────── */
 .mobile-prototype .account-picker-container {
