@@ -43,6 +43,7 @@ import {
 import {
   setAppPin,
   verifyAppPin,
+  getPinLockoutRemainingSeconds,
   hasAppPin,
   removeAppPin,
   isBiometricsAvailable,
@@ -4708,6 +4709,12 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
                   placeholder="e.g. Chase Sapphire, Revolut, HSBC"
                   value={formData.name}
                   onChange={(e) => handleFormChange("name", e.target.value)}
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellCheck="false"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  data-form-type="other"
                 />
               </div>
             )}
@@ -4753,6 +4760,12 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
                 placeholder={userProfileName || "John Smith"}
                 value={formData.holderName}
                 onChange={(e) => handleFormChange("holderName", e.target.value)}
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck="false"
+                data-lpignore="true"
+                data-1p-ignore="true"
+                data-form-type="other"
               />
             </div>
 
@@ -4776,6 +4789,12 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
                     : formData.last4 || formData.number
                 }
                 onChange={(e) => handleCardNumberChange(e.target.value)}
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck="false"
+                data-lpignore="true"
+                data-1p-ignore="true"
+                data-form-type="other"
               />
             </div>
 
@@ -4791,6 +4810,12 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
                     maxLength={5}
                     value={formData.expiry}
                     onChange={(e) => handleExpiryChange(e.target.value)}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck="false"
+                    data-lpignore="true"
+                    data-1p-ignore="true"
+                    data-form-type="other"
                   />
                 </div>
               )}
@@ -4807,6 +4832,12 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
                   onChange={(e) =>
                     handleFormChange("initialBalance", e.target.value)
                   }
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellCheck="false"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  data-form-type="other"
                 />
               </div>
             </div>
@@ -5411,6 +5442,12 @@ function CardOptionsSheet({
                     onChange={(e) =>
                       setFormData((prev) => ({ ...prev, name: e.target.value }))
                     }
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck="false"
+                    data-lpignore="true"
+                    data-1p-ignore="true"
+                    data-form-type="other"
                   />
                 </div>
 
@@ -5426,6 +5463,12 @@ function CardOptionsSheet({
                         holderName: e.target.value,
                       }))
                     }
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck="false"
+                    data-lpignore="true"
+                    data-1p-ignore="true"
+                    data-form-type="other"
                   />
                 </div>
 
@@ -5438,6 +5481,12 @@ function CardOptionsSheet({
                     maxLength={isMfs ? 16 : 4}
                     value={isMfs ? (formData.number || "") : (formData.last4 || "")}
                     onChange={(e) => handleCardNumberChange(e.target.value)}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck="false"
+                    data-lpignore="true"
+                    data-1p-ignore="true"
+                    data-form-type="other"
                   />
                 </div>
 
@@ -5450,6 +5499,12 @@ function CardOptionsSheet({
                     maxLength={5}
                     value={formData.expiry}
                     onChange={(e) => handleExpiryChange(e.target.value)}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck="false"
+                    data-lpignore="true"
+                    data-1p-ignore="true"
+                    data-form-type="other"
                   />
                 </div>
 
@@ -5465,6 +5520,12 @@ function CardOptionsSheet({
                         subtitle: e.target.value,
                       }))
                     }
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck="false"
+                    data-lpignore="true"
+                    data-1p-ignore="true"
+                    data-form-type="other"
                   />
                 </div>
               </>
@@ -5482,6 +5543,12 @@ function CardOptionsSheet({
                     onChange={(e) =>
                       setFormData((prev) => ({ ...prev, name: e.target.value }))
                     }
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck="false"
+                    data-lpignore="true"
+                    data-1p-ignore="true"
+                    data-form-type="other"
                   />
                 </div>
 
@@ -5497,6 +5564,12 @@ function CardOptionsSheet({
                         holderName: e.target.value,
                       }))
                     }
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck="false"
+                    data-lpignore="true"
+                    data-1p-ignore="true"
+                    data-form-type="other"
                   />
                 </div>
 
@@ -5508,6 +5581,12 @@ function CardOptionsSheet({
                     placeholder="01712 345678"
                     value={formData.number}
                     onChange={(e) => handleCardNumberChange(e.target.value)}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck="false"
+                    data-lpignore="true"
+                    data-1p-ignore="true"
+                    data-form-type="other"
                   />
                 </div>
 
@@ -5523,6 +5602,12 @@ function CardOptionsSheet({
                         subtitle: e.target.value,
                       }))
                     }
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck="false"
+                    data-lpignore="true"
+                    data-1p-ignore="true"
+                    data-form-type="other"
                   />
                 </div>
               </>
@@ -6378,9 +6463,36 @@ function AppLockScreen({ onUnlock }) {
   const [isError, setIsError] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [biometricsConfigured] = useState(() => hasBiometricsConfigured());
+  const [lockoutSec, setLockoutSec] = useState(() =>
+    getPinLockoutRemainingSeconds(),
+  );
+
+  useEffect(() => {
+    if (lockoutSec <= 0) return;
+    setErrorMsg(`Too many failed attempts. Try again in ${lockoutSec}s.`);
+    setIsError(true);
+    const interval = setInterval(() => {
+      const remaining = getPinLockoutRemainingSeconds();
+      setLockoutSec(remaining);
+      if (remaining <= 0) {
+        setIsError(false);
+        setErrorMsg("");
+      } else {
+        setErrorMsg(`Too many failed attempts. Try again in ${remaining}s.`);
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [lockoutSec]);
 
   const handleDigit = useCallback(
     async (d) => {
+      const currentLockout = getPinLockoutRemainingSeconds();
+      if (currentLockout > 0) {
+        setLockoutSec(currentLockout);
+        setIsError(true);
+        setErrorMsg(`Too many failed attempts. Try again in ${currentLockout}s.`);
+        return;
+      }
       if (pin.length >= 4 || isVerifying) return;
       triggerHaptic("selection");
       const nextPin = pin + d;
@@ -6397,10 +6509,18 @@ function AppLockScreen({ onUnlock }) {
         } else {
           triggerHaptic("warning");
           setIsError(true);
-          setErrorMsg("Incorrect passcode. Try again.");
+          const remaining = getPinLockoutRemainingSeconds();
+          if (remaining > 0) {
+            setLockoutSec(remaining);
+            setErrorMsg(`Too many failed attempts. Try again in ${remaining}s.`);
+          } else {
+            setErrorMsg("Incorrect passcode. Try again.");
+          }
           setTimeout(() => {
             setPin("");
-            setIsError(false);
+            if (getPinLockoutRemainingSeconds() === 0) {
+              setIsError(false);
+            }
             setIsVerifying(false);
           }, 500);
         }
@@ -6410,6 +6530,7 @@ function AppLockScreen({ onUnlock }) {
   );
 
   const handleBackspace = () => {
+    if (lockoutSec > 0) return;
     if (pin.length > 0 && !isVerifying) {
       triggerHaptic("selection");
       setPin((prev) => prev.slice(0, -1));
@@ -6419,14 +6540,14 @@ function AppLockScreen({ onUnlock }) {
   };
 
   const handleBiometricAuth = useCallback(async () => {
-    if (isVerifying) return;
+    if (isVerifying || lockoutSec > 0) return;
     triggerHaptic("light");
     const ok = await authenticateWithBiometrics();
     if (ok) {
       triggerHaptic("success");
       onUnlock();
     }
-  }, [isVerifying, onUnlock]);
+  }, [isVerifying, lockoutSec, onUnlock]);
 
   return (
     <div
@@ -6494,6 +6615,7 @@ function AppLockScreen({ onUnlock }) {
             key={num}
             type="button"
             className="app-lock-key"
+            disabled={isVerifying || lockoutSec > 0}
             onClick={() => handleDigit(num)}
             aria-label={num}
           >
@@ -6508,6 +6630,7 @@ function AppLockScreen({ onUnlock }) {
           <button
             type="button"
             className="app-lock-action-key"
+            disabled={isVerifying || lockoutSec > 0}
             onClick={handleBiometricAuth}
             aria-label="Unlock with biometrics"
           >
@@ -6530,6 +6653,7 @@ function AppLockScreen({ onUnlock }) {
         <button
           type="button"
           className="app-lock-key"
+          disabled={isVerifying || lockoutSec > 0}
           onClick={() => handleDigit("0")}
           aria-label="0"
         >
@@ -6539,6 +6663,7 @@ function AppLockScreen({ onUnlock }) {
         <button
           type="button"
           className="app-lock-action-key"
+          disabled={isVerifying || lockoutSec > 0}
           onClick={handleBackspace}
           aria-label="Delete last digit"
         >

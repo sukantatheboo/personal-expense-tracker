@@ -10,6 +10,8 @@
 
 const PIN_STORAGE_KEY = "spend-security-pin-v1";
 const PIN_SALT_KEY = "spend-security-salt-v1";
+const PIN_FAIL_COUNT_KEY = "spend-security-pin-fails-v1";
+const PIN_LOCKOUT_UNTIL_KEY = "spend-security-pin-lockout-v1";
 const BIOMETRIC_KEY_ID = "spend-biometric-credential-v1";
 const LOCK_TIMEOUT_KEY = "spend-lock-timeout-v1";
 const LAST_ACTIVE_KEY = "spend-last-active-v1";
@@ -72,6 +74,52 @@ function getRandomBytes(length = 16) {
   return array;
 }
 
+/**
+ * Constant-time string equality check to prevent timing attacks.
+ */
+function constantTimeEqual(a, b) {
+  if (typeof a !== "string" || typeof b !== "string") return false;
+  if (a.length !== b.length) return false;
+  let result = 0;
+  for (let i = 0; i < a.length; i++) {
+    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return result === 0;
+}
+
+export function getPinLockoutRemainingSeconds() {
+  try {
+    const until = Number(localStorage.getItem(PIN_LOCKOUT_UNTIL_KEY)) || 0;
+    const remaining = Math.ceil((until - Date.now()) / 1000);
+    return remaining > 0 ? remaining : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function resetPinFailures() {
+  try {
+    localStorage.removeItem(PIN_FAIL_COUNT_KEY);
+    localStorage.removeItem(PIN_LOCKOUT_UNTIL_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+function recordPinFailure() {
+  try {
+    const count = (Number(localStorage.getItem(PIN_FAIL_COUNT_KEY)) || 0) + 1;
+    localStorage.setItem(PIN_FAIL_COUNT_KEY, String(count));
+    if (count >= 10) {
+      localStorage.setItem(PIN_LOCKOUT_UNTIL_KEY, String(Date.now() + 300000)); // 5 min lockout
+    } else if (count >= 5) {
+      localStorage.setItem(PIN_LOCKOUT_UNTIL_KEY, String(Date.now() + 30000)); // 30 sec lockout
+    }
+  } catch {
+    // ignore
+  }
+}
+
 /* ───────────── App Lock PIN Management (On-Device Screen Lock) ───────────── */
 export async function setAppPin(pin) {
   if (!pin || pin.length < 4) {
@@ -108,6 +156,10 @@ export async function setAppPin(pin) {
 }
 
 export async function verifyAppPin(pin) {
+  if (getPinLockoutRemainingSeconds() > 0) {
+    return false;
+  }
+
   const storedHash = localStorage.getItem(PIN_STORAGE_KEY);
   const storedSalt = localStorage.getItem(PIN_SALT_KEY);
   if (!storedHash || !storedSalt) return false;
@@ -135,11 +187,13 @@ export async function verifyAppPin(pin) {
   );
 
   const computedHash = bufferToBase64(hashBuffer);
-  if (computedHash === storedHash) {
+  if (constantTimeEqual(computedHash, storedHash)) {
+    resetPinFailures();
     setSessionUnlocked(true);
     markActive();
     return true;
   }
+  recordPinFailure();
   return false;
 }
 
@@ -154,6 +208,7 @@ export function removeAppPin() {
   localStorage.removeItem(PIN_STORAGE_KEY);
   localStorage.removeItem(PIN_SALT_KEY);
   localStorage.removeItem(BIOMETRIC_KEY_ID);
+  resetPinFailures();
   setSessionUnlocked(true);
 }
 
