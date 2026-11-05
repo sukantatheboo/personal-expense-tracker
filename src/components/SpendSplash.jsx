@@ -1,24 +1,22 @@
 import { useEffect, useRef } from "react";
 
 const EASE = {
-  out: "cubic-bezier(.16,1,.3,1)",
+  out: "cubic-bezier(.22,1,.36,1)",
   inOut: "cubic-bezier(.65,0,.35,1)",
-  spring: "cubic-bezier(.22,1.15,.36,1)",
 };
 
 const T = {
-  tile: 520,
-  shaft: 180,
-  arms: 380,
-  shift: 640,
-  letters: 680,
-  hold: 1950,
-  exit: 320,
+  shaft: 640,
+  arms: 980,
+  shift: 1340,
+  letters: 1400,
+  hold: 2750,
+  exit: 450,
 };
 
 export default function SpendSplash({
   onDone,
-  once = true,
+  once = false,
   storageKey = "spend-splash",
   fontFamily = '"Outfit", "Nunito Sans", ui-rounded, system-ui, sans-serif',
   fontUrl = "https://fonts.googleapis.com/css2?family=Outfit:wght@600&display=swap",
@@ -72,7 +70,6 @@ export default function SpendSplash({
     const root = rootRef.current;
     if (!root) return undefined;
 
-    // Start icon entrance animation IMMEDIATELY on frame 0 — zero font delay
     const el = root;
     el.hidden = false;
 
@@ -114,41 +111,50 @@ export default function SpendSplash({
       );
     }
 
-    // 1. Spend icon blooms in with fluid spring momentum — zero lag, zero dead pause
+    // 1. Dot pops in, then swells into the rounded tile (circle -> 25% radius)
+    // Compositor-accelerated scale transform on GPU layer
     run(
       tile,
       [
         {
           transform: "scale(0) translateZ(0)",
-          easing: "cubic-bezier(.16,1,.3,1)",
+          easing: "cubic-bezier(.2,.8,.3,1)",
         },
         {
-          transform: "scale(1.05) translateZ(0)",
-          offset: 0.65,
-          easing: "cubic-bezier(.25,1,.5,1)",
+          transform: "scale(.07) translateZ(0)",
+          offset: 0.2,
+          easing: "cubic-bezier(.34,1.3,.64,1)",
         },
-        { transform: "scale(1) translateZ(0)", offset: 1 },
+        { transform: "scale(1) translateZ(0)" },
       ],
-      { duration: t(T.tile) },
+      { duration: t(800) },
     );
 
+    // Border radius morph runs in parallel without degrading transform compositor thread
     run(
       tile,
       [
-        { borderRadius: "50%", easing: "cubic-bezier(.16,1,.3,1)" },
-        { borderRadius: "32%", offset: 0.5 },
-        { borderRadius: "25%", offset: 1 },
+        {
+          borderRadius: "50%",
+          easing: "cubic-bezier(.2,.8,.3,1)",
+        },
+        {
+          borderRadius: "50%",
+          offset: 0.2,
+          easing: "cubic-bezier(.34,1.3,.64,1)",
+        },
+        { borderRadius: "25%" },
       ],
-      { duration: t(T.tile) },
+      { duration: t(800) },
     );
 
-    // 2. Arrow draws itself dynamically: shaft shoots at 180ms, head snaps open at 380ms
-    draw(shaft, T.shaft, 300, EASE.out);
+    // 2. Arrow draws itself: shaft first, then the head opens out from the tip
+    draw(shaft, T.shaft, 400, EASE.inOut);
     Array.prototype.forEach.call(arms, (a) => {
-      draw(a, T.arms, 260, EASE.out);
+      draw(a, T.arms, 300, EASE.out);
     });
 
-    // 3. Tile slides left as the wordmark arrives; lockup ends perfectly centered
+    // 3. Tile slides left as the wordmark arrives; lockup ends perfectly centred
     const gap = parseFloat(getComputedStyle(lockup).columnGap) || 0;
     const shift = (word.offsetWidth + gap) / 2;
     run(
@@ -157,10 +163,11 @@ export default function SpendSplash({
         { transform: `translateX(${shift}px) translateZ(0)` },
         { transform: "translateX(0) translateZ(0)" },
       ],
-      { delay: t(T.shift), duration: t(540), easing: EASE.out },
+      { delay: t(T.shift), duration: t(720), easing: EASE.out },
     );
 
     letters.forEach((l, i) => {
+      // GPU compositor transform & opacity
       run(
         l,
         [
@@ -168,11 +175,12 @@ export default function SpendSplash({
           { opacity: 1, transform: "translateX(0) translateZ(0)" },
         ],
         {
-          delay: t(T.letters + i * 42),
-          duration: t(400),
+          delay: t(T.letters + i * 60),
+          duration: t(480),
           easing: EASE.out,
         },
       );
+      // Decoupled color transition
       run(
         l,
         [
@@ -180,14 +188,14 @@ export default function SpendSplash({
           { color: ink },
         ],
         {
-          delay: t(T.letters + i * 42),
-          duration: t(400),
+          delay: t(T.letters + i * 60),
+          duration: t(480),
           easing: EASE.out,
         },
       );
     });
 
-    // 4. Confident brand hold, then fluid exit. Tap, click, Esc, Enter or Space skips instantly.
+    // 4. Hold, then exit. Tap, click, Esc, Enter or Space skips the hold.
     let isReleased = false;
     let releaseResolver;
     const held = new Promise((resolve) => {
@@ -200,7 +208,7 @@ export default function SpendSplash({
       if (releaseResolver) releaseResolver();
     }
 
-    holdTimer = setTimeout(triggerRelease, reduce ? 600 : T.hold);
+    holdTimer = setTimeout(triggerRelease, reduce ? 900 : T.hold);
 
     function onKey(e) {
       if (e.key === "Escape" || e.key === "Enter" || e.key === " ") {
@@ -221,12 +229,12 @@ export default function SpendSplash({
       .then(() => {
         if (!active || !rootRef.current) return undefined;
         cleanListeners();
-        const d = reduce ? 180 : T.exit;
+        const d = reduce ? 200 : T.exit;
         run(
           stage,
           [
             { transform: "scale(1) translateZ(0)" },
-            { transform: reduce ? "scale(1) translateZ(0)" : "scale(.96) translateZ(0)" },
+            { transform: reduce ? "scale(1) translateZ(0)" : "scale(.94) translateZ(0)" },
           ],
           { duration: d, easing: "cubic-bezier(.4,0,1,1)" },
         );
@@ -248,7 +256,9 @@ export default function SpendSplash({
           rootRef.current.hidden = true;
         }
         try {
-          sessionStorage.setItem(storageKey, "1");
+          if (once) {
+            sessionStorage.setItem(storageKey, "1");
+          }
         } catch {}
         document.dispatchEvent(new CustomEvent("spend:splash-done"));
         onDone?.();
@@ -320,7 +330,7 @@ export default function SpendSplash({
           flex: none; width: var(--tile); height: var(--tile);
           background: var(--sp-green); border-radius: 25%;
           transform: scale(0) translateZ(0);
-          will-change: transform, border-radius;
+          will-change: transform;
           backface-visibility: hidden;
         }
         .sp-tile svg { display: block; width: 100%; height: 100%; overflow: visible; }
