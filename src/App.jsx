@@ -25,8 +25,10 @@ import {
   makeId,
   nextOccurrenceDate,
   readStorage,
+  readStorageAsync,
   roundMoney,
   writeStorage,
+  writeStorageAsync,
 } from "./data.js";
 import {
   disableBackgroundPush,
@@ -43,7 +45,12 @@ import {
   saveCloudData,
   subscribeToCloudChanges,
 } from "./cloud-sync.js";
-import { encryptBackup, decryptBackup } from "./security.js";
+import {
+  encryptBackup,
+  decryptBackup,
+  getSessionKey,
+  hasAppPin,
+} from "./security.js";
 import { Capacitor } from "@capacitor/core";
 import {
   checkAndNotifyNewMonth,
@@ -805,9 +812,7 @@ function mergeCloudSnapshots(
 
 function loadBudgetUpdatedAt() {
   try {
-    return normalizeBudgetUpdatedAt(
-      JSON.parse(localStorage.getItem(BUDGET_UPDATED_AT_KEY) || "{}"),
-    );
+    return normalizeBudgetUpdatedAt(readStorage(BUDGET_UPDATED_AT_KEY, {}));
   } catch {
     return {};
   }
@@ -856,9 +861,7 @@ function clearSharedFinancialData() {
 
 function readLocalUserSnapshots() {
   try {
-    const saved = JSON.parse(
-      localStorage.getItem(LOCAL_USER_SNAPSHOTS_KEY) || "{}",
-    );
+    const saved = readStorage(LOCAL_USER_SNAPSHOTS_KEY, {});
     return saved && typeof saved === "object" && !Array.isArray(saved)
       ? saved
       : {};
@@ -901,7 +904,7 @@ function saveLocalUserSnapshot(userId, snapshot) {
   try {
     const snapshots = readLocalUserSnapshots();
     snapshots[userId] = snapshot;
-    localStorage.setItem(LOCAL_USER_SNAPSHOTS_KEY, JSON.stringify(snapshots));
+    writeStorage(LOCAL_USER_SNAPSHOTS_KEY, snapshots);
   } catch {
     // Shared local storage remains as a compatibility fallback.
   }
@@ -945,6 +948,8 @@ function usePopupPresence() {
 }
 
 export default function App() {
+  const [isHydrated, setIsHydrated] = useState(!hasAppPin());
+  const isHydratedRef = useRef(!hasAppPin());
   const [ready, setReady] = useState(false);
   const [expenses, setExpenses] = useState(loadExpenses);
   const [budgets, setBudgets] = useState(loadBudgets);
@@ -1160,6 +1165,10 @@ export default function App() {
   }
 
   function selectLocalDataForUser(userId) {
+    if (hasAppPin() && !getSessionKey()) {
+      // App is locked; wait for unlock hydration before adopting or switching local user
+      return;
+    }
     const hasSavedSnapshot = Boolean(loadLocalUserSnapshot(userId));
     if (localDataOwnerRef.current || hasSavedSnapshot) {
       switchLocalUser(userId);
@@ -1344,24 +1353,31 @@ export default function App() {
   }, [theme]);
 
   useEffect(() => {
+    if (!isHydratedRef.current) return;
     writeStorage(STORAGE_KEYS.expenses, expenses);
   }, [expenses]);
   useEffect(() => {
+    if (!isHydratedRef.current) return;
     writeStorage(STORAGE_KEYS.budgets, budgets);
   }, [budgets]);
   useEffect(() => {
+    if (!isHydratedRef.current) return;
     writeStorage(BUDGET_UPDATED_AT_KEY, budgetUpdatedAt);
   }, [budgetUpdatedAt]);
   useEffect(() => {
+    if (!isHydratedRef.current) return;
     writeStorage(STORAGE_KEYS.recurring, recurringSchedules);
   }, [recurringSchedules]);
   useEffect(() => {
+    if (!isHydratedRef.current) return;
     writeStorage(STORAGE_KEYS.accounts, accountData);
   }, [accountData]);
   useEffect(() => {
+    if (!isHydratedRef.current) return;
     writeStorage(STORAGE_KEYS.deletedRecords, deletedRecords);
   }, [deletedRecords]);
   useEffect(() => {
+    if (!isHydratedRef.current) return;
     const owner = localDataOwnerRef.current;
     if (!owner || owner !== pushUser?.id) return;
     saveLocalUserSnapshot(owner, cloudSnapshotRef.current);
@@ -1377,6 +1393,112 @@ export default function App() {
     reminderTime,
     pushUser?.id,
   ]);
+
+  const handleAppUnlock = useCallback(async () => {
+    const sessionKey = getSessionKey();
+    if (!sessionKey) return;
+
+    try {
+      const [
+        decryptedExpenses,
+        decryptedBudgets,
+        decryptedBudgetUpdatedAt,
+        decryptedRecurring,
+        decryptedAccounts,
+        decryptedDeleted,
+      ] = await Promise.all([
+        readStorageAsync(STORAGE_KEYS.expenses, [], sessionKey),
+        readStorageAsync(STORAGE_KEYS.budgets, {}, sessionKey),
+        readStorageAsync(BUDGET_UPDATED_AT_KEY, {}, sessionKey),
+        readStorageAsync(STORAGE_KEYS.recurring, [], sessionKey),
+        readStorageAsync(STORAGE_KEYS.accounts, null, sessionKey),
+        readStorageAsync(STORAGE_KEYS.deletedRecords, null, sessionKey),
+      ]);
+
+      const effectiveDeleted = normalizeDeletedRecords(decryptedDeleted);
+      const loadedAccounts = loadAccountData(
+        decryptedAccounts ?? emptyAccountData(),
+        effectiveDeleted,
+      );
+
+      setDeletedRecords(effectiveDeleted);
+      setAccountData(loadedAccounts);
+      setExpenses(loadExpenses(decryptedExpenses, loadedAccounts));
+      setBudgets(loadBudgets(decryptedBudgets));
+      setBudgetUpdatedAt(normalizeBudgetUpdatedAt(decryptedBudgetUpdatedAt));
+      setRecurringSchedules(
+        loadRecurringSchedules(decryptedRecurring, loadedAccounts),
+      );
+
+      isHydratedRef.current = true;
+      setIsHydrated(true);
+
+      // If any record in localStorage was still plaintext from an older version, encrypt it now
+      const isEncryptedAtRest = (key) => {
+        try {
+          const raw = localStorage.getItem(key);
+          if (!raw) return true;
+          const parsed = JSON.parse(raw);
+          return Boolean(parsed?.format === "spend-encrypted-v1");
+        } catch {
+          return false;
+        }
+      };
+
+      const migrateTasks = [];
+      if (!isEncryptedAtRest(STORAGE_KEYS.expenses)) {
+        migrateTasks.push(
+          writeStorageAsync(STORAGE_KEYS.expenses, decryptedExpenses, sessionKey),
+        );
+      }
+      if (!isEncryptedAtRest(STORAGE_KEYS.budgets)) {
+        migrateTasks.push(
+          writeStorageAsync(STORAGE_KEYS.budgets, decryptedBudgets, sessionKey),
+        );
+      }
+      if (!isEncryptedAtRest(BUDGET_UPDATED_AT_KEY)) {
+        migrateTasks.push(
+          writeStorageAsync(
+            BUDGET_UPDATED_AT_KEY,
+            decryptedBudgetUpdatedAt,
+            sessionKey,
+          ),
+        );
+      }
+      if (!isEncryptedAtRest(STORAGE_KEYS.recurring)) {
+        migrateTasks.push(
+          writeStorageAsync(
+            STORAGE_KEYS.recurring,
+            decryptedRecurring,
+            sessionKey,
+          ),
+        );
+      }
+      if (!isEncryptedAtRest(STORAGE_KEYS.accounts)) {
+        migrateTasks.push(
+          writeStorageAsync(STORAGE_KEYS.accounts, loadedAccounts, sessionKey),
+        );
+      }
+      if (!isEncryptedAtRest(STORAGE_KEYS.deletedRecords)) {
+        migrateTasks.push(
+          writeStorageAsync(
+            STORAGE_KEYS.deletedRecords,
+            effectiveDeleted,
+            sessionKey,
+          ),
+        );
+      }
+      if (migrateTasks.length > 0) {
+        await Promise.all(migrateTasks);
+      }
+
+      if (pushUser && localDataOwnerRef.current !== pushUser.id) {
+        selectLocalDataForUser(pushUser.id);
+      }
+    } catch (err) {
+      console.error("Failed to decrypt and hydrate app data on unlock:", err);
+    }
+  }, [pushUser]);
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEYS.currency, targetCurrency);
@@ -1491,7 +1613,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!supabase || !pushUser || !cloudSyncEnabled) {
+    if (!supabase || !pushUser || !cloudSyncEnabled || !isHydrated) {
       setCloudSyncReady(false);
       return undefined;
     }
@@ -1610,7 +1732,7 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, [cloudSyncEnabled, pushUser?.id, cloudSyncRetry]);
+  }, [cloudSyncEnabled, pushUser?.id, cloudSyncRetry, isHydrated]);
 
   useEffect(() => {
     if (!supabase || !pushUser || !cloudSyncEnabled || !cloudSyncReady) {
@@ -1773,7 +1895,8 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (!supabase || !pushUser || !backgroundPushEnabled) return undefined;
+    if (!supabase || !pushUser || !backgroundPushEnabled || !isHydrated)
+      return undefined;
     let active = true;
     async function syncSchedules() {
       if (!active) return;
@@ -1796,7 +1919,7 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, [backgroundPushEnabled, pushUser, recurringSchedules, reminderTime]);
+  }, [backgroundPushEnabled, isHydrated, pushUser, recurringSchedules, reminderTime]);
 
   useEffect(() => {
     if (!pushUser || !("serviceWorker" in navigator)) return undefined;
@@ -2726,29 +2849,56 @@ export default function App() {
   }
 
   function handleAddCard(newCard) {
-    const cardId = newCard.id || makeId();
+    const cardId = newCard?.id || makeId();
     const now = Date.now();
-    const { cvv: _omittedCvv, ...safeCard } = newCard || {};
-    const last4 =
-      safeCard.last4 ||
-      (safeCard.number
-        ? String(safeCard.number).replace(/\D/g, "").slice(-4)
-        : "");
-    const rawBal = Number(newCard.initialBalance);
+    const isMfs = Boolean(
+      newCard?.isPhone ||
+      newCard?.category === "mfs" ||
+      newCard?.type === "mfs" ||
+      newCard?.network === "mfs",
+    );
+    const isSavings = Boolean(
+      newCard?.category === "savings" ||
+      newCard?.type === "savings" ||
+      String(newCard?.number || "").startsWith("SAV-") ||
+      String(newCard?.number || "").startsWith("VAULT-"),
+    );
+
+    const rawNumber = String(newCard?.number || "").replace(/\D/g, "");
+    const last4 = newCard?.last4 || (rawNumber ? rawNumber.slice(-4) : "");
+
+    // Explicitly delete full card number and CVV before saving
+    const { cvv: _cvv, number: _number, ...safeCard } = newCard || {};
+
+    const rawBal = Number(newCard?.initialBalance);
     const initialBalance =
       Number.isFinite(rawBal) && rawBal >= 0 ? roundMoney(rawBal) : 0;
+
+    // Payment cards (and any card with >=15 digits) store ONLY masked representation
+    // Savings vaults and MFS phone numbers preserve their non-PAN identifiers
+    let storedNumber = "";
+    if (isSavings) {
+      storedNumber =
+        String(newCard?.number || "").trim() || (last4 ? `SAV-${last4}` : "");
+    } else if (isMfs && rawNumber.length < 15) {
+      storedNumber =
+        String(newCard?.number || "").trim() || (last4 ? `01••• •••${last4}` : "");
+    } else {
+      storedNumber = last4 ? `•••• •••• •••• ${last4}` : "";
+    }
+
     setRecordDeleted("cards", cardId, false);
     setAccountData((current) => {
       const currentCards = Array.isArray(current.settings.cards)
         ? current.settings.cards
         : [];
       const isFirst = currentCards.length === 0;
-      const isPrimary = Boolean(newCard.isPrimary ?? isFirst);
+      const isPrimary = Boolean(newCard?.isPrimary ?? isFirst);
       const card = {
         ...safeCard,
         id: cardId,
         last4,
-        number: safeCard.number || (last4 ? `•••• •••• •••• ${last4}` : ""),
+        number: storedNumber,
         isPrimary,
         createdAt: now,
         updatedAt: now,
@@ -2772,7 +2922,12 @@ export default function App() {
         },
       };
     });
-    return { ...safeCard, id: cardId, last4 };
+    return {
+      ...safeCard,
+      id: cardId,
+      last4,
+      number: storedNumber,
+    };
   }
 
   function handleDeleteCard(cardId) {
@@ -2854,28 +3009,84 @@ export default function App() {
   function handleUpdateCard(updatedCard) {
     if (!updatedCard?.id) return updatedCard;
     const now = Date.now();
-    const { cvv: _omittedCvv, ...safeCard } = updatedCard || {};
-    const last4 =
-      safeCard.last4 ||
-      (safeCard.number
-        ? String(safeCard.number).replace(/\D/g, "").slice(-4)
-        : "");
-    const cleanCard = {
-      ...safeCard,
-      last4,
-      number: safeCard.number || (last4 ? `•••• •••• •••• ${last4}` : ""),
-    };
-    setRecordDeleted("cards", cleanCard.id, false);
+    const isMfs = Boolean(
+      updatedCard?.isPhone ||
+      updatedCard?.category === "mfs" ||
+      updatedCard?.type === "mfs" ||
+      updatedCard?.network === "mfs",
+    );
+    const isSavings = Boolean(
+      updatedCard?.category === "savings" ||
+      updatedCard?.type === "savings" ||
+      String(updatedCard?.number || "").startsWith("SAV-") ||
+      String(updatedCard?.number || "").startsWith("VAULT-"),
+    );
+
+    const rawNumber = String(updatedCard?.number || "").replace(/\D/g, "");
+    const last4 = updatedCard?.last4 || (rawNumber ? rawNumber.slice(-4) : "");
+
+    // Explicitly delete full card number and CVV before saving
+    const { cvv: _cvv, number: _number, ...safeCard } = updatedCard || {};
+
+    const hasNumberUpdate =
+      updatedCard?.last4 !== undefined || updatedCard?.number !== undefined;
+
+    let targetNumber = undefined;
+    if (hasNumberUpdate) {
+      if (isSavings) {
+        targetNumber =
+          String(updatedCard?.number || "").trim() ||
+          (last4 ? `SAV-${last4}` : "");
+      } else if (isMfs && rawNumber.length < 15) {
+        targetNumber =
+          String(updatedCard?.number || "").trim() ||
+          (last4 ? `01••• •••${last4}` : "");
+      } else {
+        targetNumber = last4 ? `•••• •••• •••• ${last4}` : "";
+      }
+    }
+
+    let resolvedLast4 = last4;
+    let resolvedNumber = targetNumber;
+
+    setRecordDeleted("cards", updatedCard.id, false);
     setAccountData((current) => {
       const currentCards = Array.isArray(current.settings.cards)
         ? current.settings.cards
         : [];
-      const exists = currentCards.some((c) => c.id === cleanCard.id);
+      const exists = currentCards.some((c) => c.id === updatedCard.id);
       const newCards = exists
-        ? currentCards.map((c) =>
-            c.id === cleanCard.id ? { ...c, ...cleanCard, updatedAt: now } : c,
-          )
-        : [...currentCards, { ...cleanCard, createdAt: now, updatedAt: now }];
+        ? currentCards.map((c) => {
+            if (c.id !== updatedCard.id) return c;
+            const effectiveLast4 = hasNumberUpdate
+              ? last4
+              : c.last4 ||
+                String(c.number || "").replace(/\D/g, "").slice(-4);
+            const effectiveNumber = hasNumberUpdate
+              ? targetNumber
+              : c.number ||
+                (effectiveLast4 ? `•••• •••• •••• ${effectiveLast4}` : "");
+            resolvedLast4 = effectiveLast4;
+            resolvedNumber = effectiveNumber;
+            return {
+              ...c,
+              ...safeCard,
+              last4: effectiveLast4,
+              number: effectiveNumber,
+              updatedAt: now,
+            };
+          })
+        : [
+            ...currentCards,
+            {
+              ...safeCard,
+              id: updatedCard.id,
+              last4,
+              number: targetNumber ?? (last4 ? `•••• •••• •••• ${last4}` : ""),
+              createdAt: now,
+              updatedAt: now,
+            },
+          ];
       return {
         ...current,
         settings: {
@@ -2886,7 +3097,14 @@ export default function App() {
         },
       };
     });
-    return cleanCard;
+    return {
+      ...safeCard,
+      id: updatedCard.id,
+      last4: resolvedLast4,
+      number:
+        resolvedNumber ??
+        (resolvedLast4 ? `•••• •••• •••• ${resolvedLast4}` : ""),
+    };
   }
 
   function handleSetPrimaryCard(cardId) {
@@ -3986,6 +4204,7 @@ export default function App() {
       {!ready && <SpendSplash onDone={() => setReady(true)} />}
       <MobilePrototype
         S={mobilePrototypeData}
+        onUnlock={handleAppUnlock}
         onShift={addMonth}
         onExpenseSave={saveMobileExpense}
         onExpenseUpdate={saveMobileExpenseUpdate}

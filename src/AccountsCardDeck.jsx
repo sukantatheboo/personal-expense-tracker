@@ -148,7 +148,7 @@ export function WalletCard({
   const isFrozen = Boolean(card.frozen);
 
   const formattedNumber = formatCardNumber(
-    card.last4 || card.number || "",
+    card.number || card.last4 || "",
     isMfs,
     showFullDetails,
   );

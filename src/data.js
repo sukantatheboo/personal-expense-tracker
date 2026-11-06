@@ -1,3 +1,12 @@
+import {
+  encryptData,
+  decryptData,
+  getSessionKey,
+  hasAppPin,
+  ENCRYPTED_STORAGE_FORMAT,
+  SENSITIVE_STORAGE_KEYS,
+} from "./security.js";
+
 export const STORAGE_KEYS = {
   expenses: "spend-expenses-v1",
   budgets: "spend-monthly-budgets-v1",
@@ -10,6 +19,12 @@ export const STORAGE_KEYS = {
   reminderTime: "spend-reminder-time-v1",
   profileName: "spend-profile-name-v1",
 };
+
+const SENSITIVE_STORAGE_KEY_SET = new Set(SENSITIVE_STORAGE_KEYS);
+
+export function isSensitiveStorageKey(key) {
+  return SENSITIVE_STORAGE_KEY_SET.has(key);
+}
 
 export const CATEGORIES = [
   "Food",
@@ -118,19 +133,78 @@ export function makeId() {
 export function readStorage(key, fallback) {
   try {
     const saved = localStorage.getItem(key);
-    return saved === null ? fallback : JSON.parse(saved);
+    if (saved === null) return fallback;
+    const parsed = JSON.parse(saved);
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      parsed.format === ENCRYPTED_STORAGE_FORMAT
+    ) {
+      // Data is encrypted at rest; cannot be read synchronously.
+      return fallback;
+    }
+    return parsed;
   } catch {
     return fallback;
   }
 }
 
-export function writeStorage(key, value) {
+export async function readStorageAsync(
+  key,
+  fallback,
+  keyMaterial = getSessionKey(),
+) {
   try {
-    localStorage.setItem(key, JSON.stringify(value));
-    return true;
-  } catch {
+    const saved = localStorage.getItem(key);
+    if (saved === null) return fallback;
+    const decrypted = await decryptData(saved, keyMaterial);
+    return decrypted === null || decrypted === undefined ? fallback : decrypted;
+  } catch (err) {
+    console.warn(`Failed to read/decrypt storage for ${key}:`, err);
+    return fallback;
+  }
+}
+
+const writeQueues = new Map();
+
+export async function writeStorageAsync(
+  key,
+  value,
+  keyMaterial = getSessionKey(),
+) {
+  if (isSensitiveStorageKey(key) && hasAppPin() && !keyMaterial) {
+    // Session is locked. Guard against overwriting encrypted storage with empty defaults.
     return false;
   }
+
+  const prev = writeQueues.get(key) || Promise.resolve();
+  const next = prev
+    .catch(() => {})
+    .then(async () => {
+      try {
+        if (keyMaterial && isSensitiveStorageKey(key)) {
+          const encrypted = await encryptData(value, keyMaterial);
+          localStorage.setItem(key, encrypted);
+        } else {
+          localStorage.setItem(key, JSON.stringify(value));
+        }
+        return true;
+      } catch (err) {
+        console.error(`Storage write error for ${key}:`, err);
+        return false;
+      }
+    });
+
+  writeQueues.set(key, next);
+  return next;
+}
+
+export function writeStorage(key, value, keyMaterial = getSessionKey()) {
+  if (isSensitiveStorageKey(key) && hasAppPin() && !keyMaterial) {
+    return false;
+  }
+  void writeStorageAsync(key, value, keyMaterial);
+  return true;
 }
 
 export function loadExpenses(
@@ -196,9 +270,7 @@ export function isAccountId(value, accountData = null) {
   )
     return true;
   try {
-    const saved = JSON.parse(
-      localStorage.getItem(STORAGE_KEYS.accounts) || "null",
-    );
+    const saved = readStorage(STORAGE_KEYS.accounts, null);
     if (saved?.settings?.cards?.some((c) => c.id === trimmed)) return true;
     if (
       saved?.settings?.balances &&
@@ -341,12 +413,40 @@ export function loadAccountData(
       }
 
       const existingMatch = DEFAULT_CARDS.find((d) => d.id === id);
-      const { cvv: _cvv, ...safeCard } = card || {};
+      const isMfs = Boolean(
+        card?.isPhone ||
+        card?.category === "mfs" ||
+        card?.type === "mfs" ||
+        card?.network === "mfs",
+      );
+      const isSavings = Boolean(
+        card?.category === "savings" ||
+        card?.type === "savings" ||
+        String(card?.number || "").startsWith("SAV-") ||
+        String(card?.number || "").startsWith("VAULT-"),
+      );
+
+      const rawNumber = String(card?.number || "").replace(/\D/g, "");
       const rawLast4 =
-        safeCard.last4 ||
-        (safeCard.number ? String(safeCard.number).replace(/\D/g, "").slice(-4) : "") ||
+        card?.last4 ||
+        (rawNumber ? rawNumber.slice(-4) : "") ||
         existingMatch?.last4 ||
         "";
+
+      // Explicitly delete full card number and CVV before saving / loading
+      const { cvv: _cvv, number: _number, ...safeCard } = card || {};
+
+      let storedNumber = "";
+      if (isSavings) {
+        storedNumber =
+          String(card?.number || "").trim() || (rawLast4 ? `SAV-${rawLast4}` : "");
+      } else if (isMfs && rawNumber.length < 15) {
+        storedNumber =
+          String(card?.number || "").trim() || (rawLast4 ? `01••• •••${rawLast4}` : "");
+      } else {
+        storedNumber = rawLast4 ? `•••• •••• •••• ${rawLast4}` : "";
+      }
+
       cardMap.set(id, {
         ...(existingMatch || {}),
         ...safeCard,
@@ -357,7 +457,7 @@ export function loadAccountData(
         type: card.type || existingMatch?.type || "credit",
         network: card.network || existingMatch?.network || "visa",
         last4: rawLast4,
-        number: safeCard.number || (rawLast4 ? `•••• •••• •••• ${rawLast4}` : ""),
+        number: storedNumber,
         expiry: card.expiry || existingMatch?.expiry || "",
         color: card.color || existingMatch?.color || "#1e293b",
         gradient: card.gradient || existingMatch?.gradient || "",

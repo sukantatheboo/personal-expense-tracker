@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.frankfurter.dev; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self';"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.frankfurter.dev; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self';"
     />
     <meta
       http-equiv="Permissions-Policy"
@@ -99,29 +99,6 @@
         }
       }
     </style>
-    <script>
-      // Frame busting / Clickjacking protection
-      try {
-        if (window.top !== window.self) {
-          window.top.location = window.self.location;
-        }
-      } catch (e) {}
-      try {
-        var savedTheme = localStorage.getItem("spend-theme-v1");
-        var isDark =
-          savedTheme === "dark" ||
-          (!savedTheme &&
-            window.matchMedia &&
-            window.matchMedia("(prefers-color-scheme: dark)").matches);
-        document.documentElement.dataset.theme = isDark ? "dark" : "light";
-        var color = isDark ? "#0e1411" : "#f4f3ee";
-        document
-          .querySelectorAll('meta[name="theme-color"]')
-          .forEach(function (meta) {
-            meta.setAttribute("content", color);
-          });
-      } catch (e) {}
-    </script>
   </head>
   <body>
     <input

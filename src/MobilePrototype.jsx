@@ -6267,9 +6267,9 @@ function SecuritySheet({ onClose, onLockNow }) {
     setStep("overview");
   };
 
-  const handleRemovePin = () => {
-    removeAppPin();
-    disableBiometrics();
+  const handleRemovePin = async () => {
+    await removeAppPin();
+    await disableBiometrics();
     setPinSet(false);
     setBiometricsConfigured(false);
     triggerHaptic("delete");
@@ -6689,7 +6689,10 @@ function AppLockScreen({ onUnlock }) {
         const ok = await verifyAppPin(nextPin);
         if (ok) {
           triggerHaptic("success");
-          onUnlock();
+          if (typeof onUnlock === "function") {
+            await onUnlock();
+          }
+          setIsVerifying(false);
         } else {
           triggerHaptic("warning");
           setIsError(true);
@@ -6729,7 +6732,9 @@ function AppLockScreen({ onUnlock }) {
     const ok = await authenticateWithBiometrics();
     if (ok) {
       triggerHaptic("success");
-      onUnlock();
+      if (typeof onUnlock === "function") {
+        await onUnlock();
+      }
     }
   }, [isVerifying, lockoutSec, onUnlock]);
 
@@ -6873,6 +6878,7 @@ function AppLockScreen({ onUnlock }) {
    persistence, account actions, and sync state. */
 export default function MobilePrototype({
   S,
+  onUnlock,
   onShift,
   onExpenseSave,
   onExpenseUpdate,
@@ -6948,10 +6954,17 @@ export default function MobilePrototype({
         markActive();
       }
     };
+    const idleCheckInterval = setInterval(() => {
+      if (document.visibilityState === "visible" && shouldLockApp()) {
+        setIsAppLocked(true);
+      }
+    }, 10000);
+
     window.addEventListener("pointerdown", handleActivity, { passive: true });
     window.addEventListener("keydown", handleActivity, { passive: true });
     document.addEventListener("visibilitychange", handleVisibility);
     return () => {
+      clearInterval(idleCheckInterval);
       window.removeEventListener("pointerdown", handleActivity);
       window.removeEventListener("keydown", handleActivity);
       document.removeEventListener("visibilitychange", handleVisibility);
@@ -7687,6 +7700,26 @@ export default function MobilePrototype({
       ? "app-settings"
       : tab;
 
+  if (isAppLocked) {
+    return (
+      <div
+        ref={mobileRootRef}
+        className="mobile-prototype"
+        data-theme={S.theme}
+      >
+        <AppLockScreen
+          onUnlock={async () => {
+            markActive();
+            if (typeof onUnlock === "function") {
+              await onUnlock();
+            }
+            setIsAppLocked(false);
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div
       ref={mobileRootRef}
@@ -8070,6 +8103,7 @@ export default function MobilePrototype({
           onClose={close}
           onLockNow={() => {
             close();
+            lockAppManually();
             setIsAppLocked(true);
           }}
         />
@@ -8106,15 +8140,6 @@ export default function MobilePrototype({
             </button>
           )}
         </div>
-      )}
-
-      {isAppLocked && (
-        <AppLockScreen
-          onUnlock={() => {
-            markActive();
-            setIsAppLocked(false);
-          }}
-        />
       )}
     </div>
   );
