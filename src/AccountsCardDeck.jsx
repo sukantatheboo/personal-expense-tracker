@@ -442,7 +442,7 @@ export function StackedCardDeck({
 
   // ──── Pointer Drag Gestures ────
   const onPointerDown = (e) => {
-    if (totalCards <= 1 || phase.startsWith("commit")) return;
+    if (phase.startsWith("commit")) return;
     if (e.button !== undefined && e.button !== 0) return;
     if (phaseTimerRef.current) clearTimeout(phaseTimerRef.current);
 
@@ -451,6 +451,9 @@ export function StackedCardDeck({
     isDraggingRef.current = false;
     hasCapturedPointerRef.current = false;
     dragReleasePRef.current = 0;
+
+    if (totalCards <= 1) return;
+
     dragStartRef.current = {
       startY: e.clientY,
       startX: e.clientX,

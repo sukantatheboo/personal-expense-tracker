@@ -352,7 +352,10 @@ function bal(S, id) {
     if (t.type === "income" && t.acct === id) b += t.amt;
     if ((t.type === "adjust" || t.type === "adjustment") && t.acct === id) {
       const isUp =
-        t.dir === "up" || t.dir === "increase" || t.direction === "increase";
+        t.dir === "up" ||
+        t.dir === "increase" ||
+        t.direction === "increase" ||
+        t.direction === "up";
       b += isUp ? t.amt : -t.amt;
     }
     if (t.type === "transfer") {
@@ -2825,7 +2828,9 @@ function Accounts({
         selectedId={selectedAccount}
         onSelectCard={chooseAccount}
         onAddCardClick={onAddCardClick}
-        onOpenCardDetails={(card) => card && onOpenCardOptions?.(card.id)}
+        onOpenCardDetails={(card) =>
+          card && onOpenCardOptions?.(card.id)
+        }
         onDragOffsetChange={setDeckDragY}
       />
 
@@ -2912,7 +2917,7 @@ function Accounts({
               onAddCardClick?.();
               return;
             }
-            onOpenCardOptions?.(selectedAccount);
+            onOpenCardOptions?.(selectedAccount || activeCard?.id || cards[0]?.id);
           }}
           aria-label="Manage cards and view card options"
         >
@@ -5050,6 +5055,7 @@ function CardOptionsSheet({
   initialCardId,
   cards = [],
   balances = {},
+  startBalances = {},
   onClose,
   onUpdateCard,
   onDeleteCard,
@@ -5069,6 +5075,12 @@ function CardOptionsSheet({
     }
   }, [cards, selectedId]);
 
+  useEffect(() => {
+    if (initialCardId && cards.some((c) => c.id === initialCardId)) {
+      setSelectedId(initialCardId);
+    }
+  }, [initialCardId, cards]);
+
   const selectedCard =
     cards.find((c) => c.id === selectedId) || cards[0] || null;
 
@@ -5087,7 +5099,9 @@ function CardOptionsSheet({
     selectedCard?.provider === "savings";
 
   const isCard = !isMfs && !isSavings;
-  const initialCardBal = S?.start?.[selectedCard?.id];
+  const initialCardBal =
+    (selectedCard?.id != null ? startBalances[selectedCard.id] : undefined) ??
+    selectedCard?.initialBalance;
 
   const [formData, setFormData] = useState({
     name: selectedCard?.name || "",
@@ -5119,7 +5133,9 @@ function CardOptionsSheet({
 
   useEffect(() => {
     if (selectedCard) {
-      const cardBal = S?.start?.[selectedCard.id];
+      const cardBal =
+        (selectedCard.id != null ? startBalances[selectedCard.id] : undefined) ??
+        selectedCard.initialBalance;
       setFormData({
         name: selectedCard.name || "",
         holderName: selectedCard.holderName || "Cardholder",
@@ -5143,7 +5159,7 @@ function CardOptionsSheet({
       setIsFrozen(Boolean(selectedCard.frozen));
       setConfirmDeleteOpen(false);
     }
-  }, [selectedCard?.id, S?.start]);
+  }, [selectedCard?.id, startBalances]);
 
   const previewCard = useMemo(() => {
     if (!selectedCard) return null;
@@ -5157,11 +5173,16 @@ function CardOptionsSheet({
       gradient: formData.gradient,
       color: formData.color,
       last4: formData.last4 || (formData.number ? formData.number.slice(-4) : ""),
-      number: formData.last4 ? `•••• •••• •••• ${formData.last4}` : formData.number,
+      number:
+        isMfs || isSavings
+          ? formData.number || selectedCard.number
+          : formData.last4
+            ? `•••• •••• •••• ${formData.last4}`
+            : formData.number,
       expiry: formData.expiry,
       frozen: isFrozen,
     };
-  }, [selectedCard, formData, isFrozen]);
+  }, [selectedCard, formData, isFrozen, isMfs, isSavings]);
 
   const handleCardNumberChange = (raw) => {
     if (isMfs) {
@@ -5205,9 +5226,10 @@ function CardOptionsSheet({
     triggerHaptic("warning");
     const nextFrozen = !isFrozen;
     setIsFrozen(nextFrozen);
+    const { initialBalance: _initBal, ...safeFormData } = formData;
     onUpdateCard?.({
       ...selectedCard,
-      ...formData,
+      ...safeFormData,
       frozen: nextFrozen,
       id: selectedCard.id,
     });
@@ -5216,12 +5238,14 @@ function CardOptionsSheet({
   const handleSave = () => {
     if (!selectedCard) return;
     triggerHaptic("success");
-    const rawBal = parseFloat(formData.initialBalance);
+    const trimmed = String(formData.initialBalance || "").trim();
+    const rawBal = trimmed !== "" ? parseFloat(trimmed) : NaN;
     const parsedInitial =
       Number.isFinite(rawBal) && rawBal >= 0 ? rawBal : undefined;
+    const { initialBalance: _initBal, ...safeFormData } = formData;
     onUpdateCard?.({
       ...selectedCard,
-      ...formData,
+      ...safeFormData,
       ...(parsedInitial !== undefined ? { initialBalance: parsedInitial } : {}),
       frozen: isFrozen,
       id: selectedCard.id,
@@ -7942,6 +7966,7 @@ export default function MobilePrototype({
           initialCardId={sheet.cardId}
           cards={cards}
           balances={Object.fromEntries(cards.map((c) => [c.id, bal(S, c.id)]))}
+          startBalances={S?.start || {}}
           onClose={close}
           onUpdateCard={(updated) => {
             onUpdateCard?.(updated);

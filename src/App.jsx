@@ -3086,9 +3086,15 @@ export default function App() {
       }
     }
 
-    const rawInitialBal = Number(updatedCard?.initialBalance);
+    const rawInitialBal =
+      typeof updatedCard?.initialBalance === "string"
+        ? updatedCard.initialBalance.trim() === ""
+          ? NaN
+          : Number(updatedCard.initialBalance)
+        : Number(updatedCard?.initialBalance);
     const hasInitialBalanceUpdate =
       updatedCard?.initialBalance !== undefined &&
+      updatedCard?.initialBalance !== null &&
       Number.isFinite(rawInitialBal) &&
       rawInitialBal >= 0;
 
