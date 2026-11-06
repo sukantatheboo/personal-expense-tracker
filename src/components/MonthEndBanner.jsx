@@ -52,6 +52,21 @@ const SAMPLE = {
   },
 };
 
+export function getSampleRecap(targetMonth = "2026-10") {
+  if (!targetMonth || !/^\d{4}-\d{2}$/.test(targetMonth)) return SAMPLE;
+  const [y, m] = targetMonth.split("-").map(Number);
+  const name = (mm) =>
+    new Date(y, mm, 1).toLocaleString("en-US", { month: "long" });
+  return {
+    ...SAMPLE,
+    monthKey: targetMonth,
+    month: name(m - 1),
+    prevMonth: name(m - 2),
+    nextMonth: name(m),
+    daysInMonth: new Date(y, m, 0).getDate(),
+  };
+}
+
 /* ---------- helper: build `data` from raw transactions ----------
    month = "YYYY-MM" of the month to recap. Expenses must be positive numbers
    (use amountOf={(t) => -t.amount} if yours are negative). */
@@ -166,6 +181,7 @@ export default function MonthRecap({
   data,
   transactions,
   month,
+  isPreview = false,
   amountOf,
   dateOf,
   categoryOf,
@@ -177,37 +193,51 @@ export default function MonthRecap({
 }) {
   const resolvedData = useMemo(() => {
     if (data) return data;
-    if (Array.isArray(transactions)) {
-      if (transactions.length === 0) return null;
+    if (Array.isArray(transactions) && transactions.length > 0) {
       const built = buildRecap(transactions, {
         month,
         amountOf,
         dateOf,
         categoryOf,
       });
-      return built && built.total > 0 ? built : null;
+      if (built && built.total > 0) return built;
+    }
+    if (month) {
+      return getSampleRecap(month);
     }
     return SAMPLE;
   }, [data, transactions, month, amountOf, dateOf, categoryOf]);
 
-  const activeData = resolvedData || (transactions ? null : SAMPLE);
-  const dismissId = activeData?.monthKey || activeData?.month || "October";
+  const activeData = resolvedData;
+  const baseMonthId =
+    activeData?.monthKey || activeData?.month || month || "October";
+  const dismissId = isPreview
+    ? `preview-${month || baseMonthId}`
+    : baseMonthId;
 
-  const [gone, setGone] = useState(() => {
+  const isDismissed = (id) => {
+    if (!id) return false;
     try {
-      return localStorage.getItem("spend-recap-dismissed") === dismissId;
+      return (
+        localStorage.getItem(`spend-month-overview-dismissed-${id}`) === "1" ||
+        localStorage.getItem("spend-month-overview-dismissed") === id
+      );
     } catch {
       return false;
     }
-  });
+  };
+
+  const [gone, setGone] = useState(() => isDismissed(dismissId));
 
   useEffect(() => {
-    try {
-      setGone(localStorage.getItem("spend-recap-dismissed") === dismissId);
-    } catch {
-      setGone(false);
-    }
+    setGone(isDismissed(dismissId));
   }, [dismissId]);
+
+  useEffect(() => {
+    setPhase("closed");
+    setReady(false);
+    setI(0);
+  }, [month, isPreview]);
 
   const [phase, setPhase] = useState("closed"); // closed | mount | open | closing
   const [rect, setRect] = useState(null);
@@ -414,7 +444,11 @@ export default function MonthRecap({
             e.stopPropagation();
             setGone(true);
             try {
-              localStorage.setItem("spend-recap-dismissed", dismissId);
+              localStorage.setItem(
+                `spend-month-overview-dismissed-${dismissId}`,
+                "1",
+              );
+              localStorage.setItem("spend-month-overview-dismissed", dismissId);
             } catch {}
             onDismiss?.(activeData.month);
           }}

@@ -129,6 +129,7 @@ function capitalizeFirst(value) {
 }
 
 function accountName(accountId, cards = []) {
+  if (!accountId || accountId === "cash") return "Cash";
   const customCard = Array.isArray(cards)
     ? cards.find((c) => c?.id === accountId)
     : null;
@@ -2458,7 +2459,7 @@ export default function App() {
       processDueSchedules.current?.();
       checkDailyReminder();
       checkBudgetMilestones();
-      checkAndNotifyNewMonth(selectedMonth);
+      checkAndNotifyNewMonth();
     };
 
     const initialTimer = window.setTimeout(runChecks, 800);
@@ -2862,6 +2863,9 @@ export default function App() {
         return updated;
       }),
     }));
+    if (txDate && isValidDateString(txDate)) {
+      setSelectedMonth(txDate.slice(0, 7));
+    }
     return true;
   }
 

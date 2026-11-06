@@ -249,6 +249,7 @@ export function isAccountId(value, accountData = null) {
   if (!value || typeof value !== "string") return false;
   const trimmed = value.trim();
   if (!trimmed) return false;
+  if (trimmed === "cash") return true;
   if (ACCOUNT_OPTIONS.some(([id]) => id === trimmed)) return true;
   if (DEFAULT_CARDS.some((c) => c.id === trimmed)) return true;
   if (trimmed.startsWith("card_")) return true;

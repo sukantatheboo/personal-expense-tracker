@@ -83,6 +83,7 @@ const CAT = {
 function getAccountDisplay(id, cards = []) {
   const match = cards.find((c) => c.id === id);
   if (match) return [match.name, match.color || "#2563a8"];
+  if (!id || id === "cash") return ["Cash", "#10b981"];
   return [id || "Account", "#2563a8"];
 }
 const TABS = [
@@ -410,9 +411,11 @@ function AccountPicker({ value, options, onPick, cards = [] }) {
     >
       <div className="account-picker-track">
         {options.map(([id, label]) => {
-          const isSelected = value === id;
-          const card = cards.find((c) => c.id === id);
           const isCash = id === "" || id === "cash";
+          const isSelected =
+            value === id ||
+            (isCash && (value === "" || value === "cash"));
+          const card = cards.find((c) => c.id === id);
           const isPrimary = card?.isPrimary;
           const isFrozen = card?.frozen;
 
@@ -460,6 +463,7 @@ function AccountPicker({ value, options, onPick, cards = [] }) {
 const MonthSwitch = ({ m, onShift }) => (
   <div className="mon">
     <button
+      type="button"
       aria-label="Previous month"
       onClick={() => {
         triggerHaptic("selection");
@@ -470,8 +474,9 @@ const MonthSwitch = ({ m, onShift }) => (
     </button>
     <b>{fM(m)}</b>
     <button
+      type="button"
       aria-label="Next month"
-      disabled={m >= ld().slice(0, 7)}
+      disabled={!m || m >= ld().slice(0, 7)}
       onClick={() => {
         triggerHaptic("selection");
         onShift(1);
@@ -582,6 +587,7 @@ function ExpenseRow({
   const [swipe, setSwipe] = useState({ offset: 0, phase: "idle" });
   const [duplicatePress, setDuplicatePress] = useState(false);
   const swipeRef = useRef(swipe);
+  const canDelete = Boolean(isTx ? onDeleteTransaction || onDelete : onDelete);
 
   const updateSwipe = (next) => {
     swipeRef.current = next;
@@ -680,7 +686,7 @@ function ExpenseRow({
   }, [swipe.phase]);
 
   const startGesture = (event) => {
-    if (!onDelete && !onDuplicate) return;
+    if (!canDelete && !onDuplicate) return;
     if (event.button != null && event.button !== 0) return;
     if (["deleting", "collapsing"].includes(swipeRef.current.phase)) return;
     clearHoldTimer();
@@ -751,7 +757,7 @@ function ExpenseRow({
       clearHoldTimer();
     }
 
-    if (!gesture.horizontal && onDelete) {
+    if (!gesture.horizontal && canDelete) {
       // Intent check: swiping horizontally
       const isHorizontalIntent =
         (absDx > 6 && absDx > absDy * 1.1) ||
@@ -855,7 +861,7 @@ function ExpenseRow({
       return;
     }
 
-    if (gesture.horizontal && onDelete) {
+    if (gesture.horizontal && canDelete) {
       const dx = (event?.clientX ?? gesture.lastX) - gesture.startX;
       const currentOffset = pendingOffsetRef.current;
       const elapsed = Math.max(1, performance.now() - gesture.startedAt);
@@ -912,11 +918,11 @@ function ExpenseRow({
         ? "Income"
         : e.type === "transfer"
           ? "Transfer"
-          : "Adjustment")
+          : "Balance adjustment")
     : e.desc || "Untitled expense";
 
   const gestureHint =
-    onDelete && (onDuplicate || isTx)
+    canDelete && (onDuplicate || isTx)
       ? e.rec
         ? "Tap to edit, swipe left to skip this occurrence, or press and hold to duplicate."
         : isTx
@@ -942,7 +948,7 @@ function ExpenseRow({
       className={rowClasses}
       type="button"
       style={
-        onDelete && swipe.offset !== 0
+        canDelete && swipe.offset !== 0
           ? { transform: `translate3d(${swipe.offset}px, 0, 0)` }
           : undefined
       }
@@ -959,7 +965,7 @@ function ExpenseRow({
       onContextMenu={(event) => event.preventDefault()}
       onKeyDown={(event) => {
         if (event.key === "Delete" || event.key === "Backspace") {
-          if (onDelete) {
+          if (canDelete) {
             event.preventDefault();
             executeDeleteAnimation();
           }
@@ -1014,7 +1020,11 @@ function ExpenseRow({
           ) : (
             <>
               {e.cat}
-              {e.acct ? " · " + getAccountDisplay(e.acct, cards)[0] : ""}
+              {cards.length > 0
+                ? " · " + getAccountDisplay(e.acct, cards)[0]
+                : e.acct && e.acct !== "cash"
+                  ? " · " + getAccountDisplay(e.acct, cards)[0]
+                  : ""}
               {e.rec ? " · Recurring" : ""}
               {suggestion && suggestion !== e.cat ? (
                 <span className="category-suggestion-inline">
@@ -1037,7 +1047,7 @@ function ExpenseRow({
     </button>
   );
 
-  if (!onDelete && !onDeleteTransaction) return row;
+  if (!canDelete) return row;
 
   return (
     <div
@@ -1048,6 +1058,8 @@ function ExpenseRow({
       <button
         className={`expense-swipe-delete is-right${e.rec ? " is-skip" : ""}`}
         type="button"
+        tabIndex={swipe.phase === "revealed" ? 0 : -1}
+        aria-hidden={swipe.phase !== "revealed"}
         aria-label={
           e.rec ? `Skip ${title} for this occurrence` : `Delete ${title}`
         }
@@ -1532,8 +1544,16 @@ function Home({
   const [highlightedCategory, setHighlightedCategory] = useState("");
   const { shown, toggle } = useReveal(5000);
   const todayStr = ld();
-  const monthKey = S?.m || todayStr.slice(0, 7);
-  const isCurrentMonth = monthKey === todayStr.slice(0, 7);
+  const currentMonthKey = todayStr.slice(0, 7);
+  const currentDay = Number(todayStr.split("-")[2]) || 1;
+  const isNewMonthWindow = currentDay <= 7;
+  const monthKey = S?.m || currentMonthKey;
+  const isCurrentMonth = monthKey === currentMonthKey;
+  const isPastMonth = Boolean(monthKey && monthKey < currentMonthKey);
+  const previousMonthKey = shift(currentMonthKey, -1);
+  const shouldShowBanner =
+    isPastMonth || (isCurrentMonth && isNewMonthWindow);
+  const bannerMonth = isPastMonth ? monthKey : previousMonthKey;
   const total = tot(S, monthKey);
   const saved = monthExp(S)
     .filter((expense) => expense.cat === "Savings" && expense.amt != null)
@@ -1615,8 +1635,10 @@ function Home({
 
   return (
     <>
-      {isCurrentMonth && (
+      {shouldShowBanner && (
         <MonthEndBanner
+          month={bannerMonth}
+          isPreview={isCurrentMonth}
           transactions={S?.exp || []}
           amountOf={(t) => (t.cat === "Savings" ? 0 : t.amt)}
           categoryOf={(t) => t.cat}
@@ -1962,30 +1984,55 @@ function Activity({
   const [feedType, setFeedType] = useState("all"); // "all" | "expenses" | "income" | "transfers"
   const [quickFilter, setQuickFilter] = useState(""); // "" | "needs-amount" | "recurring" | "cash" | "high-value"
 
-  // Automatically switch to expenses if user selected a category filter
+  // Automatically switch to expenses if user selected a category filter, and clear stale quick filters
   useEffect(() => {
-    if (cf && feedType !== "all" && feedType !== "expenses") {
-      setFeedType("expenses");
+    if (cf) {
+      if (feedType !== "all" && feedType !== "expenses") {
+        setFeedType("expenses");
+      }
+      setQuickFilter("");
+    } else if (feedType === "income" || feedType === "transfers") {
+      if (quickFilter === "needs-amount" || quickFilter === "recurring") {
+        setQuickFilter("");
+      }
     }
-  }, [cf, feedType]);
+  }, [cf, feedType, quickFilter]);
 
   const query = String(q || "").trim().toLowerCase();
+
+  const isItemCash = useCallback((item) => {
+    if (!item) return false;
+    if (item.sourceType === "expense") return !item.acct || item.acct === "cash";
+    if (item.type === "transfer") {
+      return (
+        item.from === "cash" ||
+        item.to === "cash" ||
+        item.acct === "cash" ||
+        item.fromAccount === "cash" ||
+        item.toAccount === "cash"
+      );
+    }
+    return !item.acct || item.acct === "cash";
+  }, []);
+
+  const currentMonth =
+    typeof S?.m === "string" && S.m.length >= 7 ? S.m : ld().slice(0, 7);
 
   // 1. Month Expenses
   const monthExpenses = useMemo(() => {
     return (S?.exp || [])
-      .filter((e) => typeof e?.date === "string" && e.date.startsWith(S?.m || ""))
+      .filter((e) => typeof e?.date === "string" && e.date.startsWith(currentMonth))
       .map((e, index) => ({
         ...e,
         sourceType: "expense",
         index,
       }));
-  }, [S?.exp, S?.m]);
+  }, [S?.exp, currentMonth]);
 
   // 2. Month Transactions (Income, Transfers, Adjustments)
   const monthTransactions = useMemo(() => {
     return (S?.tx || [])
-      .filter((t) => typeof t?.date === "string" && t.date.startsWith(S?.m || ""))
+      .filter((t) => typeof t?.date === "string" && t.date.startsWith(currentMonth))
       .map((t, index) => ({
         ...t,
         sourceType: "tx",
@@ -2007,18 +2054,22 @@ function Activity({
         amount: t.amt,
         index,
       }));
-  }, [S?.tx, S?.m]);
+  }, [S?.tx, currentMonth]);
 
-  // 3. Combined & Sorted Unified Feed
+  // 3. Combined & Sorted Unified Feed (with stable combined indexing)
   const allMonthItems = useMemo(() => {
-    return [...monthExpenses, ...monthTransactions].sort((x, y) => {
-      return (
-        String(y.date || "").localeCompare(String(x.date || "")) ||
-        activityTime(y) - activityTime(x) ||
-        y.index - x.index ||
-        String(y.id || "").localeCompare(String(x.id || ""))
-      );
-    });
+    const combined = [...monthExpenses, ...monthTransactions];
+    return combined
+      .map((item, combinedIndex) => ({ item, combinedIndex }))
+      .sort((x, y) => {
+        return (
+          String(y.item.date || "").localeCompare(String(x.item.date || "")) ||
+          activityTime(y.item) - activityTime(x.item) ||
+          y.combinedIndex - x.combinedIndex ||
+          String(y.item.id || "").localeCompare(String(x.item.id || ""))
+        );
+      })
+      .map(({ item }) => item);
   }, [monthExpenses, monthTransactions]);
 
   // Counts for Segmented Tabs
@@ -2030,16 +2081,26 @@ function Activity({
   ).length;
   const countAll = monthExpenses.length + monthTransactions.length;
 
+  // Items in active feed scope for accurate badge counts
+  const targetScopeItems = useMemo(() => {
+    if (feedType === "expenses") return monthExpenses;
+    if (feedType === "income")
+      return monthTransactions.filter((t) => t.type === "income");
+    if (feedType === "transfers")
+      return monthTransactions.filter(
+        (t) =>
+          t.type === "transfer" ||
+          t.type === "adjust" ||
+          t.type === "adjustment",
+      );
+    return allMonthItems;
+  }, [allMonthItems, feedType, monthExpenses, monthTransactions]);
+
   // Counts for Quick Filter Badges
   const needsAmountCount = monthExpenses.filter((e) => e.amt == null).length;
   const recurringCount = monthExpenses.filter((e) => Boolean(e.rec)).length;
-  const cashCount = allMonthItems.filter((item) => {
-    if (item.sourceType === "expense") return !item.acct || item.acct === "cash";
-    if (item.type === "transfer")
-      return item.from === "cash" || item.to === "cash" || item.acct === "cash";
-    return item.acct === "cash";
-  }).length;
-  const highValueCount = allMonthItems.filter(
+  const cashCount = targetScopeItems.filter((item) => isItemCash(item)).length;
+  const highValueCount = targetScopeItems.filter(
     (item) => Number(item.amt || 0) >= 1000,
   ).length;
 
@@ -2076,22 +2137,7 @@ function Activity({
         (item.sourceType !== "expense" || !item.rec)
       )
         return false;
-      if (quickFilter === "cash") {
-        if (item.sourceType === "expense") {
-          if (item.acct && item.acct !== "cash") return false;
-        } else if (item.sourceType === "tx") {
-          if (item.type === "transfer") {
-            if (
-              item.from !== "cash" &&
-              item.to !== "cash" &&
-              item.acct !== "cash"
-            )
-              return false;
-          } else {
-            if (item.acct !== "cash") return false;
-          }
-        }
-      }
+      if (quickFilter === "cash" && !isItemCash(item)) return false;
       if (quickFilter === "high-value" && Number(item.amt || 0) < 1000)
         return false;
 
@@ -2102,29 +2148,67 @@ function Activity({
       ).toLowerCase();
       const cat = String(item.cat || "").toLowerCase();
       const amtStr = item.amt != null ? String(item.amt) : "";
+      const formattedAmt = item.amt != null ? M(item.amt).toLowerCase() : "";
+      const cleanMoneyQuery = query.replace(/[৳,\s]/g, "");
       const [accountName] = getAccountDisplay(item.acct || item.from, S?.cards);
       const acctStr = String(accountName || "").toLowerCase();
       const [toAccountName] = item.to
         ? getAccountDisplay(item.to, S?.cards)
         : [""];
       const toAcctStr = String(toAccountName || "").toLowerCase();
-      const isCash =
-        item.sourceType === "expense"
-          ? !item.acct || item.acct === "cash"
-          : item.type === "transfer"
-            ? item.from === "cash" || item.to === "cash" || item.acct === "cash"
-            : item.acct === "cash";
+      const isCash = isItemCash(item);
+      const matchesCash =
+        isCash &&
+        (query === "cash" ||
+          query === "cas" ||
+          query.includes("cash") ||
+          ("cash".startsWith(query) && query.length >= 2));
+      const dateStr = String(item.date || "");
+      const formattedDate = fD(dateStr).toLowerCase();
+      const isToday = dateStr === ld();
+      const isYesterday = dateStr === ago(1);
+      const matchesRelativeDay =
+        (isToday && "today".includes(query)) ||
+        (isYesterday && "yesterday".includes(query));
+
+      let matchesType = false;
+      if (item.sourceType === "tx") {
+        if (item.type === "income") {
+          matchesType = query.length >= 2 && "income".includes(query);
+        } else if (item.type === "transfer") {
+          matchesType = query.length >= 2 && "transfer".includes(query);
+        } else if (item.type === "adjust" || item.type === "adjustment") {
+          matchesType =
+            "adjustment".includes(query) ||
+            "adjust".includes(query) ||
+            "balance".includes(query) ||
+            (item.dir === "up"
+              ? "increase".includes(query)
+              : "decrease".includes(query));
+        }
+      } else if (item.sourceType === "expense") {
+        matchesType =
+          query === "expense" ||
+          (Boolean(item.rec) &&
+            ("recurring".includes(query) || "repeat".includes(query)));
+      }
+
       return (
         desc.includes(query) ||
         cat.includes(query) ||
         amtStr.includes(query) ||
+        formattedAmt.includes(query) ||
+        (cleanMoneyQuery && amtStr.includes(cleanMoneyQuery)) ||
         acctStr.includes(query) ||
         toAcctStr.includes(query) ||
-        (isCash && "cash".includes(query)) ||
-        (item.type && String(item.type).toLowerCase().includes(query))
+        matchesCash ||
+        matchesType ||
+        matchesRelativeDay ||
+        dateStr.includes(query) ||
+        formattedDate.includes(query)
       );
     });
-  }, [allMonthItems, feedType, cf, quickFilter, query, S?.cards]);
+  }, [allMonthItems, feedType, cf, quickFilter, query, isItemCash, S?.cards]);
 
   // Day grouping
   const g = {};
@@ -2164,15 +2248,28 @@ function Activity({
   const matchesInOtherMonths =
     query && !filteredItems.length
       ? [...(S?.exp || []), ...(S?.tx || [])].some((item) => {
+          const itemDate = item.date || "";
+          if (
+            typeof itemDate === "string" &&
+            itemDate.startsWith(currentMonth)
+          ) {
+            return false;
+          }
           const desc = String(
             item.desc || item.title || item.note || item.description || "",
           ).toLowerCase();
           const cat = String(item.cat || "").toLowerCase();
+          const amtStr = item.amt != null ? String(item.amt) : "";
+          const cleanMoneyQuery = query.replace(/[৳,\s]/g, "");
           const [acct] = getAccountDisplay(item.acct || item.from, S?.cards);
+          const [toAcct] = item.to ? getAccountDisplay(item.to, S?.cards) : [""];
           return (
             desc.includes(query) ||
             cat.includes(query) ||
-            String(acct || "").toLowerCase().includes(query)
+            amtStr.includes(query) ||
+            (cleanMoneyQuery && amtStr.includes(cleanMoneyQuery)) ||
+            String(acct || "").toLowerCase().includes(query) ||
+            String(toAcct || "").toLowerCase().includes(query)
           );
         })
       : false;
@@ -2262,6 +2359,12 @@ function Activity({
               triggerHaptic("selection");
               setFeedType("income");
               setCf("");
+              if (
+                quickFilter === "needs-amount" ||
+                quickFilter === "recurring"
+              ) {
+                setQuickFilter("");
+              }
             }}
           >
             <span>Income</span>
@@ -2276,6 +2379,12 @@ function Activity({
               triggerHaptic("selection");
               setFeedType("transfers");
               setCf("");
+              if (
+                quickFilter === "needs-amount" ||
+                quickFilter === "recurring"
+              ) {
+                setQuickFilter("");
+              }
             }}
           >
             <span>Transfers</span>
@@ -2442,8 +2551,14 @@ function Activity({
               <span>·</span>
               <strong className="is-positive">+{M(totalIncome)}</strong>
             </>
+          ) : totalIncome > 0 && totalExpenses === 0 ? (
+            <strong className="is-positive">+{M(totalIncome)}</strong>
+          ) : totalExpenses > 0 ? (
+            <strong>{M(totalExpenses)}</strong>
+          ) : totalTransfers > 0 ? (
+            <strong>{M(totalTransfers)}</strong>
           ) : (
-            <strong>{M(totalExpenses || totalIncome || totalTransfers)}</strong>
+            <strong>{M(0)}</strong>
           )}
           <span>·</span>
           <span>
@@ -2500,17 +2615,17 @@ function Activity({
             </div>
             <b>
               {hasFilter
-                ? `No matching ${feedType === "income" ? "income" : feedType === "transfers" ? "transfers" : "activity"}`
+                ? `No matching ${feedType === "income" ? "income" : feedType === "transfers" ? "transfers" : feedType === "expenses" ? "expenses" : "activity"}`
                 : countAll === 0
-                  ? `No activity in ${fM(S.m)}`
-                  : `No ${feedType} in ${fM(S.m)}`}
+                  ? `No activity in ${fM(currentMonth)}`
+                  : `No ${feedType} in ${fM(currentMonth)}`}
             </b>
             <small>
               {hasFilter
                 ? matchesInOtherMonths
-                  ? `No matches in ${fM(S.m)}. Matching items found in other months — switch months above to view them.`
+                  ? `No matches in ${fM(currentMonth)}. Matching items found in other months — switch months above to view them.`
                   : "Try searching another keyword or clearing your filter."
-                : `${feedType === "income" ? "Income" : feedType === "transfers" ? "Transfers and adjustments" : "Activity"} for this month will show up here by date.`}
+                : `${feedType === "income" ? "Income" : feedType === "transfers" ? "Transfers and adjustments" : feedType === "expenses" ? "Expenses" : "Activity"} for this month will show up here by date.`}
             </small>
             {hasFilter && (
               <button
@@ -2531,6 +2646,14 @@ function Activity({
             const dayIncomeSum = dayExpenses
               .filter((e) => e.type === "income")
               .reduce((acc, e) => acc + (e.amt || 0), 0);
+            const dayTransfersSum = dayExpenses
+              .filter(
+                (e) =>
+                  e.type === "transfer" ||
+                  e.type === "adjust" ||
+                  e.type === "adjustment",
+              )
+              .reduce((acc, e) => acc + (e.amt || 0), 0);
             const hasAmount = dayExpenses.some((e) => e.amt != null);
             const dayLabel = !d
               ? "Undated"
@@ -2548,16 +2671,20 @@ function Activity({
                     <span>
                       {feedType === "income" ? (
                         <span className="is-positive">+{M(dayIncomeSum)}</span>
+                      ) : feedType === "transfers" ? (
+                        <span>{M(dayTransfersSum)}</span>
                       ) : dayIncomeSum > 0 && dayExpenseSum > 0 ? (
                         <>
                           <span>-{M(dayExpenseSum)} </span>
                           <span className="is-positive">(+{M(dayIncomeSum)})</span>
                         </>
-                      ) : dayIncomeSum > 0 ? (
+                      ) : dayIncomeSum > 0 && dayExpenseSum === 0 ? (
                         <span className="is-positive">+{M(dayIncomeSum)}</span>
-                      ) : (
-                        <span>-{M(dayExpenseSum || dayExpenses.reduce((acc, e) => acc + (e.amt || 0), 0))}</span>
-                      )}
+                      ) : dayExpenseSum > 0 ? (
+                        <span>-{M(dayExpenseSum)}</span>
+                      ) : dayTransfersSum > 0 ? (
+                        <span>{M(dayTransfersSum)}</span>
+                      ) : null}
                     </span>
                   )}
                 </div>
@@ -3936,36 +4063,50 @@ function TxSheet({ type, defaultAccount, cards = [], onSave, onClose }) {
 }
 
 function AccountTxDetailSheet({ tx, cards = [], onSave, onDelete, onClose }) {
-  const accountOptions = cards.map((c) => [c.id, c.name]);
+  const baseAccountOptions = [
+    ["cash", "Cash"],
+    ...cards.map((c) => [c.id, c.name]),
+  ];
   const ensureAccountOption = (id) => {
-    if (!id) return accountOptions;
-    if (accountOptions.some(([optId]) => optId === id)) return accountOptions;
-    return [...accountOptions, [id, getAccountDisplay(id, cards)[0]]];
+    if (!id) return baseAccountOptions;
+    const normalizedId = id === "" ? "cash" : id;
+    if (baseAccountOptions.some(([optId]) => optId === normalizedId)) {
+      return baseAccountOptions;
+    }
+    return [
+      ...baseAccountOptions,
+      [normalizedId, getAccountDisplay(normalizedId, cards)[0]],
+    ];
   };
   const [g, setG] = useState({
     type: tx.type === "adjustment" ? "adjust" : tx.type || "income",
     amt: tx.amt ?? "",
-    acct: tx.acct || cards[0]?.id || "",
+    acct: tx.acct || cards[0]?.id || "cash",
     dir: tx.dir || (tx.direction === "decrease" ? "down" : "up"),
     note: tx.note || "",
     date: tx.date || ld(),
-    fromAccount: tx.acct || cards[0]?.id || "",
+    fromAccount: tx.acct || cards[0]?.id || "cash",
     toAccount:
-      tx.to || cards.find((c) => c.id !== tx.acct)?.id || cards[1]?.id || "",
+      tx.to || cards.find((c) => c.id !== tx.acct)?.id || (cards[0]?.id ? "cash" : ""),
   });
   const set = (k, v) => setG((x) => ({ ...x, [k]: v }));
   const tr = g.type === "transfer";
   const allFromOptions = ensureAccountOption(g.fromAccount);
+  const normFrom = g.fromAccount === "" ? "cash" : g.fromAccount;
   const allToOptions = ensureAccountOption(g.toAccount).filter(
-    ([id]) => id !== g.fromAccount,
+    ([id]) => id !== normFrom,
   );
   const singleAccountOptions = ensureAccountOption(g.acct);
+  const normTo = g.toAccount === "" ? "cash" : g.toAccount;
+  const amtNum = Number(g.amt);
+  const hasValidAmt = Number.isFinite(amtNum) && amtNum > 0;
   const canSave =
-    singleAccountOptions.length > 0 &&
-    (!tr ||
-      (allFromOptions.length >= 1 &&
+    hasValidAmt &&
+    (tr
+      ? allFromOptions.length >= 1 &&
         allToOptions.length >= 1 &&
-        g.fromAccount !== g.toAccount));
+        normFrom !== normTo
+      : singleAccountOptions.length > 0);
 
   return (
     <Sheet
@@ -3989,7 +4130,20 @@ function AccountTxDetailSheet({ tx, cards = [], onSave, onDelete, onClose }) {
       <h3 id="sheet-title">Edit account activity</h3>
       <Seg
         value={g.type}
-        onPick={(v) => setG((current) => ({ ...current, type: v }))}
+        onPick={(v) => {
+          setG((current) => ({
+            ...current,
+            type: v,
+            acct:
+              v === "transfer"
+                ? current.fromAccount || current.acct
+                : current.acct,
+            fromAccount:
+              v === "transfer"
+                ? current.acct || current.fromAccount
+                : current.fromAccount,
+          }));
+        }}
         options={[
           [
             "income",
@@ -4034,6 +4188,7 @@ function AccountTxDetailSheet({ tx, cards = [], onSave, onDelete, onClose }) {
               setG((current) => ({
                 ...current,
                 fromAccount: value,
+                acct: value,
                 toAccount:
                   current.toAccount === value
                     ? allFromOptions.find(([id]) => id !== value)?.[0] || ""
@@ -4056,7 +4211,13 @@ function AccountTxDetailSheet({ tx, cards = [], onSave, onDelete, onClose }) {
           <span className="lbl">Account</span>
           <AccountPicker
             value={g.acct}
-            onPick={(v) => set("acct", v)}
+            onPick={(v) => {
+              setG((current) => ({
+                ...current,
+                acct: v,
+                fromAccount: v,
+              }));
+            }}
             cards={cards}
             options={singleAccountOptions}
           />
@@ -4101,6 +4262,10 @@ function AccountTxDetailSheet({ tx, cards = [], onSave, onDelete, onClose }) {
             <option value="Fee">Fee</option>
             <option value="Cash withdrawn">Cash withdrawn</option>
             <option value="Correction">Correction</option>
+            {g.note &&
+              !["", "Fee", "Cash withdrawn", "Correction"].includes(g.note) && (
+                <option value={g.note}>{g.note}</option>
+              )}
           </select>
         </>
       ) : (
@@ -4132,16 +4297,28 @@ function DetailSheet({ e, suggestion, cards = [], onSave, onDelete, onClose }) {
     acct: e.acct || "",
   });
   const set = (key, value) => setF((current) => ({ ...current, [key]: value }));
+  const amtNum = f.amt !== "" && f.amt != null ? Number(f.amt) : null;
+  const isSavings = f.cat === "Savings";
+  const canSave =
+    Boolean(f.desc?.trim()) &&
+    Boolean(f.date) &&
+    (amtNum === null || (Number.isFinite(amtNum) && amtNum > 0)) &&
+    (!isSavings || (amtNum !== null && amtNum > 0));
   return (
     <Sheet
       onClose={onClose}
       actionsClassName="is-paired"
       actions={
         <>
-          <button className="btn" onClick={() => onSave(e.id, f)}>
+          <button
+            type="button"
+            className="btn"
+            disabled={!canSave}
+            onClick={() => canSave && onSave(e.id, f)}
+          >
             Save changes
           </button>
-          <button className="btn del" onClick={() => onDelete(e.id)}>
+          <button type="button" className="btn del" onClick={() => onDelete(e.id)}>
             Delete expense
           </button>
         </>
@@ -4179,6 +4356,7 @@ function DetailSheet({ e, suggestion, cards = [], onSave, onDelete, onClose }) {
       <div className="cg">
         {Object.keys(CAT).map((category) => (
           <button
+            type="button"
             key={category}
             className={f.cat === category ? "on" : ""}
             onClick={() => set("cat", category)}
@@ -4212,7 +4390,9 @@ function DetailSheet({ e, suggestion, cards = [], onSave, onDelete, onClose }) {
           ...cards
             .filter((c) => c.type !== "savings")
             .map((c) => [c.id, c.name]),
-          ...(f.acct && !cards.some((c) => c.id === f.acct)
+          ...(f.acct &&
+          f.acct !== "cash" &&
+          !cards.some((c) => c.id === f.acct)
             ? [[f.acct, getAccountDisplay(f.acct, cards)[0]]]
             : []),
         ]}
@@ -7547,6 +7727,13 @@ export default function MobilePrototype({
     )
       return toast("Could not update this expense.");
     close();
+    clearTimeout(highlightTimer.current);
+    setHighlightedTransactionId(null);
+    setHighlightedExpenseId(id);
+    highlightTimer.current = setTimeout(() => {
+      setHighlightedExpenseId(null);
+      setHighlightedTransactionId(null);
+    }, 1500);
     triggerHaptic("success");
     toast("Expense updated");
   };
@@ -7584,6 +7771,13 @@ export default function MobilePrototype({
     const updated = onTransactionUpdate?.(id, value);
     if (!updated) return toast("Enter a valid amount.");
     close();
+    clearTimeout(highlightTimer.current);
+    setHighlightedExpenseId(null);
+    setHighlightedTransactionId(id);
+    highlightTimer.current = setTimeout(() => {
+      setHighlightedExpenseId(null);
+      setHighlightedTransactionId(null);
+    }, 1500);
     triggerHaptic("success");
     toast("Transaction updated");
   };
