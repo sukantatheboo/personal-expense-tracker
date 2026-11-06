@@ -18,6 +18,7 @@ export const STORAGE_KEYS = {
   currency: "spend-target-currency-v1",
   reminderTime: "spend-reminder-time-v1",
   profileName: "spend-profile-name-v1",
+  preferredAccount: "spend-preferred-account-v1",
 };
 
 const SENSITIVE_STORAGE_KEY_SET = new Set(SENSITIVE_STORAGE_KEYS);
@@ -622,6 +623,28 @@ export function loadAccountData(
           }))
       : [],
   };
+}
+
+export function parseAmount(val) {
+  if (val === "" || val == null) return null;
+  let str = String(val).trim().replace(/[৳$€£\s]/g, "");
+  if (!str) return null;
+  if (str.includes(",") && str.includes(".")) {
+    if (str.indexOf(",") < str.indexOf(".")) {
+      str = str.replace(/,/g, "");
+    } else {
+      str = str.replace(/\./g, "").replace(",", ".");
+    }
+  } else if (str.includes(",")) {
+    const parts = str.split(",");
+    if (parts.length === 2 && parts[1].length !== 3) {
+      str = parts[0] + "." + parts[1];
+    } else {
+      str = str.replace(/,/g, "");
+    }
+  }
+  const num = Number(str);
+  return Number.isFinite(num) ? num : NaN;
 }
 
 export function roundMoney(value) {

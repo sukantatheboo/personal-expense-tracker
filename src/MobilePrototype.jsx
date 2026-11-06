@@ -10,7 +10,13 @@ import {
 import { Capacitor } from "@capacitor/core";
 import { Haptics, ImpactStyle, NotificationType } from "@capacitor/haptics";
 import { FaPenToSquare } from "react-icons/fa6";
-import { ACCOUNT_OPTIONS, DEFAULT_CARDS, getSavingsAccountId } from "./data.js";
+import {
+  ACCOUNT_OPTIONS,
+  DEFAULT_CARDS,
+  getSavingsAccountId,
+  parseAmount,
+  STORAGE_KEYS,
+} from "./data.js";
 import {
   StackedCardDeck,
   WalletCard,
@@ -412,9 +418,10 @@ function AccountPicker({ value, options, onPick, cards = [] }) {
       <div className="account-picker-track">
         {options.map(([id, label]) => {
           const isCash = id === "" || id === "cash";
+          const normalizedValue = value ?? "";
           const isSelected =
-            value === id ||
-            (isCash && (value === "" || value === "cash"));
+            normalizedValue === id ||
+            (isCash && (normalizedValue === "" || normalizedValue === "cash"));
           const card = cards.find((c) => c.id === id);
           const isPrimary = card?.isPrimary;
           const isFrozen = card?.frozen;
@@ -1108,37 +1115,25 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
       '[data-sheet-autofocus], .amt input, input[autofocus]'
     );
 
+    sheetNode.focus({ preventScroll: true });
+
     if (autoFocusTarget && typeof autoFocusTarget.focus === "function") {
-      try {
-        autoFocusTarget.focus({ preventScroll: true });
-        if (typeof autoFocusTarget.select === "function" && autoFocusTarget.value) {
-          autoFocusTarget.select();
-        }
-      } catch {
-        // ignore
-      }
-
-      // Secondary check after layout animation/reflow to ensure mobile webview focus remains active
-      const timer = setTimeout(() => {
-        if (
-          sheetNode.contains(autoFocusTarget) &&
-          (document.activeElement === sheetNode || document.activeElement === document.body)
-        ) {
-          try {
-            autoFocusTarget.focus({ preventScroll: true });
-            if (typeof autoFocusTarget.select === "function" && autoFocusTarget.value) {
-              autoFocusTarget.select();
-            }
-          } catch {
-            // ignore
+      const focusTarget = () => {
+        if (!sheetNode.contains(autoFocusTarget)) return;
+        try {
+          autoFocusTarget.focus({ preventScroll: true });
+          if (typeof autoFocusTarget.select === "function" && autoFocusTarget.value) {
+            autoFocusTarget.select();
           }
+        } catch {
+          // ignore
         }
-      }, 50);
+      };
 
+      // Defer slightly so the sheet slide-up animation begins smoothly without sudden viewport jumping
+      const timer = setTimeout(focusTarget, 60);
       return () => clearTimeout(timer);
     }
-
-    sheetNode.focus({ preventScroll: true });
   }, []);
 
   useEffect(() => {
@@ -2824,6 +2819,7 @@ function Accounts({
   onOpenTransaction,
   onLockedCardNotice,
   onAddExpense,
+  onActiveAccountChange,
 }) {
   const cards = Array.isArray(S.cards) ? S.cards : [];
   const savingsAccountId = getSavingsAccountId(cards);
@@ -2834,6 +2830,10 @@ function Accounts({
   const [showAllTx, setShowAllTx] = useState(false);
   const [deckDragY, setDeckDragY] = useState(0);
   const prevCardCountRef = useRef(cards.length);
+
+  useEffect(() => {
+    onActiveAccountChange?.(selectedAccount);
+  }, [selectedAccount, onActiveAccountChange]);
 
   useEffect(() => {
     if (cards.length === 0) {
@@ -3707,23 +3707,45 @@ function AddSheet({
   categoryOrder,
   expenses,
   cards = [],
-  defaultAccount = "",
+  defaultAccount,
+  preferredAccount,
+  onAccountChange,
   onSave,
   onClose,
 }) {
   const spendableCards = cards.filter((c) => c.type !== "savings" && !c.frozen);
   const primaryCard = spendableCards.find((c) => c.isPrimary) || spendableCards[0];
   const hasSavingsAccount = Boolean(getSavingsAccountId(cards));
-  const initialAcct =
-    defaultAccount && spendableCards.some((c) => c.id === defaultAccount)
-      ? defaultAccount
-      : primaryCard?.id || "";
+
+  const resolvedInitialAcct = useMemo(() => {
+    // 1. Explicit defaultAccount passed to sheet (including empty string or "cash" for Cash)
+    if (defaultAccount !== undefined && defaultAccount !== null) {
+      if (defaultAccount === "" || defaultAccount === "cash") {
+        return "";
+      }
+      if (spendableCards.some((c) => c.id === defaultAccount)) {
+        return defaultAccount;
+      }
+    }
+    // 2. User's remembered preferred / last-used account
+    if (preferredAccount !== undefined && preferredAccount !== null) {
+      if (preferredAccount === "" || preferredAccount === "cash") {
+        return "";
+      }
+      if (spendableCards.some((c) => c.id === preferredAccount)) {
+        return preferredAccount;
+      }
+    }
+    // 3. Fallback to primary card if available, else Cash
+    return primaryCard?.id || "";
+  }, [defaultAccount, preferredAccount, spendableCards, primaryCard]);
+
   const [f, setF] = useState({
     amt: "",
     desc: "",
     cat: categoryOrder.find((category) => category !== "Savings") || "Food",
     date: ld(),
-    acct: initialAcct,
+    acct: resolvedInitialAcct,
     iv: iv || "none",
   });
   const [categoryTouched, setCategoryTouched] = useState(false);
@@ -3796,7 +3818,7 @@ function AddSheet({
               setF((current) => ({
                 ...current,
                 cat: c,
-                ...(c === "Savings" && !current.acct
+                ...(c === "Savings" && hasSavingsAccount && !current.acct
                   ? { acct: spendableCards[0]?.id || "" }
                   : {}),
               }));
@@ -3807,7 +3829,7 @@ function AddSheet({
           </button>
         ))}
       </div>
-      {f.cat === "Savings" && (
+      {f.cat === "Savings" && hasSavingsAccount && (
         <p className="hint savings-transfer-note">
           Moves money from the selected account into Savings. It is not counted
           as spending or against your budget.
@@ -3822,7 +3844,9 @@ function AddSheet({
         aria-label="Expense description"
         enterKeyHint="done"
         placeholder={
-          f.cat === "Savings" ? "e.g. Monthly savings" : "e.g. Lunch"
+          f.cat === "Savings" && hasSavingsAccount
+            ? "e.g. Monthly savings"
+            : "e.g. Lunch"
         }
         value={f.desc}
         onChange={(event) => {
@@ -3830,16 +3854,22 @@ function AddSheet({
           set("desc", description);
           if (!categoryTouched) {
             const suggestion = suggestedCategory(description, expenses);
-            if (suggestion) set("cat", suggestion);
+            if (suggestion) {
+              set("cat", suggestion);
+            } else if (!description.trim()) {
+              set("cat", categoryOrder.find((category) => category !== "Savings") || "Food");
+            }
           }
         }}
         onKeyDown={(event) => {
           if (event.key === "Enter") {
+            event.preventDefault();
             event.currentTarget.blur();
+            onSave(f);
           }
         }}
       />
-      {categorySuggestion && (
+      {categorySuggestion && categorySuggestion !== f.cat && (
         <p
           className="category-suggestion-hint"
           role="status"
@@ -3878,14 +3908,19 @@ function AddSheet({
       </div>
 
       <span className="lbl">
-        {f.cat === "Savings" ? "Transfer from" : "Paid from"}
+        {f.cat === "Savings" && hasSavingsAccount ? "Transfer from" : "Paid from"}
       </span>
       <AccountPicker
         value={f.acct}
-        onPick={(v) => set("acct", v)}
+        onPick={(v) => {
+          set("acct", v);
+          if (f.cat !== "Savings") {
+            onAccountChange?.(v);
+          }
+        }}
         cards={cards}
         options={
-          f.cat === "Savings" && spendableCards.length > 0
+          f.cat === "Savings" && hasSavingsAccount && spendableCards.length > 0
             ? spendableCards.map((c) => [c.id, c.name])
             : [["", "Cash"], ...spendableCards.map((c) => [c.id, c.name])]
         }
@@ -3940,7 +3975,10 @@ function TxSheet({ type, defaultAccount, cards = [], onSave, onClose }) {
   const transferFromOptions =
     unfrozenFromOptions.length > 0 ? unfrozenFromOptions : accountOptions;
   const fromCardIsFrozen = cards.find((c) => c.id === g.fromAccount)?.frozen;
+  const amtNum = parseAmount(g.amt);
+  const hasValidAmt = Number.isFinite(amtNum) && amtNum > 0;
   const canSave =
+    hasValidAmt &&
     accountOptions.length > 0 &&
     (!tr ||
       (accountOptions.length >= 2 &&
@@ -4134,7 +4172,9 @@ function TxSheet({ type, defaultAccount, cards = [], onSave, onClose }) {
             onChange={(e) => set("note", e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
+                e.preventDefault();
                 e.currentTarget.blur();
+                if (canSave) onSave(g);
               }
             }}
           />
@@ -4183,7 +4223,7 @@ function AccountTxDetailSheet({ tx, cards = [], onSave, onDelete, onClose }) {
   );
   const singleAccountOptions = ensureAccountOption(g.acct);
   const normTo = g.toAccount === "" ? "cash" : g.toAccount;
-  const amtNum = Number(g.amt);
+  const amtNum = parseAmount(g.amt);
   const hasValidAmt = Number.isFinite(amtNum) && amtNum > 0;
   const canSave =
     hasValidAmt &&
@@ -4386,7 +4426,9 @@ function AccountTxDetailSheet({ tx, cards = [], onSave, onDelete, onClose }) {
             onChange={(e) => set("note", e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
+                e.preventDefault();
                 e.currentTarget.blur();
+                if (canSave) onSave(tx.id, g);
               }
             }}
           />
@@ -4407,13 +4449,18 @@ function DetailSheet({ e, suggestion, cards = [], onSave, onDelete, onClose }) {
   const amtInputRef = useRef(null);
   const descInputRef = useRef(null);
   const set = (key, value) => setF((current) => ({ ...current, [key]: value }));
-  const amtNum = f.amt !== "" && f.amt != null ? Number(f.amt) : null;
+  const amtNum = parseAmount(f.amt);
   const isSavings = f.cat === "Savings";
+  const hasSavingsAccount = Boolean(getSavingsAccountId(cards));
+  const spendableCards = cards.filter((c) => c.type !== "savings" && !c.frozen);
   const canSave =
     Boolean(f.desc?.trim()) &&
     Boolean(f.date) &&
     (amtNum === null || (Number.isFinite(amtNum) && amtNum > 0)) &&
-    (!isSavings || (amtNum !== null && amtNum > 0));
+    (!isSavings ||
+      (amtNum !== null &&
+        amtNum > 0 &&
+        (!hasSavingsAccount || Boolean(f.acct))));
   return (
     <Sheet
       onClose={onClose}
@@ -4464,7 +4511,9 @@ function DetailSheet({ e, suggestion, cards = [], onSave, onDelete, onClose }) {
         onChange={(event) => set("desc", event.target.value)}
         onKeyDown={(event) => {
           if (event.key === "Enter") {
+            event.preventDefault();
             event.currentTarget.blur();
+            if (canSave) onSave(e.id, f);
           }
         }}
       />
@@ -4484,7 +4533,15 @@ function DetailSheet({ e, suggestion, cards = [], onSave, onDelete, onClose }) {
             type="button"
             key={category}
             className={f.cat === category ? "on" : ""}
-            onClick={() => set("cat", category)}
+            onClick={() => {
+              setF((current) => ({
+                ...current,
+                cat: category,
+                ...(category === "Savings" && hasSavingsAccount && !current.acct
+                  ? { acct: spendableCards[0]?.id || "" }
+                  : {}),
+              }));
+            }}
           >
             <CategorySymbol category={category} />
             <span>{category}</span>
@@ -4505,22 +4562,28 @@ function DetailSheet({ e, suggestion, cards = [], onSave, onDelete, onClose }) {
         disabled={e.rec}
         onChange={(event) => set("date", event.target.value)}
       />
-      <span className="lbl">Paid from</span>
+      <span className="lbl">
+        {isSavings && hasSavingsAccount ? "Transfer from" : "Paid from"}
+      </span>
       <AccountPicker
         value={f.acct}
         onPick={(value) => set("acct", value)}
         cards={cards}
-        options={[
-          ["", "Cash"],
-          ...cards
-            .filter((c) => c.type !== "savings")
-            .map((c) => [c.id, c.name]),
-          ...(f.acct &&
-          f.acct !== "cash" &&
-          !cards.some((c) => c.id === f.acct)
-            ? [[f.acct, getAccountDisplay(f.acct, cards)[0]]]
-            : []),
-        ]}
+        options={
+          isSavings && hasSavingsAccount && spendableCards.length > 0
+            ? spendableCards.map((c) => [c.id, c.name])
+            : [
+                ["", "Cash"],
+                ...cards
+                  .filter((c) => c.type !== "savings")
+                  .map((c) => [c.id, c.name]),
+                ...(f.acct &&
+                f.acct !== "cash" &&
+                !cards.some((c) => c.id === f.acct)
+                  ? [[f.acct, getAccountDisplay(f.acct, cards)[0]]]
+                  : []),
+              ]
+        }
       />
     </Sheet>
   );
@@ -4536,7 +4599,13 @@ function BudgetSheet({ S, onSave, onClear, onClose }) {
       actionsClassName={currentBudget ? "is-paired" : ""}
       actions={
         <>
-          <button className="btn" onClick={() => onSave(parseFloat(v))}>
+          <button
+            className="btn"
+            onClick={() => {
+              const num = parseAmount(v);
+              onSave(num);
+            }}
+          >
             Save budget
           </button>
           {currentBudget ? (
@@ -4564,10 +4633,8 @@ function BudgetSheet({ S, onSave, onClear, onClose }) {
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
-              const num = parseFloat(v);
-              if (Number.isFinite(num) && num > 0) {
-                onSave(num);
-              }
+              const num = parseAmount(v);
+              onSave(num);
             }
           }}
         />
@@ -4860,7 +4927,7 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
       expiry: isMfs || isSavings ? "" : formData.expiry.trim() || "12/28",
       color: formData.color || selectedProvider.color,
       gradient: formData.gradient || selectedProvider.gradient,
-      initialBalance: parseFloat(formData.initialBalance) || 0,
+      initialBalance: parseAmount(formData.initialBalance) || 0,
     };
 
     onAddCard(newCard);
@@ -5039,7 +5106,7 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
           <div className="add-card-live-preview-wrap">
             <WalletCard
               card={previewCard}
-              balance={parseFloat(formData.initialBalance) || 0}
+              balance={parseAmount(formData.initialBalance) || 0}
               isActive={true}
               interactive={false}
               showBalance={false}
@@ -5579,7 +5646,7 @@ function CardOptionsSheet({
     if (!selectedCard) return;
     triggerHaptic("success");
     const trimmed = String(formData.initialBalance || "").trim();
-    const rawBal = trimmed !== "" ? parseFloat(trimmed) : NaN;
+    const rawBal = trimmed !== "" ? parseAmount(trimmed) : NaN;
     const parsedInitial =
       Number.isFinite(rawBal) && rawBal >= 0 ? rawBal : undefined;
     const { initialBalance: _initBal, ...safeFormData } = formData;
@@ -7087,6 +7154,29 @@ export default function MobilePrototype({
 }) {
   const [tab, setTab] = useState("home");
   const cards = Array.isArray(S.cards) ? S.cards : [];
+  const [preferredAccount, setPreferredAccount] = useState(() => {
+    try {
+      const stored = localStorage.getItem(
+        STORAGE_KEYS.preferredAccount || "spend-preferred-account-v1",
+      );
+      return stored !== null ? stored : null;
+    } catch {
+      return null;
+    }
+  });
+  const activeAccountRef = useRef("");
+
+  const handlePreferredAccountChange = useCallback((acct) => {
+    const nextAccount = acct ?? "";
+    setPreferredAccount(nextAccount);
+    try {
+      localStorage.setItem(
+        STORAGE_KEYS.preferredAccount || "spend-preferred-account-v1",
+        nextAccount,
+      );
+    } catch {}
+  }, []);
+
   const [plan, setPlan] = useState("budget");
   const [q, setQ] = useState("");
   const [cf, setCf] = useState("");
@@ -7747,6 +7837,8 @@ export default function MobilePrototype({
     const isRecurring = f.iv !== "none";
     if (isSavingsTransfer && !String(f.amt ?? "").trim())
       return toast("Enter an amount for this savings transfer.");
+    if (isSavingsTransfer && !f.acct)
+      return toast("Select an account to transfer from.");
     const saved = onExpenseSave({
       description:
         f.desc.trim() || (isSavingsTransfer ? "Savings transfer" : f.cat),
@@ -7773,6 +7865,16 @@ export default function MobilePrototype({
         setHighlightedExpenseId(null);
         setHighlightedTransactionId(null);
       }, 1500);
+    }
+    if (!isSavingsTransfer) {
+      const nextAccount = f.acct ?? "";
+      setPreferredAccount(nextAccount);
+      try {
+        localStorage.setItem(
+          STORAGE_KEYS.preferredAccount || "spend-preferred-account-v1",
+          nextAccount,
+        );
+      } catch {}
     }
     close();
     triggerHaptic("success");
@@ -7852,8 +7954,7 @@ export default function MobilePrototype({
     return true;
   };
   const updateExpense = (id, form) => {
-    const amountText = String(form.amt ?? "").trim();
-    const amount = amountText ? Number(amountText) : null;
+    const amount = parseAmount(form.amt);
     const isSavings = form.cat === "Savings";
     if (
       !form.desc.trim() ||
@@ -7865,6 +7966,9 @@ export default function MobilePrototype({
         return toast("Savings transfer requires an amount.");
       }
       return toast("Check the description, amount, and date.");
+    }
+    if (isSavings && !form.acct && Boolean(getSavingsAccountId(cards))) {
+      return toast("Select an account to transfer from.");
     }
     if (
       !onExpenseUpdate(id, {
@@ -8254,6 +8358,9 @@ export default function MobilePrototype({
                   )
                 }
                 onAddExpense={(acct) => openSheet({ type: "add", acct })}
+                onActiveAccountChange={(acct) => {
+                  activeAccountRef.current = acct;
+                }}
               />
             )}
             {!appSettingsOpen && !profileSettingsOpen && tab === "plans" && (
@@ -8297,7 +8404,14 @@ export default function MobilePrototype({
                 aria-label="Add expense"
                 onClick={() => {
                   triggerHaptic("light");
-                  openSheet({ type: "add" });
+                  const activeAcct =
+                    tab === "accounts" && activeAccountRef.current !== undefined
+                      ? activeAccountRef.current
+                      : undefined;
+                  openSheet({
+                    type: "add",
+                    ...(activeAcct !== undefined ? { acct: activeAcct } : {}),
+                  });
                 }}
               >
                 <Icon n="plus" />
@@ -8383,6 +8497,8 @@ export default function MobilePrototype({
           expenses={S.exp}
           cards={cards}
           defaultAccount={sheet.acct}
+          preferredAccount={preferredAccount}
+          onAccountChange={handlePreferredAccountChange}
           onSave={saveExpense}
           onClose={close}
         />

@@ -24,6 +24,7 @@ import {
   localDate,
   makeId,
   nextOccurrenceDate,
+  parseAmount,
   readStorage,
   readStorageAsync,
   roundMoney,
@@ -2562,8 +2563,7 @@ export default function App() {
 
   function saveExpenseData(form, { returnResult = false } = {}) {
     const description = form.description.trim();
-    const rawAmount = String(form.amount ?? "").trim();
-    const amount = rawAmount === "" ? null : Number(rawAmount);
+    const amount = parseAmount(form.amount);
     if (
       !description ||
       !isValidDateString(form.date) ||
@@ -2660,8 +2660,7 @@ export default function App() {
   }
 
   function saveMobileExpenseUpdate(expenseId, form) {
-    const rawAmount = String(form.amount ?? "").trim();
-    const amount = rawAmount === "" ? null : Number(rawAmount);
+    const amount = parseAmount(form.amount);
     const existingExpense = expenses.find(
       (expense) => expense.id === expenseId,
     );
@@ -2774,7 +2773,7 @@ export default function App() {
   }
 
   function saveMobileTransaction(form) {
-    const amount = Number(form.amt);
+    const amount = parseAmount(form.amt);
     if (!Number.isFinite(amount) || amount <= 0) return false;
     const txDate =
       form.date && isValidDateString(form.date) ? form.date : localDate();
@@ -2819,7 +2818,7 @@ export default function App() {
   }
 
   function saveMobileTransactionUpdate(txId, form) {
-    const amount = Number(form.amt);
+    const amount = parseAmount(form.amt);
     if (!txId || !Number.isFinite(amount) || amount <= 0) return false;
     const txDate =
       form.date && isValidDateString(form.date) ? form.date : localDate();

@@ -2299,7 +2299,7 @@ a:active,
   border-radius: 10px;
   border: 1px solid transparent;
   background: transparent;
-  color: var(--sub);
+  color: var(--mut);
   font-size: 13.5px;
   font-weight: 600;
   white-space: nowrap;
@@ -2308,10 +2308,14 @@ a:active,
     background-color 150ms ease,
     color 150ms ease,
     box-shadow 150ms ease,
+    border-color 150ms ease,
     transform 150ms ease;
   touch-action: manipulation;
   user-select: none;
   -webkit-user-select: none;
+}
+.mobile-prototype .account-picker-chip > * {
+  pointer-events: none;
 }
 .mobile-prototype .account-picker-container.is-few-options .account-picker-chip {
   flex: 1 1 0px;
@@ -2321,14 +2325,16 @@ a:active,
 }
 .mobile-prototype .account-picker-chip.is-selected {
   background: var(--card);
-  color: var(--ink);
+  color: var(--g, var(--ink));
   font-weight: 800;
-  border-color: rgba(0, 0, 0, 0.05);
-  box-shadow: 0 1.5px 5px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.03);
 }
+:root[data-theme="dark"] .mobile-prototype .account-picker-chip.is-selected,
+.mobile-prototype[data-theme="dark"] .account-picker-chip.is-selected,
 html[data-theme="dark"] .mobile-prototype .account-picker-chip.is-selected {
-  border-color: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 1.5px 5px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 .mobile-prototype .account-picker-dot {
   width: 10px;
@@ -2336,7 +2342,13 @@ html[data-theme="dark"] .mobile-prototype .account-picker-chip.is-selected {
   border-radius: 50%;
   flex-shrink: 0;
   box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.1);
+  transition: transform 150ms ease;
 }
+.mobile-prototype .account-picker-chip.is-selected .account-picker-dot {
+  transform: scale(1.18);
+}
+:root[data-theme="dark"] .mobile-prototype .account-picker-dot,
+.mobile-prototype[data-theme="dark"] .account-picker-dot,
 html[data-theme="dark"] .mobile-prototype .account-picker-dot {
   box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.2);
 }
@@ -3089,6 +3101,7 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
 .mobile-prototype[data-sheet-closing="true"] .ov {
   animation: prototype-fade-out var(--sheet-fade-duration, 260ms)
     cubic-bezier(0.2, 0.9, 0.28, 1) both;
+  pointer-events: none;
 }
 .mobile-prototype[data-sheet-closing="true"] .sh {
   animation: prototype-sheet-down var(--sheet-exit-duration, 280ms)
@@ -4017,10 +4030,12 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
 
   .mobile-prototype[data-sheet-closing="true"] .ov {
     animation: prototype-fade-out 180ms ease-out both !important;
+    pointer-events: none;
   }
 
   .mobile-prototype[data-sheet-closing="true"] .sh {
     animation: prototype-sheet-down-reduced 180ms ease-out both !important;
+    pointer-events: none;
   }
 }
 
