@@ -58,6 +58,8 @@ import {
   getLockTimeoutMinutes,
   setLockTimeoutMinutes,
   markActive,
+  markBackgrounded,
+  isSessionUnlocked,
   shouldLockApp,
   lockAppManually,
 } from "./security.js";
@@ -6322,6 +6324,7 @@ function SecuritySheet({ onClose, onBack, onLockNow }) {
   const handleTimeoutChange = (mins) => {
     setLockTimeoutMinutes(mins);
     setTimeoutMinutes(mins);
+    markActive();
     triggerHaptic("selection");
   };
 
@@ -6820,30 +6823,81 @@ export default function MobilePrototype({
   }, [onUnlock]);
 
   useEffect(() => {
-    const handleActivity = () => markActive();
+    let lastActivityCall = 0;
+    const handleActivity = () => {
+      const now = Date.now();
+      if (now - lastActivityCall > 1000) {
+        lastActivityCall = now;
+        markActive();
+      }
+    };
+
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
         if (shouldLockApp()) {
           setIsAppLocked(true);
         }
-      } else {
-        markActive();
+      } else if (document.visibilityState === "hidden") {
+        markBackgrounded();
       }
     };
+
+    const handlePageHide = () => {
+      markBackgrounded();
+    };
+
     const idleCheckInterval = setInterval(() => {
-      if (document.visibilityState === "visible" && shouldLockApp()) {
+      if (
+        document.visibilityState === "visible" &&
+        isSessionUnlocked() &&
+        shouldLockApp()
+      ) {
         setIsAppLocked(true);
       }
-    }, 10000);
+    }, 5000);
+
+    // Native Capacitor app lifecycle support
+    let capacitorListenerHandle = null;
+    if (window.Capacitor?.Plugins?.App?.addListener) {
+      try {
+        capacitorListenerHandle = window.Capacitor.Plugins.App.addListener(
+          "appStateChange",
+          ({ isActive }) => {
+            if (isActive) {
+              if (shouldLockApp()) {
+                setIsAppLocked(true);
+              }
+            } else {
+              markBackgrounded();
+            }
+          },
+        );
+      } catch {
+        // ignore
+      }
+    }
 
     window.addEventListener("pointerdown", handleActivity, { passive: true });
+    window.addEventListener("touchstart", handleActivity, { passive: true });
     window.addEventListener("keydown", handleActivity, { passive: true });
+    window.addEventListener("wheel", handleActivity, { passive: true });
+    window.addEventListener("scroll", handleActivity, {
+      passive: true,
+      capture: true,
+    });
     document.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("pagehide", handlePageHide);
+
     return () => {
       clearInterval(idleCheckInterval);
+      capacitorListenerHandle?.then?.((h) => h?.remove?.())?.catch?.(() => {});
       window.removeEventListener("pointerdown", handleActivity);
+      window.removeEventListener("touchstart", handleActivity);
       window.removeEventListener("keydown", handleActivity);
+      window.removeEventListener("wheel", handleActivity);
+      window.removeEventListener("scroll", handleActivity, { capture: true });
       document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("pagehide", handlePageHide);
     };
   }, []);
   const [isScrolled, setIsScrolled] = useState(false);
@@ -7586,6 +7640,11 @@ export default function MobilePrototype({
       >
         <SpendLogin
           verifyPin={handleVerifyPin}
+          biometric={
+            hasBiometricsConfigured()
+              ? { type: "fingerprint", label: "Touch ID" }
+              : null
+          }
           onBiometric={handleBiometricAuth}
           onUnlock={handleUnlock}
           onForgot={handleForgotPin}

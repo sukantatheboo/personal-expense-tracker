@@ -16,6 +16,7 @@ const BIOMETRIC_KEY_ID = "spend-biometric-credential-v1";
 const BIOMETRIC_KEY_STORAGE = "spend-biometric-key-v1";
 const LOCK_TIMEOUT_KEY = "spend-lock-timeout-v1";
 const LAST_ACTIVE_KEY = "spend-last-active-v1";
+const BACKGROUNDED_AT_KEY = "spend-backgrounded-at-v1";
 const SESSION_UNLOCKED_KEY = "spend-session-unlocked-v1";
 const DATA_SALT_KEY = "spend-security-data-salt-v1";
 
@@ -85,15 +86,16 @@ export const NativeSecureStorage = {
   async setItem(key, value) {
     try {
       const valStr = typeof value === "string" ? value : JSON.stringify(value);
+      const cap = typeof window !== "undefined" ? window.Capacitor : null;
       const plugin =
-        window.Capacitor?.Plugins?.SecureStoragePlugin ||
-        window.Capacitor?.Plugins?.SecureStorage ||
-        window.SecureStoragePlugin;
+        cap?.Plugins?.SecureStoragePlugin ||
+        cap?.Plugins?.SecureStorage ||
+        (typeof window !== "undefined" ? window.SecureStoragePlugin : null);
       if (plugin) {
         await plugin.set({ key, value: valStr });
         return true;
       }
-      const prefs = window.Capacitor?.Plugins?.Preferences;
+      const prefs = cap?.Plugins?.Preferences;
       if (prefs) {
         await prefs.set({ key, value: valStr });
         return true;
@@ -110,15 +112,16 @@ export const NativeSecureStorage = {
 
   async getItem(key) {
     try {
+      const cap = typeof window !== "undefined" ? window.Capacitor : null;
       const plugin =
-        window.Capacitor?.Plugins?.SecureStoragePlugin ||
-        window.Capacitor?.Plugins?.SecureStorage ||
-        window.SecureStoragePlugin;
+        cap?.Plugins?.SecureStoragePlugin ||
+        cap?.Plugins?.SecureStorage ||
+        (typeof window !== "undefined" ? window.SecureStoragePlugin : null);
       if (plugin) {
         const res = await plugin.get({ key });
         if (res?.value != null) return res.value;
       }
-      const prefs = window.Capacitor?.Plugins?.Preferences;
+      const prefs = cap?.Plugins?.Preferences;
       if (prefs) {
         const res = await prefs.get({ key });
         if (res?.value != null) return res.value;
@@ -138,15 +141,16 @@ export const NativeSecureStorage = {
 
   async removeItem(key) {
     try {
+      const cap = typeof window !== "undefined" ? window.Capacitor : null;
       const plugin =
-        window.Capacitor?.Plugins?.SecureStoragePlugin ||
-        window.Capacitor?.Plugins?.SecureStorage ||
-        window.SecureStoragePlugin;
+        cap?.Plugins?.SecureStoragePlugin ||
+        cap?.Plugins?.SecureStorage ||
+        (typeof window !== "undefined" ? window.SecureStoragePlugin : null);
       if (plugin) {
         await plugin.remove({ key });
         return true;
       }
-      const prefs = window.Capacitor?.Plugins?.Preferences;
+      const prefs = cap?.Plugins?.Preferences;
       if (prefs) {
         await prefs.remove({ key });
         return true;
@@ -164,15 +168,16 @@ export const NativeSecureStorage = {
 
   async clear() {
     try {
+      const cap = typeof window !== "undefined" ? window.Capacitor : null;
       const plugin =
-        window.Capacitor?.Plugins?.SecureStoragePlugin ||
-        window.Capacitor?.Plugins?.SecureStorage ||
-        window.SecureStoragePlugin;
+        cap?.Plugins?.SecureStoragePlugin ||
+        cap?.Plugins?.SecureStorage ||
+        (typeof window !== "undefined" ? window.SecureStoragePlugin : null);
       if (plugin) {
         await plugin.clear();
         return true;
       }
-      const prefs = window.Capacitor?.Plugins?.Preferences;
+      const prefs = cap?.Plugins?.Preferences;
       if (prefs) {
         await prefs.clear();
         return true;
@@ -612,6 +617,7 @@ export async function removeAppPin() {
   localStorage.removeItem(PIN_SALT_KEY);
   localStorage.removeItem(DATA_SALT_KEY);
   localStorage.removeItem(BIOMETRIC_KEY_ID);
+  clearBackgroundedAt();
   try {
     await NativeSecureStorage.removeItem(BIOMETRIC_KEY_STORAGE);
   } catch {
@@ -803,6 +809,40 @@ export async function authenticateWithBiometrics() {
 }
 
 /* ───────────── Session & Auto-Lock Lifecycle ───────────── */
+let inMemoryBackgroundedAt = null;
+
+function setBackgroundedAt(timestamp) {
+  inMemoryBackgroundedAt = timestamp;
+  try {
+    if (timestamp != null) {
+      sessionStorage.setItem(BACKGROUNDED_AT_KEY, String(timestamp));
+    } else {
+      sessionStorage.removeItem(BACKGROUNDED_AT_KEY);
+    }
+  } catch {
+    // ignore
+  }
+}
+
+function getBackgroundedAt() {
+  if (inMemoryBackgroundedAt != null) return inMemoryBackgroundedAt;
+  try {
+    const val = sessionStorage.getItem(BACKGROUNDED_AT_KEY);
+    return val ? Number(val) : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearBackgroundedAt() {
+  inMemoryBackgroundedAt = null;
+  try {
+    sessionStorage.removeItem(BACKGROUNDED_AT_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 export function getLockTimeoutMinutes() {
   const val = localStorage.getItem(LOCK_TIMEOUT_KEY);
   if (val === "0" || val === "1" || val === "5") return Number(val);
@@ -811,10 +851,23 @@ export function getLockTimeoutMinutes() {
 
 export function setLockTimeoutMinutes(minutes) {
   localStorage.setItem(LOCK_TIMEOUT_KEY, String(minutes));
+  markActive();
 }
 
 export function markActive() {
   localStorage.setItem(LAST_ACTIVE_KEY, String(Date.now()));
+  clearBackgroundedAt();
+}
+
+export function markBackgrounded() {
+  if (!hasAppPin() || !isSessionUnlocked()) return;
+  const timeoutMinutes = getLockTimeoutMinutes();
+  setBackgroundedAt(Date.now());
+  if (timeoutMinutes === 0) {
+    // "Immediately": lock session as soon as the app leaves foreground
+    setSessionUnlocked(false);
+    setSessionKey(null);
+  }
 }
 
 export function shouldLockApp() {
@@ -822,14 +875,39 @@ export function shouldLockApp() {
   if (!isSessionUnlocked()) return true;
 
   const timeoutMinutes = getLockTimeoutMinutes();
+  const backgroundedAt = getBackgroundedAt();
+
+  // 1. If the app was backgrounded, evaluate against background elapsed time
+  if (backgroundedAt != null) {
+    const elapsedMinutes = (Date.now() - backgroundedAt) / 60000;
+    if (timeoutMinutes === 0 || elapsedMinutes >= timeoutMinutes) {
+      setSessionUnlocked(false);
+      setSessionKey(null);
+      clearBackgroundedAt();
+      return true;
+    }
+    // Returned to foreground within allowed timeout window: keep session unlocked
+    clearBackgroundedAt();
+    markActive();
+    return false;
+  }
+
+  // 2. The app is in the foreground (user is actively inside the app).
+  // "Immediately" (timeoutMinutes === 0) requires passcode upon leaving the app,
+  // NEVER while actively inside the app in the foreground.
+  if (timeoutMinutes === 0) {
+    return false;
+  }
+
+  // 3. For timeoutMinutes > 0 (1 min, 5 min), check foreground inactivity (idle timeout)
   const lastActive = Number(localStorage.getItem(LAST_ACTIVE_KEY)) || 0;
   const elapsedMinutes = (Date.now() - lastActive) / 60000;
-
   if (elapsedMinutes >= timeoutMinutes) {
     setSessionUnlocked(false);
     setSessionKey(null);
     return true;
   }
+
   return false;
 }
 
@@ -837,6 +915,7 @@ export function lockAppManually() {
   if (hasAppPin()) {
     setSessionUnlocked(false);
     setSessionKey(null);
+    clearBackgroundedAt();
   }
 }
 
