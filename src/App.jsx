@@ -880,12 +880,20 @@ function clearSharedFinancialData() {
   }
 }
 
+let localUserSnapshotsCache = null;
+
 function readLocalUserSnapshots() {
+  if (localUserSnapshotsCache && typeof localUserSnapshotsCache === "object") {
+    return localUserSnapshotsCache;
+  }
   try {
     const saved = readStorage(LOCAL_USER_SNAPSHOTS_KEY, {});
-    return saved && typeof saved === "object" && !Array.isArray(saved)
-      ? saved
-      : {};
+    const parsed =
+      saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {};
+    if (Object.keys(parsed).length > 0) {
+      localUserSnapshotsCache = parsed;
+    }
+    return parsed;
   } catch {
     return {};
   }
@@ -923,8 +931,8 @@ function loadLocalUserSnapshot(userId) {
 
 function saveLocalUserSnapshot(userId, snapshot) {
   try {
-    const snapshots = readLocalUserSnapshots();
-    snapshots[userId] = snapshot;
+    const snapshots = { ...readLocalUserSnapshots(), [userId]: snapshot };
+    localUserSnapshotsCache = snapshots;
     writeStorage(LOCAL_USER_SNAPSHOTS_KEY, snapshots);
   } catch {
     // Shared local storage remains as a compatibility fallback.
@@ -1184,7 +1192,7 @@ export default function App() {
     }
   }
 
-  function queueCloudSnapshotSave(userId) {
+  function queueCloudSnapshotSave(userId, { forceOverwrite = false } = {}) {
     const saveTask = cloudSaveQueueRef.current
       .catch(() => {})
       .then(async () => {
@@ -1197,6 +1205,7 @@ export default function App() {
 
         let snapshot = cloudSnapshotRef.current;
         if (
+          !forceOverwrite &&
           lastSyncedSnapshotRef.current &&
           areCloudSnapshotsEqual(snapshot, lastSyncedSnapshotRef.current)
         ) {
@@ -1207,8 +1216,9 @@ export default function App() {
         for (let attempt = 0; attempt < 3; attempt += 1) {
           let savedVersion = null;
           try {
-            const expectedVersion =
-              attempt === 2 ? null : cloudVersionRef.current;
+            const expectedVersion = forceOverwrite
+              ? null
+              : cloudVersionRef.current;
             savedVersion = await saveCloudData(
               userId,
               snapshot,
@@ -1240,6 +1250,10 @@ export default function App() {
             localDataOwnerRef.current !== userId
           ) {
             return;
+          }
+          if (forceOverwrite) {
+            cloudVersionRef.current = remote?.updated_at ?? null;
+            continue;
           }
           snapshot = cloudSnapshotRef.current;
           if (remote?.data) {
@@ -1293,13 +1307,21 @@ export default function App() {
         if (!remote?.data) return null;
 
         // Break realtime echo loop if remote matches what this client just uploaded
+        const isSameVersion =
+          cloudVersionRef.current &&
+          (remote.updated_at === cloudVersionRef.current ||
+            Math.abs(
+              (Date.parse(remote.updated_at) || 0) -
+                (Date.parse(cloudVersionRef.current) || 0),
+            ) < 1000);
+
         if (
           source === "live" &&
-          cloudVersionRef.current &&
-          remote.updated_at === cloudVersionRef.current &&
           lastSyncedSnapshotRef.current &&
-          areCloudSnapshotsEqual(remote.data, lastSyncedSnapshotRef.current)
+          (areCloudSnapshotsEqual(remote.data, lastSyncedSnapshotRef.current) ||
+            isSameVersion)
         ) {
+          if (remote.updated_at) cloudVersionRef.current = remote.updated_at;
           setCloudSyncActivity("synced");
           return lastSyncedSnapshotRef.current;
         }
@@ -1413,6 +1435,7 @@ export default function App() {
         decryptedRecurring,
         decryptedAccounts,
         decryptedDeleted,
+        decryptedSnapshots,
       ] = await Promise.all([
         readStorageAsync(STORAGE_KEYS.expenses, [], sessionKey),
         readStorageAsync(STORAGE_KEYS.budgets, {}, sessionKey),
@@ -1420,7 +1443,16 @@ export default function App() {
         readStorageAsync(STORAGE_KEYS.recurring, [], sessionKey),
         readStorageAsync(STORAGE_KEYS.accounts, null, sessionKey),
         readStorageAsync(STORAGE_KEYS.deletedRecords, null, sessionKey),
+        readStorageAsync(LOCAL_USER_SNAPSHOTS_KEY, {}, sessionKey),
       ]);
+
+      if (
+        decryptedSnapshots &&
+        typeof decryptedSnapshots === "object" &&
+        !Array.isArray(decryptedSnapshots)
+      ) {
+        localUserSnapshotsCache = decryptedSnapshots;
+      }
 
       const effectiveDeleted = normalizeDeletedRecords(decryptedDeleted);
       const loadedAccounts = loadAccountData(
@@ -1667,8 +1699,7 @@ export default function App() {
             preferLocalAccountSettings,
           );
           try {
-            const expectedVersion =
-              attempt === 2 ? null : (remote?.updated_at ?? null);
+            const expectedVersion = remote?.updated_at ?? null;
             savedVersion = await saveCloudData(
               pushUser.id,
               merged,
@@ -3644,43 +3675,50 @@ export default function App() {
         data.accountData,
         restoredDeletedRecords,
       );
-      setExpenses(
-        loadExpenses(data.expenses, restoredAccounts).map((expense) => ({
-          ...expense,
-          createdAt: expense.createdAt ?? restoreTimestamp,
-          updatedAt: restoreTimestamp,
-        })),
-      );
+      const restoredExpenses = loadExpenses(
+        data.expenses,
+        restoredAccounts,
+      ).map((expense) => ({
+        ...expense,
+        createdAt: expense.createdAt ?? restoreTimestamp,
+        updatedAt: expense.updatedAt ?? restoreTimestamp,
+      }));
+      setExpenses(restoredExpenses);
       const restoredBudgets = loadBudgets(data.budgets);
       setBudgets(restoredBudgets);
       const restoredBudgetUpdatedAt = Object.fromEntries(
-        Object.keys(restoredBudgets).map((month) => [month, restoreTimestamp]),
+        Object.keys(restoredBudgets).map((month) => [
+          month,
+          data.budgetUpdatedAt?.[month] ?? restoreTimestamp,
+        ]),
       );
       setBudgetUpdatedAt(restoredBudgetUpdatedAt);
-      setRecurringSchedules(
-        loadRecurringSchedules(data.recurringSchedules, restoredAccounts).map(
-          (schedule) => ({
-            ...schedule,
-            updatedAt: restoreTimestamp,
-          }),
-        ),
-      );
-      setAccountData({
-        settings: { ...restoredAccounts.settings, updatedAt: restoreTimestamp },
+      const restoredSchedules = loadRecurringSchedules(
+        data.recurringSchedules,
+        restoredAccounts,
+      ).map((schedule) => ({
+        ...schedule,
+        createdAt: schedule.createdAt ?? restoreTimestamp,
+        updatedAt: schedule.updatedAt ?? restoreTimestamp,
+      }));
+      setRecurringSchedules(restoredSchedules);
+      const restoredAccountData = {
+        settings: {
+          ...restoredAccounts.settings,
+          updatedAt: restoredAccounts.settings.updatedAt || restoreTimestamp,
+        },
         transactions: restoredAccounts.transactions.map((transaction) => ({
           ...transaction,
           createdAt: transaction.createdAt ?? restoreTimestamp,
-          updatedAt: restoreTimestamp,
+          updatedAt: transaction.updatedAt ?? restoreTimestamp,
         })),
-      });
+      };
+      setAccountData(restoredAccountData);
       setStartingBalances(
         formatStartingBalances(restoredAccounts.settings),
       );
-      for (const changes of Object.values(restoredDeletedRecords)) {
-        for (const change of Object.values(changes)) {
-          change.updatedAt = restoreTimestamp;
-        }
-      }
+      // Retain original tombstone timestamps from the backup so historical deletions
+      // do not act as new deletions wiping out changes on other synchronized devices
       setDeletedRecords(restoredDeletedRecords);
       setTheme(data.theme);
       setTargetCurrency(data.targetCurrency);
@@ -3692,6 +3730,25 @@ export default function App() {
           // Keep the restored reminder time for this visit.
         }
       }
+
+      if (pushUser && cloudSyncEnabled) {
+        const restoredSnapshot = {
+          expenses: restoredExpenses,
+          budgets: restoredBudgets,
+          budgetUpdatedAt: restoredBudgetUpdatedAt,
+          recurringSchedules: restoredSchedules,
+          accountData: restoredAccountData,
+          deletedRecords: restoredDeletedRecords,
+          theme: data.theme,
+          targetCurrency: data.targetCurrency,
+          reminderTime: isValidReminderTime(data.reminderTime)
+            ? data.reminderTime
+            : "09:00",
+        };
+        cloudSnapshotRef.current = restoredSnapshot;
+        void queueCloudSnapshotSave(pushUser.id, { forceOverwrite: true });
+      }
+
       setBackupStatus("Backup restored.");
     } catch (error) {
       setBackupStatus(`Could not restore backup: ${error.message}`);

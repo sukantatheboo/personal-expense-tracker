@@ -872,17 +872,27 @@ export async function encryptBackup(plainData, password) {
     ["encrypt"],
   );
 
+  const exportedAt = new Date().toISOString();
+  const format = "spend-encrypted-backup";
+  const version = 1;
+
+  // Bind envelope metadata using AES-GCM Additional Authenticated Data (AAD)
+  // to prevent unauthenticated header/metadata tampering
+  const additionalData = encoder.encode(
+    JSON.stringify({ format, version, exportedAt }),
+  );
+
   const plaintextBytes = encoder.encode(JSON.stringify(plainData));
   const ciphertextBuffer = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv },
+    { name: "AES-GCM", iv, additionalData },
     aesKey,
     plaintextBytes,
   );
 
   return {
-    format: "spend-encrypted-backup",
-    version: 1,
-    exportedAt: new Date().toISOString(),
+    format,
+    version,
+    exportedAt,
     salt: bufferToBase64(salt),
     iv: bufferToBase64(iv),
     ciphertext: bufferToBase64(ciphertextBuffer),
@@ -930,15 +940,35 @@ export async function decryptBackup(encryptedPayload, password) {
     ["decrypt"],
   );
 
+  // Attempt decryption with authenticated metadata (AAD)
+  const additionalData = encoder.encode(
+    JSON.stringify({
+      format: encryptedPayload.format,
+      version: encryptedPayload.version ?? 1,
+      exportedAt: encryptedPayload.exportedAt,
+    }),
+  );
+
   try {
     const decryptedBuffer = await crypto.subtle.decrypt(
-      { name: "AES-GCM", iv },
+      { name: "AES-GCM", iv, additionalData },
       aesKey,
       ciphertext,
     );
     const decoder = new TextDecoder();
     return JSON.parse(decoder.decode(decryptedBuffer));
   } catch {
-    throw new Error("Incorrect password or corrupted encrypted backup.");
+    // Backward compatibility: fallback to decrypting without AAD for legacy backups
+    try {
+      const decryptedBuffer = await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv },
+        aesKey,
+        ciphertext,
+      );
+      const decoder = new TextDecoder();
+      return JSON.parse(decoder.decode(decryptedBuffer));
+    } catch {
+      throw new Error("Incorrect password or corrupted encrypted backup.");
+    }
   }
 }

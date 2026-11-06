@@ -1408,7 +1408,7 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
           onPointerDown={(e) => {
             if (
               e.target.closest(
-                "#sheet-title, .add-card-header-bar, .card-options-sheet-header",
+                "#sheet-title, .add-card-header-bar, .card-options-sheet-header, .security-sheet-header",
               )
             ) {
               if (!e.target.closest("button, input, textarea, select")) {
@@ -2154,107 +2154,109 @@ function Activity({
 
   return (
     <>
-      <label className="srch">
-        <Icon n="s" />
-        <input
-          ref={searchRef}
-          type="search"
-          aria-label="Search expenses"
-          placeholder="Search activity, categories, or accounts"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") {
-              setQ("");
-              e.currentTarget.blur();
-            }
-          }}
-        />
-        {q && (
+      <div className="activity-controls">
+        <label className="srch">
+          <Icon n="s" />
+          <input
+            ref={searchRef}
+            type="search"
+            aria-label="Search activity"
+            placeholder="Search activity, categories, or accounts"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                setQ("");
+                e.currentTarget.blur();
+              }
+            }}
+          />
+          {q && (
+            <button
+              type="button"
+              className="srch-clear-btn"
+              aria-label="Clear search"
+              onClick={(e) => {
+                e.preventDefault();
+                setQ("");
+                searchRef?.current?.focus();
+              }}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                width="16"
+                height="16"
+                stroke="currentColor"
+                strokeWidth="2.4"
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          )}
+        </label>
+
+        {/* 1. Unified Feed Type Segmented Control */}
+        <div className="seg activity-type-seg" role="tablist" aria-label="Activity type">
           <button
             type="button"
-            className="srch-clear-btn"
-            aria-label="Clear search"
-            onClick={(e) => {
-              e.preventDefault();
-              setQ("");
-              searchRef?.current?.focus();
+            role="tab"
+            aria-selected={feedType === "all"}
+            className={feedType === "all" ? "on" : ""}
+            onClick={() => {
+              triggerHaptic("selection");
+              setFeedType("all");
             }}
           >
-            <svg
-              viewBox="0 0 24 24"
-              width="16"
-              height="16"
-              stroke="currentColor"
-              strokeWidth="2.4"
-              fill="none"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
+            <span>All</span>
+            {countAll > 0 && <span className="chip-badge">{countAll}</span>}
           </button>
-        )}
-      </label>
-
-      {/* 1. Unified Feed Type Segmented Control */}
-      <div className="seg activity-type-seg" role="tablist" aria-label="Activity type">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={feedType === "all"}
-          className={feedType === "all" ? "on" : ""}
-          onClick={() => {
-            triggerHaptic("selection");
-            setFeedType("all");
-          }}
-        >
-          <span>All</span>
-          {countAll > 0 && <span className="chip-badge">{countAll}</span>}
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={feedType === "expenses"}
-          className={feedType === "expenses" ? "on" : ""}
-          onClick={() => {
-            triggerHaptic("selection");
-            setFeedType("expenses");
-          }}
-        >
-          <span>Expenses</span>
-          {countExpenses > 0 && <span className="chip-badge">{countExpenses}</span>}
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={feedType === "income"}
-          className={feedType === "income" ? "on" : ""}
-          onClick={() => {
-            triggerHaptic("selection");
-            setFeedType("income");
-            setCf("");
-          }}
-        >
-          <span>Income</span>
-          {countIncome > 0 && <span className="chip-badge">{countIncome}</span>}
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={feedType === "transfers"}
-          className={feedType === "transfers" ? "on" : ""}
-          onClick={() => {
-            triggerHaptic("selection");
-            setFeedType("transfers");
-            setCf("");
-          }}
-        >
-          <span>Transfers</span>
-          {countTransfers > 0 && <span className="chip-badge">{countTransfers}</span>}
-        </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={feedType === "expenses"}
+            className={feedType === "expenses" ? "on" : ""}
+            onClick={() => {
+              triggerHaptic("selection");
+              setFeedType("expenses");
+            }}
+          >
+            <span>Expenses</span>
+            {countExpenses > 0 && <span className="chip-badge">{countExpenses}</span>}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={feedType === "income"}
+            className={feedType === "income" ? "on" : ""}
+            onClick={() => {
+              triggerHaptic("selection");
+              setFeedType("income");
+              setCf("");
+            }}
+          >
+            <span>Income</span>
+            {countIncome > 0 && <span className="chip-badge">{countIncome}</span>}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={feedType === "transfers"}
+            className={feedType === "transfers" ? "on" : ""}
+            onClick={() => {
+              triggerHaptic("selection");
+              setFeedType("transfers");
+              setCf("");
+            }}
+          >
+            <span>Transfers</span>
+            {countTransfers > 0 && <span className="chip-badge">{countTransfers}</span>}
+          </button>
+        </div>
       </div>
 
       {/* 2. Quick Filter Pills Bar */}
@@ -4235,12 +4237,6 @@ function SettingsSheet({
   onAdvanced,
   onProfileSettings,
   onSecurity,
-  backupStatus,
-  lastBackupAt,
-  onBackupDownload,
-  onEncryptedBackupDownload,
-  onExpensesCsv,
-  onBackupRestore,
   onClose,
 }) {
   const dark = S.theme === "dark";
@@ -4279,7 +4275,7 @@ function SettingsSheet({
       <button className="ri" type="button" onClick={onAdvanced}>
         <span className="nm">
           <b>App settings</b>
-          <small>Accounts and reminders</small>
+          <small>Reminders &amp; backups</small>
         </span>
         <span className="settings-chevron" aria-hidden="true">
           <Icon n="r" />
@@ -4296,105 +4292,6 @@ function SettingsSheet({
           <Icon n="r" />
         </span>
       </button>
-      <div className="settings-menu-section">
-        <h4>Data &amp; backups</h4>
-        <button
-          className="ri settings-action"
-          type="button"
-          onClick={onBackupDownload}
-        >
-          <i className="ic" style={{ "--c": "#5b73d9" }}>
-            <Icon n="backup" />
-          </i>
-          <span className="nm">
-            <b>Export JSON backup</b>
-            <small>All expenses, budgets, and settings</small>
-          </span>
-          <span className="settings-chevron" aria-hidden="true">
-            <Icon n="r" />
-          </span>
-        </button>
-        <button
-          className="ri settings-action"
-          type="button"
-          onClick={onEncryptedBackupDownload}
-        >
-          <i className="ic" style={{ "--c": "#10b981" }}>
-            <svg
-              viewBox="0 0 24 24"
-              width="18"
-              height="18"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-            </svg>
-          </i>
-          <span className="nm">
-            <b>Export encrypted backup</b>
-            <small>Protected with AES-256-GCM encryption</small>
-          </span>
-          <span className="settings-chevron" aria-hidden="true">
-            <Icon n="r" />
-          </span>
-        </button>
-        <button
-          className="ri settings-action"
-          type="button"
-          onClick={onExpensesCsv}
-        >
-          <i className="ic" style={{ "--c": "#2f9a6b" }}>
-            <Icon n="csv" />
-          </i>
-          <span className="nm">
-            <b>Export expenses CSV</b>
-            <small>Full history for a spreadsheet</small>
-          </span>
-          <span className="settings-chevron" aria-hidden="true">
-            <Icon n="r" />
-          </span>
-        </button>
-        <button
-          className="ri settings-action"
-          type="button"
-          onClick={onBackupRestore}
-        >
-          <i className="ic" style={{ "--c": "#8a6fd1" }}>
-            <Icon n="restore" />
-          </i>
-          <span className="nm">
-            <b>Restore from backup</b>
-            <small>Choose a Spend backup file</small>
-          </span>
-          <span className="settings-chevron" aria-hidden="true">
-            <Icon n="r" />
-          </span>
-        </button>
-        <p className="settings-note">
-          Restoring replaces current data. Spend will ask you to confirm first.
-        </p>
-        <p className="settings-note backup-reminder">
-          {lastBackupAt
-            ? `Last backed up ${new Date(lastBackupAt).toLocaleString(
-                undefined,
-                {
-                  dateStyle: "medium",
-                  timeStyle: "short",
-                },
-              )}. Consider downloading a fresh copy from time to time.`
-            : "No backup yet. Download a JSON backup to keep a copy off this device."}
-        </p>
-        {backupStatus && (
-          <p className="settings-status" role="status" aria-live="polite">
-            {backupStatus}
-          </p>
-        )}
-      </div>
     </Sheet>
   );
 }
@@ -6142,11 +6039,15 @@ function AppSettingsPage({
   notificationPermission,
   notificationStatus,
   backgroundPushEnabled,
-  onAccounts,
   onSignIn,
   onReminder,
   onToggleNotifications,
   onTestNotification,
+  onBackupDownload,
+  onEncryptedBackupDownload,
+  onExpensesCsv,
+  onBackupRestore,
+  backupStatus,
 }) {
   const notificationUnavailable = notificationPermission === "unsupported";
   const notificationBlocked = notificationPermission === "denied";
@@ -6166,26 +6067,6 @@ function AppSettingsPage({
   return (
     <>
       <p className="settings-page-intro">Manage accounts and reminders.</p>
-
-      <section className="card app-settings-card">
-        <h2>Accounts</h2>
-        <button
-          className="ri settings-action"
-          type="button"
-          onClick={onAccounts}
-        >
-          <i className="ic" style={{ "--c": "#3b82c4" }}>
-            <Icon n="bank" />
-          </i>
-          <span className="nm">
-            <b>Account setup</b>
-            <small>Starting balances, transfers, and account activity</small>
-          </span>
-          <span className="settings-chevron" aria-hidden="true">
-            <Icon n="r" />
-          </span>
-        </button>
-      </section>
 
       <section className="card app-settings-card">
         <h2>Reminders</h2>
@@ -6247,11 +6128,105 @@ function AppSettingsPage({
               : "Notifications remind you when a scheduled expense is due.")}
         </p>
       </section>
+
+      <section className="card app-settings-card app-settings-data-card">
+        <h2>Data &amp; backups</h2>
+        <button
+          className="ri settings-action app-settings-minimal-item"
+          type="button"
+          onClick={() => {
+            triggerHaptic("light");
+            onBackupDownload?.();
+          }}
+        >
+          <i className="ic is-minimal" style={{ "--c": "#5b73d9" }}>
+            <Icon n="backup" />
+          </i>
+          <span className="nm">
+            <b>Export JSON backup</b>
+          </span>
+          <span className="settings-chevron" aria-hidden="true">
+            <Icon n="r" />
+          </span>
+        </button>
+        <button
+          className="ri settings-action app-settings-minimal-item"
+          type="button"
+          onClick={() => {
+            triggerHaptic("light");
+            onEncryptedBackupDownload?.();
+          }}
+        >
+          <i className="ic is-minimal" style={{ "--c": "#10b981" }}>
+            <svg
+              viewBox="0 0 24 24"
+              width="17"
+              height="17"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+          </i>
+          <span className="nm">
+            <b>Export encrypted backup</b>
+          </span>
+          <span className="settings-chevron" aria-hidden="true">
+            <Icon n="r" />
+          </span>
+        </button>
+        <button
+          className="ri settings-action app-settings-minimal-item"
+          type="button"
+          onClick={() => {
+            triggerHaptic("light");
+            onExpensesCsv?.();
+          }}
+        >
+          <i className="ic is-minimal" style={{ "--c": "#2f9a6b" }}>
+            <Icon n="csv" />
+          </i>
+          <span className="nm">
+            <b>Export expenses CSV</b>
+          </span>
+          <span className="settings-chevron" aria-hidden="true">
+            <Icon n="r" />
+          </span>
+        </button>
+        <button
+          className="ri settings-action app-settings-minimal-item"
+          type="button"
+          onClick={() => {
+            triggerHaptic("light");
+            onBackupRestore?.();
+          }}
+        >
+          <i className="ic is-minimal" style={{ "--c": "#8a6fd1" }}>
+            <Icon n="restore" />
+          </i>
+          <span className="nm">
+            <b>Restore from backup</b>
+          </span>
+          <span className="settings-chevron" aria-hidden="true">
+            <Icon n="r" />
+          </span>
+        </button>
+        {backupStatus && (
+          <p className="settings-status" role="status" aria-live="polite">
+            {backupStatus}
+          </p>
+        )}
+      </section>
     </>
   );
 }
 
-function SecuritySheet({ onClose, onLockNow }) {
+function SecuritySheet({ onClose, onBack, onLockNow }) {
   const [pinSet, setPinSet] = useState(() => hasAppPin());
   const [biometricsAvailable, setBiometricsAvailable] = useState(false);
   const [biometricsConfigured, setBiometricsConfigured] = useState(() =>
@@ -6265,6 +6240,20 @@ function SecuritySheet({ onClose, onLockNow }) {
   const [pinConfirm, setPinConfirm] = useState("");
   const [pinError, setPinError] = useState("");
   const [statusMsg, setStatusMsg] = useState("");
+
+  const handleBack = () => {
+    triggerHaptic("light");
+    if (step === "confirm_pin") {
+      setStep("setup_pin");
+      setPinConfirm("");
+    } else if (step === "setup_pin") {
+      setStep("overview");
+    } else if (onBack) {
+      onBack();
+    } else {
+      onClose();
+    }
+  };
 
   useEffect(() => {
     isBiometricsAvailable().then((avail) => setBiometricsAvailable(avail));
@@ -6338,57 +6327,58 @@ function SecuritySheet({ onClose, onLockNow }) {
 
   return (
     <Sheet onClose={onClose}>
-      <h3 id="sheet-title">Security &amp; App Lock</h3>
+      <div className="security-sheet-header">
+        <button
+          type="button"
+          className="prototype-header-back security-sheet-back-btn"
+          aria-label={step === "overview" ? "Back to settings" : "Back"}
+          onClick={handleBack}
+        >
+          <Icon n="l" />
+        </button>
+        <h3 id="sheet-title">Security &amp; App Lock</h3>
+      </div>
 
       {step === "overview" && (
         <div className="security-sheet-content">
-          {/* Section 1: Device App Lock */}
-          <div className="settings-menu-section">
-            <h4>Device Passcode &amp; Biometrics</h4>
-            <p className="settings-note" style={{ marginBottom: 12 }}>
-              Lock Spend with a passcode or biometrics when inactive or closed.
-            </p>
-            {pinSet ? (
-              <>
-                <div className="ri" style={{ justifyContent: "space-between" }}>
-                  <span className="nm">
-                    <b>App Passcode</b>
-                    <small>Active (4-digit PIN)</small>
-                  </span>
-                  <span
-                    className="security-badge-e2e"
-                    style={{
-                      color: "#10b981",
-                      background: "rgba(16,185,129,0.1)",
-                    }}
-                  >
-                    Enabled
-                  </span>
-                </div>
-                <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
-                  <button
-                    type="button"
-                    className="btn"
-                    style={{ flex: 1, padding: "10px 14px", fontSize: 13 }}
-                    onClick={handleStartSetPin}
-                  >
-                    Change PIN
-                  </button>
-                  <button
-                    type="button"
-                    className="btn del"
-                    style={{ flex: 1, padding: "10px 14px", fontSize: 13 }}
-                    onClick={handleRemovePin}
-                  >
-                    Turn Off PIN
-                  </button>
-                </div>
-              </>
-            ) : (
-              <button
-                className="ri settings-action"
-                type="button"
-                onClick={handleStartSetPin}
+          {!pinSet ? (
+            <button
+              className="ri settings-action"
+              type="button"
+              onClick={handleStartSetPin}
+            >
+              <i className="ic" style={{ "--c": "#10b981" }}>
+                <svg
+                  viewBox="0 0 24 24"
+                  width="20"
+                  height="20"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+              </i>
+              <span className="nm">
+                <b>4-Digit Passcode</b>
+                <small>Not set</small>
+              </span>
+              <span className="settings-chevron" aria-hidden="true">
+                <Icon n="r" />
+              </span>
+            </button>
+          ) : (
+            <div className="ri" style={{ justifyContent: "space-between" }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  minWidth: 0,
+                }}
               >
                 <i className="ic" style={{ "--c": "#10b981" }}>
                   <svg
@@ -6406,143 +6396,132 @@ function SecuritySheet({ onClose, onLockNow }) {
                   </svg>
                 </i>
                 <span className="nm">
-                  <b>Set 4-Digit Passcode</b>
-                  <small>Lock app when inactive or closed</small>
-                </span>
-                <span className="settings-chevron" aria-hidden="true">
-                  <Icon n="r" />
-                </span>
-              </button>
-            )}
-          </div>
-
-          {pinSet && (
-            <div className="settings-menu-section" style={{ marginTop: 16 }}>
-              <h4>Biometrics</h4>
-              <button
-                className="ri"
-                type="button"
-                aria-pressed={biometricsConfigured}
-                disabled={!biometricsAvailable && !Capacitor.isNativePlatform()}
-                onClick={handleToggleBiometrics}
-              >
-                <i className="ic" style={{ "--c": "#6366f1" }}>
-                  <svg
-                    viewBox="0 0 24 24"
-                    width="20"
-                    height="20"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
-                    <path d="M9 9h.01M15 9h.01M10 13a2 2 0 0 0 4 0m-2 0v2" />
-                  </svg>
-                </i>
-                <span className="nm">
-                  <b>Biometric Unlock</b>
-                  <small>
-                    {biometricsConfigured
-                      ? "Face ID / Touch ID Enabled"
-                      : biometricsAvailable
-                        ? "Use Face ID / Touch ID / Fingerprint"
-                        : "Unavailable on this device"}
-                  </small>
-                </span>
-                <span
-                  className={"sw " + (biometricsConfigured ? "on" : "")}
-                  aria-hidden="true"
-                />
-              </button>
-            </div>
-          )}
-
-          {pinSet && (
-            <div className="settings-menu-section" style={{ marginTop: 16 }}>
-              <h4>Auto-Lock Timeout</h4>
-              <p className="settings-note" style={{ marginBottom: 10 }}>
-                Choose when Spend requires your passcode after leaving:
-              </p>
-              <Seg
-                value={timeoutMinutes}
-                onPick={handleTimeoutChange}
-                options={[
-                  [0, "Immediately"],
-                  [1, "1 min"],
-                  [5, "5 min"],
-                ]}
-              />
-            </div>
-          )}
-
-          {/* Section 2: Cloud Data Protection */}
-          <div className="settings-menu-section" style={{ marginTop: 16 }}>
-            <h4>Cloud Security</h4>
-            <div
-              className="ri"
-              style={{
-                justifyContent: "space-between",
-                alignItems: "center",
-                padding: "10px 4px",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <i
-                  className="ic"
-                  style={{
-                    "--c": "#10b981",
-                    width: 40,
-                    height: 40,
-                    borderRadius: 13,
-                  }}
-                >
-                  <svg
-                    viewBox="0 0 24 24"
-                    width="20"
-                    height="20"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                  </svg>
-                </i>
-                <span className="nm">
-                  <b>Cloud Encryption</b>
-                  <small>Encrypted in transit &amp; at rest</small>
+                  <b>4-Digit Passcode</b>
+                  <small>Active</small>
                 </span>
               </div>
-              <span
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 5,
-                  fontSize: 12,
-                  fontWeight: 750,
-                  color: "#10b981",
-                  background: "rgba(16, 185, 129, 0.1)",
-                  padding: "4px 10px",
-                  borderRadius: 999,
-                }}
-              >
-                <span
-                  style={{
-                    width: 6,
-                    height: 6,
-                    borderRadius: "50%",
-                    background: "#10b981",
-                  }}
-                />
-                Protected
-              </span>
+              <div className="security-row-actions">
+                <button
+                  type="button"
+                  className="security-sub-btn"
+                  onClick={handleStartSetPin}
+                >
+                  Change
+                </button>
+                <button
+                  type="button"
+                  className="security-sub-btn is-danger"
+                  onClick={handleRemovePin}
+                >
+                  Turn Off
+                </button>
+              </div>
             </div>
-            <p className="settings-note" style={{ marginTop: 6 }}>
-              Your financial records are automatically encrypted and securely isolated to your account.
-            </p>
+          )}
+
+          {pinSet && (
+            <button
+              className="ri settings-action"
+              type="button"
+              aria-pressed={biometricsConfigured}
+              disabled={!biometricsAvailable && !Capacitor.isNativePlatform()}
+              onClick={handleToggleBiometrics}
+            >
+              <i className="ic" style={{ "--c": "#6366f1" }}>
+                <svg
+                  viewBox="0 0 24 24"
+                  width="20"
+                  height="20"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+                  <path d="M9 9h.01M15 9h.01M10 13a2 2 0 0 0 4 0m-2 0v2" />
+                </svg>
+              </i>
+              <span className="nm">
+                <b>Biometric Unlock</b>
+                <small>
+                  {biometricsConfigured
+                    ? "Face ID / Touch ID"
+                    : biometricsAvailable
+                      ? "Off"
+                      : "Unavailable on this device"}
+                </small>
+              </span>
+              <span
+                className={"sw " + (biometricsConfigured ? "on" : "")}
+                aria-hidden="true"
+              />
+            </button>
+          )}
+
+          {pinSet && (
+            <div className="security-autolock-wrap">
+              <div
+                className="ri"
+                style={{ borderBottom: 0, paddingBottom: 6 }}
+              >
+                <i className="ic" style={{ "--c": "#0ea5e9" }}>
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="20"
+                    height="20"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12 6 12 12 16 14" />
+                  </svg>
+                </i>
+                <span className="nm">
+                  <b>Auto-Lock</b>
+                  <small>Require passcode</small>
+                </span>
+              </div>
+              <div style={{ padding: "0 4px 10px" }}>
+                <Seg
+                  value={timeoutMinutes}
+                  onPick={handleTimeoutChange}
+                  options={[
+                    [0, "Immediately"],
+                    [1, "1 min"],
+                    [5, "5 min"],
+                  ]}
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="ri">
+            <i className="ic" style={{ "--c": "#10b981" }}>
+              <svg
+                viewBox="0 0 24 24"
+                width="20"
+                height="20"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              </svg>
+            </i>
+            <span className="nm">
+              <b>Cloud Encryption</b>
+              <small>End-to-end encrypted</small>
+            </span>
+            <span className="security-badge-e2e">
+              <span className="security-badge-dot" />
+              Protected
+            </span>
           </div>
 
           {statusMsg && (
@@ -6550,14 +6529,14 @@ function SecuritySheet({ onClose, onLockNow }) {
               className="settings-status"
               role="status"
               aria-live="polite"
-              style={{ marginTop: 14 }}
+              style={{ marginTop: 12 }}
             >
               {statusMsg}
             </p>
           )}
 
           {pinSet && (
-            <div style={{ marginTop: 24 }}>
+            <div style={{ marginTop: 18 }}>
               <button
                 type="button"
                 className="btn"
@@ -6581,8 +6560,10 @@ function SecuritySheet({ onClose, onLockNow }) {
 
       {step === "setup_pin" && (
         <form onSubmit={handleDraftPinSubmit}>
-          <p className="hint">Enter a new 4-digit PIN for your app passcode:</p>
-          <div className="amt" style={{ margin: "20px 0" }}>
+          <p className="hint" style={{ textAlign: "center", margin: "6px 0 0" }}>
+            Create a 4-digit passcode
+          </p>
+          <div className="amt" style={{ margin: "20px 0 16px" }}>
             <input
               type="password"
               inputMode="numeric"
@@ -6627,8 +6608,10 @@ function SecuritySheet({ onClose, onLockNow }) {
 
       {step === "confirm_pin" && (
         <form onSubmit={handleConfirmPinSubmit}>
-          <p className="hint">Re-enter your 4-digit PIN to confirm:</p>
-          <div className="amt" style={{ margin: "20px 0" }}>
+          <p className="hint" style={{ textAlign: "center", margin: "6px 0 0" }}>
+            Confirm your 4-digit passcode
+          </p>
+          <div className="amt" style={{ margin: "20px 0 16px" }}>
             <input
               type="password"
               inputMode="numeric"
@@ -6668,7 +6651,7 @@ function SecuritySheet({ onClose, onLockNow }) {
               className="btn"
               disabled={pinConfirm.length !== 4}
             >
-              Confirm &amp; Enable
+              Confirm
             </button>
           </div>
         </form>
@@ -7746,11 +7729,15 @@ export default function MobilePrototype({
                 notificationPermission={notificationPermission}
                 notificationStatus={notificationStatus}
                 backgroundPushEnabled={backgroundPushEnabled}
-                onAccounts={() => nav("accounts")}
                 onSignIn={signIn}
                 onReminder={onReminder}
                 onToggleNotifications={onToggleNotifications}
                 onTestNotification={onTestNotification}
+                onBackupDownload={onBackupDownload}
+                onEncryptedBackupDownload={onEncryptedBackupDownload}
+                onExpensesCsv={onExpensesCsv}
+                onBackupRestore={onBackupRestore}
+                backupStatus={backupStatus}
               />
             ) : (
               tab === "home" && (
@@ -7991,17 +7978,15 @@ export default function MobilePrototype({
           onAdvanced={advanced}
           onProfileSettings={openProfileSettings}
           onSecurity={() => openSheet({ type: "sec" })}
-          backupStatus={backupStatus}
-          lastBackupAt={lastBackupAt}
-          onBackupDownload={onBackupDownload}
-          onEncryptedBackupDownload={onEncryptedBackupDownload}
-          onExpensesCsv={onExpensesCsv}
-          onBackupRestore={onBackupRestore}
         />
       )}
       {sheet?.type === "sec" && (
         <SecuritySheet
           onClose={close}
+          onBack={() => {
+            triggerHaptic("selection");
+            openSheet({ type: "set" });
+          }}
           onLockNow={() => {
             close();
             lockAppManually();

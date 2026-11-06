@@ -1947,42 +1947,58 @@ a:active,
 .mobile-prototype .activity-filter-clear-link:focus-visible {
   background: color-mix(in srgb, var(--g, #10b981) 12%, transparent);
 }
+.mobile-prototype .activity-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+  margin-bottom: 2px;
+}
 .mobile-prototype .srch {
   display: flex;
   align-items: center;
-  gap: 8px;
-  border: 1px solid transparent;
+  gap: 10px;
+  border: 1px solid var(--line);
   background: var(--card);
-  border-radius: 16px;
+  border-radius: 14px;
   padding: 0 14px;
-  box-shadow: var(--shadow);
+  min-height: 46px;
+  box-shadow: 0 1.5px 5px rgba(0, 0, 0, 0.03);
   transition:
     border-color 180ms ease,
-    background-color 180ms ease;
+    background-color 180ms ease,
+    box-shadow 180ms ease;
 }
 .mobile-prototype .srch:focus-within {
-  border-color: color-mix(in srgb, var(--g) 38%, var(--line));
-  background: color-mix(in srgb, var(--card) 96%, var(--g) 4%);
+  border-color: color-mix(in srgb, var(--ink) 45%, var(--line));
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
 }
 .mobile-prototype .srch > svg {
+  width: 18px;
+  height: 18px;
   color: var(--mut);
+  flex-shrink: 0;
   transition: color 180ms ease;
 }
 .mobile-prototype .srch:focus-within > svg {
-  color: var(--g);
+  color: var(--ink);
 }
 .mobile-prototype .srch input {
   flex: 1;
-  font-size: 16px;
+  font-size: 15px;
+  font-weight: 500;
   border: 0;
   background: none;
-  padding: 14px 0;
+  padding: 12px 0;
   outline: 0;
   color: var(--ink);
+  line-height: 1.3;
 }
 .mobile-prototype .srch input::placeholder {
   color: var(--mut);
-  opacity: 1;
+  opacity: 0.85;
+  font-size: 14.5px;
+  font-weight: 500;
 }
 .mobile-prototype .srch input[type="search"]::-webkit-search-decoration,
 .mobile-prototype .srch input[type="search"]::-webkit-search-cancel-button,
@@ -2001,7 +2017,10 @@ a:active,
   color: var(--mut);
   border-radius: 50%;
   cursor: pointer;
-  transition: color 150ms ease, background-color 150ms ease, transform 150ms ease;
+  transition:
+    color 150ms ease,
+    background-color 150ms ease,
+    transform 150ms ease;
 }
 .mobile-prototype .srch-clear-btn:hover,
 .mobile-prototype .srch-clear-btn:focus-visible {
@@ -2015,7 +2034,7 @@ a:active,
   display: flex;
   gap: 8px;
   overflow-x: auto;
-  padding: 12px 0 4px;
+  padding: 10px 0 4px;
   scrollbar-width: none;
 }
 .mobile-prototype .chips button,
@@ -2150,29 +2169,58 @@ a:active,
   min-width: 0;
 }
 .mobile-prototype .activity-type-seg {
-  margin: 10px 0 4px;
-  background: var(--card);
+  margin: 0;
+  background: color-mix(in srgb, var(--ink) 4%, var(--bg));
   border: 1px solid var(--line);
-  box-shadow: var(--shadow);
+  border-radius: 14px;
+  padding: 3.5px;
+  gap: 3px;
+  box-shadow: none;
 }
 .mobile-prototype .activity-type-seg button {
-  padding: 8px 3px;
+  padding: 7px 4px;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--mut);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 5px;
+  border-radius: 11px;
+  border: 1px solid transparent;
+  background: transparent;
+  white-space: nowrap;
+  letter-spacing: -0.01em;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease,
+    border-color 160ms ease,
+    transform 160ms ease;
+}
+.mobile-prototype .activity-type-seg button:active {
+  transform: scale(0.97);
 }
 .mobile-prototype .activity-type-seg button.on {
-  color: var(--g);
-  background: var(--bg);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  color: var(--ink);
+  background: var(--card);
+  font-weight: 800;
+  border-color: rgba(0, 0, 0, 0.04);
+  box-shadow:
+    0 1.5px 5px rgba(0, 0, 0, 0.08),
+    0 0.5px 1.5px rgba(0, 0, 0, 0.03);
+}
+:root[data-theme="dark"] .mobile-prototype .activity-type-seg {
+  background: color-mix(in srgb, var(--card) 55%, var(--bg));
+  border-color: var(--line);
 }
 :root[data-theme="dark"] .mobile-prototype .activity-type-seg button.on {
-  background: color-mix(in srgb, var(--card) 85%, #fff 15%);
+  background: var(--card);
   color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.4),
+    0 0.5px 1.5px rgba(255, 255, 255, 0.05);
 }
 .mobile-prototype .chips-divider {
   width: 1px;
@@ -2186,18 +2234,33 @@ a:active,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: color-mix(in srgb, var(--ink) 10%, transparent);
-  color: var(--ink);
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  color: var(--mut);
   font-size: 11px;
-  font-weight: 800;
-  padding: 1px 6px;
+  font-weight: 700;
+  padding: 1px 6.5px;
   border-radius: 99px;
-  margin-left: 2px;
+  margin-left: 1px;
   line-height: 1.2;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease;
 }
-.mobile-prototype .chips button.on .chip-badge,
 .mobile-prototype .activity-type-seg button.on .chip-badge {
-  background: rgba(255, 255, 255, 0.35);
+  background: color-mix(in srgb, var(--ink) 12%, transparent);
+  color: var(--ink);
+  font-weight: 800;
+}
+:root[data-theme="dark"] .mobile-prototype .chip-badge {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--mut);
+}
+:root[data-theme="dark"] .mobile-prototype .activity-type-seg button.on .chip-badge {
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+}
+.mobile-prototype .chips button.on .chip-badge {
+  background: rgba(255, 255, 255, 0.32);
   color: inherit;
 }
 /* ───────────── Account Picker Horizontal Chips ───────────── */
@@ -3009,7 +3072,8 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
   cursor: grab;
 }
 .mobile-prototype .sh[data-dragging="true"] .sheet-drag-zone,
-.mobile-prototype .sh[data-dragging="true"] .sheet-content > h3:first-child {
+.mobile-prototype .sh[data-dragging="true"] .sheet-content > h3:first-child,
+.mobile-prototype .sh[data-dragging="true"] .security-sheet-header {
   cursor: grabbing;
 }
 .mobile-prototype .grab {
@@ -6787,6 +6851,80 @@ html[data-theme="dark"] .mobile-prototype .card-options-bar-btn.is-primary-card 
 }
 
 /* ───────────── Security & Privacy Settings Sheet ───────────── */
+.mobile-prototype .security-sheet-header {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 0 10px;
+  margin-bottom: 6px;
+  background: var(--card);
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grab;
+  touch-action: none !important;
+}
+.mobile-prototype .security-sheet-header h3 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--ink);
+  line-height: 1.2;
+}
+.mobile-prototype .security-sheet-back-btn {
+  flex-shrink: 0;
+  min-width: 40px;
+  min-height: 40px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.mobile-prototype .security-sheet-content {
+  display: flex;
+  flex-direction: column;
+  padding: 2px 0 16px;
+}
+.mobile-prototype .security-sheet-content .ri {
+  min-height: 58px;
+  padding: 10px 4px;
+}
+.mobile-prototype .security-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.mobile-prototype .security-sub-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 750;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 120ms ease, background-color 120ms ease;
+}
+.mobile-prototype .security-sub-btn:active {
+  transform: scale(0.94);
+}
+.mobile-prototype .security-sub-btn.is-danger {
+  color: var(--bad, #ef4444);
+  border-color: color-mix(in srgb, var(--bad, #ef4444) 30%, var(--line));
+  background: color-mix(in srgb, var(--bad, #ef4444) 8%, var(--bg));
+}
+.mobile-prototype .security-autolock-wrap {
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 8px;
+}
 .mobile-prototype .security-badge-e2e {
   display: inline-flex;
   align-items: center;
@@ -6798,6 +6936,8 @@ html[data-theme="dark"] .mobile-prototype .card-options-bar-btn.is-primary-card 
   color: #10b981;
   font-size: 11.5px;
   font-weight: 800;
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 .mobile-prototype .security-badge-dot {
