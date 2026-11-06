@@ -293,8 +293,8 @@ export async function sendNativeBuiltinNotification({
 }
 
 /**
- * When a new month comes, send a reminder notification:
- * "Start your expense tracking with Spend"
+ * When a new month comes, send a reminder notification and schedule OS background delivery:
+ * "Previous month's spend overview is ready"
  */
 export async function checkAndNotifyNewMonth(currentMonthStr) {
   const now = new Date();
@@ -309,7 +309,7 @@ export async function checkAndNotifyNewMonth(currentMonthStr) {
 
   const shouldNotify =
     !lastNotifiedMonth
-      ? now.getDate() <= 3 // First install in early month
+      ? now.getDate() <= 7 // Active during the 7-day month-end banner window
       : lastNotifiedMonth < thisMonth; // True month rollover
 
   if (shouldNotify) {
@@ -319,8 +319,8 @@ export async function checkAndNotifyNewMonth(currentMonthStr) {
 
     await sendNativeBuiltinNotification({
       id: 20001,
-      title: "Start your expense tracking with Spend",
-      body: "A new month has begun! Start your expense tracking with Spend to keep your budget on target.",
+      title: "Previous month's spend overview is ready",
+      body: "A new month has begun! Open Spend to review your previous month's spend overview and recap.",
       tag: `spend-new-month-${thisMonth}`,
       tab: "home",
       tone: "reminder",
@@ -331,7 +331,7 @@ export async function checkAndNotifyNewMonth(currentMonthStr) {
     } catch {}
   }
 
-  // Schedule next month's day 1 morning reminder on native iOS/Android
+  // Schedule next month's day 1 morning reminder on native iOS/Android (fires even when the app is closed)
   if (Capacitor.isNativePlatform()) {
     try {
       const nextMonthDate = new Date(
@@ -346,8 +346,8 @@ export async function checkAndNotifyNewMonth(currentMonthStr) {
         notifications: [
           {
             id: 20002,
-            title: "Start your expense tracking with Spend",
-            body: "A new month has begun! Start your expense tracking with Spend to keep your budget on target.",
+            title: "Previous month's spend overview is ready",
+            body: "A new month has begun! Open Spend to review your previous month's spend overview and recap.",
             channelId: "spend_monthly",
             sound: "reminder.wav",
             foreground: true,

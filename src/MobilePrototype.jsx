@@ -57,6 +57,7 @@ import {
   shouldLockApp,
   lockAppManually,
 } from "./security.js";
+import MonthEndBanner from "./components/MonthEndBanner.jsx";
 import "./MobilePrototype.css";
 
 /* ───────────── constants ───────────── */
@@ -1602,6 +1603,12 @@ function Home({
 
   return (
     <>
+      <MonthEndBanner
+        transactions={S?.exp || []}
+        amountOf={(t) => (t.cat === "Savings" ? 0 : t.amt)}
+        categoryOf={(t) => t.cat}
+        currency="BDT"
+      />
       <div className="hd">
         <div>
           <small>
