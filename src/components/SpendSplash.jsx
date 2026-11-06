@@ -42,7 +42,7 @@ const T = {
   exit: 450,
 };
 
-const WORD = "spend";
+const WORD = "Spend";
 const RESUME_WINDOW = 250; // a remount within this window continues the run
 
 // Module-level timeline so re-renders / remounts can never restart the intro.
