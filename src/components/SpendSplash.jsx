@@ -135,6 +135,15 @@ export default function SpendSplash({
     let released = false;
     let holdTimer;
 
+    const prevHtmlBg = document.documentElement.style.backgroundColor;
+    const prevBodyBg = document.body.style.backgroundColor;
+    document.documentElement.style.backgroundColor = "#0c130f";
+    document.body.style.backgroundColor = "#0c130f";
+    const restoreBg = () => {
+      document.documentElement.style.backgroundColor = prevHtmlBg;
+      document.body.style.backgroundColor = prevBodyBg;
+    };
+
     // ---- intro ------------------------------------------------------------
     const gap = parseFloat(getComputedStyle(lockup).columnGap) || 0;
     const shiftOf = () => (word.offsetWidth + gap) / 2;
@@ -221,6 +230,7 @@ export default function SpendSplash({
     const finish = () => {
       if (finished) return;
       finished = true;
+      restoreBg();
       root.hidden = true;
       clock = null;
       releaseAt = null;
@@ -232,6 +242,7 @@ export default function SpendSplash({
     };
 
     const exit = () => {
+      restoreBg();
       if (releaseAt === null) releaseAt = sinceStart();
       const since = Math.max(0, sinceStart() - releaseAt);
       const d = reduce ? 200 : T.exit;
@@ -283,6 +294,7 @@ export default function SpendSplash({
 
     return () => {
       alive = false;
+      restoreBg();
       lastCleanup = performance.now();
       clearTimeout(holdTimer);
       unlisten();
@@ -336,7 +348,9 @@ const CSS = `
   --sp-ink: #eaf4ed;
   --tile: min(96px, 26vw);
   --gap: 16px;
-  position: fixed; inset: 0; z-index: 2147483000;
+  position: fixed; inset: -2px; z-index: 2147483000;
+  width: calc(100vw + 4px); height: calc(100dvh + 4px);
+  box-shadow: 0 0 0 4px var(--sp-bg);
   display: grid; place-items: center;
   background: var(--sp-bg);
   font-family: var(--sp-font);

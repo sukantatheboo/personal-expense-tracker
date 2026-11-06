@@ -34,6 +34,12 @@ body {
   margin: 0;
   background: var(--page-bg);
   overscroll-behavior: none;
+  overflow-x: hidden;
+  scrollbar-width: none;
+}
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none;
 }
 html {
   min-height: 100%;

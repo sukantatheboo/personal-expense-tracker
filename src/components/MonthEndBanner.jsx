@@ -318,8 +318,11 @@ export default function MonthRecap({
 
   const down = (e) => {
     const h = hold.current;
+    h.x = e.clientX;
     h.y = e.clientY;
     h.held = false;
+    clearTimeout(h.t);
+    if (e.target.closest("button")) return;
     h.t = setTimeout(() => {
       h.held = true;
       setPaused(true);
@@ -335,9 +338,16 @@ export default function MonthRecap({
     const h = hold.current;
     cancel();
     if (e.target.closest("button")) return;
-    if (e.clientY - h.y > 110) return close();
+    const dx = e.clientX - (h.x ?? e.clientX);
+    const dy = e.clientY - (h.y ?? e.clientY);
+    if (dy > 110 && Math.abs(dy) > Math.abs(dx)) return close();
     if (h.held) {
       h.held = false;
+      return;
+    }
+    if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) {
+      buzz();
+      go(dx < 0 ? i + 1 : i - 1);
       return;
     }
     const r = colRef.current.getBoundingClientRect();
@@ -347,6 +357,7 @@ export default function MonthRecap({
 
   const s = slides[i];
   const peak = [...dayEntries].sort((a, b) => b[1] - a[1])[0] || [1, 1];
+  const peakDay = Number(peak[0]) || 1;
   const peakAmount = Number(peak[1]) || 1;
   const pct =
     cats.length && activeData.total > 0
@@ -361,12 +372,13 @@ export default function MonthRecap({
   const storyStyle =
     phase === "open"
       ? {
-          top: 0,
-          left: 0,
-          width: "100vw",
-          height: "100dvh",
+          top: -1,
+          left: -1,
+          width: "calc(100vw + 2px)",
+          height: "calc(100dvh + 2px)",
           borderRadius: 0,
           background: BG[i % BG.length],
+          boxShadow: `0 0 0 4px ${BG[i % BG.length]}`,
         }
       : { ...rect, borderRadius: 28, background: BG[0] };
 
@@ -442,7 +454,7 @@ export default function MonthRecap({
       {active &&
         createPortal(
           <div
-            className={`mr-story${ready ? " mr-in" : ""}${paused ? " mr-hold" : ""}`}
+            className={`mr-story${ready ? " mr-in" : ""}${paused ? " mr-hold" : ""}${phase === "closing" ? " mr-closing" : ""}`}
             style={{ ...storyStyle, "--ms": `${slideMs}ms` }}
             role="dialog"
             aria-modal="true"
@@ -643,7 +655,7 @@ export default function MonthRecap({
                               return (
                                 <div
                                   key={k}
-                                  className={`mr-c${v === peak[1] ? " hit" : v ? " on2" : ""}`}
+                                  className={`mr-c${k + 1 === peakDay && v > 0 ? " hit" : v ? " on2" : ""}`}
                                   style={{
                                     "--i": k,
                                     "--h": `${v ? Math.max(10, (v / peakAmount) * 100) : 7}%`,
@@ -723,8 +735,11 @@ const CSS = `
   margin-bottom: 16px;
   text-align: left;
 }
-.mr-card:active {
+.mr-card:active:not(:has(.mr-x:active)) {
   transform: scale(0.98);
+}
+.mr-story.mr-closing {
+  pointer-events: none;
 }
 .mr-card .mr-tile,
 .mr-story .mr-tile {
