@@ -155,16 +155,11 @@ export default function SpendLogin({
           role="img"
           aria-label="Spend"
         >
-          <rect
-            className="sl__logo-bg"
-            width="64"
-            height="64"
-            rx="16"
-          />
+          <rect width="64" height="64" rx="16" fill="#39785d" />
           <path
-            className="sl__logo-arrow"
             d="M22 43 43 22M28 22h15v15"
             fill="none"
+            stroke="#fff"
             strokeLinecap="round"
             strokeLinejoin="round"
             strokeWidth="4.5"
