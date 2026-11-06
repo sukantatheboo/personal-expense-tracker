@@ -1,377 +1,370 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+
+/**
+ * SpendSplash — opening animation.
+ *
+ * What was wrong (measured from the screen recording):
+ *  1. The effect re-ran while the intro was playing (new `onDone` identity on
+ *     every parent render), so the whole sequence restarted from the dot —
+ *     twice. Now: the effect runs once, props live in a ref, and the timeline
+ *     is anchored to a module-level clock, so even a re-render or remount
+ *     resumes mid-flight instead of restarting.
+ *  2. The overlay was un-hidden inside useEffect, which runs AFTER first paint,
+ *     so the lock screen flashed for a frame. Now: the overlay is opaque and
+ *     visible in the very first commit, and animations are created in a layout
+ *     effect (before paint).
+ *  3. Letters animated `color` (main-thread repaint x10) on top of
+ *     transform/opacity. Over a dark background, a plain opacity fade gives the
+ *     same mist -> ink look with zero repaints.
+ *
+ * Only transform + opacity run on the compositor, so they stay smooth even when
+ * the app underneath is busy mounting. (The tile's radius morph and the arrow
+ * stroke are tiny and main-thread; they finish before the heavy work usually
+ * lands, and are the only things that can stutter.)
+ */
 
 const EASE = {
   out: "cubic-bezier(.22,1,.36,1)",
   inOut: "cubic-bezier(.65,0,.35,1)",
+  swell: "cubic-bezier(.2,.8,.3,1)",
+  pop: "cubic-bezier(.34,1.3,.64,1)",
+  exit: "cubic-bezier(.4,0,1,1)",
 };
 
+// ms from the start of the intro
 const T = {
   shaft: 640,
   arms: 980,
   shift: 1340,
   letters: 1400,
+  stagger: 60,
   hold: 2750,
   exit: 450,
 };
+
+const WORD = "spend";
+const RESUME_WINDOW = 250; // a remount within this window continues the run
+
+// Module-level timeline so re-renders / remounts can never restart the intro.
+let clock = null; // performance.now() at intro start
+let releaseAt = null; // ms since clock when the exit began
+let lastCleanup = 0;
+
+const useIsoLayoutEffect =
+  typeof window !== "undefined" ? useLayoutEffect : useEffect;
+
+function alreadySeen(once, key) {
+  if (!once) return false;
+  try {
+    return sessionStorage.getItem(key) === "1";
+  } catch {
+    return false;
+  }
+}
 
 export default function SpendSplash({
   onDone,
   once = false,
   storageKey = "spend-splash",
   fontFamily = '"Outfit", "Nunito Sans", ui-rounded, system-ui, sans-serif',
+  // Set to null/"" if you bundle the font yourself (recommended, see notes).
   fontUrl = "https://fonts.googleapis.com/css2?family=Outfit:wght@600&display=swap",
 }) {
   const rootRef = useRef(null);
+  const firedSkip = useRef(false);
 
-  const isAlreadySeen = () => {
-    try {
-      return Boolean(once && sessionStorage.getItem(storageKey));
-    } catch {
-      return false;
-    }
-  };
+  // Always-latest props, deliberately NOT effect dependencies.
+  const live = useRef({});
+  live.current = { onDone, once, storageKey, fontFamily, fontUrl };
 
-  const alreadySeen = useRef(typeof window !== "undefined" && isAlreadySeen());
+  const [skip] = useState(() => alreadySeen(once, storageKey));
 
   useEffect(() => {
-    if (alreadySeen.current) {
-      onDone?.();
-      return undefined;
-    }
+    if (!skip || firedSkip.current) return;
+    firedSkip.current = true;
+    document.dispatchEvent(new CustomEvent("spend:splash-done"));
+    live.current.onDone?.();
+  }, [skip]);
 
-    let active = true;
-    const anims = [];
-    let holdTimer = null;
-    let cleanListeners = () => {};
-
-    // Load font stylesheet if requested and not already present
-    if (fontUrl && typeof document !== "undefined") {
-      if (!document.querySelector(`link[href="${fontUrl}"]`)) {
-        if (!document.querySelector('link[href="https://fonts.googleapis.com"]')) {
-          const pre1 = document.createElement("link");
-          pre1.rel = "preconnect";
-          pre1.href = "https://fonts.googleapis.com";
-          document.head.appendChild(pre1);
-        }
-        if (!document.querySelector('link[href="https://fonts.gstatic.com"]')) {
-          const pre2 = document.createElement("link");
-          pre2.rel = "preconnect";
-          pre2.href = "https://fonts.gstatic.com";
-          pre2.crossOrigin = "anonymous";
-          document.head.appendChild(pre2);
-        }
-        const link = document.createElement("link");
-        link.rel = "stylesheet";
-        link.href = fontUrl;
-        document.head.appendChild(link);
-      }
-    }
-
+  useIsoLayoutEffect(() => {
     const root = rootRef.current;
-    if (!root) return undefined;
+    if (!root || skip) return undefined;
 
-    const el = root;
-    el.hidden = false;
-
+    const $ = (s) => root.querySelector(s);
+    const stage = $(".sp-stage");
+    const lockup = $(".sp-lockup");
+    const mark = $(".sp-mark");
+    const tile = $(".sp-tile");
+    const word = $(".sp-word");
+    const shaft = $(".sp-shaft");
+    const arms = root.querySelectorAll(".sp-arm");
+    const letters = root.querySelectorAll(".sp-l");
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const t = (ms) => (reduce ? 0 : ms);
-    const cs = getComputedStyle(el);
-    const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    const ink =
-      cs.getPropertyValue("--sp-ink").trim() || (isDark ? "#eef6f1" : "#12261d");
-    const mist =
-      cs.getPropertyValue("--sp-mist").trim() || (isDark ? "#5f7468" : "#a3b5ab");
 
-    const q = (s) => el.querySelector(s);
-    const tile = q(".sp-tile");
-    const stage = q(".sp-stage");
-    const lockup = q(".sp-lockup");
-    const word = q(".sp-word");
-    const shaft = q(".sp-shaft");
-    const arms = el.querySelectorAll(".sp-arm");
-    const letters = Array.prototype.slice.call(el.querySelectorAll(".sp-word span"));
+    // ---- timeline anchor: resume instead of restart ----------------------
+    const now = performance.now();
+    if (clock === null || now - lastCleanup > RESUME_WINDOW) {
+      clock = now;
+      releaseAt = null;
+    }
+    const sinceStart = () => performance.now() - clock;
+    const elapsed = sinceStart(); // 0 on a fresh start
 
-    if (!tile || !stage || !lockup || !word || !shaft) return undefined;
-
-    function run(target, kf, o) {
-      const a = target.animate(kf, Object.assign({ fill: "both" }, o));
+    // ---- helpers ----------------------------------------------------------
+    const anims = [];
+    const play = (el, keyframes, options, startAt = 0) => {
+      const a = el.animate(keyframes, { fill: "both", ...options });
+      if (startAt > 0) a.currentTime = startAt;
       anims.push(a);
       return a;
+    };
+    const intro = (el, kf, opts) => play(el, kf, opts, elapsed);
+
+    // Font: inject once, never block the first frame.
+    const { fontUrl: fUrl, fontFamily: fFam } = live.current;
+    if (fUrl && !document.querySelector("link[data-spend-splash-font]")) {
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = fUrl;
+      link.setAttribute("data-spend-splash-font", "");
+      document.head.appendChild(link);
     }
 
-    function draw(target, delay, dur, easing) {
-      run(
-        target,
-        [
-          { strokeDashoffset: 1, opacity: 0, offset: 0 },
-          { strokeDashoffset: 1, opacity: 1, offset: 0.001 },
-          { strokeDashoffset: 0, opacity: 1, offset: 1 },
-        ],
-        { delay: t(delay), duration: t(dur), easing },
-      );
-    }
+    let alive = true;
+    let finished = false;
+    let released = false;
+    let holdTimer;
 
-    // 1. Dot pops in, then swells into the rounded tile (circle -> 25% radius)
-    // Compositor-accelerated scale transform on GPU layer
-    run(
-      tile,
-      [
-        {
-          transform: "scale(0) translateZ(0)",
-          easing: "cubic-bezier(.2,.8,.3,1)",
-        },
-        {
-          transform: "scale(.07) translateZ(0)",
-          offset: 0.2,
-          easing: "cubic-bezier(.34,1.3,.64,1)",
-        },
-        { transform: "scale(1) translateZ(0)" },
-      ],
-      { duration: t(800) },
-    );
-
-    // Border radius morph runs in parallel without degrading transform compositor thread
-    run(
-      tile,
-      [
-        {
-          borderRadius: "50%",
-          easing: "cubic-bezier(.2,.8,.3,1)",
-        },
-        {
-          borderRadius: "50%",
-          offset: 0.2,
-          easing: "cubic-bezier(.34,1.3,.64,1)",
-        },
-        { borderRadius: "25%" },
-      ],
-      { duration: t(800) },
-    );
-
-    // 2. Arrow draws itself: shaft first, then the head opens out from the tip
-    draw(shaft, T.shaft, 400, EASE.inOut);
-    Array.prototype.forEach.call(arms, (a) => {
-      draw(a, T.arms, 300, EASE.out);
-    });
-
-    // 3. Tile slides left as the wordmark arrives; lockup ends perfectly centred
+    // ---- intro ------------------------------------------------------------
     const gap = parseFloat(getComputedStyle(lockup).columnGap) || 0;
-    const shift = (word.offsetWidth + gap) / 2;
-    run(
-      lockup,
-      [
-        { transform: `translateX(${shift}px) translateZ(0)` },
-        { transform: "translateX(0) translateZ(0)" },
-      ],
-      { delay: t(T.shift), duration: t(720), easing: EASE.out },
-    );
+    const shiftOf = () => (word.offsetWidth + gap) / 2;
+    const shiftFrames = (px) => [
+      { transform: `translate3d(${px}px,0,0)` },
+      { transform: "translate3d(0,0,0)" },
+    ];
 
-    letters.forEach((l, i) => {
-      // GPU compositor transform & opacity
-      run(
-        l,
+    if (reduce) {
+      root.classList.add("sp-reduce");
+      intro(stage, [{ opacity: 0 }, { opacity: 1 }], { duration: 200 });
+    } else {
+      // 1. Dot pops in, then swells into the rounded tile (circle -> 25%).
+      intro(
+        tile,
         [
-          { opacity: 0, transform: "translateX(-.16em) translateZ(0)" },
-          { opacity: 1, transform: "translateX(0) translateZ(0)" },
+          { transform: "scale3d(0,0,1)", easing: EASE.swell },
+          { transform: "scale3d(.07,.07,1)", offset: 0.2, easing: EASE.pop },
+          { transform: "scale3d(1,1,1)" },
         ],
-        {
-          delay: t(T.letters + i * 60),
-          duration: t(480),
-          easing: EASE.out,
-        },
+        { duration: 800 }
       );
-      // Decoupled color transition
-      run(
-        l,
+      intro(
+        tile,
         [
-          { color: mist },
-          { color: ink },
+          { borderRadius: "50%", easing: EASE.swell },
+          { borderRadius: "50%", offset: 0.2, easing: EASE.pop },
+          { borderRadius: "25%" },
         ],
-        {
-          delay: t(T.letters + i * 60),
-          duration: t(480),
-          easing: EASE.out,
-        },
+        { duration: 800 }
       );
-    });
 
-    // 4. Hold, then exit. Tap, click, Esc, Enter or Space skips the hold.
-    let isReleased = false;
-    let releaseResolver;
-    const held = new Promise((resolve) => {
-      releaseResolver = resolve;
-    });
+      // 2. Arrow draws itself: shaft first, then the head opens from the tip.
+      const draw = (path, delay, duration, easing) => {
+        const len = path.getTotalLength();
+        path.style.strokeDasharray = String(len);
+        intro(
+          path,
+          [
+            { strokeDashoffset: len, opacity: 0, offset: 0 },
+            { strokeDashoffset: len, opacity: 1, offset: 0.001, easing },
+            { strokeDashoffset: 0, opacity: 1, offset: 1 },
+          ],
+          { delay, duration }
+        );
+      };
+      draw(shaft, T.shaft, 400, EASE.inOut);
+      arms.forEach((a) => draw(a, T.arms, 300, EASE.out));
 
-    function triggerRelease() {
-      if (isReleased) return;
-      isReleased = true;
-      if (releaseResolver) releaseResolver();
-    }
-
-    holdTimer = setTimeout(triggerRelease, reduce ? 900 : T.hold);
-
-    function onKey(e) {
-      if (e.key === "Escape" || e.key === "Enter" || e.key === " ") {
-        triggerRelease();
+      // 3. Tile slides left as the wordmark arrives; lockup ends centred.
+      const shiftAnim = intro(mark, shiftFrames(shiftOf()), {
+        delay: T.shift,
+        duration: 720,
+        easing: EASE.out,
+      });
+      // If the web font lands after we measured, re-aim the slide (no restart).
+      if (document.fonts?.load) {
+        document.fonts
+          .load(`600 64px ${fFam}`)
+          .then(() => {
+            if (alive) shiftAnim.effect?.setKeyframes?.(shiftFrames(shiftOf()));
+          })
+          .catch(() => {});
       }
+
+      // 4. Letters: transform + opacity only (compositor).
+      letters.forEach((l, i) =>
+        intro(
+          l,
+          [
+            { opacity: 0, transform: "translate3d(-.16em,0,0)" },
+            { opacity: 1, transform: "translate3d(0,0,0)" },
+          ],
+          {
+            delay: T.letters + i * T.stagger,
+            duration: 480,
+            easing: EASE.out,
+          }
+        )
+      );
     }
 
-    el.addEventListener("pointerdown", triggerRelease);
-    window.addEventListener("keydown", onKey);
+    // ---- hold + exit ------------------------------------------------------
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      root.hidden = true;
+      clock = null;
+      releaseAt = null;
+      try {
+        if (live.current.once) sessionStorage.setItem(live.current.storageKey, "1");
+      } catch {}
+      document.dispatchEvent(new CustomEvent("spend:splash-done"));
+      live.current.onDone?.();
+    };
 
-    cleanListeners = () => {
-      clearTimeout(holdTimer);
-      el.removeEventListener("pointerdown", triggerRelease);
+    const exit = () => {
+      if (releaseAt === null) releaseAt = sinceStart();
+      const since = Math.max(0, sinceStart() - releaseAt);
+      const d = reduce ? 200 : T.exit;
+      root.style.pointerEvents = "none";
+      play(
+        stage,
+        [
+          { transform: "scale3d(1,1,1)" },
+          { transform: reduce ? "scale3d(1,1,1)" : "scale3d(.94,.94,1)" },
+        ],
+        { duration: d, easing: EASE.exit },
+        since
+      );
+      const fade = play(
+        root,
+        [{ opacity: 1 }, { opacity: 0 }],
+        { duration: d, easing: EASE.exit },
+        since
+      );
+      fade.onfinish = finish;
+    };
+
+    // Tap, click, Esc, Enter or Space skips the hold.
+    const onKey = (e) => {
+      if (e.key === "Escape" || e.key === "Enter" || e.key === " ") release();
+    };
+    const unlisten = () => {
+      root.removeEventListener("pointerdown", release);
       window.removeEventListener("keydown", onKey);
     };
+    function release() {
+      if (released || !alive) return;
+      released = true;
+      clearTimeout(holdTimer);
+      unlisten();
+      exit();
+    }
 
-    held
-      .then(() => {
-        if (!active || !rootRef.current) return undefined;
-        cleanListeners();
-        const d = reduce ? 200 : T.exit;
-        run(
-          stage,
-          [
-            { transform: "scale(1) translateZ(0)" },
-            { transform: reduce ? "scale(1) translateZ(0)" : "scale(.94) translateZ(0)" },
-          ],
-          { duration: d, easing: "cubic-bezier(.4,0,1,1)" },
-        );
-        const fadeAnim = run(
-          el,
-          [{ opacity: 1 }, { opacity: 0 }],
-          { duration: d, easing: "ease-out" },
-        );
-        return fadeAnim.finished;
-      })
-      .then(() => {
-        if (!active) return;
-        anims.forEach((a) => {
-          try {
-            a.cancel();
-          } catch {}
-        });
-        if (rootRef.current) {
-          rootRef.current.hidden = true;
-        }
-        try {
-          if (once) {
-            sessionStorage.setItem(storageKey, "1");
-          }
-        } catch {}
-        document.dispatchEvent(new CustomEvent("spend:splash-done"));
-        onDone?.();
-      });
+    if (releaseAt !== null) {
+      // Remounted during the exit: continue it from where it was.
+      released = true;
+      exit();
+    } else {
+      root.addEventListener("pointerdown", release);
+      window.addEventListener("keydown", onKey);
+      const hold = reduce ? 900 : T.hold;
+      holdTimer = setTimeout(release, Math.max(0, hold - elapsed));
+    }
 
     return () => {
-      active = false;
-      cleanListeners();
+      alive = false;
+      lastCleanup = performance.now();
+      clearTimeout(holdTimer);
+      unlisten();
       anims.forEach((a) => {
-        try {
-          a.cancel();
-        } catch {}
+        a.onfinish = null;
+        a.cancel();
       });
     };
-  }, [once, storageKey, fontFamily, fontUrl, onDone]);
+  }, [skip]);
 
-  if (alreadySeen.current) {
-    return null;
-  }
-
-  const effectiveFont =
-    fontFamily || '"Outfit", "Nunito Sans", ui-rounded, system-ui, sans-serif';
+  if (skip) return null;
 
   return (
-    <>
-      <style>{`
-        :root, #spend-splash {
-          --sp-green: #39785d;
-          --sp-ink: #12261d;
-          --sp-mist: #a3b5ab;
-          --sp-top: #ffffff;
-          --sp-bot: #e3efe8;
-          --sp-font: ${effectiveFont};
-        }
-        @media (prefers-color-scheme: dark) {
-          :root, #spend-splash {
-            --sp-ink: #eef6f1;
-            --sp-mist: #5f7468;
-            --sp-top: #0d1511;
-            --sp-bot: #14271e;
-          }
-        }
-        #spend-splash {
-          --tile: clamp(76px, 24vw, 112px);
-          position: fixed; inset: 0; z-index: 9999;
-          display: grid; place-items: center;
-          background: linear-gradient(180deg, var(--sp-top) 35%, var(--sp-bot));
-          cursor: pointer; overflow: hidden;
-          contain: strict;
-          isolation: isolate;
-          transform: translateZ(0);
-          will-change: transform, opacity;
-          backface-visibility: hidden;
-          -webkit-backface-visibility: hidden;
-        }
-        #spend-splash[hidden] { display: none; }
-        .sp-stage {
-          transform: translateZ(0);
-          will-change: transform;
-          backface-visibility: hidden;
-        }
-        .sp-lockup {
-          display: flex; align-items: center; gap: calc(var(--tile) * .2);
-          transform: translateZ(0);
-          will-change: transform;
-          backface-visibility: hidden;
-        }
-        .sp-tile {
-          flex: none; width: var(--tile); height: var(--tile);
-          background: var(--sp-green); border-radius: 25%;
-          transform: scale(0) translateZ(0);
-          will-change: transform;
-          backface-visibility: hidden;
-        }
-        .sp-tile svg { display: block; width: 100%; height: 100%; overflow: visible; }
-        .sp-draw {
-          fill: none; stroke: #fff; stroke-width: 4.5;
-          stroke-linecap: round; stroke-linejoin: round;
-          stroke-dasharray: 1; stroke-dashoffset: 1; opacity: 0;
-          will-change: stroke-dashoffset, opacity;
-        }
-        .sp-word {
-          display: flex; padding-bottom: .05em;
-          font: 600 calc(var(--tile) * .68) / 1 var(--sp-font);
-          letter-spacing: -.025em; color: var(--sp-ink);
-        }
-        .sp-word span {
-          display: inline-block; opacity: 0;
-          transform: translateZ(0);
-          will-change: transform, opacity;
-          backface-visibility: hidden;
-        }
-      `}</style>
-      <div id="spend-splash" ref={rootRef} role="img" aria-label="Spend">
-        <div className="sp-stage">
-          <div className="sp-lockup">
+    <div
+      ref={rootRef}
+      className="sp-root"
+      role="img"
+      aria-label="Spend"
+      style={{ "--sp-font": fontFamily }}
+    >
+      <style>{CSS}</style>
+      <div className="sp-stage">
+        <div className="sp-lockup">
+          <div className="sp-mark">
             <div className="sp-tile">
-              <svg viewBox="0 0 64 64" aria-hidden="true">
-                <path className="sp-draw sp-shaft" pathLength="1" d="M22 43 43 22" />
-                <path className="sp-draw sp-arm" pathLength="1" d="M43 22H28" />
-                <path className="sp-draw sp-arm" pathLength="1" d="M43 22V37" />
+              <svg className="sp-arrow" viewBox="0 0 100 100" aria-hidden="true">
+                <path className="sp-shaft" d="M34 66L66 34" />
+                <path className="sp-arm" d="M66 34H44" />
+                <path className="sp-arm" d="M66 34V56" />
               </svg>
             </div>
-            <div className="sp-word" aria-hidden="true">
-              <span>s</span>
-              <span>p</span>
-              <span>e</span>
-              <span>n</span>
-              <span>d</span>
-            </div>
+          </div>
+          <div className="sp-word" aria-hidden="true">
+            {[...WORD].map((c, i) => (
+              <span key={i} className="sp-l">
+                {c}
+              </span>
+            ))}
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 }
+
+// Colours / sizes measured from the recording of the real app.
+const CSS = `
+.sp-root {
+  --sp-bg: #0c130f;
+  --sp-green: #316c51;
+  --sp-ink: #eaf4ed;
+  --tile: min(96px, 26vw);
+  --gap: 16px;
+  position: fixed; inset: 0; z-index: 2147483000;
+  display: grid; place-items: center;
+  background: var(--sp-bg);
+  font-family: var(--sp-font);
+  -webkit-font-smoothing: antialiased;
+  user-select: none; -webkit-user-select: none;
+  touch-action: none; overscroll-behavior: contain;
+}
+.sp-root[hidden] { display: none; }
+.sp-stage { display: grid; place-items: center; will-change: transform; }
+.sp-lockup { display: flex; align-items: center; column-gap: var(--gap); }
+.sp-mark { flex: none; width: var(--tile); height: var(--tile); will-change: transform; }
+.sp-tile {
+  width: 100%; height: 100%;
+  background: var(--sp-green); border-radius: 25%;
+  transform: scale3d(0,0,1);
+  will-change: transform; backface-visibility: hidden;
+}
+.sp-tile svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.sp-arrow path {
+  fill: none; stroke: #fff; stroke-width: 7.5;
+  stroke-linecap: round; stroke-linejoin: round; opacity: 0;
+}
+.sp-word {
+  display: flex; white-space: nowrap;
+  font-size: calc(var(--tile) * .667); line-height: 1;
+  font-weight: 600; letter-spacing: -.03em; color: var(--sp-ink);
+}
+.sp-l { display: inline-block; opacity: 0; will-change: transform, opacity; }
+.sp-reduce .sp-tile { transform: none; }
+.sp-reduce .sp-l, .sp-reduce .sp-arrow path { opacity: 1; }
+`;
