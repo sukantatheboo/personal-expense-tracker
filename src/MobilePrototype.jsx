@@ -6776,21 +6776,40 @@ export default function MobilePrototype({
     const lockoutSec = getPinLockoutRemainingSeconds();
     if (lockoutSec > 0) {
       triggerHaptic("warning");
-      return false;
+      return {
+        ok: false,
+        message: `Too many attempts. Try again in ${lockoutSec}s.`,
+      };
     }
     triggerHaptic("light");
-    // Connect to existing biometric unlock (Touch ID / Face ID / WebAuthn)
+    if (!hasBiometricsConfigured()) {
+      triggerHaptic("warning");
+      return {
+        ok: false,
+        message: "Enable Touch ID in Settings first.",
+      };
+    }
     try {
-      const ok = await authenticateWithBiometrics();
-      if (ok) {
+      const res = await authenticateWithBiometrics();
+      if (res === true || res?.ok === true) {
         triggerHaptic("success");
         return true;
+      }
+      if (res?.reason === "key_missing") {
+        triggerHaptic("warning");
+        return {
+          ok: false,
+          message: "Enter PIN once to sync Touch ID.",
+        };
       }
     } catch (err) {
       console.warn("Biometric authentication error:", err);
     }
     triggerHaptic("warning");
-    return false;
+    return {
+      ok: false,
+      message: "Touch ID failed. Use your PIN.",
+    };
   }, []);
 
   const handleUnlock = useCallback(async () => {

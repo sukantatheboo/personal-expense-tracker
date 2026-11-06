@@ -108,7 +108,13 @@ export default function SpendLogin({
     if (busy(status)) return;
     setOpen(false);
     try {
-      if (await onBiometric?.()) finish();
+      const res = await onBiometric?.();
+      const ok = typeof res === "object" && res !== null ? res.ok : !!res;
+      if (ok) finish();
+      else if (res?.message) {
+        setMsg(res.message);
+        setStatus("error");
+      }
     } catch {
       /* cancelled */
     }
@@ -181,20 +187,20 @@ export default function SpendLogin({
             onClick={() => !done && setOpen(true)}
             aria-label="Enter your PIN"
           >
-            <svg
-              width="22"
-              height="22"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <rect x="5" y="11" width="14" height="9" rx="2.5" />
-              <path d="M8.5 11V8a3.5 3.5 0 0 1 7 0v3" />
-            </svg>
+            <span className="sl__field-icon" aria-hidden="true">
+              <svg
+                className="sl__lock-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <rect x="5" y="11" width="14" height="9" rx="2.5" />
+                <path d="M8.5 11V8a3.5 3.5 0 0 1 7 0v3" />
+              </svg>
+            </span>
             <span className="sl__dots">
               {Array.from({ length: pinLength }, (_, i) => (
                 <span

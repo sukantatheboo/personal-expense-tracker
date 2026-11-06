@@ -6771,6 +6771,11 @@ html[data-theme="dark"] .mobile-prototype .card-options-bar-btn.is-primary-card 
 .mobile-prototype.is-locked-screen {
   display: block;
   padding: 0;
+  background: var(--bg);
+}
+.mobile-prototype.is-locked-screen svg {
+  stroke: none;
+  stroke-width: 0;
 }
 
 .mobile-prototype .security-pin-error-msg {

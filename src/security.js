@@ -79,33 +79,27 @@ function setSessionUnlocked(unlocked) {
  */
 export const NativeSecureStorage = {
   isAvailable() {
-    return Boolean(
-      (typeof window !== "undefined" && window.Capacitor?.isNativePlatform?.()) &&
-        (window.Capacitor?.Plugins?.SecureStoragePlugin ||
-          window.Capacitor?.Plugins?.SecureStorage ||
-          window.SecureStoragePlugin),
-    );
+    return true;
   },
 
   async setItem(key, value) {
     try {
+      const valStr = typeof value === "string" ? value : JSON.stringify(value);
       const plugin =
         window.Capacitor?.Plugins?.SecureStoragePlugin ||
         window.Capacitor?.Plugins?.SecureStorage ||
         window.SecureStoragePlugin;
       if (plugin) {
-        await plugin.set({
-          key,
-          value: typeof value === "string" ? value : JSON.stringify(value),
-        });
+        await plugin.set({ key, value: valStr });
         return true;
       }
       const prefs = window.Capacitor?.Plugins?.Preferences;
       if (prefs) {
-        await prefs.set({
-          key,
-          value: typeof value === "string" ? value : JSON.stringify(value),
-        });
+        await prefs.set({ key, value: valStr });
+        return true;
+      }
+      if (typeof localStorage !== "undefined") {
+        localStorage.setItem(`spend-secure-${key}`, valStr);
         return true;
       }
     } catch (err) {
@@ -122,12 +116,19 @@ export const NativeSecureStorage = {
         window.SecureStoragePlugin;
       if (plugin) {
         const res = await plugin.get({ key });
-        return res?.value ?? null;
+        if (res?.value != null) return res.value;
       }
       const prefs = window.Capacitor?.Plugins?.Preferences;
       if (prefs) {
         const res = await prefs.get({ key });
-        return res?.value ?? null;
+        if (res?.value != null) return res.value;
+      }
+      if (typeof localStorage !== "undefined") {
+        return (
+          localStorage.getItem(`spend-secure-${key}`) ??
+          localStorage.getItem(key) ??
+          null
+        );
       }
     } catch {
       return null;
@@ -150,6 +151,11 @@ export const NativeSecureStorage = {
         await prefs.remove({ key });
         return true;
       }
+      if (typeof localStorage !== "undefined") {
+        localStorage.removeItem(`spend-secure-${key}`);
+        localStorage.removeItem(key);
+        return true;
+      }
     } catch {
       return false;
     }
@@ -169,6 +175,14 @@ export const NativeSecureStorage = {
       const prefs = window.Capacitor?.Plugins?.Preferences;
       if (prefs) {
         await prefs.clear();
+        return true;
+      }
+      if (typeof localStorage !== "undefined") {
+        Object.keys(localStorage).forEach((k) => {
+          if (k.startsWith("spend-secure-")) {
+            localStorage.removeItem(k);
+          }
+        });
         return true;
       }
     } catch {
@@ -562,17 +576,15 @@ export async function verifyAppPin(pin) {
     setSessionUnlocked(true);
     markActive();
 
-    if (hasBiometricsConfigured()) {
-      biometricCachedKey = sessionKey;
-      try {
-        const rawKey = await crypto.subtle.exportKey("raw", sessionKey);
-        await NativeSecureStorage.setItem(
-          BIOMETRIC_KEY_STORAGE,
-          bufferToBase64(rawKey),
-        );
-      } catch {
-        // ignore
-      }
+    biometricCachedKey = sessionKey;
+    try {
+      const rawKey = await crypto.subtle.exportKey("raw", sessionKey);
+      await NativeSecureStorage.setItem(
+        BIOMETRIC_KEY_STORAGE,
+        bufferToBase64(rawKey),
+      );
+    } catch {
+      // ignore
     }
 
     return true;
@@ -713,7 +725,7 @@ export async function disableBiometrics() {
 export async function authenticateWithBiometrics() {
   try {
     const credentialId = localStorage.getItem(BIOMETRIC_KEY_ID);
-    if (!credentialId) return false;
+    if (!credentialId) return { ok: false, reason: "not_configured" };
 
     const isNative =
       typeof window !== "undefined" && window.Capacitor?.isNativePlatform?.();
@@ -736,6 +748,9 @@ export async function authenticateWithBiometrics() {
         authenticated = true;
       }
     } else {
+      if (credentialId === "native-biometric") {
+        return { ok: false, reason: "invalid_credential" };
+      }
       const challenge = getRandomBytes(32);
       const assertion = await navigator.credentials.get({
         publicKey: {
@@ -780,9 +795,10 @@ export async function authenticateWithBiometrics() {
       markActive();
       return true;
     }
-    return false;
-  } catch {
-    return false;
+    return { ok: false, reason: "key_missing" };
+  } catch (err) {
+    console.warn("Biometric authentication error:", err);
+    return { ok: false, reason: "error", error: err };
   }
 }
 
