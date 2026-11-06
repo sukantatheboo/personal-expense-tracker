@@ -62,6 +62,7 @@ import {
   lockAppManually,
 } from "./security.js";
 import MonthEndBanner from "./components/MonthEndBanner.jsx";
+import SpendLogin from "./components/SpendLogin.jsx";
 import "./MobilePrototype.css";
 
 /* ───────────── constants ───────────── */
@@ -6599,7 +6600,7 @@ function SecuritySheet({ onClose, onLockNow }) {
           </div>
           {pinError && (
             <p
-              className="app-lock-error-msg"
+              className="security-pin-error-msg"
               style={{ textAlign: "center" }}
             >
               {pinError}
@@ -6645,7 +6646,7 @@ function SecuritySheet({ onClose, onLockNow }) {
           </div>
           {pinError && (
             <p
-              className="app-lock-error-msg"
+              className="security-pin-error-msg"
               style={{ textAlign: "center" }}
             >
               {pinError}
@@ -6673,239 +6674,6 @@ function SecuritySheet({ onClose, onLockNow }) {
         </form>
       )}
     </Sheet>
-  );
-}
-
-function AppLockScreen({ onUnlock }) {
-  const [pin, setPin] = useState("");
-  const [isVerifying, setIsVerifying] = useState(false);
-  const [isError, setIsError] = useState(false);
-  const [errorMsg, setErrorMsg] = useState("");
-  const [biometricsConfigured] = useState(() => hasBiometricsConfigured());
-  const [lockoutSec, setLockoutSec] = useState(() =>
-    getPinLockoutRemainingSeconds(),
-  );
-
-  useEffect(() => {
-    if (lockoutSec <= 0) return;
-    setErrorMsg(`Too many failed attempts. Try again in ${lockoutSec}s.`);
-    setIsError(true);
-    const interval = setInterval(() => {
-      const remaining = getPinLockoutRemainingSeconds();
-      setLockoutSec(remaining);
-      if (remaining <= 0) {
-        setIsError(false);
-        setErrorMsg("");
-      } else {
-        setErrorMsg(`Too many failed attempts. Try again in ${remaining}s.`);
-      }
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [lockoutSec]);
-
-  const handleDigit = useCallback(
-    async (d) => {
-      const currentLockout = getPinLockoutRemainingSeconds();
-      if (currentLockout > 0) {
-        setLockoutSec(currentLockout);
-        setIsError(true);
-        setErrorMsg(`Too many failed attempts. Try again in ${currentLockout}s.`);
-        return;
-      }
-      if (pin.length >= 4 || isVerifying) return;
-      triggerHaptic("selection");
-      const nextPin = pin + d;
-      setPin(nextPin);
-      setIsError(false);
-      setErrorMsg("");
-
-      if (nextPin.length === 4) {
-        setIsVerifying(true);
-        const ok = await verifyAppPin(nextPin);
-        if (ok) {
-          triggerHaptic("success");
-          if (typeof onUnlock === "function") {
-            await onUnlock();
-          }
-          setIsVerifying(false);
-        } else {
-          triggerHaptic("warning");
-          setIsError(true);
-          const remaining = getPinLockoutRemainingSeconds();
-          if (remaining > 0) {
-            setLockoutSec(remaining);
-            setErrorMsg(`Too many failed attempts. Try again in ${remaining}s.`);
-          } else {
-            setErrorMsg("Incorrect passcode. Try again.");
-          }
-          setTimeout(() => {
-            setPin("");
-            if (getPinLockoutRemainingSeconds() === 0) {
-              setIsError(false);
-            }
-            setIsVerifying(false);
-          }, 500);
-        }
-      }
-    },
-    [pin, isVerifying, onUnlock],
-  );
-
-  const handleBackspace = () => {
-    if (lockoutSec > 0) return;
-    if (pin.length > 0 && !isVerifying) {
-      triggerHaptic("selection");
-      setPin((prev) => prev.slice(0, -1));
-      setIsError(false);
-      setErrorMsg("");
-    }
-  };
-
-  const handleBiometricAuth = useCallback(async () => {
-    if (isVerifying || lockoutSec > 0) return;
-    triggerHaptic("light");
-    const ok = await authenticateWithBiometrics();
-    if (ok) {
-      triggerHaptic("success");
-      if (typeof onUnlock === "function") {
-        await onUnlock();
-      }
-    }
-  }, [isVerifying, lockoutSec, onUnlock]);
-
-  return (
-    <div
-      className="app-lock-overlay"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Spend is locked"
-    >
-      <div className="app-lock-header">
-        <div className="app-lock-icon-wrap" aria-hidden="true">
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-          </svg>
-        </div>
-        <h2 className="app-lock-title">Spend is Locked</h2>
-        <p className="app-lock-subtitle">
-          Enter your 4-digit PIN to access your accounts
-        </p>
-
-        <div
-          className={`app-lock-dots${isError ? " is-error" : ""}`}
-          aria-hidden="true"
-        >
-          {[0, 1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className={`app-lock-dot${pin.length > i ? " is-filled" : ""}`}
-            />
-          ))}
-        </div>
-        <div
-          className="app-lock-error-msg"
-          role="status"
-          aria-live="assertive"
-        >
-          {errorMsg}
-        </div>
-      </div>
-
-      <div
-        className="app-lock-keypad"
-        role="group"
-        aria-label="Passcode keypad"
-      >
-        {[
-          ["1", ""],
-          ["2", "ABC"],
-          ["3", "DEF"],
-          ["4", "GHI"],
-          ["5", "JKL"],
-          ["6", "MNO"],
-          ["7", "PQRS"],
-          ["8", "TUV"],
-          ["9", "WXYZ"],
-        ].map(([num, letters]) => (
-          <button
-            key={num}
-            type="button"
-            className="app-lock-key"
-            disabled={isVerifying || lockoutSec > 0}
-            onClick={() => handleDigit(num)}
-            aria-label={num}
-          >
-            <span className="app-lock-key-num">{num}</span>
-            {letters && (
-              <span className="app-lock-key-letters">{letters}</span>
-            )}
-          </button>
-        ))}
-
-        {biometricsConfigured ? (
-          <button
-            type="button"
-            className="app-lock-action-key"
-            disabled={isVerifying || lockoutSec > 0}
-            onClick={handleBiometricAuth}
-            aria-label="Unlock with biometrics"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
-              <path d="M9 9h.01M15 9h.01M10 13a2 2 0 0 0 4 0m-2 0v2" />
-            </svg>
-          </button>
-        ) : (
-          <div aria-hidden="true" />
-        )}
-
-        <button
-          type="button"
-          className="app-lock-key"
-          disabled={isVerifying || lockoutSec > 0}
-          onClick={() => handleDigit("0")}
-          aria-label="0"
-        >
-          <span className="app-lock-key-num">0</span>
-        </button>
-
-        <button
-          type="button"
-          className="app-lock-action-key"
-          disabled={isVerifying || lockoutSec > 0}
-          onClick={handleBackspace}
-          aria-label="Delete last digit"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z" />
-            <line x1="18" y1="9" x2="12" y2="15" />
-            <line x1="12" y1="9" x2="18" y2="15" />
-          </svg>
-        </button>
-      </div>
-    </div>
   );
 }
 
@@ -6977,6 +6745,77 @@ export default function MobilePrototype({
   const [profileSettingsOpen, setProfileSettingsOpen] = useState(false);
   const [toastMsg, setToastMsg] = useState(null);
   const [isAppLocked, setIsAppLocked] = useState(() => shouldLockApp());
+  const [resetPinConfirmOpen, setResetPinConfirmOpen] = useState(false);
+
+  const handleVerifyPin = useCallback(async (enteredPin) => {
+    const lockoutSec = getPinLockoutRemainingSeconds();
+    if (lockoutSec > 0) {
+      triggerHaptic("warning");
+      return {
+        ok: false,
+        message: `Too many attempts. Try again in ${lockoutSec}s.`,
+      };
+    }
+    const ok = await verifyAppPin(enteredPin);
+    if (ok) {
+      triggerHaptic("success");
+      return true;
+    }
+    triggerHaptic("warning");
+    const remaining = getPinLockoutRemainingSeconds();
+    if (remaining > 0) {
+      return {
+        ok: false,
+        message: `Too many attempts. Try again in ${remaining}s.`,
+      };
+    }
+    return false;
+  }, []);
+
+  const handleBiometricAuth = useCallback(async () => {
+    const lockoutSec = getPinLockoutRemainingSeconds();
+    if (lockoutSec > 0) {
+      triggerHaptic("warning");
+      return false;
+    }
+    triggerHaptic("light");
+    // Connect to existing biometric unlock (Touch ID / Face ID / WebAuthn)
+    try {
+      const ok = await authenticateWithBiometrics();
+      if (ok) {
+        triggerHaptic("success");
+        return true;
+      }
+    } catch (err) {
+      console.warn("Biometric authentication error:", err);
+    }
+    triggerHaptic("warning");
+    return false;
+  }, []);
+
+  const handleUnlock = useCallback(async () => {
+    markActive();
+    if (typeof onUnlock === "function") {
+      await onUnlock();
+    }
+    setIsAppLocked(false);
+  }, [onUnlock]);
+
+  const handleForgotPin = useCallback(() => {
+    setResetPinConfirmOpen(true);
+  }, []);
+
+  const handleConfirmResetPin = useCallback(async () => {
+    setResetPinConfirmOpen(false);
+    triggerHaptic("delete");
+    await removeAppPin();
+    await disableBiometrics();
+    markActive();
+    if (typeof onUnlock === "function") {
+      await onUnlock();
+    }
+    setIsAppLocked(false);
+  }, [onUnlock]);
 
   useEffect(() => {
     const handleActivity = () => markActive();
@@ -7740,17 +7579,24 @@ export default function MobilePrototype({
     return (
       <div
         ref={mobileRootRef}
-        className="mobile-prototype"
+        className="mobile-prototype is-locked-screen"
         data-theme={S.theme}
       >
-        <AppLockScreen
-          onUnlock={async () => {
-            markActive();
-            if (typeof onUnlock === "function") {
-              await onUnlock();
-            }
-            setIsAppLocked(false);
-          }}
+        <SpendLogin
+          verifyPin={handleVerifyPin}
+          onBiometric={handleBiometricAuth}
+          onUnlock={handleUnlock}
+          onForgot={handleForgotPin}
+        />
+        <ConfirmationModal
+          isOpen={resetPinConfirmOpen}
+          title="Reset App PIN?"
+          message="Forgot your passcode? Resetting will remove the PIN lock and any biometric settings so you can access Spend."
+          confirmLabel="Reset PIN"
+          cancelLabel="Cancel"
+          isDestructive={true}
+          onConfirm={handleConfirmResetPin}
+          onCancel={() => setResetPinConfirmOpen(false)}
         />
       </div>
     );
