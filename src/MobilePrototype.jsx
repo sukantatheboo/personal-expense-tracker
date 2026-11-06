@@ -39,6 +39,10 @@ import {
   educationSvg,
   savingsSvg,
   otherSvg,
+  alertSvg,
+  cashSvg,
+  starSvg,
+  refreshSvg,
 } from "./categoryAssets.jsx";
 import {
   setAppPin,
@@ -2286,12 +2290,15 @@ function Activity({
                 setCf("");
               }}
             >
-              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <circle cx="12" cy="12" r="10" />
-                <line x1="12" y1="8" x2="12" y2="12" />
-                <line x1="12" y1="16" x2="12.01" y2="16" />
-              </svg>
-              <span>Needs amount</span>
+              <span className="category-symbol" aria-hidden="true">
+                <img
+                  src={alertSvg}
+                  alt=""
+                  className="category-symbol-img"
+                  draggable="false"
+                />
+              </span>
+              <span>Needs amt</span>
               {needsAmountCount > 0 && <span className="chip-badge">{needsAmountCount}</span>}
             </button>
 
@@ -2305,10 +2312,15 @@ function Activity({
                 setCf("");
               }}
             >
-              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
-              </svg>
-              <span>Recurring</span>
+              <span className="category-symbol" aria-hidden="true">
+                <img
+                  src={refreshSvg}
+                  alt=""
+                  className="category-symbol-img"
+                  draggable="false"
+                />
+              </span>
+              <span>Repeat</span>
               {recurringCount > 0 && <span className="chip-badge">{recurringCount}</span>}
             </button>
           </>
@@ -2324,11 +2336,15 @@ function Activity({
             setCf("");
           }}
         >
-          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <rect width="20" height="12" x="2" y="6" rx="2" />
-            <circle cx="12" cy="12" r="2" />
-          </svg>
-          <span>Cash only</span>
+          <span className="category-symbol" aria-hidden="true">
+            <img
+              src={cashSvg}
+              alt=""
+              className="category-symbol-img"
+              draggable="false"
+            />
+          </span>
+          <span>Cash</span>
           {cashCount > 0 && <span className="chip-badge">{cashCount}</span>}
         </button>
 
@@ -2342,10 +2358,15 @@ function Activity({
             setCf("");
           }}
         >
-          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-          </svg>
-          <span>≥ ৳1,000</span>
+          <span className="category-symbol" aria-hidden="true">
+            <img
+              src={starSvg}
+              alt=""
+              className="category-symbol-img"
+              draggable="false"
+            />
+          </span>
+          <span>≥ ৳1k</span>
           {highValueCount > 0 && (
             <span className="chip-badge">{highValueCount}</span>
           )}
@@ -2381,10 +2402,10 @@ function Activity({
             <b>{feedType.charAt(0).toUpperCase() + feedType.slice(1)}</b>
           )}
           {feedType !== "all" && (quickFilter || cf || query) && <span>·</span>}
-          {quickFilter === "needs-amount" && <b>Needs amount</b>}
-          {quickFilter === "recurring" && <b>Recurring</b>}
-          {quickFilter === "cash" && <b>Cash only</b>}
-          {quickFilter === "high-value" && <b>≥ ৳1,000</b>}
+          {quickFilter === "needs-amount" && <b>Needs amt</b>}
+          {quickFilter === "recurring" && <b>Repeat</b>}
+          {quickFilter === "cash" && <b>Cash</b>}
+          {quickFilter === "high-value" && <b>≥ ৳1k</b>}
           {quickFilter && (cf || query) && <span>·</span>}
           {cf && <b>{cf}</b>}
           {cf && query && <span>·</span>}
