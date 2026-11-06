@@ -684,24 +684,28 @@ export function nextOccurrenceDate(dateValue, interval, dayOfMonth) {
 }
 
 export function getSavingsAccountId(cards = []) {
-  if (!Array.isArray(cards) || cards.length === 0) return "savings";
-  const exact = cards.find((c) => c.id === "savings");
-  if (exact) return exact.id;
-  const byType = cards.find(
-    (c) => c.type === "savings" || c.provider === "savings",
+  if (!Array.isArray(cards) || cards.length === 0) return "";
+  const byCategoryOrType = cards.find(
+    (c) =>
+      c?.category === "savings" ||
+      c?.type === "savings" ||
+      c?.provider === "savings",
   );
-  return byType ? byType.id : "savings";
+  if (byCategoryOrType) return byCategoryOrType.id;
+  const exact = cards.find((c) => c?.id === "savings");
+  if (exact) return exact.id;
+  return "";
 }
 
 export function calculateAccountBalance(accountId, expenses, accountData) {
-  const { balances, cards = [] } = accountData.settings;
+  const { balances = {}, cards = [] } = accountData?.settings || {};
   const savingsId = getSavingsAccountId(cards);
   const today = localDate();
   let balance = Number(balances[accountId] || 0);
 
   for (const expense of expenses) {
     if (expense.amount !== null && expense.date <= today) {
-      if (expense.category === "Savings") {
+      if (expense.category === "Savings" && savingsId) {
         if (
           accountId === savingsId &&
           expense.account &&

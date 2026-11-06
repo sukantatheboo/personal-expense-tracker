@@ -269,11 +269,11 @@ async function loadLegacyCloudData(userId) {
   const legacyBalances = legacyAccounts?.settings?.balances || {};
   const baseBalances = { ...legacyBalances };
   if (!hasCards && !legacyAccounts?.settings?.cardsConfigured) {
-    if (settingsResult.data.bkash_balance != null)
+    if (Number(settingsResult.data.bkash_balance) > 0)
       baseBalances.bkash = settingsResult.data.bkash_balance;
-    if (settingsResult.data.bank_balance != null)
+    if (Number(settingsResult.data.bank_balance) > 0)
       baseBalances.bank = settingsResult.data.bank_balance;
-    if (settingsResult.data.savings_balance != null)
+    if (Number(settingsResult.data.savings_balance) > 0)
       baseBalances.savings = settingsResult.data.savings_balance;
   }
 

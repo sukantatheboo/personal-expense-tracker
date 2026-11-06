@@ -77,16 +77,9 @@ const CAT = {
   Savings: [savingsSvg, "#be185d"],
   Other: [otherSvg, "#64748b"],
 };
-const ACC = {
-  bkash: ["bKash", "#e2136e"],
-  bank: ["Bank", "#2563a8"],
-  savings: ["Savings", "#10b981"],
-};
-
 function getAccountDisplay(id, cards = []) {
   const match = cards.find((c) => c.id === id);
   if (match) return [match.name, match.color || "#2563a8"];
-  if (ACC[id]) return ACC[id];
   return [id || "Account", "#2563a8"];
 }
 const TABS = [
@@ -346,7 +339,7 @@ function bal(S, id) {
   const savingsId = getSavingsAccountId(S?.cards);
   for (const e of S.exp) {
     if (e.amt == null || e.date > ld()) continue;
-    if (e.cat === "Savings") {
+    if (e.cat === "Savings" && savingsId) {
       if (id === savingsId && e.acct && e.acct !== savingsId) b += e.amt;
       else if (e.acct === id && id !== savingsId) b -= e.amt;
     } else if (e.acct === id) b -= e.amt;
@@ -2687,7 +2680,7 @@ function Accounts({
     if (card?.name) return card.name;
     const tombstone = S?.deletedCards?.[id];
     if (tombstone?.name) return `${tombstone.name} (Archived)`;
-    return ACC[id]?.[0] || id || "Account";
+    return id || "Account";
   };
 
   const events = [
@@ -2697,7 +2690,8 @@ function Accounts({
           expense.acct && expense.amt != null && expense.date <= ld(),
       )
       .map((expense) => {
-        const isSavingsTransfer = expense.cat === "Savings";
+        const isSavingsTransfer =
+          expense.cat === "Savings" && Boolean(savingsAccountId);
         return {
           id: expense.id,
           sourceType: "expense",
@@ -3523,6 +3517,7 @@ function AddSheet({
 }) {
   const spendableCards = cards.filter((c) => c.type !== "savings" && !c.frozen);
   const primaryCard = spendableCards.find((c) => c.isPrimary) || spendableCards[0];
+  const hasSavingsAccount = Boolean(getSavingsAccountId(cards));
   const initialAcct =
     defaultAccount && spendableCards.some((c) => c.id === defaultAccount)
       ? defaultAccount
@@ -3547,7 +3542,7 @@ function AddSheet({
       onClose={onClose}
       actions={
         <button className="btn" onClick={() => onSave(f)}>
-          {f.cat === "Savings"
+          {f.cat === "Savings" && hasSavingsAccount
             ? f.iv === "none"
               ? "Save to Savings"
               : "Schedule savings transfer"
@@ -3558,7 +3553,9 @@ function AddSheet({
       }
     >
       <h3 id="sheet-title">
-        {f.cat === "Savings" ? "Savings transfer" : "New expense"}
+        {f.cat === "Savings" && hasSavingsAccount
+          ? "Savings transfer"
+          : "New expense"}
       </h3>
       <div className="amt">
         <span>৳</span>
@@ -5190,6 +5187,7 @@ function CardOptionsSheet({
     selectedCard?.provider === "savings";
 
   const isCard = !isMfs && !isSavings;
+  const initialCardBal = S?.start?.[selectedCard?.id];
 
   const [formData, setFormData] = useState({
     name: selectedCard?.name || "",
@@ -5208,6 +5206,10 @@ function CardOptionsSheet({
     gradient:
       selectedCard?.gradient ||
       "linear-gradient(135deg, #334155 0%, #1e293b 60%, #0f172a 100%)",
+    initialBalance:
+      initialCardBal !== undefined && initialCardBal !== null
+        ? String(initialCardBal)
+        : "",
   });
 
   const [showSecrets, setShowSecrets] = useState(false);
@@ -5217,6 +5219,7 @@ function CardOptionsSheet({
 
   useEffect(() => {
     if (selectedCard) {
+      const cardBal = S?.start?.[selectedCard.id];
       setFormData({
         name: selectedCard.name || "",
         holderName: selectedCard.holderName || "Cardholder",
@@ -5234,11 +5237,13 @@ function CardOptionsSheet({
         gradient:
           selectedCard.gradient ||
           "linear-gradient(135deg, #334155 0%, #1e293b 60%, #0f172a 100%)",
+        initialBalance:
+          cardBal !== undefined && cardBal !== null ? String(cardBal) : "",
       });
       setIsFrozen(Boolean(selectedCard.frozen));
       setConfirmDeleteOpen(false);
     }
-  }, [selectedCard?.id]);
+  }, [selectedCard?.id, S?.start]);
 
   const previewCard = useMemo(() => {
     if (!selectedCard) return null;
@@ -5311,9 +5316,13 @@ function CardOptionsSheet({
   const handleSave = () => {
     if (!selectedCard) return;
     triggerHaptic("success");
+    const rawBal = parseFloat(formData.initialBalance);
+    const parsedInitial =
+      Number.isFinite(rawBal) && rawBal >= 0 ? rawBal : undefined;
     onUpdateCard?.({
       ...selectedCard,
       ...formData,
+      ...(parsedInitial !== undefined ? { initialBalance: parsedInitial } : {}),
       frozen: isFrozen,
       id: selectedCard.id,
     });
@@ -5883,6 +5892,32 @@ function CardOptionsSheet({
                     />
                   );
                 })}
+              </div>
+            </div>
+
+            {/* Starting Balance Field */}
+            <div className="card-options-field">
+              <label>Starting Balance</label>
+              <div className="add-card-balance-input-wrap">
+                <span className="add-card-curr-prefix">৳</span>
+                <input
+                  className="add-card-native-input add-card-balance-input"
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  value={formData.initialBalance}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      initialBalance: e.target.value,
+                    }))
+                  }
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellCheck="false"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  data-form-type="other"
+                />
               </div>
             </div>
           </div>
@@ -7436,7 +7471,8 @@ export default function MobilePrototype({
     sheet?.type === "txDet" ? S.tx.find((x) => x.id === sheet.id) : null;
 
   const saveExpense = (f) => {
-    const isSavingsTransfer = f.cat === "Savings";
+    const isSavingsTransfer =
+      f.cat === "Savings" && Boolean(getSavingsAccountId(cards));
     const isRecurring = f.iv !== "none";
     if (isSavingsTransfer && !String(f.amt ?? "").trim())
       return toast("Enter an amount for this savings transfer.");

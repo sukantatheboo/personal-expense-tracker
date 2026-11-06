@@ -214,16 +214,37 @@ function makeExpenseForm() {
   };
 }
 
-function makeTransactionForm() {
+function formatStartingBalances(settings = {}) {
+  const balances = settings?.balances || {};
+  const formatted = {};
+  for (const [key, value] of Object.entries(balances)) {
+    if (value !== undefined && value !== null) {
+      formatted[key] = String(value);
+    }
+  }
+  return {
+    ...formatted,
+    date: settings?.startDate || localDate(),
+  };
+}
+
+function makeTransactionForm(accountData = null) {
+  const cards = Array.isArray(accountData?.settings?.cards)
+    ? accountData.settings.cards
+    : [];
+  const primaryCard = cards.find((c) => c.isPrimary) || cards[0];
+  const primaryId = primaryCard?.id || "";
+  const otherCard = cards.find((c) => c.id !== primaryId);
+  const secondaryId = otherCard?.id || primaryId;
   return {
     type: "income",
     amount: "",
     date: localDate(),
     note: "",
-    account: "bkash",
+    account: primaryId,
     direction: "increase",
-    fromAccount: "bkash",
-    toAccount: "savings",
+    fromAccount: primaryId,
+    toAccount: secondaryId,
   };
 }
 
@@ -991,15 +1012,12 @@ export default function App() {
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [expenseForm, setExpenseForm] = useState(makeExpenseForm);
   const [expenseMessage, setExpenseMessage] = useState("");
-  const [transactionForm, setTransactionForm] = useState(makeTransactionForm);
+  const [transactionForm, setTransactionForm] = useState(() =>
+    makeTransactionForm(loadAccountData()),
+  );
   const [startingBalances, setStartingBalances] = useState(() => {
     const { settings } = loadAccountData();
-    return {
-      bkash: String(settings.balances.bkash),
-      bank: String(settings.balances.bank),
-      savings: String(settings.balances.savings),
-      date: settings.startDate,
-    };
+    return formatStartingBalances(settings);
   });
   const [budgetAmount, setBudgetAmount] = useState("");
   const [budgetEditingMonth, setBudgetEditingMonth] = useState(null);
@@ -1105,14 +1123,9 @@ export default function App() {
     setTheme("light");
     setTargetCurrency("USD");
     setReminderTime("09:00");
-    setStartingBalances({
-      bkash: "0",
-      bank: "0",
-      savings: "0",
-      date: empty.settings.startDate,
-    });
+    setStartingBalances(formatStartingBalances(empty.settings));
     setExpenseForm(makeExpenseForm());
-    setTransactionForm(makeTransactionForm());
+    setTransactionForm(makeTransactionForm(empty));
     setBudgetAmount("");
     setQuery("");
     setCategoryFilter("");
@@ -1144,20 +1157,14 @@ export default function App() {
           true,
         );
         applyCloudSnapshot(merged);
-        setStartingBalances({
-          bkash: String(merged.accountData.settings.balances.bkash || 0),
-          bank: String(merged.accountData.settings.balances.bank || 0),
-          savings: String(merged.accountData.settings.balances.savings || 0),
-          date: merged.accountData.settings.startDate,
-        });
+        setStartingBalances(
+          formatStartingBalances(merged.accountData?.settings),
+        );
       } else {
         applyCloudSnapshot(snapshot);
-        setStartingBalances({
-          bkash: String(snapshot.accountData.settings.balances.bkash || 0),
-          bank: String(snapshot.accountData.settings.balances.bank || 0),
-          savings: String(snapshot.accountData.settings.balances.savings || 0),
-          date: snapshot.accountData.settings.startDate,
-        });
+        setStartingBalances(
+          formatStartingBalances(snapshot.accountData?.settings),
+        );
       }
     } else if (!hasMeaningfulLocalData(cloudSnapshotRef.current)) {
       resetDataForNewUser();
@@ -1945,12 +1952,7 @@ export default function App() {
 
   useEffect(() => {
     const { settings } = accountData;
-    setStartingBalances({
-      bkash: String(settings.balances.bkash),
-      bank: String(settings.balances.bank),
-      savings: String(settings.balances.savings),
-      date: settings.startDate,
-    });
+    setStartingBalances(formatStartingBalances(settings));
   }, [accountData.settings]);
 
   useEffect(() => {
@@ -2094,19 +2096,27 @@ export default function App() {
         .slice(0, 3),
     [monthExpenses],
   );
-  const accountBalances = useMemo(
-    () => ({
-      bkash: calculateAccountBalance("bkash", expenses, accountData),
-      bank: calculateAccountBalance("bank", expenses, accountData),
-      savings: calculateAccountBalance("savings", expenses, accountData),
-    }),
-    [expenses, accountData],
-  );
+  const accountBalances = useMemo(() => {
+    const cards = Array.isArray(accountData?.settings?.cards)
+      ? accountData.settings.cards
+      : [];
+    const balances = {};
+    for (const card of cards) {
+      if (card?.id) {
+        balances[card.id] = calculateAccountBalance(
+          card.id,
+          expenses,
+          accountData,
+        );
+      }
+    }
+    return balances;
+  }, [expenses, accountData]);
   const accountActivity = useMemo(() => {
     const expenseActivity = expenses
       .filter(
         (expense) =>
-          isAccountId(expense.account) &&
+          isAccountId(expense.account, accountData) &&
           expense.amount !== null &&
           expense.date >= accountData.settings.startDate,
       )
@@ -2384,7 +2394,9 @@ export default function App() {
             amount: Number(schedule.amount),
             category: schedule.category,
             date: nextDate,
-            account: isAccountId(schedule.account) ? schedule.account : "",
+            account: isAccountId(schedule.account, accountData)
+              ? schedule.account
+              : "",
             recurringId: schedule.id,
           });
           dueExpenses.push({
@@ -2650,31 +2662,28 @@ export default function App() {
   }
 
   function handleOpeningBalancesSubmit(event) {
-    event.preventDefault();
-    const bkash = Number(startingBalances.bkash);
-    const bank = Number(startingBalances.bank);
-    const savings = Number(startingBalances.savings);
-    if (
-      !Number.isFinite(bkash) ||
-      bkash < 0 ||
-      !Number.isFinite(bank) ||
-      bank < 0 ||
-      !Number.isFinite(savings) ||
-      savings < 0 ||
-      !isValidDateString(startingBalances.date)
-    )
-      return;
+    if (event?.preventDefault) event.preventDefault();
+    const date = startingBalances?.date;
+    if (!isValidDateString(date)) return;
+
+    const cards = Array.isArray(accountData?.settings?.cards)
+      ? accountData.settings.cards
+      : [];
+    const nextBalances = {};
+    for (const card of cards) {
+      const val = Number(startingBalances[card.id] ?? 0);
+      if (!Number.isFinite(val) || val < 0) return;
+      nextBalances[card.id] = roundMoney(val);
+    }
     setAccountData((current) => ({
       ...current,
       settings: {
         ...current.settings,
-        startDate: startingBalances.date,
+        startDate: date,
         updatedAt: Date.now(),
         balances: {
           ...current.settings.balances,
-          bkash: roundMoney(bkash),
-          bank: roundMoney(bank),
-          savings: roundMoney(savings),
+          ...nextBalances,
         },
         configured: true,
       },
@@ -2716,7 +2725,7 @@ export default function App() {
       ...current,
       transactions: [...current.transactions, transaction],
     }));
-    setTransactionForm(makeTransactionForm());
+    setTransactionForm(makeTransactionForm(accountData));
   }
 
   function changeTransferAccount(field, value) {
@@ -2773,7 +2782,7 @@ export default function App() {
       ...current,
       transactions: [...current.transactions, transaction],
     }));
-    setTransactionForm(makeTransactionForm());
+    setTransactionForm(makeTransactionForm(accountData));
     return { success: true, transactionId: transaction.id };
   }
 
@@ -3046,6 +3055,12 @@ export default function App() {
       }
     }
 
+    const rawInitialBal = Number(updatedCard?.initialBalance);
+    const hasInitialBalanceUpdate =
+      updatedCard?.initialBalance !== undefined &&
+      Number.isFinite(rawInitialBal) &&
+      rawInitialBal >= 0;
+
     let resolvedLast4 = last4;
     let resolvedNumber = targetNumber;
 
@@ -3094,6 +3109,14 @@ export default function App() {
           updatedAt: now,
           cardsConfigured: true,
           cards: newCards,
+          ...(hasInitialBalanceUpdate
+            ? {
+                balances: {
+                  ...current.settings.balances,
+                  [updatedCard.id]: roundMoney(rawInitialBal),
+                },
+              }
+            : {}),
         },
       };
     });
@@ -3650,12 +3673,9 @@ export default function App() {
           updatedAt: restoreTimestamp,
         })),
       });
-      setStartingBalances({
-        bkash: String(restoredAccounts.settings.balances.bkash || 0),
-        bank: String(restoredAccounts.settings.balances.bank || 0),
-        savings: String(restoredAccounts.settings.balances.savings || 0),
-        date: restoredAccounts.settings.startDate,
-      });
+      setStartingBalances(
+        formatStartingBalances(restoredAccounts.settings),
+      );
       for (const changes of Object.values(restoredDeletedRecords)) {
         for (const change of Object.values(changes)) {
           change.updatedAt = restoreTimestamp;
@@ -3707,12 +3727,9 @@ export default function App() {
       } else {
         const localAccountData = loadAccountData(undefined, deletedRecords);
         setAccountData(localAccountData);
-        setStartingBalances({
-          bkash: String(localAccountData.settings.balances.bkash),
-          bank: String(localAccountData.settings.balances.bank),
-          savings: String(localAccountData.settings.balances.savings),
-          date: localAccountData.settings.startDate,
-        });
+        setStartingBalances(
+          formatStartingBalances(localAccountData.settings),
+        );
       }
       setAccountRefreshStatus("Account balances updated.");
     } catch (error) {
