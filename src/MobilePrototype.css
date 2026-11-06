@@ -7011,7 +7011,7 @@ html[data-theme="dark"] .mobile-prototype .card-options-bar-btn.is-primary-card 
   align-items: center;
   margin-top: 10px;
   padding-top: 8px;
-  border-top: 1px dashed color-mix(in srgb, var(--ink) 12%, transparent);
+  border-top: 1px dashed rgba(255, 255, 255, 0.16);
 }
 .mobile-prototype .hero-velocity-badge {
   font-size: 12px;
@@ -7020,15 +7020,15 @@ html[data-theme="dark"] .mobile-prototype .card-options-bar-btn.is-primary-card 
   border-radius: 99px;
 }
 .mobile-prototype .hero-velocity-badge.is-good {
-  background: color-mix(in srgb, var(--g, #10b981) 15%, transparent);
-  color: var(--g, #10b981);
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
 }
 .mobile-prototype .hero-velocity-badge.is-over {
-  background: color-mix(in srgb, #f43f5e 15%, transparent);
-  color: #f43f5e;
+  background: rgba(244, 63, 94, 0.2);
+  color: #fb7185;
 }
 .mobile-prototype .hero-velocity-sub {
   font-size: 12px;
   font-weight: 600;
-  color: var(--mut);
+  color: rgba(255, 255, 255, 0.72);
 }

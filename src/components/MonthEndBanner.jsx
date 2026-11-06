@@ -177,20 +177,21 @@ export default function MonthRecap({
 }) {
   const resolvedData = useMemo(() => {
     if (data) return data;
-    if (Array.isArray(transactions) && transactions.length > 0) {
+    if (Array.isArray(transactions)) {
+      if (transactions.length === 0) return null;
       const built = buildRecap(transactions, {
         month,
         amountOf,
         dateOf,
         categoryOf,
       });
-      if (built && built.total > 0) return built;
+      return built && built.total > 0 ? built : null;
     }
     return SAMPLE;
   }, [data, transactions, month, amountOf, dateOf, categoryOf]);
 
-  const activeData = resolvedData || SAMPLE;
-  const dismissId = activeData.monthKey || activeData.month || "October";
+  const activeData = resolvedData || (transactions ? null : SAMPLE);
+  const dismissId = activeData?.monthKey || activeData?.month || "October";
 
   const [gone, setGone] = useState(() => {
     try {
@@ -217,8 +218,8 @@ export default function MonthRecap({
     colRef = useRef(null),
     hold = useRef({ t: 0, held: false, y: 0 });
 
-  const cats = activeData.categories || [];
-  const dayEntries = Object.entries(activeData.days || {});
+  const cats = activeData?.categories || [];
+  const dayEntries = Object.entries(activeData?.days || {});
   const slides = [
     "total",
     ...(cats.length ? ["top", "rank"] : []),
@@ -227,7 +228,7 @@ export default function MonthRecap({
   ];
   const active = phase !== "closed";
   const delta =
-    activeData.prevTotal > 0
+    activeData && activeData.prevTotal > 0
       ? Math.round(
           ((activeData.total - activeData.prevTotal) / activeData.prevTotal) *
             100,
@@ -235,11 +236,13 @@ export default function MonthRecap({
       : null;
   const pill =
     delta !== null
-      ? `${delta <= 0 ? "▾" : "▴"} ${Math.abs(delta)}% ${delta <= 0 ? "less" : "more"} than ${activeData.prevMonth}`
-      : `${activeData.entries} ${activeData.entries === 1 ? "entry" : "entries"} · ${cats.length} ${cats.length === 1 ? "category" : "categories"}`;
+      ? `${delta <= 0 ? "▾" : "▴"} ${Math.abs(delta)}% ${delta <= 0 ? "less" : "more"} than ${activeData?.prevMonth}`
+      : activeData
+        ? `${activeData.entries} ${activeData.entries === 1 ? "entry" : "entries"} · ${cats.length} ${cats.length === 1 ? "category" : "categories"}`
+        : "";
 
-  const cardNum = useCountUp(activeData.total, true, 100, 900);
-  const heroNum = useCountUp(activeData.total, ready && slides[i] === "total");
+  const cardNum = useCountUp(activeData?.total || 0, true, 100, 900);
+  const heroNum = useCountUp(activeData?.total || 0, ready && slides[i] === "total");
 
   const measure = () => {
     if (!cardRef.current) return { top: 0, left: 0, width: 0, height: 0 };
@@ -314,7 +317,7 @@ export default function MonthRecap({
     return () => window.removeEventListener("keydown", k);
   }, [phase, i]);
 
-  if (gone) return null;
+  if (!activeData || gone) return null;
 
   const down = (e) => {
     const h = hold.current;

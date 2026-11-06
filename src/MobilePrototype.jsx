@@ -274,10 +274,12 @@ const amountFormatter = new Intl.NumberFormat("en-IN", {
 });
 const M = (n) => "৳" + amountFormatter.format(Number(n) || 0);
 const shift = (m, o) => {
+  if (!m || typeof m !== "string" || !m.includes("-")) return ld().slice(0, 7);
   const [y, mo] = m.split("-").map(Number);
   return ld(new Date(y, mo - 1 + o, 1)).slice(0, 7);
 };
 const fM = (m) => {
+  if (!m || typeof m !== "string" || !m.includes("-")) return "";
   const [y, mo] = m.split("-").map(Number);
   return new Date(y, mo - 1, 1).toLocaleDateString("en-GB", {
     month: "long",
@@ -1529,25 +1531,26 @@ function Home({
   const [currentTime, setCurrentTime] = useState(() => new Date());
   const [highlightedCategory, setHighlightedCategory] = useState("");
   const { shown, toggle } = useReveal(5000);
-  const total = tot(S, S.m);
+  const todayStr = ld();
+  const monthKey = S?.m || todayStr.slice(0, 7);
+  const isCurrentMonth = monthKey === todayStr.slice(0, 7);
+  const total = tot(S, monthKey);
   const saved = monthExp(S)
     .filter((expense) => expense.cat === "Savings" && expense.amt != null)
     .reduce((sum, expense) => sum + expense.amt, 0);
   const t = total - saved;
-  const previousMonth = shift(S.m, -1);
+  const previousMonth = shift(monthKey, -1);
   const previousSaved = monthExp({ ...S, m: previousMonth })
     .filter((expense) => expense.cat === "Savings" && expense.amt != null)
     .reduce((sum, expense) => sum + expense.amt, 0);
   const p = tot(S, previousMonth) - previousSaved;
-  const b = S.bud[S.m] || 0;
+  const b = S?.bud?.[monthKey] || 0;
   const d = t - p;
   const overBudget = b > 0 && t > b;
   const overflowShare = overBudget ? ((t - b) / t) * 100 : 0;
-  const todayStr = ld();
-  const isCurrentMonth = S.m === todayStr.slice(0, 7);
   let homeVelocity = null;
   if (b > 0 && isCurrentMonth) {
-    const [y, mNum] = S.m.split("-").map(Number);
+    const [y, mNum] = monthKey.split("-").map(Number);
     const daysInMonth = new Date(y, mNum, 0).getDate();
     const currentDay = Math.min(
       daysInMonth,
@@ -1585,9 +1588,15 @@ function Home({
   if (otherTotal > 0) by.Other = otherTotal;
   const cs = Object.entries(by).sort((x, y) => y[1] - x[1]);
   const topCategory = cs.find(([category]) => category !== "Savings");
-  const nx = S.rec
-    .filter((r) => r.on)
-    .sort((x, y) => x.next.localeCompare(y.next))[0];
+  const activeRecurring = (S?.rec || []).filter(
+    (r) => r?.on && typeof r?.next === "string",
+  );
+  const upcomingRecurring = activeRecurring.filter(
+    (r) => r.next >= todayStr,
+  );
+  const nx = (
+    upcomingRecurring.length > 0 ? upcomingRecurring : activeRecurring
+  ).sort((x, y) => String(x?.next || "").localeCompare(String(y?.next || "")))[0];
   const h = currentTime.getHours();
   useEffect(() => setHighlightedCategory(""), [S.m]);
   useEffect(() => {
@@ -1595,23 +1604,25 @@ function Home({
     return () => window.clearInterval(timer);
   }, []);
   const timeGreeting =
-    h < 12
+    h >= 5 && h < 12
       ? "Good morning"
-      : h < 17
+      : h >= 12 && h < 17
         ? "Good afternoon"
-        : h < 21
+        : h >= 17 && h < 21
           ? "Good evening"
           : "Good night";
   const greetingName = greetingFirstName(profile);
 
   return (
     <>
-      <MonthEndBanner
-        transactions={S?.exp || []}
-        amountOf={(t) => (t.cat === "Savings" ? 0 : t.amt)}
-        categoryOf={(t) => t.cat}
-        currency="BDT"
-      />
+      {isCurrentMonth && (
+        <MonthEndBanner
+          transactions={S?.exp || []}
+          amountOf={(t) => (t.cat === "Savings" ? 0 : t.amt)}
+          categoryOf={(t) => t.cat}
+          currency="৳"
+        />
+      )}
       <div className="hd">
         <div>
           <small>
@@ -1620,13 +1631,22 @@ function Home({
           <h1>{fM(S.m)}</h1>
         </div>
         <div className="mn">
-          <button aria-label="Previous month" onClick={() => onShift(-1)}>
+          <button
+            aria-label="Previous month"
+            onClick={() => {
+              triggerHaptic("selection");
+              onShift(-1);
+            }}
+          >
             <Icon n="l" />
           </button>
           <button
             aria-label="Next month"
-            disabled={S.m >= ld().slice(0, 7)}
-            onClick={() => onShift(1)}
+            disabled={!S?.m || S.m >= ld().slice(0, 7)}
+            onClick={() => {
+              triggerHaptic("selection");
+              onShift(1);
+            }}
           >
             <Icon n="r" />
           </button>
@@ -1641,7 +1661,7 @@ function Home({
           <span>Spent this month</span>
           {p ? (
             <span className="chip">
-              <span className="mx-tri">{d > 0 ? "▲" : "▼"}</span>
+              <span className="mx-tri">{d > 0 ? "▲" : d < 0 ? "▼" : "•"}</span>
               ৳
               <Amount
                 value={amountFormatter.format(Math.abs(d))}
@@ -1797,7 +1817,7 @@ function Home({
         </div>
       </div>
 
-      {cs.length > 0 && (
+      {cs.length > 0 && total > 0 && (
         <div className="card">
           <div className="category-card-heading">
             <div>
@@ -1818,8 +1838,8 @@ function Home({
                   setHighlightedCategory((current) => (current === c ? "" : c))
                 }
                 style={{
-                  width: (v / total) * 100 + "%",
-                  background: CAT[c][1],
+                  width: total > 0 ? (v / total) * 100 + "%" : "0%",
+                  background: CAT[c]?.[1] || "#64748b",
                 }}
               />
             ))}
@@ -1832,10 +1852,10 @@ function Home({
               aria-label={`View ${c} activity, ${M(v)}`}
               onClick={() => onCategory(c)}
             >
-              <span className="dot" style={{ "--c": CAT[c][1] }} />
+              <span className="dot" style={{ "--c": CAT[c]?.[1] || "#64748b" }} />
               <span>{c}</span>
               <b>{M(v)}</b>
-              <em>{Math.round((v / total) * 100)}%</em>
+              <em>{total > 0 ? Math.round((v / total) * 100) : 0}%</em>
             </button>
           ))}
         </div>
@@ -1853,7 +1873,7 @@ function Home({
               <ExpenseRow
                 key={e.id}
                 e={e}
-                cards={S.cards}
+                cards={S?.cards || []}
                 onOpen={onOpen}
                 isNew={highlightedExpenseId === e.id}
               />
@@ -4202,17 +4222,18 @@ function DetailSheet({ e, suggestion, cards = [], onSave, onDelete, onClose }) {
 }
 
 function BudgetSheet({ S, onSave, onClear, onClose }) {
-  const [v, setV] = useState(S.bud[S.m] || "");
+  const currentBudget = S?.bud?.[S.m] || "";
+  const [v, setV] = useState(currentBudget);
   return (
     <Sheet
       onClose={onClose}
-      actionsClassName={S.bud[S.m] ? "is-paired" : ""}
+      actionsClassName={currentBudget ? "is-paired" : ""}
       actions={
         <>
           <button className="btn" onClick={() => onSave(parseFloat(v))}>
             Save budget
           </button>
-          {S.bud[S.m] ? (
+          {currentBudget ? (
             <button className="btn del" onClick={onClear}>
               Clear budget
             </button>
@@ -4222,7 +4243,7 @@ function BudgetSheet({ S, onSave, onClear, onClose }) {
     >
       <h3 id="sheet-title">Monthly budget</h3>
       <p className="hint" style={{ textAlign: "left" }}>
-        {fM(S.m)}
+        {fM(S?.m || "")}
       </p>
       <div className="amt">
         <span>৳</span>
@@ -7829,7 +7850,13 @@ export default function MobilePrototype({
                   S={S}
                   profile={profile}
                   onShift={onShift}
-                  onTab={nav}
+                  onTab={(nextTab) => {
+                    if (nextTab === "activity") {
+                      setCf("");
+                      setQ("");
+                    }
+                    nav(nextTab);
+                  }}
                   onCategory={(category) => {
                     setCf(category);
                     setQ("");
