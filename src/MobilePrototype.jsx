@@ -1100,7 +1100,45 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
   }, []);
 
   useLayoutEffect(() => {
-    sheetRef.current?.focus({ preventScroll: true });
+    const sheetNode = sheetRef.current;
+    if (!sheetNode) return;
+
+    // Check if there is an explicit autofocus target or a primary amount input field
+    const autoFocusTarget = sheetNode.querySelector(
+      '[data-sheet-autofocus], .amt input, input[autofocus]'
+    );
+
+    if (autoFocusTarget && typeof autoFocusTarget.focus === "function") {
+      try {
+        autoFocusTarget.focus({ preventScroll: true });
+        if (typeof autoFocusTarget.select === "function" && autoFocusTarget.value) {
+          autoFocusTarget.select();
+        }
+      } catch {
+        // ignore
+      }
+
+      // Secondary check after layout animation/reflow to ensure mobile webview focus remains active
+      const timer = setTimeout(() => {
+        if (
+          sheetNode.contains(autoFocusTarget) &&
+          (document.activeElement === sheetNode || document.activeElement === document.body)
+        ) {
+          try {
+            autoFocusTarget.focus({ preventScroll: true });
+            if (typeof autoFocusTarget.select === "function" && autoFocusTarget.value) {
+              autoFocusTarget.select();
+            }
+          } catch {
+            // ignore
+          }
+        }
+      }, 50);
+
+      return () => clearTimeout(timer);
+    }
+
+    sheetNode.focus({ preventScroll: true });
   }, []);
 
   useEffect(() => {
@@ -3689,6 +3727,8 @@ function AddSheet({
     iv: iv || "none",
   });
   const [categoryTouched, setCategoryTouched] = useState(false);
+  const amtInputRef = useRef(null);
+  const descInputRef = useRef(null);
   const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
   const custom = f.date !== ld() && f.date !== ago(1);
   const categorySuggestion = categoryTouched
@@ -3718,6 +3758,7 @@ function AddSheet({
       <div className="amt">
         <span>৳</span>
         <input
+          ref={amtInputRef}
           inputMode="decimal"
           enterKeyHint="next"
           aria-label={
@@ -3726,6 +3767,12 @@ function AddSheet({
           placeholder="0"
           value={f.amt}
           onChange={(e) => set("amt", e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              descInputRef.current?.focus();
+            }
+          }}
         />
       </div>
       <p className="hint">
@@ -3769,9 +3816,11 @@ function AddSheet({
 
       <span className="lbl">What was it for?</span>
       <input
+        ref={descInputRef}
         className="in"
         maxLength={80}
         aria-label="Expense description"
+        enterKeyHint="done"
         placeholder={
           f.cat === "Savings" ? "e.g. Monthly savings" : "e.g. Lunch"
         }
@@ -3782,6 +3831,11 @@ function AddSheet({
           if (!categoryTouched) {
             const suggestion = suggestedCategory(description, expenses);
             if (suggestion) set("cat", suggestion);
+          }
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.currentTarget.blur();
           }
         }}
       />
@@ -3877,6 +3931,9 @@ function TxSheet({ type, defaultAccount, cards = [], onSave, onClose }) {
     fromAccount: defaultTransferFrom,
     toAccount: defaultTo,
   });
+  const amtInputRef = useRef(null);
+  const noteInputRef = useRef(null);
+  const reasonSelectRef = useRef(null);
   const set = (k, v) => setG((x) => ({ ...x, [k]: v }));
   const tr = g.type === "transfer";
   const customDate = g.date !== ld() && g.date !== ago(1);
@@ -3906,7 +3963,12 @@ function TxSheet({ type, defaultAccount, cards = [], onSave, onClose }) {
       <h3 id="sheet-title">Account activity</h3>
       <Seg
         value={g.type}
-        onPick={(v) => setG((current) => ({ ...current, type: v, note: "" }))}
+        onPick={(v) => {
+          setG((current) => ({ ...current, type: v, note: "" }));
+          setTimeout(() => {
+            amtInputRef.current?.focus({ preventScroll: true });
+          }, 0);
+        }}
         options={[
           [
             "income",
@@ -3934,11 +3996,23 @@ function TxSheet({ type, defaultAccount, cards = [], onSave, onClose }) {
       <div className="amt">
         <span>৳</span>
         <input
+          ref={amtInputRef}
           inputMode="decimal"
+          enterKeyHint="next"
           aria-label={`${g.type === "adjust" ? "Adjustment" : g.type === "transfer" ? "Transfer" : "Income"} amount in taka`}
           placeholder="0"
           value={g.amt}
           onChange={(e) => set("amt", e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              if (g.type === "adjust") {
+                reasonSelectRef.current?.focus();
+              } else {
+                noteInputRef.current?.focus();
+              }
+            }
+          }}
         />
       </div>
 
@@ -4031,6 +4105,7 @@ function TxSheet({ type, defaultAccount, cards = [], onSave, onClose }) {
         <>
           <span className="lbl">Reason (optional)</span>
           <select
+            ref={reasonSelectRef}
             className="in"
             aria-label="Adjustment reason (optional)"
             value={g.note}
@@ -4046,15 +4121,22 @@ function TxSheet({ type, defaultAccount, cards = [], onSave, onClose }) {
         <>
           <span className="lbl">Note (optional)</span>
           <input
+            ref={noteInputRef}
             className="in"
             maxLength={80}
             aria-label="Transaction note"
             autoCapitalize="sentences"
+            enterKeyHint="done"
             placeholder={
               g.type === "income" ? "e.g. Salary, cash in" : "Optional note"
             }
             value={g.note}
             onChange={(e) => set("note", e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.currentTarget.blur();
+              }
+            }}
           />
         </>
       )}
@@ -4089,6 +4171,9 @@ function AccountTxDetailSheet({ tx, cards = [], onSave, onDelete, onClose }) {
     toAccount:
       tx.to || cards.find((c) => c.id !== tx.acct)?.id || (cards[0]?.id ? "cash" : ""),
   });
+  const amtInputRef = useRef(null);
+  const noteInputRef = useRef(null);
+  const reasonSelectRef = useRef(null);
   const set = (k, v) => setG((x) => ({ ...x, [k]: v }));
   const tr = g.type === "transfer";
   const allFromOptions = ensureAccountOption(g.fromAccount);
@@ -4143,6 +4228,9 @@ function AccountTxDetailSheet({ tx, cards = [], onSave, onDelete, onClose }) {
                 ? current.acct || current.fromAccount
                 : current.fromAccount,
           }));
+          setTimeout(() => {
+            amtInputRef.current?.focus({ preventScroll: true });
+          }, 0);
         }}
         options={[
           [
@@ -4171,11 +4259,23 @@ function AccountTxDetailSheet({ tx, cards = [], onSave, onDelete, onClose }) {
       <div className="amt">
         <span>৳</span>
         <input
+          ref={amtInputRef}
           inputMode="decimal"
+          enterKeyHint="next"
           aria-label="Transaction amount in taka"
           placeholder="0"
           value={g.amt}
           onChange={(e) => set("amt", e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              if (g.type === "adjust") {
+                reasonSelectRef.current?.focus();
+              } else {
+                noteInputRef.current?.focus();
+              }
+            }
+          }}
         />
       </div>
 
@@ -4253,6 +4353,7 @@ function AccountTxDetailSheet({ tx, cards = [], onSave, onDelete, onClose }) {
         <>
           <span className="lbl">Reason (optional)</span>
           <select
+            ref={reasonSelectRef}
             className="in"
             aria-label="Adjustment reason (optional)"
             value={g.note}
@@ -4272,15 +4373,22 @@ function AccountTxDetailSheet({ tx, cards = [], onSave, onDelete, onClose }) {
         <>
           <span className="lbl">Note (optional)</span>
           <input
+            ref={noteInputRef}
             className="in"
             maxLength={80}
             aria-label="Transaction note"
             autoCapitalize="sentences"
+            enterKeyHint="done"
             placeholder={
               g.type === "income" ? "e.g. Salary, cash in" : "Optional note"
             }
             value={g.note}
             onChange={(e) => set("note", e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.currentTarget.blur();
+              }
+            }}
           />
         </>
       )}
@@ -4296,6 +4404,8 @@ function DetailSheet({ e, suggestion, cards = [], onSave, onDelete, onClose }) {
     date: e.date,
     acct: e.acct || "",
   });
+  const amtInputRef = useRef(null);
+  const descInputRef = useRef(null);
   const set = (key, value) => setF((current) => ({ ...current, [key]: value }));
   const amtNum = f.amt !== "" && f.amt != null ? Number(f.amt) : null;
   const isSavings = f.cat === "Savings";
@@ -4328,20 +4438,35 @@ function DetailSheet({ e, suggestion, cards = [], onSave, onDelete, onClose }) {
       <div className="amt">
         <span>৳</span>
         <input
+          ref={amtInputRef}
           inputMode="decimal"
+          enterKeyHint="next"
           aria-label="Expense amount in taka"
           placeholder="0"
           value={f.amt}
           onChange={(event) => set("amt", event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              descInputRef.current?.focus();
+            }
+          }}
         />
       </div>
       <span className="lbl">What was it for?</span>
       <input
+        ref={descInputRef}
         className="in"
         maxLength={80}
         aria-label="Expense description"
+        enterKeyHint="done"
         value={f.desc}
         onChange={(event) => set("desc", event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.currentTarget.blur();
+          }
+        }}
       />
       <span className="lbl">Category</span>
       {suggestion && suggestion !== e.cat && (
@@ -4404,6 +4529,7 @@ function DetailSheet({ e, suggestion, cards = [], onSave, onDelete, onClose }) {
 function BudgetSheet({ S, onSave, onClear, onClose }) {
   const currentBudget = S?.bud?.[S.m] || "";
   const [v, setV] = useState(currentBudget);
+  const amtInputRef = useRef(null);
   return (
     <Sheet
       onClose={onClose}
@@ -4428,11 +4554,22 @@ function BudgetSheet({ S, onSave, onClear, onClose }) {
       <div className="amt">
         <span>৳</span>
         <input
+          ref={amtInputRef}
           inputMode="decimal"
+          enterKeyHint="done"
           aria-label="Monthly budget amount in taka"
           placeholder="20000"
           value={v}
           onChange={(x) => setV(x.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              const num = parseFloat(v);
+              if (Number.isFinite(num) && num > 0) {
+                onSave(num);
+              }
+            }
+          }}
         />
       </div>
     </Sheet>
@@ -5115,6 +5252,7 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
                 <input
                   className="add-card-native-input add-card-balance-input"
                   inputMode="decimal"
+                  enterKeyHint="done"
                   placeholder="0.00"
                   value={formData.initialBalance}
                   onChange={(e) =>
@@ -6487,6 +6625,15 @@ function SecuritySheet({ onClose, onBack, onLockNow }) {
     isBiometricsAvailable().then((avail) => setBiometricsAvailable(avail));
   }, []);
 
+  useLayoutEffect(() => {
+    if (step === "setup_pin" || step === "confirm_pin") {
+      const pinEl = document.querySelector(
+        '[data-sheet-autofocus], .amt input[type="password"]'
+      );
+      pinEl?.focus({ preventScroll: true });
+    }
+  }, [step]);
+
   const handleStartSetPin = () => {
     setPinDraft("");
     setPinConfirm("");
@@ -7476,6 +7623,9 @@ export default function MobilePrototype({
   const close = (exit = null, afterClose = null) => {
     if (!sheet || sheetClosing) return;
     clearTimeout(sheetCloseTimer.current);
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
 
     if (exit?.kind === "drag") {
       const returnFocus = sheetReturnFocusRef.current;

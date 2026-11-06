@@ -4611,6 +4611,7 @@ export default function App() {
                   required
                   placeholder="Your name"
                   value={profileDraft}
+                  onFocus={(event) => event.target.select()}
                   onChange={(event) => setProfileDraft(event.target.value)}
                 />
                 <p className="profile-editor-hint">
