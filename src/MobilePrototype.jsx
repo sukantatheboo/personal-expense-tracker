@@ -2741,6 +2741,7 @@ function Accounts({
         account: transaction.acct,
         from: transaction.acct,
         to: transaction.to,
+        dir: transaction.dir,
         direction: transaction.dir,
       })),
   ];
@@ -3113,7 +3114,7 @@ function Accounts({
                   className="accounts-tx-empty-unlock-btn"
                   onClick={() => {
                     triggerHaptic("selection");
-                    onOpenCardOptions?.(selectedAccount);
+                    onOpenCardOptions?.(selectedAccount || activeCard?.id || cards[0]?.id);
                   }}
                 >
                   Manage
