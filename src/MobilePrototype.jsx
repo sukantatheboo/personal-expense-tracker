@@ -501,6 +501,87 @@ const MonthSwitch = ({ m, onShift }) => (
   </div>
 );
 
+const getMonthYearParts = (m) => {
+  if (!m || typeof m !== "string" || !m.includes("-")) {
+    const d = new Date();
+    return {
+      month: d.toLocaleDateString("en-GB", { month: "long" }),
+      year: String(d.getFullYear()),
+    };
+  }
+  const [y, mo] = m.split("-").map(Number);
+  const dateObj = new Date(y, mo - 1, 1);
+  return {
+    month: dateObj.toLocaleDateString("en-GB", { month: "long" }),
+    year: String(y),
+  };
+};
+
+function PlansCalendarBar({ m, onShift }) {
+  const { month, year } = getMonthYearParts(m);
+  const isNextDisabled = !m || m >= ld().slice(0, 7);
+
+  return (
+    <div className="plans-calendar-bar" aria-label="Month navigation">
+      <div className="plans-calendar-title" role="heading" aria-level={2}>
+        <span className="plans-calendar-month">{month}</span>
+        <span className="plans-calendar-year">{year}</span>
+      </div>
+      <div className="plans-calendar-controls">
+        <button
+          type="button"
+          className="plans-calendar-btn"
+          aria-label="Previous month"
+          onClick={() => {
+            triggerHaptic("selection");
+            onShift(-1);
+          }}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            width="17"
+            height="17"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="m15 18-6-6 6-6" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          className="plans-calendar-btn"
+          aria-label="Next month"
+          disabled={isNextDisabled}
+          aria-disabled={isNextDisabled}
+          onClick={() => {
+            if (isNextDisabled) return;
+            triggerHaptic("selection");
+            onShift(1);
+          }}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            width="17"
+            height="17"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="m9 18 6-6-6-6" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function suggestedCategory(description, expenses = [], excludeId = null) {
   const title = String(description || "")
     .trim()
@@ -3474,7 +3555,7 @@ function Plans({
 
   const budget = (
     <>
-      <MonthSwitch m={S.m} onShift={onShift} />
+      <PlansCalendarBar m={S.m} onShift={onShift} />
       <div className="card" style={{ marginTop: 0, textAlign: "center" }}>
         {b ? (
           <>

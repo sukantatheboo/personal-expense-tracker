@@ -7832,3 +7832,122 @@ html[data-theme="dark"] .mobile-prototype .card-options-bar-btn.is-primary-card 
   font-weight: 600;
   color: rgba(255, 255, 255, 0.72);
 }
+
+/* ───────────── Plans Section Calendar Bar Redesign ───────────── */
+.mobile-prototype .plans-calendar-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 6px 0 16px;
+  padding: 0 2px;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.mobile-prototype .plans-calendar-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  font-size: clamp(22px, 6.2vw, 25px);
+  line-height: 1.15;
+  letter-spacing: -0.035em;
+  user-select: none;
+}
+
+.mobile-prototype .plans-calendar-month {
+  font-weight: 850;
+  color: var(--ink);
+  letter-spacing: -0.035em;
+}
+
+.mobile-prototype .plans-calendar-year {
+  font-weight: 650;
+  color: #5a6675;
+  letter-spacing: -0.025em;
+}
+
+[data-theme="dark"] .mobile-prototype .plans-calendar-year {
+  color: #94a3b8;
+}
+
+.mobile-prototype .plans-calendar-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.mobile-prototype .plans-calendar-btn {
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  min-height: 38px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+  display: grid;
+  place-items: center;
+  color: var(--ink);
+  cursor: pointer;
+  transition: transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    opacity 160ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-prototype .plans-calendar-btn svg {
+  width: 17px;
+  height: 17px;
+  stroke: currentColor;
+  stroke-width: 2.5px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  display: block;
+}
+
+@media (hover: hover) {
+  .mobile-prototype .plans-calendar-btn:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--card) 92%, var(--ink) 8%);
+    border-color: color-mix(in srgb, var(--line) 70%, var(--ink) 30%);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+  }
+}
+
+.mobile-prototype .plans-calendar-btn:active:not(:disabled) {
+  transform: scale(0.92);
+}
+
+.mobile-prototype .plans-calendar-btn:focus-visible {
+  outline: 2px solid var(--accent, #2563eb);
+  outline-offset: 2px;
+}
+
+.mobile-prototype .plans-calendar-btn:disabled,
+.mobile-prototype .plans-calendar-btn[aria-disabled="true"] {
+  cursor: default;
+  opacity: 0.32;
+  pointer-events: none;
+  box-shadow: none;
+  transform: none;
+}
+
+[data-theme="dark"] .mobile-prototype .plans-calendar-btn {
+  background: var(--card);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+[data-theme="dark"] .mobile-prototype .plans-calendar-btn:disabled {
+  opacity: 0.28;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mobile-prototype .plans-calendar-btn {
+    transition: none;
+  }
+}

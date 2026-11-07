@@ -32,8 +32,11 @@ const TINTS = [
 const SAMPLE = {
   monthKey: "2026-10",
   month: "October",
+  monthShort: "Oct",
   prevMonth: "September",
+  prevMonthShort: "Sep",
   nextMonth: "November",
+  nextMonthShort: "Nov",
   total: 12480,
   prevTotal: 14200,
   entries: 48,
@@ -57,12 +60,17 @@ export function getSampleRecap(targetMonth = "2026-10") {
   const [y, m] = targetMonth.split("-").map(Number);
   const name = (mm) =>
     new Date(y, mm, 1).toLocaleString("en-US", { month: "long" });
+  const shortName = (mm) =>
+    new Date(y, mm, 1).toLocaleString("en-US", { month: "short" });
   return {
     ...SAMPLE,
     monthKey: targetMonth,
     month: name(m - 1),
+    monthShort: shortName(m - 1),
     prevMonth: name(m - 2),
+    prevMonthShort: shortName(m - 2),
     nextMonth: name(m),
+    nextMonthShort: shortName(m),
     daysInMonth: new Date(y, m, 0).getDate(),
   };
 }
@@ -100,6 +108,8 @@ export function buildRecap(
   const prevKey = key(prevDate);
   const name = (mm) =>
     new Date(y, mm, 1).toLocaleString(locale, { month: "long" });
+  const shortName = (mm) =>
+    new Date(y, mm, 1).toLocaleString(locale, { month: "short" });
 
   let total = 0,
     prevTotal = 0,
@@ -135,8 +145,11 @@ export function buildRecap(
   return {
     monthKey: targetKey,
     month: name(m - 1),
+    monthShort: shortName(m - 1),
     prevMonth: name(m - 2),
+    prevMonthShort: shortName(m - 2),
     nextMonth: name(m),
+    nextMonthShort: shortName(m),
     total,
     prevTotal,
     entries,
@@ -265,11 +278,15 @@ export default function MonthRecap({
         )
       : null;
   const pill =
-    delta !== null
-      ? `${delta <= 0 ? "▾" : "▴"} ${Math.abs(delta)}% ${delta <= 0 ? "less" : "more"} than ${activeData?.prevMonth}`
-      : activeData
-        ? `${activeData.entries} ${activeData.entries === 1 ? "entry" : "entries"} · ${cats.length} ${cats.length === 1 ? "category" : "categories"}`
-        : "";
+    delta !== null ? (
+      <>
+        <span>{delta <= 0 ? "▾" : "▴"} {Math.abs(delta)}% {delta <= 0 ? "less" : "more"} than </span>
+        <span className="mr-pill-m-full">{activeData?.prevMonth}</span>
+        <span className="mr-pill-m-short">{activeData?.prevMonthShort || activeData?.prevMonth?.slice(0, 3)}</span>
+      </>
+    ) : activeData ? (
+      `${activeData.entries} ${activeData.entries === 1 ? "entry" : "entries"} · ${cats.length} ${cats.length === 1 ? "category" : "categories"}`
+    ) : null;
 
   const cardNum = useCountUp(activeData?.total || 0, true, 100, 900);
   const heroNum = useCountUp(activeData?.total || 0, ready && slides[i] === "total");
@@ -329,12 +346,15 @@ export default function MonthRecap({
 
   useEffect(() => {
     if (!active) return;
-    const prev = document.body.style.overflow;
+    const prevOverflow = document.body.style.overflow;
+    const prevBg = document.body.style.backgroundColor;
     document.body.style.overflow = "hidden";
+    document.body.style.backgroundColor = BG[i % BG.length];
     return () => {
-      document.body.style.overflow = prev;
+      document.body.style.overflow = prevOverflow;
+      document.body.style.backgroundColor = prevBg;
     };
-  }, [active]);
+  }, [active, i]);
 
   useEffect(() => {
     if (phase !== "open") return;
@@ -342,6 +362,10 @@ export default function MonthRecap({
       if (e.key === "Escape") close();
       if (e.key === "ArrowRight") go(i + 1);
       if (e.key === "ArrowLeft") go(i - 1);
+      if (e.key === " " || e.key === "Spacebar") {
+        e.preventDefault();
+        setPaused((prev) => !prev);
+      }
     };
     window.addEventListener("keydown", k);
     return () => window.removeEventListener("keydown", k);
@@ -350,6 +374,7 @@ export default function MonthRecap({
   if (!activeData || gone) return null;
 
   const down = (e) => {
+    if (!ready) return;
     const h = hold.current;
     h.x = e.clientX;
     h.y = e.clientY;
@@ -359,7 +384,7 @@ export default function MonthRecap({
     h.t = setTimeout(() => {
       h.held = true;
       setPaused(true);
-    }, 220);
+    }, 180);
   };
 
   const cancel = () => {
@@ -368,6 +393,7 @@ export default function MonthRecap({
   };
 
   const up = (e) => {
+    if (!ready) return;
     const h = hold.current;
     cancel();
     if (e.target.closest("button")) return;
@@ -383,7 +409,8 @@ export default function MonthRecap({
       go(dx < 0 ? i + 1 : i - 1);
       return;
     }
-    const r = colRef.current.getBoundingClientRect();
+    const r = colRef.current?.getBoundingClientRect();
+    if (!r) return;
     buzz();
     go(e.clientX - r.left < r.width * 0.3 ? i - 1 : i + 1);
   };
@@ -405,13 +432,15 @@ export default function MonthRecap({
   const storyStyle =
     phase === "open"
       ? {
-          top: -1,
-          left: -1,
-          width: "calc(100vw + 2px)",
-          height: "calc(100dvh + 2px)",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          width: "100%",
+          height: "100%",
+          minHeight: "100%",
           borderRadius: 0,
           background: BG[i % BG.length],
-          boxShadow: `0 0 0 4px ${BG[i % BG.length]}`,
         }
       : { ...rect, borderRadius: 28, background: BG[0] };
 
@@ -499,6 +528,7 @@ export default function MonthRecap({
             onPointerDown={down}
             onPointerUp={up}
             onPointerCancel={cancel}
+            onContextMenu={(e) => e.preventDefault()}
           >
             <div className="mr-layer">
               <div className="mr-col" ref={colRef}>
@@ -622,7 +652,17 @@ export default function MonthRecap({
                           </div>
                         </div>
                         <p {...up_("mr-k", 1)}>Your top category</p>
-                        <p {...up_("mr-big", 2)}>{cats[0].name}</p>
+                        <p
+                          {...up_(
+                            "mr-big",
+                            2,
+                            cats[0].name.length > 9
+                              ? { fontSize: "clamp(38px, 12vw, 56px)" }
+                              : undefined,
+                          )}
+                        >
+                          {cats[0].name}
+                        </p>
                         <p {...up_("mr-sub", 3)}>
                           {pct}% of what you spent went here.
                         </p>
@@ -766,11 +806,12 @@ const CSS = `
   background: var(--mr-forest);
   color: #eef5f0;
   border-radius: 28px;
-  padding: 24px 22px 24px;
+  padding: 22px 18px 22px;
   cursor: pointer;
   transition: transform 0.25s var(--mr-ease);
   margin-bottom: 16px;
   text-align: left;
+  overflow: hidden;
 }
 .mr-card:active:not(:has(.mr-x:active)) {
   transform: scale(0.98);
@@ -799,8 +840,8 @@ const CSS = `
 }
 .mr-card button.mr-x {
   position: absolute;
-  top: 22px;
-  right: 22px;
+  top: 20px;
+  right: 20px;
   width: 36px;
   height: 36px;
   border: 0;
@@ -826,15 +867,18 @@ const CSS = `
 }
 .mr-card small {
   display: block;
-  margin-top: 26px;
-  font-size: 17px;
+  margin-top: 24px;
+  font-size: clamp(15px, 4.2vw, 17px);
   font-weight: 600;
   color: var(--mr-mist);
   letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .mr-card b {
   display: block;
-  font-size: clamp(44px, 13vw, 64px);
+  font-size: clamp(40px, 12vw, 60px);
   line-height: 1.05;
   letter-spacing: -0.04em;
   font-weight: 800;
@@ -847,11 +891,11 @@ const CSS = `
 }
 .mr-hrow {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  margin-top: 20px;
+  gap: 8px;
+  margin-top: 18px;
+  width: 100%;
 }
 .mr-pill {
   display: inline-flex;
@@ -864,32 +908,59 @@ const CSS = `
   font-size: 13px;
   font-weight: 700;
   letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: fit-content;
+  max-width: 100%;
+  flex: 0 0 auto;
+}
+.mr-pill-m-short {
+  display: none;
+}
+.mr-pill-m-full {
+  display: inline;
+}
+@media (max-width: 350px) {
+  .mr-pill-m-full {
+    display: none;
+  }
+  .mr-pill-m-short {
+    display: inline;
+  }
 }
 .mr-card button.mr-vbtn {
+  flex-shrink: 0;
   margin-left: auto;
   border: 0;
   background: #eef5f0;
   color: var(--mr-forest);
   border-radius: 99px;
-  padding: 10px 18px;
+  padding: 8px 16px;
   font: inherit;
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 750;
   cursor: pointer;
   letter-spacing: -0.01em;
   text-align: center;
+  white-space: nowrap;
   transition: opacity 150ms ease, transform 150ms ease;
 }
 .mr-card button.mr-vbtn:hover {
   opacity: 0.92;
+}
+.mr-card button.mr-vbtn:active {
+  transform: scale(0.96);
 }
 .mr-story {
   position: fixed;
   z-index: 9999;
   overflow: hidden;
   color: #eef5f0;
-  touch-action: manipulation;
+  touch-action: none;
   user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent;
   transition:
     top 0.6s var(--mr-ease),
@@ -898,6 +969,16 @@ const CSS = `
     height 0.6s var(--mr-ease),
     border-radius 0.6s var(--mr-ease),
     background 0.7s;
+}
+.mr-story.mr-in {
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 100vh !important;
+  min-height: -webkit-fill-available !important;
 }
 .mr-layer {
   position: absolute;
@@ -947,12 +1028,25 @@ const CSS = `
   animation: mr-fill var(--ms) linear forwards;
 }
 @keyframes mr-fill {
+  from {
+    width: 0;
+  }
   to {
     width: 100%;
   }
 }
 .mr-hold .mr-bar i.on {
-  animation-play-state: paused;
+  animation-play-state: paused !important;
+}
+.mr-hold .mr-top,
+.mr-hold .mr-bars {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.mr-top,
+.mr-bars {
+  transition: opacity 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .mr-top {
   position: absolute;
@@ -1000,11 +1094,19 @@ const CSS = `
 .mr-sl {
   position: absolute;
   inset: 0;
-  padding: 0 24px calc(14% + env(safe-area-inset-bottom, 0px));
+  padding: calc(90px + env(safe-area-inset-top, 0px)) 24px calc(14% + env(safe-area-inset-bottom, 0px));
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
   text-align: left;
+  box-sizing: border-box;
+}
+.mr-sl .mr-pill {
+  flex: none;
+  align-self: flex-start;
+  height: auto;
+  min-height: unset;
+  line-height: normal;
 }
 .mr-k {
   font-size: 20px;
@@ -1114,13 +1216,25 @@ const CSS = `
 }
 .mr-rb {
   flex: 1;
+  min-width: 0;
 }
 .mr-rt {
   display: flex;
+  align-items: baseline;
   justify-content: space-between;
+  gap: 8px;
   font-size: 15px;
   font-weight: 700;
   margin-bottom: 8px;
+}
+.mr-rt span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mr-rt b {
+  flex-shrink: 0;
 }
 .mr-rt em {
   font-style: normal;
