@@ -2050,9 +2050,73 @@ a:active,
 .mobile-prototype .activity-controls {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   margin-top: 4px;
-  margin-bottom: 2px;
+  margin-bottom: 4px;
+}
+.mobile-prototype .activity-search-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+.mobile-prototype .activity-search-row .srch {
+  flex: 1;
+  min-width: 0;
+}
+.mobile-prototype .activity-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  width: 46px;
+  height: 46px;
+  flex-shrink: 0;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  cursor: pointer;
+  box-shadow: 0 1.5px 5px rgba(0, 0, 0, 0.03);
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease,
+    color 180ms ease,
+    box-shadow 180ms ease,
+    transform 140ms ease;
+  touch-action: manipulation;
+}
+.mobile-prototype .activity-filter-btn:active {
+  transform: scale(0.94);
+}
+.mobile-prototype .activity-filter-btn.is-active {
+  border-color: color-mix(in srgb, var(--ink) 35%, var(--line));
+  background: color-mix(in srgb, var(--ink) 6%, var(--card));
+}
+:root[data-theme="dark"] .mobile-prototype .activity-filter-btn {
+  background: var(--card);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+:root[data-theme="dark"] .mobile-prototype .activity-filter-btn:hover,
+:root[data-theme="dark"] .mobile-prototype .activity-filter-btn:focus-visible {
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.08);
+}
+:root[data-theme="dark"] .mobile-prototype .activity-filter-btn.is-active {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #ffffff;
+}
+.mobile-prototype .activity-filter-indicator {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--g, #10b981);
+  box-shadow: 0 0 0 2px var(--card);
 }
 .mobile-prototype .srch {
   display: flex;
@@ -2362,6 +2426,91 @@ a:active,
 .mobile-prototype .chips button.on .chip-badge {
   background: rgba(255, 255, 255, 0.32);
   color: inherit;
+}
+/* ───────────── Activity Tabs Bar (Prototype Underline Navigation) ───────────── */
+.mobile-prototype .activity-tabs-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0 4px;
+  margin-top: 2px;
+  margin-bottom: 2px;
+  border-bottom: 1px solid var(--line);
+  position: relative;
+  box-sizing: border-box;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.mobile-prototype .activity-tabs-bar::-webkit-scrollbar {
+  display: none;
+}
+:root[data-theme="dark"] .mobile-prototype .activity-tabs-bar {
+  border-bottom-color: rgba(255, 255, 255, 0.12);
+}
+.mobile-prototype .activity-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  position: relative;
+  background: transparent;
+  border: 0;
+  padding: 10px 4px 12px;
+  font-size: 14.5px;
+  font-weight: 550;
+  letter-spacing: -0.01em;
+  color: var(--mut);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    color 180ms ease,
+    transform 140ms ease;
+  touch-action: manipulation;
+}
+.mobile-prototype .activity-tab-btn:active {
+  transform: scale(0.96);
+}
+.mobile-prototype .activity-tab-label {
+  transition: color 180ms ease;
+}
+.mobile-prototype .activity-tab-count {
+  font-weight: 500;
+  opacity: 0.82;
+  transition: opacity 180ms ease, color 180ms ease;
+}
+.mobile-prototype .activity-tab-btn.is-active {
+  color: var(--ink);
+  font-weight: 750;
+}
+.mobile-prototype .activity-tab-btn.is-active .activity-tab-count {
+  opacity: 1;
+  font-weight: 700;
+}
+.mobile-prototype .activity-tab-btn.is-active::after {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2.5px;
+  background: var(--ink);
+  border-radius: 2px 2px 0 0;
+  pointer-events: none;
+}
+:root[data-theme="dark"] .mobile-prototype .activity-tab-btn {
+  color: #94a3b8;
+}
+:root[data-theme="dark"] .mobile-prototype .activity-tab-btn:hover,
+:root[data-theme="dark"] .mobile-prototype .activity-tab-btn:focus-visible {
+  color: #cbd5e1;
+}
+:root[data-theme="dark"] .mobile-prototype .activity-tab-btn.is-active {
+  color: #ffffff;
+}
+:root[data-theme="dark"] .mobile-prototype .activity-tab-btn.is-active::after {
+  background: #ffffff;
+  box-shadow: 0 -1px 6px rgba(255, 255, 255, 0.28);
 }
 /* ───────────── Account Picker Horizontal Chips ───────────── */
 .mobile-prototype .account-picker-container {

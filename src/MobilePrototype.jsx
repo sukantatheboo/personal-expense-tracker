@@ -2026,6 +2026,7 @@ function Activity({
 }) {
   const [feedType, setFeedType] = useState("all"); // "all" | "expenses" | "income" | "transfers"
   const [quickFilter, setQuickFilter] = useState(""); // "" | "needs-amount" | "recurring" | "cash" | "high-value"
+  const [showFilterTray, setShowFilterTray] = useState(false);
 
   // Automatically switch to expenses if user selected a category filter, and clear stale quick filters
   useEffect(() => {
@@ -2286,6 +2287,7 @@ function Activity({
     setQuickFilter("");
     setCf("");
     setQ("");
+    setShowFilterTray(false);
   };
 
   const matchesInOtherMonths =
@@ -2320,84 +2322,123 @@ function Activity({
   return (
     <>
       <div className="activity-controls">
-        <label className="srch">
-          <Icon n="s" />
-          <input
-            ref={searchRef}
-            type="search"
-            aria-label="Search activity"
-            placeholder="Search activity, categories, or accounts"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") {
-                setQ("");
-                e.currentTarget.blur();
-              }
-            }}
-          />
-          {q && (
-            <button
-              type="button"
-              className="srch-clear-btn"
-              aria-label="Clear search"
-              onClick={(e) => {
-                e.preventDefault();
-                setQ("");
-                searchRef?.current?.focus();
+        <div className="activity-search-row">
+          <label className="srch">
+            <Icon n="s" />
+            <input
+              ref={searchRef}
+              type="search"
+              aria-label="Search transactions"
+              placeholder="Search transactions"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  setQ("");
+                  e.currentTarget.blur();
+                }
               }}
-            >
-              <svg
-                viewBox="0 0 24 24"
-                width="16"
-                height="16"
-                stroke="currentColor"
-                strokeWidth="2.4"
-                fill="none"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
+            />
+            {q && (
+              <button
+                type="button"
+                className="srch-clear-btn"
+                aria-label="Clear search"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setQ("");
+                  searchRef?.current?.focus();
+                }}
               >
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-          )}
-        </label>
+                <svg
+                  viewBox="0 0 24 24"
+                  width="16"
+                  height="16"
+                  stroke="currentColor"
+                  strokeWidth="2.4"
+                  fill="none"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            )}
+          </label>
 
-        {/* 1. Unified Feed Type Segmented Control */}
-        <div className="seg activity-type-seg" role="tablist" aria-label="Activity type">
+          <button
+            type="button"
+            className={`activity-filter-btn${showFilterTray || cf || quickFilter ? " is-active" : ""}`}
+            onClick={() => {
+              triggerHaptic("selection");
+              setShowFilterTray((prev) => !prev);
+            }}
+            aria-label="Filter transactions"
+            aria-expanded={showFilterTray || Boolean(cf) || Boolean(quickFilter)}
+            title="Filter options"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="20"
+              height="20"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.1"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <line x1="3" y1="6" x2="13" y2="6" />
+              <line x1="19" y1="6" x2="21" y2="6" />
+              <circle cx="16" cy="6" r="2.5" />
+              <line x1="3" y1="12" x2="5" y2="12" />
+              <line x1="11" y1="12" x2="21" y2="12" />
+              <circle cx="8" cy="12" r="2.5" />
+              <line x1="3" y1="18" x2="13" y2="18" />
+              <line x1="19" y1="18" x2="21" y2="18" />
+              <circle cx="16" cy="18" r="2.5" />
+            </svg>
+            {(cf || quickFilter) && (
+              <span className="activity-filter-indicator" aria-hidden="true" />
+            )}
+          </button>
+        </div>
+
+        {/* 1. Feed Tabs Bar */}
+        <div className="activity-tabs-bar" role="tablist" aria-label="Activity filter">
           <button
             type="button"
             role="tab"
             aria-selected={feedType === "all"}
-            className={feedType === "all" ? "on" : ""}
+            className={`activity-tab-btn ${feedType === "all" ? "is-active" : ""}`}
             onClick={() => {
               triggerHaptic("selection");
               setFeedType("all");
             }}
           >
-            <span>All</span>
-            {countAll > 0 && <span className="chip-badge">{countAll}</span>}
+            <span className="activity-tab-label">All</span>
+            <span className="activity-tab-count">{countAll}</span>
           </button>
           <button
             type="button"
             role="tab"
             aria-selected={feedType === "expenses"}
-            className={feedType === "expenses" ? "on" : ""}
+            className={`activity-tab-btn ${feedType === "expenses" ? "is-active" : ""}`}
             onClick={() => {
               triggerHaptic("selection");
               setFeedType("expenses");
             }}
           >
-            <span>Expenses</span>
-            {countExpenses > 0 && <span className="chip-badge">{countExpenses}</span>}
+            <span className="activity-tab-label">Expenses</span>
+            <span className="activity-tab-count">{countExpenses}</span>
           </button>
           <button
             type="button"
             role="tab"
             aria-selected={feedType === "income"}
-            className={feedType === "income" ? "on" : ""}
+            className={`activity-tab-btn ${feedType === "income" ? "is-active" : ""}`}
             onClick={() => {
               triggerHaptic("selection");
               setFeedType("income");
@@ -2410,14 +2451,14 @@ function Activity({
               }
             }}
           >
-            <span>Income</span>
-            {countIncome > 0 && <span className="chip-badge">{countIncome}</span>}
+            <span className="activity-tab-label">Income</span>
+            <span className="activity-tab-count">{countIncome}</span>
           </button>
           <button
             type="button"
             role="tab"
             aria-selected={feedType === "transfers"}
-            className={feedType === "transfers" ? "on" : ""}
+            className={`activity-tab-btn ${feedType === "transfers" ? "is-active" : ""}`}
             onClick={() => {
               triggerHaptic("selection");
               setFeedType("transfers");
@@ -2430,143 +2471,145 @@ function Activity({
               }
             }}
           >
-            <span>Transfers</span>
-            {countTransfers > 0 && <span className="chip-badge">{countTransfers}</span>}
+            <span className="activity-tab-label">Transfers</span>
+            <span className="activity-tab-count">{countTransfers}</span>
           </button>
         </div>
       </div>
 
       {/* 2. Quick Filter Pills Bar */}
-      <div className="chips" data-dock-scroll-lock role="toolbar" aria-label="Activity filter chips">
-        <button
-          type="button"
-          className={!cf && !quickFilter ? "on" : ""}
-          aria-pressed={!cf && !quickFilter}
-          onClick={() => {
-            triggerHaptic("selection");
-            setQuickFilter("");
-            setCf("");
-          }}
-        >
-          All
-        </button>
+      {(showFilterTray || cf || quickFilter) && (
+        <div className="chips" data-dock-scroll-lock role="toolbar" aria-label="Activity filter chips">
+          <button
+            type="button"
+            className={!cf && !quickFilter ? "on" : ""}
+            aria-pressed={!cf && !quickFilter}
+            onClick={() => {
+              triggerHaptic("selection");
+              setQuickFilter("");
+              setCf("");
+            }}
+          >
+            All
+          </button>
 
-        {(feedType === "all" || feedType === "expenses") && (
-          <>
-            <button
-              type="button"
-              className={quickFilter === "needs-amount" ? "on" : ""}
-              aria-pressed={quickFilter === "needs-amount"}
-              onClick={() => {
-                triggerHaptic("selection");
-                setQuickFilter(quickFilter === "needs-amount" ? "" : "needs-amount");
-                setCf("");
-              }}
-            >
-              <span className="category-symbol" aria-hidden="true">
-                <img
-                  src={alertSvg}
-                  alt=""
-                  className="category-symbol-img"
-                  draggable="false"
-                />
-              </span>
-              <span>Needs amt</span>
-              {needsAmountCount > 0 && <span className="chip-badge">{needsAmountCount}</span>}
-            </button>
-
-            <button
-              type="button"
-              className={quickFilter === "recurring" ? "on" : ""}
-              aria-pressed={quickFilter === "recurring"}
-              onClick={() => {
-                triggerHaptic("selection");
-                setQuickFilter(quickFilter === "recurring" ? "" : "recurring");
-                setCf("");
-              }}
-            >
-              <span className="category-symbol" aria-hidden="true">
-                <img
-                  src={refreshSvg}
-                  alt=""
-                  className="category-symbol-img"
-                  draggable="false"
-                />
-              </span>
-              <span>Repeat</span>
-              {recurringCount > 0 && <span className="chip-badge">{recurringCount}</span>}
-            </button>
-          </>
-        )}
-
-        <button
-          type="button"
-          className={quickFilter === "cash" ? "on" : ""}
-          aria-pressed={quickFilter === "cash"}
-          onClick={() => {
-            triggerHaptic("selection");
-            setQuickFilter(quickFilter === "cash" ? "" : "cash");
-            setCf("");
-          }}
-        >
-          <span className="category-symbol" aria-hidden="true">
-            <img
-              src={cashSvg}
-              alt=""
-              className="category-symbol-img"
-              draggable="false"
-            />
-          </span>
-          <span>Cash</span>
-          {cashCount > 0 && <span className="chip-badge">{cashCount}</span>}
-        </button>
-
-        <button
-          type="button"
-          className={quickFilter === "high-value" ? "on" : ""}
-          aria-pressed={quickFilter === "high-value"}
-          onClick={() => {
-            triggerHaptic("selection");
-            setQuickFilter(quickFilter === "high-value" ? "" : "high-value");
-            setCf("");
-          }}
-        >
-          <span className="category-symbol" aria-hidden="true">
-            <img
-              src={starSvg}
-              alt=""
-              className="category-symbol-img"
-              draggable="false"
-            />
-          </span>
-          <span>≥ ৳1k</span>
-          {highValueCount > 0 && (
-            <span className="chip-badge">{highValueCount}</span>
-          )}
-        </button>
-
-        {(feedType === "all" || feedType === "expenses") && (
-          <>
-            <span className="chips-divider" aria-hidden="true" />
-            {Object.keys(CAT).map((c) => (
+          {(feedType === "all" || feedType === "expenses") && (
+            <>
               <button
-                key={c}
                 type="button"
-                className={cf === c ? "on" : ""}
-                aria-pressed={cf === c}
+                className={quickFilter === "needs-amount" ? "on" : ""}
+                aria-pressed={quickFilter === "needs-amount"}
                 onClick={() => {
                   triggerHaptic("selection");
-                  setCf(cf === c ? "" : c);
-                  setQuickFilter("");
+                  setQuickFilter(quickFilter === "needs-amount" ? "" : "needs-amount");
+                  setCf("");
                 }}
               >
-                <CategorySymbol category={c} />
-                <span>{c}</span>
+                <span className="category-symbol" aria-hidden="true">
+                  <img
+                    src={alertSvg}
+                    alt=""
+                    className="category-symbol-img"
+                    draggable="false"
+                  />
+                </span>
+                <span>Needs amt</span>
+                {needsAmountCount > 0 && <span className="chip-badge">{needsAmountCount}</span>}
               </button>
-            ))}
-          </>
-        )}
-      </div>
+
+              <button
+                type="button"
+                className={quickFilter === "recurring" ? "on" : ""}
+                aria-pressed={quickFilter === "recurring"}
+                onClick={() => {
+                  triggerHaptic("selection");
+                  setQuickFilter(quickFilter === "recurring" ? "" : "recurring");
+                  setCf("");
+                }}
+              >
+                <span className="category-symbol" aria-hidden="true">
+                  <img
+                    src={refreshSvg}
+                    alt=""
+                    className="category-symbol-img"
+                    draggable="false"
+                  />
+                </span>
+                <span>Repeat</span>
+                {recurringCount > 0 && <span className="chip-badge">{recurringCount}</span>}
+              </button>
+            </>
+          )}
+
+          <button
+            type="button"
+            className={quickFilter === "cash" ? "on" : ""}
+            aria-pressed={quickFilter === "cash"}
+            onClick={() => {
+              triggerHaptic("selection");
+              setQuickFilter(quickFilter === "cash" ? "" : "cash");
+              setCf("");
+            }}
+          >
+            <span className="category-symbol" aria-hidden="true">
+              <img
+                src={cashSvg}
+                alt=""
+                className="category-symbol-img"
+                draggable="false"
+              />
+            </span>
+            <span>Cash</span>
+            {cashCount > 0 && <span className="chip-badge">{cashCount}</span>}
+          </button>
+
+          <button
+            type="button"
+            className={quickFilter === "high-value" ? "on" : ""}
+            aria-pressed={quickFilter === "high-value"}
+            onClick={() => {
+              triggerHaptic("selection");
+              setQuickFilter(quickFilter === "high-value" ? "" : "high-value");
+              setCf("");
+            }}
+          >
+            <span className="category-symbol" aria-hidden="true">
+              <img
+                src={starSvg}
+                alt=""
+                className="category-symbol-img"
+                draggable="false"
+              />
+            </span>
+            <span>≥ ৳1k</span>
+            {highValueCount > 0 && (
+              <span className="chip-badge">{highValueCount}</span>
+            )}
+          </button>
+
+          {(feedType === "all" || feedType === "expenses") && (
+            <>
+              <span className="chips-divider" aria-hidden="true" />
+              {Object.keys(CAT).map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  className={cf === c ? "on" : ""}
+                  aria-pressed={cf === c}
+                  onClick={() => {
+                    triggerHaptic("selection");
+                    setCf(cf === c ? "" : c);
+                    setQuickFilter("");
+                  }}
+                >
+                  <CategorySymbol category={c} />
+                  <span>{c}</span>
+                </button>
+              ))}
+            </>
+          )}
+        </div>
+      )}
 
       {/* 3. Filter Summary Banner */}
       {hasFilter && (
