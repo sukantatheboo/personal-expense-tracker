@@ -1882,6 +1882,15 @@ a:active,
   flex: none;
   background: color-mix(in srgb, var(--c) 18%, transparent);
 }
+.mobile-prototype .expense-row .ic,
+.mobile-prototype .ri .ic {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+}
 .mobile-prototype .ic svg {
   display: block;
   width: 21px;
@@ -1905,15 +1914,19 @@ a:active,
   width: 100%;
   height: 100%;
   object-fit: contain;
+  object-position: center;
   pointer-events: none;
   user-select: none;
   -webkit-user-select: none;
 }
 .mobile-prototype .ic .category-symbol,
 .mobile-prototype .ic .transaction-symbol {
-  width: 36px;
-  height: 36px;
-  flex: 0 0 36px;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   vertical-align: 0;
 }
 .mobile-prototype .expense-day-card .expense-row .ic .category-symbol,
@@ -5409,12 +5422,16 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
 }
 .mobile-prototype .accounts-tx-icon-circle .category-symbol,
 .mobile-prototype .accounts-tx-icon-circle .transaction-symbol {
-  width: 36px;
-  height: 36px;
-  flex: 0 0 36px;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
   display: flex;
   align-items: center;
   justify-content: center;
+}
+.mobile-prototype .accounts-tx-icon-circle[style*="--c"] {
+  background: color-mix(in srgb, var(--c) 16%, transparent);
+  color: var(--c);
 }
 .mobile-prototype .accounts-tx-icon-circle.is-income {
   background: linear-gradient(
@@ -5474,6 +5491,39 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
 .mobile-prototype .accounts-tx-icon-circle.is-other {
   background: #f1f5f9;
   color: #64748b;
+}
+.mobile-prototype .accounts-tx-icon-circle.is-spotify {
+  background: rgba(37, 216, 101, 0.15);
+  color: #25d865;
+}
+.mobile-prototype .accounts-tx-icon-circle.is-netflix {
+  background: rgba(229, 9, 20, 0.14);
+  color: #e50914;
+}
+.mobile-prototype .accounts-tx-icon-circle.is-yt,
+.mobile-prototype .accounts-tx-icon-circle.is-yt-music {
+  background: rgba(255, 75, 75, 0.15);
+  color: #ff4b4b;
+}
+.mobile-prototype .accounts-tx-icon-circle.is-chatgpt {
+  background: rgba(116, 170, 156, 0.18);
+  color: #74aa9c;
+}
+.mobile-prototype .accounts-tx-icon-circle.is-claude {
+  background: rgba(217, 119, 87, 0.18);
+  color: #d97757;
+}
+.mobile-prototype .accounts-tx-icon-circle.is-apple-music {
+  background: rgba(255, 77, 109, 0.16);
+  color: #ff4d6d;
+}
+.mobile-prototype .accounts-tx-icon-circle.is-gemini {
+  background: rgba(104, 132, 247, 0.18);
+  color: #6884f7;
+}
+[data-theme="dark"] .mobile-prototype .accounts-tx-icon-circle[style*="--c"] {
+  background: color-mix(in srgb, var(--c) 22%, transparent);
+  color: var(--c);
 }
 [data-theme="dark"] .mobile-prototype .accounts-tx-icon-circle.is-income {
   background: linear-gradient(
@@ -5536,10 +5586,49 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
   background: rgba(100, 116, 139, 0.18);
   color: #94a3b8;
 }
+[data-theme="dark"] .mobile-prototype .accounts-tx-icon-circle.is-spotify {
+  background: rgba(37, 216, 101, 0.22);
+  color: #25d865;
+}
+[data-theme="dark"] .mobile-prototype .accounts-tx-icon-circle.is-netflix {
+  background: rgba(229, 9, 20, 0.22);
+  color: #ff4d58;
+}
+[data-theme="dark"] .mobile-prototype .accounts-tx-icon-circle.is-yt,
+[data-theme="dark"] .mobile-prototype .accounts-tx-icon-circle.is-yt-music {
+  background: rgba(255, 75, 75, 0.22);
+  color: #ff6e6e;
+}
+[data-theme="dark"] .mobile-prototype .accounts-tx-icon-circle.is-chatgpt {
+  background: rgba(116, 170, 156, 0.24);
+  color: #8ed0c0;
+}
+[data-theme="dark"] .mobile-prototype .accounts-tx-icon-circle.is-claude {
+  background: rgba(217, 119, 87, 0.24);
+  color: #f39778;
+}
+[data-theme="dark"] .mobile-prototype .accounts-tx-icon-circle.is-apple-music {
+  background: rgba(255, 77, 109, 0.22);
+  color: #ff758f;
+}
+[data-theme="dark"] .mobile-prototype .accounts-tx-icon-circle.is-gemini {
+  background: rgba(104, 132, 247, 0.24);
+  color: #8fa5ff;
+}
 
 [data-theme="dark"] .mobile-prototype .category-symbol-img,
 [data-theme="dark"] .mobile-prototype .transaction-symbol-img {
   filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.5));
+}
+[data-theme="dark"] .mobile-prototype .category-symbol.is-spotify .category-symbol-img,
+[data-theme="dark"] .mobile-prototype .category-symbol.is-netflix .category-symbol-img,
+[data-theme="dark"] .mobile-prototype .category-symbol.is-yt .category-symbol-img,
+[data-theme="dark"] .mobile-prototype .category-symbol.is-yt-music .category-symbol-img,
+[data-theme="dark"] .mobile-prototype .category-symbol.is-chatgpt .category-symbol-img,
+[data-theme="dark"] .mobile-prototype .category-symbol.is-claude .category-symbol-img,
+[data-theme="dark"] .mobile-prototype .category-symbol.is-apple-music .category-symbol-img,
+[data-theme="dark"] .mobile-prototype .category-symbol.is-gemini .category-symbol-img {
+  filter: none;
 }
 .mobile-prototype .chips button.on .category-symbol-img,
 .mobile-prototype .cg button.on .category-symbol-img {

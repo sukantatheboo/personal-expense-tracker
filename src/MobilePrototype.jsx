@@ -37,6 +37,9 @@ import {
 import {
   CategorySymbol,
   TransactionSymbol,
+  getCategoryColor,
+  getCategoryIcon,
+  getDynamicEntertainmentService,
   foodSvg,
   transportSvg,
   billsSvg,
@@ -251,11 +254,12 @@ function triggerHaptic(type = "light") {
   return true;
 }
 
-function CategorySuggestionValue({ category }) {
+function CategorySuggestionValue({ category, description }) {
   const [, color] = CAT[category] || CAT.Other || ["", "#64748b"];
+  const dynamicColor = getCategoryColor(category, description) || color;
   return (
-    <span className="category-suggestion-value" style={{ "--c": color }}>
-      <CategorySymbol category={category} />
+    <span className="category-suggestion-value" style={{ "--c": dynamicColor }}>
+      <CategorySymbol category={category} description={description} />
       <span>{category}</span>
     </span>
   );
@@ -587,6 +591,7 @@ function suggestedCategory(description, expenses = [], excludeId = null) {
     .trim()
     .toLocaleLowerCase();
   if (!title) return "";
+  if (getDynamicEntertainmentService(title)) return "Entertainment";
   const exactCategory = Object.keys(CAT)
     .filter((category) => category !== "Savings")
     .find((category) => category.toLocaleLowerCase() === title);
@@ -602,7 +607,7 @@ function suggestedCategory(description, expenses = [], excludeId = null) {
     ],
     [
       "Entertainment",
-      /\b(entertainment|movie|cinema|concert|game|gaming|music|spotify|netflix|youtube premium|disney\+?|streaming|theatre|theater|hobby|event ticket)\b/,
+      /\b(entertainment|movie|cinema|concert|game|gaming|music|spotify|netflix|youtube premium|disney\+?|streaming|theatre|theater|hobby|event ticket|yt|yt\s*music|youtube|youtube\s*music|chatgpt|chat\s*gpt|claude|calude|apple\s*music|applemusic|gemini)\b/,
     ],
     [
       "Education",
@@ -667,7 +672,9 @@ function ExpenseRow({
     adjust: "#8b5cf6",
     adjustment: "#8b5cf6",
   };
-  const iconColor = isTx ? txColors[e?.type] || "#8b5cf6" : c;
+  const iconColor = isTx
+    ? txColors[e?.type] || "#8b5cf6"
+    : getCategoryColor(e?.cat, e?.desc) || c;
   const pointerRef = useRef(null);
   const rowRef = useRef(null);
   const shellRef = useRef(null);
@@ -1098,7 +1105,7 @@ function ExpenseRow({
         {isTx ? (
           <TransactionSymbol type={e.type} />
         ) : (
-          <CategorySymbol category={e.cat} />
+          <CategorySymbol category={e.cat} description={e.desc} />
         )}
       </i>
       <span className="nm">
@@ -1126,13 +1133,21 @@ function ExpenseRow({
               {suggestion && suggestion !== e.cat ? (
                 <span
                   className="category-suggestion-inline"
-                  style={{ "--c": CAT[suggestion]?.[1] || "#64748b" }}
+                  style={{
+                    "--c":
+                      getCategoryColor(suggestion, e?.desc) ||
+                      CAT[suggestion]?.[1] ||
+                      "#64748b",
+                  }}
                 >
                   <span className="category-suggestion-sep" aria-hidden="true">
                     {" · "}
                   </span>
                   <span className="category-suggestion-label">Suggested:</span>
-                  <CategorySuggestionValue category={suggestion} />
+                  <CategorySuggestionValue
+                    category={suggestion}
+                    description={e?.desc}
+                  />
                 </span>
               ) : null}
             </>
@@ -3312,11 +3327,19 @@ function Accounts({
               >
                 <div
                   className={`accounts-tx-icon-circle ${event.sourceType === "tx" || event.type !== "expense" ? `is-${event.type.toLowerCase()}` : `is-${category.toLowerCase()}`}`}
+                  style={
+                    event.sourceType === "expense"
+                      ? { "--c": getCategoryColor(category, event.title) }
+                      : undefined
+                  }
                 >
                   {event.sourceType === "tx" || event.type !== "expense" ? (
                     <TransactionSymbol type={event.type} />
                   ) : (
-                    <CategorySymbol category={category} />
+                    <CategorySymbol
+                      category={category}
+                      description={event.title}
+                    />
                   )}
                 </div>
 
@@ -3725,8 +3748,16 @@ function Plans({
         {S.rec.length ? (
           S.rec.map((r) => (
             <div className="ri" key={r.id} style={{ opacity: r.on ? 1 : 0.55 }}>
-              <i className="ic" style={{ "--c": CAT[r.cat][1] }}>
-                <CategorySymbol category={r.cat} />
+              <i
+                className="ic"
+                style={{
+                  "--c":
+                    getCategoryColor(r.cat, r.desc) ||
+                    CAT[r.cat]?.[1] ||
+                    "#64748b",
+                }}
+              >
+                <CategorySymbol category={r.cat} description={r.desc} />
               </i>
               <span className="nm">
                 <b>{r.desc}</b>
@@ -3893,7 +3924,7 @@ function AddSheet({
   const [f, setF] = useState({
     amt: "",
     desc: "",
-    cat: categoryOrder.find((category) => category !== "Savings") || "Food",
+    cat: "",
     date: ld(),
     acct: resolvedInitialAcct,
     iv: iv || "none",
@@ -3905,12 +3936,17 @@ function AddSheet({
   const custom = f.date !== ld() && f.date !== ago(1);
   const categorySuggestion = suggestedCategory(f.desc, expenses);
 
+  const handleSave = () => {
+    const resolvedCat = f.cat || categorySuggestion || "Other";
+    onSave({ ...f, cat: resolvedCat });
+  };
+
   return (
     <Sheet
       onClose={onClose}
       actions={
-        <button className="btn" onClick={() => onSave(f)}>
-          {f.cat === "Savings" && hasSavingsAccount
+        <button className="btn" onClick={handleSave}>
+          {(f.cat === "Savings" || (!f.cat && categorySuggestion === "Savings")) && hasSavingsAccount
             ? f.iv === "none"
               ? "Save to Savings"
               : "Schedule savings transfer"
@@ -3972,7 +4008,10 @@ function AddSheet({
               }));
             }}
           >
-            <CategorySymbol category={c} />
+            <CategorySymbol
+              category={c}
+              description={c === "Entertainment" ? f.desc : ""}
+            />
             <span>{c}</span>
           </button>
         ))}
@@ -4000,20 +4039,12 @@ function AddSheet({
         onChange={(event) => {
           const description = event.target.value;
           set("desc", description);
-          if (!categoryTouched) {
-            const suggestion = suggestedCategory(description, expenses);
-            if (suggestion) {
-              set("cat", suggestion);
-            } else if (!description.trim()) {
-              set("cat", categoryOrder.find((category) => category !== "Savings") || "Food");
-            }
-          }
         }}
         onKeyDown={(event) => {
           if (event.key === "Enter") {
             event.preventDefault();
             event.currentTarget.blur();
-            onSave(f);
+            handleSave();
           }
         }}
       />
@@ -4021,7 +4052,12 @@ function AddSheet({
         <button
           type="button"
           className="category-suggestion-action is-inline-hint"
-          style={{ "--c": CAT[categorySuggestion]?.[1] || "#64748b" }}
+          style={{
+            "--c":
+              getCategoryColor(categorySuggestion, f.desc) ||
+              CAT[categorySuggestion]?.[1] ||
+              "#64748b",
+          }}
           aria-label={`Use suggestion: ${categorySuggestion}`}
           onClick={() => {
             triggerHaptic("selection");
@@ -4036,7 +4072,10 @@ function AddSheet({
             aria-hidden="true"
           />
           <span className="category-suggestion-label">Suggested:</span>
-          <CategorySuggestionValue category={categorySuggestion} />
+          <CategorySuggestionValue
+            category={categorySuggestion}
+            description={f.desc}
+          />
         </button>
       )}
 
@@ -4962,7 +5001,12 @@ function DetailSheet({
         <button
           className="category-suggestion-action"
           type="button"
-          style={{ "--c": CAT[activeSuggestion]?.[1] || "#64748b" }}
+          style={{
+            "--c":
+              getCategoryColor(activeSuggestion, f.desc) ||
+              CAT[activeSuggestion]?.[1] ||
+              "#64748b",
+          }}
           aria-label={`Use suggestion: ${activeSuggestion}`}
           onClick={() => {
             triggerHaptic("selection");
@@ -4984,7 +5028,10 @@ function DetailSheet({
             aria-hidden="true"
           />
           <span className="category-suggestion-label">Suggested:</span>
-          <CategorySuggestionValue category={activeSuggestion} />
+          <CategorySuggestionValue
+            category={activeSuggestion}
+            description={f.desc}
+          />
         </button>
       )}
       <div className="cg">
@@ -5003,7 +5050,10 @@ function DetailSheet({
               }));
             }}
           >
-            <CategorySymbol category={category} />
+            <CategorySymbol
+              category={category}
+              description={category === "Entertainment" ? f.desc : ""}
+            />
             <span>{category}</span>
           </button>
         ))}
@@ -8298,8 +8348,9 @@ export default function MobilePrototype({
     sheet?.type === "txDet" ? S.tx.find((x) => x.id === sheet.id) : null;
 
   const saveExpense = (f) => {
+    const resolvedCat = f.cat || "Other";
     const isSavingsTransfer =
-      f.cat === "Savings" && Boolean(getSavingsAccountId(cards));
+      resolvedCat === "Savings" && Boolean(getSavingsAccountId(cards));
     const isRecurring = f.iv !== "none";
     if (isSavingsTransfer && !String(f.amt ?? "").trim())
       return toast("Enter an amount for this savings transfer.");
@@ -8307,9 +8358,9 @@ export default function MobilePrototype({
       return toast("Select an account to transfer from.");
     const saved = onExpenseSave({
       description:
-        f.desc.trim() || (isSavingsTransfer ? "Savings transfer" : f.cat),
+        f.desc.trim() || (isSavingsTransfer ? "Savings transfer" : resolvedCat),
       amount: f.amt,
-      category: f.cat,
+      category: resolvedCat,
       date: f.date,
       account: f.acct,
       interval: f.iv,
