@@ -711,9 +711,34 @@ function mergeAccountSettings(
     }
   }
 
-  const mergedCards = Array.from(cardMap.values());
   const localTime = recordUpdatedAt(localSettings);
   const cloudTime = recordUpdatedAt(cloudSettings);
+  const preferLocalCards =
+    preferLocal || localTime > cloudTime || (localTime === cloudTime && preferLocal);
+  const primaryCards = preferLocalCards ? localCards : cloudCards;
+  const secondaryCards = preferLocalCards ? cloudCards : localCards;
+
+  const orderedCardIds = [];
+  const seenIds = new Set();
+  for (const card of primaryCards) {
+    if (card?.id && cardMap.has(card.id) && !seenIds.has(card.id)) {
+      orderedCardIds.push(card.id);
+      seenIds.add(card.id);
+    }
+  }
+  for (const card of secondaryCards) {
+    if (card?.id && cardMap.has(card.id) && !seenIds.has(card.id)) {
+      orderedCardIds.push(card.id);
+      seenIds.add(card.id);
+    }
+  }
+  for (const id of cardMap.keys()) {
+    if (!seenIds.has(id)) {
+      orderedCardIds.push(id);
+      seenIds.add(id);
+    }
+  }
+  const mergedCards = orderedCardIds.map((id) => cardMap.get(id));
 
   return {
     startDate:
@@ -2950,8 +2975,10 @@ export default function App() {
     const isSavings = Boolean(
       newCard?.category === "savings" ||
       newCard?.type === "savings" ||
+      newCard?.provider === "savings" ||
       String(newCard?.number || "").startsWith("SAV-") ||
-      String(newCard?.number || "").startsWith("VAULT-"),
+      String(newCard?.number || "").startsWith("VAULT-") ||
+      String(newCard?.number || "").startsWith("DPS-"),
     );
 
     const rawNumber = String(newCard?.number || "").replace(/\D/g, "");
@@ -3108,12 +3135,16 @@ export default function App() {
     const isSavings = Boolean(
       updatedCard?.category === "savings" ||
       updatedCard?.type === "savings" ||
+      updatedCard?.provider === "savings" ||
       String(updatedCard?.number || "").startsWith("SAV-") ||
-      String(updatedCard?.number || "").startsWith("VAULT-"),
+      String(updatedCard?.number || "").startsWith("VAULT-") ||
+      String(updatedCard?.number || "").startsWith("DPS-"),
     );
 
     const rawNumber = String(updatedCard?.number || "").replace(/\D/g, "");
-    const last4 = updatedCard?.last4 || (rawNumber ? rawNumber.slice(-4) : "");
+    const last4 = isSavings
+      ? (rawNumber ? rawNumber.slice(-4) : updatedCard?.last4 || "")
+      : (updatedCard?.last4 || (rawNumber ? rawNumber.slice(-4) : ""));
 
     // Explicitly delete full card number and CVV before saving
     const { cvv: _cvv, number: _number, ...safeCard } = updatedCard || {};
@@ -3167,7 +3198,7 @@ export default function App() {
             const effectiveNumber = hasNumberUpdate
               ? targetNumber
               : c.number ||
-                (effectiveLast4 ? `•••• •••• •••• ${effectiveLast4}` : "");
+                (isSavings ? (effectiveLast4 ? `SAV-${effectiveLast4}` : "") : (effectiveLast4 ? `•••• •••• •••• ${effectiveLast4}` : ""));
             resolvedLast4 = effectiveLast4;
             resolvedNumber = effectiveNumber;
             return {

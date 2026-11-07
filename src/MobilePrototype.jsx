@@ -355,14 +355,13 @@ function bal(S, id) {
   let b = Number(S?.start?.[id]) || 0;
   const savingsId = getSavingsAccountId(S?.cards);
   for (const e of S.exp) {
-    if (e.amt == null || e.date > ld()) continue;
+    if (e.amt == null) continue;
     if (e.cat === "Savings" && savingsId) {
       if (id === savingsId && e.acct && e.acct !== savingsId) b += e.amt;
       else if (e.acct === id && id !== savingsId) b -= e.amt;
     } else if (e.acct === id) b -= e.amt;
   }
   for (const t of S.tx) {
-    if (t.date > ld()) continue;
     if (t.type === "income" && t.acct === id) b += t.amt;
     if ((t.type === "adjust" || t.type === "adjustment") && t.acct === id) {
       const isUp =
@@ -439,9 +438,12 @@ function AccountPicker({ value, options, onPick, cards = [] }) {
             <button
               key={id}
               type="button"
+              disabled={isFrozen}
+              aria-disabled={isFrozen}
               ref={isSelected ? selectedRef : null}
-              className={`account-picker-chip ${isSelected ? "is-selected" : ""} ${isCash ? "is-cash" : ""}`}
+              className={`account-picker-chip ${isSelected ? "is-selected" : ""} ${isCash ? "is-cash" : ""} ${isFrozen ? "is-frozen-disabled" : ""}`}
               onClick={() => {
+                if (isFrozen) return;
                 triggerHaptic("selection");
                 onPick(id);
               }}
@@ -2938,7 +2940,7 @@ function Accounts({
     ...S.exp
       .filter(
         (expense) =>
-          expense.acct && expense.amt != null && expense.date <= ld(),
+          expense.acct && expense.amt != null,
       )
       .map((expense) => {
         const isSavingsTransfer =
@@ -2961,7 +2963,6 @@ function Accounts({
         };
       }),
     ...S.tx
-      .filter((transaction) => transaction.date <= ld())
       .map((transaction) => ({
         id: transaction.id,
         sourceType: "tx",
@@ -2989,10 +2990,21 @@ function Accounts({
       })),
   ];
 
+  const itemCreationTime = (item) => {
+    if (!item) return 0;
+    const val = item.createdAt;
+    if (typeof val === "number" && Number.isFinite(val)) return val;
+    if (typeof val === "string") {
+      const parsed = Date.parse(val);
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+    return 0;
+  };
+
   const ascendingEvents = [...events].sort(
     (left, right) =>
       left.d.localeCompare(right.d) ||
-      activityTime(left) - activityTime(right) ||
+      itemCreationTime(left) - itemCreationTime(right) ||
       left.id.localeCompare(right.id),
   );
   const runningBalances = { ...S.start };
@@ -3175,24 +3187,18 @@ function Accounts({
       {/* Transactions Section matching Video Header & List */}
       <div className="accounts-transactions-header">
         <h2>Transactions</h2>
-        {filteredEvents.length > 0 && (
+        {filteredEvents.length > 8 && (
           <button
             type="button"
             className="accounts-see-all-link"
             onClick={() => {
               triggerHaptic("selection");
-              if (filteredEvents.length > 8) {
-                setShowAllTx((prev) => !prev);
-              } else {
-                onTab?.("activity");
-              }
+              setShowAllTx((prev) => !prev);
             }}
           >
-            {filteredEvents.length > 8
-              ? showAllTx
-                ? "Show less"
-                : `See all (${filteredEvents.length})`
-              : "See all"}
+            {showAllTx
+              ? "Show less"
+              : `See all (${filteredEvents.length})`}
           </button>
         )}
       </div>
@@ -4158,7 +4164,7 @@ function TxAccountCardGrid({
   );
 }
 
-function TxSheet({ type, defaultAccount, cards = [], onSave, onClose }) {
+function TxSheet({ type, defaultAccount, cards = [], onSave, onClose, onLockedCardNotice }) {
   const accountOptions = cards.map((c) => [c.id, c.name]);
   const unfrozenFromOptions = cards
     .filter((c) => !c.frozen)
@@ -4239,6 +4245,14 @@ function TxSheet({ type, defaultAccount, cards = [], onSave, onClose }) {
       <Seg
         value={g.type}
         onPick={(v) => {
+          if (v === "transfer") {
+            const defaultCard = cards.find((c) => c.id === defaultAccount);
+            if (defaultCard?.frozen) {
+              triggerHaptic("warning");
+              onLockedCardNotice?.(defaultCard.name);
+              return;
+            }
+          }
           setG((current) => ({ ...current, type: v, note: "" }));
           setTimeout(() => {
             amtInputRef.current?.focus({ preventScroll: true });
@@ -4493,17 +4507,21 @@ function AccountTxDetailSheet({ tx, cards = [], onSave, onDelete, onClose }) {
   const normTo = g.toAccount === "" ? "cash" : g.toAccount;
   const amtNum = parseAmount(g.amt);
   const hasValidAmt = Number.isFinite(amtNum) && amtNum > 0;
+  const fromCardIsFrozen = Boolean(cards.find((c) => c.id === normFrom)?.frozen);
+  const toCardIsFrozen = Boolean(cards.find((c) => c.id === normTo)?.frozen);
   const canSwap =
     allTransferOptions.length >= 2 &&
     Boolean(normFrom) &&
     Boolean(normTo) &&
-    normFrom !== normTo;
+    normFrom !== normTo &&
+    !toCardIsFrozen;
   const canSave =
     hasValidAmt &&
     (tr
       ? allTransferOptions.length >= 1 &&
         allToOptions.length >= 1 &&
-        normFrom !== normTo
+        normFrom !== normTo &&
+        !fromCardIsFrozen
       : singleAccountOptions.length > 0);
 
   const handleSwapTransferAccounts = () => {
@@ -4543,18 +4561,28 @@ function AccountTxDetailSheet({ tx, cards = [], onSave, onDelete, onClose }) {
       <Seg
         value={g.type}
         onPick={(v) => {
-          setG((current) => ({
-            ...current,
-            type: v,
-            acct:
+          setG((current) => {
+            const nextFrom =
               v === "transfer"
                 ? current.fromAccount || current.acct
-                : current.acct,
-            fromAccount:
-              v === "transfer"
-                ? current.acct || current.fromAccount
-                : current.fromAccount,
-          }));
+                : current.fromAccount;
+            const fromCard = cards.find((c) => c.id === nextFrom);
+            const resolvedFrom = fromCard?.frozen
+              ? cards.find((c) => !c.frozen)?.id || nextFrom
+              : nextFrom;
+            return {
+              ...current,
+              type: v,
+              acct:
+                v === "transfer"
+                  ? resolvedFrom
+                  : current.acct,
+              fromAccount:
+                v === "transfer"
+                  ? resolvedFrom
+                  : current.fromAccount,
+            };
+          });
           setTimeout(() => {
             amtInputRef.current?.focus({ preventScroll: true });
           }, 0);
@@ -4613,8 +4641,10 @@ function AccountTxDetailSheet({ tx, cards = [], onSave, onDelete, onClose }) {
             value={normFrom}
             options={allTransferOptions}
             cards={cards}
+            lockFrozen={true}
             ariaLabel="Transfer from account"
             onPick={(value) => {
+              if (cards.find((c) => c.id === value)?.frozen) return;
               setG((current) => ({
                 ...current,
                 fromAccount: value,
@@ -4923,12 +4953,10 @@ function DetailSheet({
             ? spendableCards.map((c) => [c.id, c.name])
             : [
                 ["", "Cash"],
-                ...cards
-                  .filter((c) => c.type !== "savings")
-                  .map((c) => [c.id, c.name]),
+                ...spendableCards.map((c) => [c.id, c.name]),
                 ...(f.acct &&
                 f.acct !== "cash" &&
-                !cards.some((c) => c.id === f.acct)
+                !spendableCards.some((c) => c.id === f.acct)
                   ? [[f.acct, getAccountDisplay(f.acct, cards)[0]]]
                   : []),
               ]
@@ -5237,8 +5265,11 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
     const isSavings = selectedProvider.category === "savings";
 
     const defaultNum = selectedProvider.numberPlaceholder.replace(/\s+/g, "");
-    const defaultLast4 = selectedProvider.isPhone ? defaultNum : defaultNum.slice(-4);
-    const last4 = (formData.last4 || formData.number || "").trim() || defaultLast4;
+    const defaultLast4 = defaultNum.slice(-4);
+    const last4 =
+      (formData.last4 ||
+        (formData.number ? formData.number.replace(/\D/g, "").slice(-4) : "")
+      ).trim() || defaultLast4;
     const number = selectedProvider.isPhone
       ? (formData.number.trim() || defaultNum)
       : `•••• •••• •••• ${last4}`;
@@ -6522,12 +6553,15 @@ function CardOptionsSheet({
                     type="text"
                     value={formData.number}
                     placeholder="SAV-8829-01"
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const rawNum = val.replace(/\D/g, "");
                       setFormData((prev) => ({
                         ...prev,
-                        number: e.target.value,
-                      }))
-                    }
+                        number: val,
+                        last4: rawNum ? rawNum.slice(-4) : "",
+                      }));
+                    }}
                   />
                 </div>
 
@@ -8874,6 +8908,11 @@ export default function MobilePrototype({
           cards={cards}
           onSave={saveTransaction}
           onClose={close}
+          onLockedCardNotice={(cardName) =>
+            toast(
+              `${cardName || "This card"} is locked. Unlock it in Card Options first.`,
+            )
+          }
         />
       )}
       {txDetail && (

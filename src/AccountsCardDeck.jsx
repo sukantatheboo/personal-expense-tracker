@@ -82,20 +82,38 @@ export const formatMoney = (n) =>
     maximumFractionDigits: 2,
   }).format(Number(n) || 0);
 
-export function formatCardNumber(raw = "", isPhone = false, showFull = false) {
+export function formatCardNumber(raw = "", isPhone = false, showFull = false, isSavings = false) {
   const str = String(raw || "").trim();
   if (!str) return "";
-  if (str.startsWith("SAV-") || str.startsWith("VAULT-")) return str;
+  if (isSavings || str.startsWith("SAV-") || str.startsWith("VAULT-") || str.startsWith("DPS-")) return str;
 
   const digits = str.replace(/\D/g, "");
   if (!digits) return str;
 
   if (isPhone) {
+    const hasPlus = str.startsWith("+");
+    if (digits.length >= 13 && digits.startsWith("880")) {
+      const prefix = hasPlus ? "+880" : "880";
+      const rest = digits.slice(3);
+      if (showFull) {
+        return `${prefix} ${rest.slice(0, 4)} ${rest.slice(4, 7)} ${rest.slice(7)}`;
+      }
+      return `${prefix} ${rest.slice(0, 4)} •••• ${rest.slice(-2)}`;
+    }
+    if (digits.length > 11) {
+      const countryCodeLen = digits.length - 10;
+      const prefix = hasPlus ? `+${digits.slice(0, countryCodeLen)}` : digits.slice(0, countryCodeLen);
+      const rest = digits.slice(countryCodeLen);
+      if (showFull) {
+        return `${prefix} ${rest.slice(0, 4)} ${rest.slice(4, 7)} ${rest.slice(7)}`;
+      }
+      return `${prefix} ${rest.slice(0, 4)} •••• ${rest.slice(-2)}`;
+    }
     if (showFull && digits.length >= 11) {
-      return `${digits.slice(0, 5)} ${digits.slice(5, 8)} ${digits.slice(8, 11)}`;
+      return `${digits.slice(0, 5)} ${digits.slice(5, 8)} ${digits.slice(8)}`;
     }
     if (digits.length >= 11) {
-      return `${digits.slice(0, 5)} •••• ${digits.slice(9, 11)}`;
+      return `${digits.slice(0, 5)} •••• ${digits.slice(-2)}`;
     }
     if (digits.length > 5) {
       return `${digits.slice(0, 5)} ${digits.slice(5)}`;
@@ -144,13 +162,18 @@ export function WalletCard({
     provider?.gradient ||
     "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)";
   const isMfs = card.type === "mfs" || provider?.category === "mfs";
-  const isSavings = card.type === "savings" || provider?.category === "savings";
+  const isSavings =
+    card.type === "savings" ||
+    card.category === "savings" ||
+    card.provider === "savings" ||
+    provider?.category === "savings";
   const isFrozen = Boolean(card.frozen);
 
   const formattedNumber = formatCardNumber(
     card.number || card.last4 || "",
     isMfs,
     showFullDetails,
+    isSavings,
   );
 
   const cardSubtitle =

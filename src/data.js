@@ -424,8 +424,10 @@ export function loadAccountData(
       const isSavings = Boolean(
         card?.category === "savings" ||
         card?.type === "savings" ||
+        card?.provider === "savings" ||
         String(card?.number || "").startsWith("SAV-") ||
-        String(card?.number || "").startsWith("VAULT-"),
+        String(card?.number || "").startsWith("VAULT-") ||
+        String(card?.number || "").startsWith("DPS-"),
       );
 
       const rawNumber = String(card?.number || "").replace(/\D/g, "");
@@ -724,11 +726,10 @@ export function getSavingsAccountId(cards = []) {
 export function calculateAccountBalance(accountId, expenses, accountData) {
   const { balances = {}, cards = [] } = accountData?.settings || {};
   const savingsId = getSavingsAccountId(cards);
-  const today = localDate();
   let balance = Number(balances[accountId] || 0);
 
   for (const expense of expenses) {
-    if (expense.amount !== null && expense.date <= today) {
+    if (expense.amount !== null) {
       if (expense.category === "Savings" && savingsId) {
         if (
           accountId === savingsId &&
@@ -747,8 +748,6 @@ export function calculateAccountBalance(accountId, expenses, accountData) {
 
   for (const transaction of accountData.transactions) {
     if (!transaction || typeof transaction !== "object") continue;
-    const txDate = transaction.date;
-    if (txDate > today) continue;
     const amount = Number(transaction.amount ?? transaction.amt ?? 0);
     const txType = transaction.type;
     const account = transaction.account ?? transaction.acct;

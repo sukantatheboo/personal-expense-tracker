@@ -83,7 +83,42 @@ function mergeAccountDataWithRawSnapshot(
       }
     }
   }
-  const mergedCards = Array.from(cardMap.values());
+  const rawUpdatedAt =
+    typeof rawSettings.updatedAt === "number"
+      ? rawSettings.updatedAt
+      : Date.parse(rawSettings.updatedAt) || 0;
+  const normUpdatedAt =
+    typeof normSettings.updatedAt === "number"
+      ? normSettings.updatedAt
+      : Date.parse(normSettings.updatedAt) || 0;
+
+  const preferRaw = rawUpdatedAt >= normUpdatedAt;
+  const rawCards = Array.isArray(rawSettings.cards) ? rawSettings.cards : [];
+  const normCards = Array.isArray(normSettings.cards) ? normSettings.cards : [];
+  const primaryCards = preferRaw ? rawCards : normCards;
+  const secondaryCards = preferRaw ? normCards : rawCards;
+
+  const orderedCardIds = [];
+  const seenIds = new Set();
+  for (const c of primaryCards) {
+    if (c?.id && cardMap.has(c.id) && !seenIds.has(c.id)) {
+      orderedCardIds.push(c.id);
+      seenIds.add(c.id);
+    }
+  }
+  for (const c of secondaryCards) {
+    if (c?.id && cardMap.has(c.id) && !seenIds.has(c.id)) {
+      orderedCardIds.push(c.id);
+      seenIds.add(c.id);
+    }
+  }
+  for (const id of cardMap.keys()) {
+    if (!seenIds.has(id)) {
+      orderedCardIds.push(id);
+      seenIds.add(id);
+    }
+  }
+  const mergedCards = orderedCardIds.map((id) => cardMap.get(id));
 
   const mergedBalances = {
     ...(rawSettings.balances && typeof rawSettings.balances === "object"
@@ -154,15 +189,6 @@ function mergeAccountDataWithRawSnapshot(
       }
     }
   }
-
-  const rawUpdatedAt =
-    typeof rawSettings.updatedAt === "number"
-      ? rawSettings.updatedAt
-      : Date.parse(rawSettings.updatedAt) || 0;
-  const normUpdatedAt =
-    typeof normSettings.updatedAt === "number"
-      ? normSettings.updatedAt
-      : Date.parse(normSettings.updatedAt) || 0;
 
   return loadAccountData(
     {

@@ -150,7 +150,9 @@ begin
     excluded.bank_balance,
     excluded.savings_balance,
     excluded.configured
-  );
+  )
+  or public.spend_account_settings.updated_at is null
+  or excluded.updated_at > public.spend_account_settings.updated_at;
 
   for v_tx in select value from jsonb_array_elements(v_transactions)
   loop
@@ -275,23 +277,40 @@ begin
     );
   end loop;
 
+  -- Soft-delete transactions present in DB but absent from the current snapshot.
+  if array_length(v_seen_ids, 1) > 0 then
+    update public.spend_account_transactions
+    set deleted_at = timezone('utc', now()), updated_at = timezone('utc', now())
+    where user_id = new.user_id
+      and deleted_at is null
+      and id <> all(v_seen_ids);
+  end if;
+
   -- Process explicit client tombstones
   declare
     v_deleted jsonb := new.data #> '{deletedRecords,accountTransactions}';
     v_tombstone record;
+    v_tombstone_time timestamptz;
   begin
     if jsonb_typeof(v_deleted) = 'object' then
       for v_tombstone in select key, value from jsonb_each(v_deleted)
       loop
         if char_length(v_tombstone.key) between 1 and 120 then
+          v_tombstone_time := public.spend_try_parse_timestamptz(v_tombstone.value->'updatedAt');
           if v_tombstone.value ->> 'deleted' = 'true' then
             update public.spend_account_transactions
             set deleted_at = timezone('utc', now()), updated_at = timezone('utc', now())
-            where user_id = new.user_id and id = v_tombstone.key and deleted_at is null;
+            where user_id = new.user_id
+              and id = v_tombstone.key
+              and deleted_at is null
+              and (v_tombstone_time is null or v_tombstone_time >= updated_at);
           elsif v_tombstone.value ->> 'deleted' = 'false' then
             update public.spend_account_transactions
             set deleted_at = null, updated_at = timezone('utc', now())
-            where user_id = new.user_id and id = v_tombstone.key and deleted_at is not null;
+            where user_id = new.user_id
+              and id = v_tombstone.key
+              and deleted_at is not null
+              and (v_tombstone_time is null or v_tombstone_time >= updated_at);
           end if;
         end if;
       end loop;
