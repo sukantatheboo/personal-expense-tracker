@@ -408,7 +408,7 @@ function AccountPicker({ value, options, onPick, cards = [] }) {
     }
   }, [value]);
 
-  const isFewOptions = options.length <= 2;
+  const isFewOptions = options.length <= 4;
 
   return (
     <div

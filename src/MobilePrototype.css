@@ -2529,7 +2529,7 @@ a:active,
 }
 .mobile-prototype .account-picker-track {
   display: flex;
-  gap: 6px;
+  gap: 5px;
   align-items: center;
   width: max-content;
   min-width: 100%;
@@ -2544,8 +2544,8 @@ a:active,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  border-radius: 10px;
+  gap: 7px;
+  border-radius: 11px;
   border: 1px solid transparent;
   background: transparent;
   color: var(--mut);
@@ -2568,33 +2568,38 @@ a:active,
 }
 .mobile-prototype .account-picker-container.is-few-options .account-picker-chip {
   flex: 1 1 0px;
+  padding: 0 6px;
+  min-width: 0;
+  gap: 6px;
 }
 .mobile-prototype .account-picker-chip:active {
   transform: scale(0.97);
 }
 .mobile-prototype .account-picker-chip.is-selected {
   background: var(--card);
-  color: var(--g, var(--ink));
-  font-weight: 800;
-  border-color: rgba(0, 0, 0, 0.08);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.03);
+  color: var(--ink);
+  font-weight: 750;
+  border-color: rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1.5px 5px rgba(0, 0, 0, 0.08), 0 0.5px 1.5px rgba(0, 0, 0, 0.03);
 }
 :root[data-theme="dark"] .mobile-prototype .account-picker-chip.is-selected,
 .mobile-prototype[data-theme="dark"] .account-picker-chip.is-selected,
 html[data-theme="dark"] .mobile-prototype .account-picker-chip.is-selected {
+  background: var(--card);
+  color: #ffffff;
   border-color: rgba(255, 255, 255, 0.12);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  box-shadow: 0 2px 7px rgba(0, 0, 0, 0.45);
 }
 .mobile-prototype .account-picker-dot {
-  width: 10px;
-  height: 10px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
   flex-shrink: 0;
   box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.1);
   transition: transform 150ms ease;
 }
 .mobile-prototype .account-picker-chip.is-selected .account-picker-dot {
-  transform: scale(1.18);
+  transform: scale(1.15);
 }
 :root[data-theme="dark"] .mobile-prototype .account-picker-dot,
 .mobile-prototype[data-theme="dark"] .account-picker-dot,
@@ -2603,7 +2608,9 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
 }
 .mobile-prototype .account-picker-name {
   white-space: nowrap;
-  line-height: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
 }
 .mobile-prototype .account-picker-badge {
   font-size: 11px;
@@ -6464,14 +6471,19 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
 }
 .mobile-prototype .add-card-curr-prefix {
   position: absolute;
-  left: 16px;
-  font-size: 18px;
-  font-weight: 800;
+  left: 14px;
+  font-size: 17px;
+  font-weight: 750;
   color: var(--mut);
   pointer-events: none;
+  z-index: 2;
+  line-height: 1;
 }
-.mobile-prototype .add-card-balance-input {
-  padding-left: 36px;
+.mobile-prototype .add-card-balance-input,
+.mobile-prototype .card-options-field input.add-card-balance-input,
+.mobile-prototype .card-options-field .add-card-balance-input-wrap input,
+.mobile-prototype .add-card-field .add-card-balance-input-wrap input {
+  padding-left: 38px !important;
   font-size: 16px;
   font-weight: 750;
 }
