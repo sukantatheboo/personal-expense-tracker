@@ -8082,13 +8082,23 @@ export default function MobilePrototype({
     }
     if (!navNode || !indicatorNode || !activeTabNode) return undefined;
 
+    let isReadyAllowed = false;
     const updateIndicator = () => {
-      indicatorNode.style.width = `${activeTabNode.offsetWidth}px`;
-      indicatorNode.style.transform = `translate3d(${activeTabNode.offsetLeft}px, 0, 0)`;
+      const currentTabNode = dockTabRefs.current[tab];
+      if (!currentTabNode || currentTabNode.offsetWidth <= 0) {
+        indicatorNode.classList.remove("is-ready");
+        return;
+      }
+      indicatorNode.style.width = `${currentTabNode.offsetWidth}px`;
+      indicatorNode.style.transform = `translate3d(${currentTabNode.offsetLeft}px, 0, 0)`;
+      if (isReadyAllowed) {
+        indicatorNode.classList.add("is-ready");
+      }
     };
     updateIndicator();
     const readyFrame = window.requestAnimationFrame(() => {
-      indicatorNode.classList.add("is-ready");
+      isReadyAllowed = true;
+      updateIndicator();
     });
 
     const resizeObserver =
@@ -8096,6 +8106,7 @@ export default function MobilePrototype({
         ? null
         : new ResizeObserver(updateIndicator);
     resizeObserver?.observe(navNode);
+    resizeObserver?.observe(activeTabNode);
     window.addEventListener("resize", updateIndicator);
     window.visualViewport?.addEventListener("resize", updateIndicator);
 
@@ -8105,7 +8116,7 @@ export default function MobilePrototype({
       window.removeEventListener("resize", updateIndicator);
       window.visualViewport?.removeEventListener("resize", updateIndicator);
     };
-  }, [tab, settingsRoute]);
+  }, [tab, settingsRoute, isAppLocked]);
   const routeTitle = profileSettingsOpen
     ? "Profile"
     : appSettingsOpen

@@ -1427,7 +1427,7 @@ export default function App() {
 
   const handleAppUnlock = useCallback(async () => {
     const sessionKey = getSessionKey();
-    if (!sessionKey) return;
+    if (!sessionKey && hasAppPin()) return;
 
     try {
       const [
@@ -1475,62 +1475,76 @@ export default function App() {
       setIsHydrated(true);
 
       // If any record in localStorage was still plaintext from an older version, encrypt it now
-      const isEncryptedAtRest = (key) => {
-        try {
-          const raw = localStorage.getItem(key);
-          if (!raw) return true;
-          const parsed = JSON.parse(raw);
-          return Boolean(parsed?.format === "spend-encrypted-v1");
-        } catch {
-          return false;
-        }
-      };
+      if (sessionKey) {
+        const isEncryptedAtRest = (key) => {
+          try {
+            const raw = localStorage.getItem(key);
+            if (!raw) return true;
+            const parsed = JSON.parse(raw);
+            return Boolean(parsed?.format === "spend-encrypted-v1");
+          } catch {
+            return false;
+          }
+        };
 
-      const migrateTasks = [];
-      if (!isEncryptedAtRest(STORAGE_KEYS.expenses)) {
-        migrateTasks.push(
-          writeStorageAsync(STORAGE_KEYS.expenses, decryptedExpenses, sessionKey),
-        );
-      }
-      if (!isEncryptedAtRest(STORAGE_KEYS.budgets)) {
-        migrateTasks.push(
-          writeStorageAsync(STORAGE_KEYS.budgets, decryptedBudgets, sessionKey),
-        );
-      }
-      if (!isEncryptedAtRest(BUDGET_UPDATED_AT_KEY)) {
-        migrateTasks.push(
-          writeStorageAsync(
-            BUDGET_UPDATED_AT_KEY,
-            decryptedBudgetUpdatedAt,
-            sessionKey,
-          ),
-        );
-      }
-      if (!isEncryptedAtRest(STORAGE_KEYS.recurring)) {
-        migrateTasks.push(
-          writeStorageAsync(
-            STORAGE_KEYS.recurring,
-            decryptedRecurring,
-            sessionKey,
-          ),
-        );
-      }
-      if (!isEncryptedAtRest(STORAGE_KEYS.accounts)) {
-        migrateTasks.push(
-          writeStorageAsync(STORAGE_KEYS.accounts, loadedAccounts, sessionKey),
-        );
-      }
-      if (!isEncryptedAtRest(STORAGE_KEYS.deletedRecords)) {
-        migrateTasks.push(
-          writeStorageAsync(
-            STORAGE_KEYS.deletedRecords,
-            effectiveDeleted,
-            sessionKey,
-          ),
-        );
-      }
-      if (migrateTasks.length > 0) {
-        await Promise.all(migrateTasks);
+        const migrateTasks = [];
+        if (!isEncryptedAtRest(STORAGE_KEYS.expenses)) {
+          migrateTasks.push(
+            writeStorageAsync(
+              STORAGE_KEYS.expenses,
+              decryptedExpenses,
+              sessionKey,
+            ),
+          );
+        }
+        if (!isEncryptedAtRest(STORAGE_KEYS.budgets)) {
+          migrateTasks.push(
+            writeStorageAsync(
+              STORAGE_KEYS.budgets,
+              decryptedBudgets,
+              sessionKey,
+            ),
+          );
+        }
+        if (!isEncryptedAtRest(BUDGET_UPDATED_AT_KEY)) {
+          migrateTasks.push(
+            writeStorageAsync(
+              BUDGET_UPDATED_AT_KEY,
+              decryptedBudgetUpdatedAt,
+              sessionKey,
+            ),
+          );
+        }
+        if (!isEncryptedAtRest(STORAGE_KEYS.recurring)) {
+          migrateTasks.push(
+            writeStorageAsync(
+              STORAGE_KEYS.recurring,
+              decryptedRecurring,
+              sessionKey,
+            ),
+          );
+        }
+        if (!isEncryptedAtRest(STORAGE_KEYS.accounts)) {
+          migrateTasks.push(
+            writeStorageAsync(
+              STORAGE_KEYS.accounts,
+              loadedAccounts,
+              sessionKey,
+            ),
+          );
+        }
+        if (!isEncryptedAtRest(STORAGE_KEYS.deletedRecords)) {
+          migrateTasks.push(
+            writeStorageAsync(
+              STORAGE_KEYS.deletedRecords,
+              effectiveDeleted,
+              sessionKey,
+            ),
+          );
+        }
+        if (migrateTasks.length > 0) {
+          await Promise.all(migrateTasks);
+        }
       }
 
       if (pushUser && localDataOwnerRef.current !== pushUser.id) {

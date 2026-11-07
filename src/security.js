@@ -606,11 +606,48 @@ export function hasAppPin() {
 }
 
 export async function removeAppPin() {
-  if (activeSessionKey) {
+  let keyToDecrypt = activeSessionKey || biometricCachedKey;
+  if (!keyToDecrypt) {
     try {
-      await decryptAllSensitiveData(activeSessionKey);
+      const storedKeyB64 = await NativeSecureStorage.getItem(
+        BIOMETRIC_KEY_STORAGE,
+      );
+      if (storedKeyB64) {
+        const keyBuffer = base64ToBuffer(storedKeyB64);
+        keyToDecrypt = await crypto.subtle.importKey(
+          "raw",
+          keyBuffer,
+          { name: "AES-GCM", length: 256 },
+          true,
+          ["encrypt", "decrypt"],
+        );
+      }
+    } catch {
+      // ignore
+    }
+  }
+  if (keyToDecrypt) {
+    try {
+      await decryptAllSensitiveData(keyToDecrypt);
     } catch (err) {
       console.warn("Failed to decrypt records when removing PIN:", err);
+    }
+  } else {
+    for (const key of SENSITIVE_STORAGE_KEYS) {
+      try {
+        const raw = localStorage.getItem(key);
+        if (!raw) continue;
+        const parsed = JSON.parse(raw);
+        if (
+          parsed &&
+          typeof parsed === "object" &&
+          parsed.format === ENCRYPTED_STORAGE_FORMAT
+        ) {
+          localStorage.removeItem(key);
+        }
+      } catch {
+        // ignore
+      }
     }
   }
   localStorage.removeItem(PIN_STORAGE_KEY);

@@ -2812,27 +2812,31 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
 }
 .mobile-prototype .dock-active-indicator {
   position: absolute;
-  top: 4px;
-  bottom: 4px;
+  top: 6px;
+  bottom: 6px;
   left: 0;
   z-index: 0;
   width: 0;
-  border: 1px solid color-mix(in srgb, var(--g) 13%, transparent);
+  border: 1px solid transparent;
   border-radius: 18px;
   background: var(--dock-active-wash);
   box-shadow: inset 0 1px 0 var(--dock-highlight);
-  opacity: 1;
+  opacity: 0;
   pointer-events: none;
   transform: translate3d(0, 0, 0);
   transition: opacity 160ms ease;
   will-change: transform, opacity;
 }
-.mobile-prototype .dock-active-indicator.is-ready {
+.mobile-prototype .dock-active-indicator.is-ready:not(.is-hidden) {
+  border-color: color-mix(in srgb, var(--g) 13%, transparent);
+  opacity: 1;
   transition:
     transform 450ms var(--dock-spring),
+    width 450ms var(--dock-spring),
     opacity 200ms ease;
 }
 .mobile-prototype .dock-active-indicator.is-hidden {
+  border-color: transparent;
   opacity: 0;
 }
 .mobile-prototype .tabs nav .t {
@@ -3455,11 +3459,9 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
     transition: none;
   }
 
-  .mobile-prototype .dock-active-indicator {
-    opacity: 0;
-    transition: opacity 150ms ease;
-  }
+  .mobile-prototype .dock-active-indicator,
   .mobile-prototype .dock-active-indicator.is-ready {
+    opacity: 0;
     transition: opacity 150ms ease !important;
   }
   .mobile-prototype .tabs nav,
