@@ -6132,18 +6132,36 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
   );
   z-index: 1;
 }
+.mobile-prototype .mini-card-pattern {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(
+      circle at 86% 16%,
+      rgba(255, 255, 255, 0.16) 0%,
+      transparent 48%
+    ),
+    radial-gradient(
+      circle at 14% 86%,
+      rgba(255, 255, 255, 0.09) 0%,
+      transparent 44%
+    );
+  z-index: 1;
+}
 .mobile-prototype .mini-card-top-row {
   position: relative;
   z-index: 2;
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: space-between;
+  gap: 2px;
   height: 10px;
 }
 .mobile-prototype .mini-card-chip-waves {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 2.5px;
 }
 .mobile-prototype .mini-card-emv {
   display: block;
@@ -6161,6 +6179,40 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
   object-fit: contain;
   filter: drop-shadow(0 0.5px 1px rgba(0, 0, 0, 0.35));
   opacity: 0.9;
+}
+.mobile-prototype .mini-card-brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  max-width: 24px;
+  height: 9px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.mobile-prototype .mini-card-brand-mark svg,
+.mobile-prototype .mini-card-brand-mark img {
+  display: block;
+  max-height: 8.5px;
+  width: auto;
+  max-width: 24px;
+  object-fit: contain;
+}
+.mobile-prototype .mini-card-tier-tag {
+  font-size: 5px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.92);
+  line-height: 1;
+}
+.mobile-prototype .mini-card-tier-tag.is-gold {
+  color: #fde68a;
+}
+.mobile-prototype .mini-card-cash-symbol {
+  font-size: 10px;
+  font-weight: 900;
+  color: #ffffff;
+  line-height: 1;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
 }
 .mobile-prototype .mini-card-mfs-brand,
 .mobile-prototype .mini-card-savings-brand {
@@ -6201,6 +6253,9 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
 }
 .mobile-prototype .mini-card-network-emblem svg {
   display: block;
+  width: auto;
+  height: auto;
+  stroke: none;
   filter: drop-shadow(0 0.5px 1.5px rgba(0, 0, 0, 0.3));
 }
 .mobile-prototype .mini-card-visa-text {
@@ -6242,6 +6297,306 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
   color: #fbd38d;
   line-height: 1;
   text-shadow: 0 0.5px 2px rgba(0, 0, 0, 0.35);
+}
+
+/* ───────────── Prototype 2×2 Account Card Grid (Income, Adjust & Transfer) ───────────── */
+.mobile-prototype .tx-account-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 11px;
+  width: 100%;
+  margin: 2px 0 4px;
+}
+
+.mobile-prototype .tx-account-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-width: 0;
+  min-height: 106px;
+  padding: 13px 14px 13px;
+  border-radius: 18px;
+  background: var(--card);
+  border: 1.5px solid color-mix(in srgb, var(--line) 92%, var(--ink) 8%);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
+  transition:
+    transform 170ms cubic-bezier(0.2, 0.85, 0.25, 1.18),
+    border-color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease,
+    opacity 160ms ease;
+}
+
+.mobile-prototype .tx-account-card:not(:disabled):active {
+  transform: scale(0.975);
+}
+
+.mobile-prototype .tx-account-card.is-selected {
+  border-color: var(--ink);
+  box-shadow:
+    0 0 0 0.6px var(--ink),
+    0 6px 18px rgba(0, 0, 0, 0.06);
+}
+
+:root[data-theme="dark"] .mobile-prototype .tx-account-card,
+.mobile-prototype[data-theme="dark"] .tx-account-card {
+  background: color-mix(in srgb, var(--card) 92%, #ffffff 4%);
+  border-color: rgba(255, 255, 255, 0.11);
+}
+
+:root[data-theme="dark"] .mobile-prototype .tx-account-card.is-selected,
+.mobile-prototype[data-theme="dark"] .tx-account-card.is-selected {
+  border-color: #f8fafc;
+  background: color-mix(in srgb, var(--card) 86%, #ffffff 7%);
+  box-shadow:
+    0 0 0 0.6px #f8fafc,
+    0 8px 22px rgba(0, 0, 0, 0.36);
+}
+
+.mobile-prototype .tx-account-card.is-sending-source,
+.mobile-prototype .tx-account-card.is-frozen-disabled {
+  border: 1.5px dashed color-mix(in srgb, var(--mut) 42%, var(--line));
+  background: color-mix(in srgb, var(--bg) 56%, var(--card));
+  box-shadow: none;
+  cursor: default;
+  transform: none !important;
+}
+
+:root[data-theme="dark"] .mobile-prototype .tx-account-card.is-sending-source,
+:root[data-theme="dark"] .mobile-prototype .tx-account-card.is-frozen-disabled,
+.mobile-prototype[data-theme="dark"] .tx-account-card.is-sending-source,
+.mobile-prototype[data-theme="dark"] .tx-account-card.is-frozen-disabled {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.mobile-prototype .tx-account-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 12px;
+}
+
+.mobile-prototype .tx-account-mini-card {
+  width: 48px;
+  height: 30px;
+  flex: 0 0 48px;
+  border-radius: 6px;
+  transition:
+    filter 180ms ease,
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+
+.mobile-prototype .tx-account-card.is-sending-source .tx-account-mini-card,
+.mobile-prototype .tx-account-card.is-frozen-disabled .tx-account-mini-card {
+  filter: grayscale(1) contrast(0.92);
+  opacity: 0.5;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.mobile-prototype .tx-account-card-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.mobile-prototype .tx-account-star {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: #b45309;
+  flex-shrink: 0;
+}
+
+:root[data-theme="dark"] .mobile-prototype .tx-account-star,
+.mobile-prototype[data-theme="dark"] .tx-account-star {
+  color: #f59e0b;
+}
+
+.mobile-prototype .tx-account-star svg {
+  width: 15px;
+  height: 15px;
+  fill: currentColor;
+  stroke: none;
+  display: block;
+}
+
+.mobile-prototype .tx-account-lock-badge {
+  font-size: 11px;
+  line-height: 1;
+  opacity: 0.78;
+}
+
+.mobile-prototype .tx-account-check {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--card);
+  display: grid;
+  place-items: center;
+  animation: tx-account-check-in 190ms cubic-bezier(0.2, 0.9, 0.3, 1.28) both;
+}
+
+:root[data-theme="dark"] .mobile-prototype .tx-account-check,
+.mobile-prototype[data-theme="dark"] .tx-account-check {
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.mobile-prototype .tx-account-check svg {
+  width: 12px;
+  height: 12px;
+  stroke: currentColor;
+  stroke-width: 2.8;
+  fill: none;
+  display: block;
+}
+
+@keyframes tx-account-check-in {
+  from {
+    opacity: 0;
+    transform: scale(0.65);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.mobile-prototype .tx-account-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2.5px;
+  min-width: 0;
+  width: 100%;
+}
+
+.mobile-prototype .tx-account-card-name {
+  display: block;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--ink);
+  letter-spacing: -0.02em;
+  line-height: 1.22;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 160ms ease;
+}
+
+.mobile-prototype .tx-account-card.is-sending-source .tx-account-card-name,
+.mobile-prototype .tx-account-card.is-frozen-disabled .tx-account-card-name {
+  color: var(--mut);
+}
+
+.mobile-prototype .tx-account-card-sub {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--mut);
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+.mobile-prototype .tx-account-dots {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  opacity: 0.9;
+}
+
+.mobile-prototype .tx-account-last4 {
+  font-family:
+    ui-monospace,
+    "SF Mono",
+    Menlo,
+    Manrope,
+    monospace;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* Transfer TO Header Row & Swap Pill Button */
+.mobile-prototype .tx-transfer-to-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 16px 0 8px;
+}
+
+.mobile-prototype .tx-transfer-to-header .lbl {
+  margin: 0;
+}
+
+.mobile-prototype .tx-transfer-swap-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 15px;
+  border-radius: 999px;
+  border: 1.5px solid color-mix(in srgb, var(--line) 90%, var(--ink) 10%);
+  background: var(--card);
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  touch-action: manipulation;
+  box-shadow: 0 1.5px 4px rgba(0, 0, 0, 0.03);
+  transition:
+    transform 160ms cubic-bezier(0.2, 0.85, 0.25, 1.2),
+    background-color 150ms ease,
+    border-color 150ms ease,
+    opacity 150ms ease;
+}
+
+.mobile-prototype .tx-transfer-swap-btn:not(:disabled):active {
+  transform: scale(0.95);
+  background: var(--bg);
+}
+
+.mobile-prototype .tx-transfer-swap-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+:root[data-theme="dark"] .mobile-prototype .tx-transfer-swap-btn,
+.mobile-prototype[data-theme="dark"] .tx-transfer-swap-btn {
+  background: color-mix(in srgb, var(--card) 92%, #ffffff 4%);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.mobile-prototype .tx-transfer-swap-btn svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  fill: none;
+  flex-shrink: 0;
 }
 
 /* ──── Card Row Meta & Trailing Accessory ──── */

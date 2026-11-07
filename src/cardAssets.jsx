@@ -949,39 +949,58 @@ export function renderProviderLogo(
  * and vector network emblems (Mastercard dual interlocking circles, Visa italic wordmark, etc.)
  */
 export function MiniCardPreview({ provider, card, className = "" }) {
+  const isCash = card?.id === "cash" || card?.type === "cash";
+  const provId = card?.provider || card?.id;
   const p =
     provider ||
-    (card ? getProviderMeta(card.provider) : null) ||
+    (provId ? getProviderMeta(provId) : null) ||
     CARD_PROVIDERS[0];
-  const network = card?.network || p.defaultNetwork || "visa";
-  const category = p.category || card?.category || "bank";
-  const isMfs = category === "mfs" || network === "mfs" || p.isPhone;
-  const isSavings = category === "savings" || p.id === "savings";
-  const gradient =
-    card?.gradient ||
-    p.gradient ||
-    "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)";
+  const network = card?.network || p?.defaultNetwork || "visa";
+  const category = card?.category || p?.category || "bank";
+  const isMfs =
+    !isCash &&
+    (category === "mfs" ||
+      card?.type === "mfs" ||
+      network === "mfs" ||
+      Boolean(card?.isPhone || p?.isPhone));
+  const isSavings =
+    !isCash &&
+    (category === "savings" ||
+      card?.type === "savings" ||
+      p?.id === "savings" ||
+      provId === "savings");
+  const gradient = isCash
+    ? "linear-gradient(135deg, #10b981 0%, #059669 60%, #047857 100%)"
+    : card?.gradient ||
+      p?.gradient ||
+      card?.color ||
+      "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)";
 
   // Extract last 4 digits or masked identifier
-  const rawNum = card?.number || p.numberPlaceholder || "4328";
-  const cleanDigits = rawNum.replace(/\D/g, "");
+  const rawNum = card?.last4 || card?.number || p?.numberPlaceholder || "4328";
+  const cleanDigits = String(rawNum).replace(/\D/g, "");
   const last4 =
     cleanDigits.slice(-4) ||
-    (p.numberPrefix ? p.numberPrefix.slice(-4) : "4328");
+    (p?.numberPrefix ? p.numberPrefix.slice(-4) : "4328");
+
+  const brandKey = provId || p?.id || "";
 
   return (
     <div
-      className={`mini-card-preview ${className}`}
+      className={`mini-card-preview ${isCash ? "is-cash" : ""} ${className}`}
       style={{ background: gradient }}
       aria-hidden="true"
     >
       <div className="mini-card-sheen" />
+      <div className="mini-card-pattern" />
 
-      {/* Top Row: Micro EMV Chip + Waves OR Brand Logo */}
+      {/* Top Row: Micro EMV Chip + Waves (Left) & Brand Mark (Right) */}
       <div className="mini-card-top-row">
-        {isMfs ? (
+        {isCash ? (
+          <span className="mini-card-cash-symbol">৳</span>
+        ) : isMfs ? (
           <div className="mini-card-mfs-brand">
-            {p.id === "bkash" && (
+            {brandKey === "bkash" && (
               <img
                 src={bkashSvg}
                 alt="bKash"
@@ -992,14 +1011,14 @@ export function MiniCardPreview({ provider, card, className = "" }) {
                 }}
               />
             )}
-            {p.id === "nagad" && (
+            {brandKey === "nagad" && (
               <img
                 src={nagadImg}
                 alt="Nagad"
                 style={{ height: 10, width: "auto" }}
               />
             )}
-            {p.id === "rocket" && (
+            {brandKey === "rocket" && (
               <img
                 src={rocketImg}
                 alt="Rocket"
@@ -1010,12 +1029,15 @@ export function MiniCardPreview({ provider, card, className = "" }) {
                 }}
               />
             )}
-            {p.id === "upay" && (
+            {brandKey === "upay" && (
               <img
                 src={upayImg}
                 alt="Upay"
                 style={{ height: 10, width: "auto" }}
               />
+            )}
+            {!["bkash", "nagad", "rocket", "upay"].includes(brandKey) && (
+              <ContactlessWaves size={8} className="mini-card-contactless" />
             )}
           </div>
         ) : isSavings ? (
@@ -1061,7 +1083,36 @@ export function MiniCardPreview({ provider, card, className = "" }) {
                 strokeWidth="0.7"
               />
             </svg>
-            <ContactlessWaves size={8} className="mini-card-contactless" />
+            <ContactlessWaves size={7.5} className="mini-card-contactless" />
+          </div>
+        )}
+
+        {!isCash && !isMfs && !isSavings && (
+          <div className="mini-card-brand-mark">
+            {(brandKey === "citi" ||
+              brandKey === "citi_mc" ||
+              brandKey === "citi_credit") && <CitiLogo height={8.5} />}
+            {brandKey === "amazon" && <AmazonLogo height={8} />}
+            {(brandKey === "hdfc" ||
+              brandKey === "hdfc_visa" ||
+              brandKey === "hdfc_credit") && <HdfcLogo height={7} />}
+            {(brandKey === "sc" || brandKey === "sc_visa") && (
+              <img
+                src={scbImg}
+                alt=""
+                style={{ height: 9, width: "auto", objectFit: "contain" }}
+              />
+            )}
+            {brandKey === "brac" && <BracBankLogo height={7.5} />}
+            {brandKey === "city" && <CityBankLogo height={8} />}
+            {brandKey === "ebl" && <EblLogo height={8} />}
+            {brandKey === "dbbl" && <DbblLogo height={8} />}
+            {brandKey === "gold_mc" && (
+              <span className="mini-card-tier-tag is-gold">GOLD</span>
+            )}
+            {(brandKey === "virtual_mc" || brandKey === "virtual_visa") && (
+              <span className="mini-card-tier-tag">VIRT</span>
+            )}
           </div>
         )}
       </div>
@@ -1069,12 +1120,18 @@ export function MiniCardPreview({ provider, card, className = "" }) {
       {/* Bottom Row: Digits + Network Emblem */}
       <div className="mini-card-bottom-row">
         <span className="mini-card-digits">
-          {isMfs ? "01X ••" : isSavings ? "VAULT" : `•• ${last4}`}
+          {isCash
+            ? "CASH"
+            : isMfs
+              ? `•• ${last4.slice(-2) || "88"}`
+              : isSavings
+                ? "VAULT"
+                : `•• ${last4}`}
         </span>
 
         <div className="mini-card-network-emblem">
-          {network === "mastercard" && (
-            <svg width="15" height="10" viewBox="0 0 30 20" fill="none">
+          {!isCash && !isMfs && !isSavings && network === "mastercard" && (
+            <svg width="14" height="9" viewBox="0 0 30 20" fill="none">
               <circle cx="10" cy="10" r="9.5" fill="#EB001B" />
               <circle
                 cx="20"
@@ -1085,10 +1142,10 @@ export function MiniCardPreview({ provider, card, className = "" }) {
               />
             </svg>
           )}
-          {network === "visa" && (
+          {!isCash && !isMfs && !isSavings && network === "visa" && (
             <span className="mini-card-visa-text">VISA</span>
           )}
-          {network === "amex" && (
+          {!isCash && !isMfs && !isSavings && network === "amex" && (
             <span className="mini-card-amex-text">AMEX</span>
           )}
           {isMfs && <span className="mini-card-mfs-text">MFS</span>}

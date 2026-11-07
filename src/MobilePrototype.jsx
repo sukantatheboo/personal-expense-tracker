@@ -4006,6 +4006,153 @@ function AddSheet({
   );
 }
 
+function getCardMaskedSubtitle(card) {
+  if (!card) return "•••• 0000";
+  if (card.id === "cash" || card.type === "cash") return "Cash wallet";
+  const prov = CARD_PROVIDERS.find((p) => p.id === (card.provider || card.id));
+  const raw =
+    card.last4 ||
+    card.number ||
+    prov?.numberPlaceholder ||
+    prov?.numberPrefix ||
+    "";
+  const digits = String(raw).replace(/\D/g, "");
+  if (digits.length >= 4) {
+    return { dots: "••••", tail: digits.slice(-4) };
+  }
+  if (
+    card.type === "savings" ||
+    card.category === "savings" ||
+    card.provider === "savings"
+  ) {
+    return { dots: "••••", tail: digits || "8829" };
+  }
+  return { dots: "••••", tail: (digits || "4821").padStart(4, "0") };
+}
+
+function TxAccountCardGrid({
+  value,
+  options = [],
+  cards = [],
+  onPick,
+  disabledAccountId = "",
+  disabledReason = "Sending from here",
+  lockFrozen = false,
+  ariaLabel = "Select account",
+}) {
+  const normalizedValue = value === "" ? "cash" : (value ?? "");
+
+  return (
+    <div
+      className="tx-account-grid"
+      role="radiogroup"
+      aria-label={ariaLabel}
+    >
+      {options.map(([id, label]) => {
+        const normId = id === "" ? "cash" : id;
+        const card =
+          cards.find((c) => c.id === normId) ||
+          (normId === "cash"
+            ? { id: "cash", name: label || "Cash", type: "cash" }
+            : { id: normId, name: label || "Account" });
+        const isSendingFromHere =
+          Boolean(disabledAccountId) && normId === disabledAccountId;
+        const isFrozenBlocked =
+          Boolean(lockFrozen) && Boolean(card?.frozen) && !isSendingFromHere;
+        const isDisabled = isSendingFromHere || isFrozenBlocked;
+        const isSelected = !isDisabled && normalizedValue === normId;
+        const isPrimary = Boolean(card?.isPrimary);
+        const maskedSub = getCardMaskedSubtitle(card);
+
+        return (
+          <button
+            key={normId}
+            type="button"
+            disabled={isDisabled}
+            aria-disabled={isDisabled}
+            role="radio"
+            aria-checked={isSelected}
+            className={`tx-account-card${isSelected ? " is-selected" : ""}${isSendingFromHere ? " is-sending-source" : ""}${isFrozenBlocked ? " is-frozen-disabled" : ""}`}
+            onClick={() => {
+              if (isDisabled) return;
+              triggerHaptic("selection");
+              onPick(id);
+            }}
+          >
+            <div className="tx-account-card-top">
+              <MiniCardPreview
+                card={card}
+                className="tx-account-mini-card"
+              />
+              <div className="tx-account-card-badges">
+                {isPrimary && (
+                  <span
+                    className="tx-account-star"
+                    title="Primary card"
+                    aria-label="Primary card"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                      stroke="none"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 2.4l2.93 5.94 6.56.95-4.75 4.63 1.12 6.53L12 17.37l-5.86 3.08 1.12-6.53-4.75-4.63 6.56-.95L12 2.4z" />
+                    </svg>
+                  </span>
+                )}
+                {card?.frozen && !isSendingFromHere && (
+                  <span
+                    className="tx-account-lock-badge"
+                    title="Card is locked"
+                    aria-label="Locked"
+                  >
+                    🔒
+                  </span>
+                )}
+                {isSelected && (
+                  <span className="tx-account-check" aria-hidden="true">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="tx-account-card-body">
+              <b className="tx-account-card-name">{card?.name || label}</b>
+              <span className="tx-account-card-sub">
+                {isSendingFromHere ? (
+                  disabledReason
+                ) : isFrozenBlocked ? (
+                  "Card is locked"
+                ) : typeof maskedSub === "string" ? (
+                  maskedSub
+                ) : (
+                  <>
+                    <span className="tx-account-dots" aria-hidden="true">
+                      {maskedSub.dots}
+                    </span>{" "}
+                    <span className="tx-account-last4">{maskedSub.tail}</span>
+                  </>
+                )}
+              </span>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function TxSheet({ type, defaultAccount, cards = [], onSave, onClose }) {
   const accountOptions = cards.map((c) => [c.id, c.name]);
   const unfrozenFromOptions = cards
@@ -4038,9 +4185,15 @@ function TxSheet({ type, defaultAccount, cards = [], onSave, onClose }) {
   const set = (k, v) => setG((x) => ({ ...x, [k]: v }));
   const tr = g.type === "transfer";
   const customDate = g.date !== ld() && g.date !== ago(1);
-  const transferFromOptions =
-    unfrozenFromOptions.length > 0 ? unfrozenFromOptions : accountOptions;
+  const hasUnfrozenCard = unfrozenFromOptions.length > 0;
   const fromCardIsFrozen = cards.find((c) => c.id === g.fromAccount)?.frozen;
+  const toCardIsFrozen = cards.find((c) => c.id === g.toAccount)?.frozen;
+  const canSwap =
+    accountOptions.length >= 2 &&
+    Boolean(g.fromAccount) &&
+    Boolean(g.toAccount) &&
+    g.fromAccount !== g.toAccount &&
+    (!hasUnfrozenCard || !toCardIsFrozen);
   const amtNum = parseAmount(g.amt);
   const hasValidAmt = Number.isFinite(amtNum) && amtNum > 0;
   const canSave =
@@ -4050,6 +4203,19 @@ function TxSheet({ type, defaultAccount, cards = [], onSave, onClose }) {
       (accountOptions.length >= 2 &&
         g.fromAccount !== g.toAccount &&
         !fromCardIsFrozen));
+
+  const handleSwapTransferAccounts = () => {
+    if (!canSwap) {
+      triggerHaptic("warning");
+      return;
+    }
+    triggerHaptic("selection");
+    setG((current) => ({
+      ...current,
+      fromAccount: current.toAccount,
+      toAccount: current.fromAccount,
+    }));
+  };
 
   return (
     <Sheet
@@ -4129,27 +4295,59 @@ function TxSheet({ type, defaultAccount, cards = [], onSave, onClose }) {
       {tr && accountOptions.length >= 2 && (
         <>
           <span className="lbl">From</span>
-          <AccountPicker
+          <TxAccountCardGrid
             value={g.fromAccount}
+            options={accountOptions}
+            cards={cards}
+            lockFrozen={hasUnfrozenCard}
+            ariaLabel="Transfer from account"
             onPick={(value) => {
               setG((current) => ({
                 ...current,
                 fromAccount: value,
                 toAccount:
                   current.toAccount === value
-                    ? accountOptions.find(([id]) => id !== value)?.[0]
+                    ? current.fromAccount && current.fromAccount !== value
+                      ? current.fromAccount
+                      : accountOptions.find(([id]) => id !== value)?.[0] || ""
                     : current.toAccount,
               }));
             }}
-            cards={cards}
-            options={transferFromOptions}
           />
-          <span className="lbl">To</span>
-          <AccountPicker
+
+          <div className="tx-transfer-to-header">
+            <span className="lbl">To</span>
+            <button
+              type="button"
+              className="tx-transfer-swap-btn"
+              disabled={!canSwap}
+              onClick={handleSwapTransferAccounts}
+              aria-label="Swap From and To accounts"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.1"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M7 4v16m0 0-4-4m4 4 4-4" />
+                <path d="M17 20V4m0 0-4 4m4-4 4 4" />
+              </svg>
+              <span>Swap</span>
+            </button>
+          </div>
+
+          <TxAccountCardGrid
             value={g.toAccount}
-            onPick={(value) => set("toAccount", value)}
+            options={accountOptions}
             cards={cards}
-            options={accountOptions.filter(([id]) => id !== g.fromAccount)}
+            disabledAccountId={g.fromAccount}
+            disabledReason="Sending from here"
+            ariaLabel="Transfer to account"
+            onPick={(value) => set("toAccount", value)}
           />
         </>
       )}
@@ -4157,11 +4355,12 @@ function TxSheet({ type, defaultAccount, cards = [], onSave, onClose }) {
       {!tr && (
         <>
           <span className="lbl">Account</span>
-          <AccountPicker
+          <TxAccountCardGrid
             value={g.acct}
-            onPick={(v) => set("acct", v)}
-            cards={cards}
             options={accountOptions}
+            cards={cards}
+            ariaLabel="Select account"
+            onPick={(v) => set("acct", v)}
           />
         </>
       )}
@@ -4251,20 +4450,20 @@ function TxSheet({ type, defaultAccount, cards = [], onSave, onClose }) {
 }
 
 function AccountTxDetailSheet({ tx, cards = [], onSave, onDelete, onClose }) {
-  const baseAccountOptions = [
-    ["cash", "Cash"],
-    ...cards.map((c) => [c.id, c.name]),
-  ];
-  const ensureAccountOption = (id) => {
-    if (!id) return baseAccountOptions;
-    const normalizedId = id === "" ? "cash" : id;
-    if (baseAccountOptions.some(([optId]) => optId === normalizedId)) {
-      return baseAccountOptions;
+  const cardOptions = cards.map((c) => [c.id, c.name]);
+  const ensureAccountOption = (...ids) => {
+    const list = [...cardOptions];
+    for (const rawId of ids) {
+      if (!rawId) continue;
+      const normalizedId = rawId === "" ? "cash" : rawId;
+      if (!list.some(([optId]) => optId === normalizedId)) {
+        list.push([normalizedId, getAccountDisplay(normalizedId, cards)[0]]);
+      }
     }
-    return [
-      ...baseAccountOptions,
-      [normalizedId, getAccountDisplay(normalizedId, cards)[0]],
-    ];
+    if (list.length === 0) {
+      list.push(["cash", "Cash"]);
+    }
+    return list;
   };
   const [g, setG] = useState({
     type: tx.type === "adjustment" ? "adjust" : tx.type || "income",
@@ -4282,22 +4481,39 @@ function AccountTxDetailSheet({ tx, cards = [], onSave, onDelete, onClose }) {
   const reasonSelectRef = useRef(null);
   const set = (k, v) => setG((x) => ({ ...x, [k]: v }));
   const tr = g.type === "transfer";
-  const allFromOptions = ensureAccountOption(g.fromAccount);
+  const allTransferOptions = ensureAccountOption(g.fromAccount, g.toAccount);
   const normFrom = g.fromAccount === "" ? "cash" : g.fromAccount;
-  const allToOptions = ensureAccountOption(g.toAccount).filter(
-    ([id]) => id !== normFrom,
-  );
+  const allToOptions = allTransferOptions.filter(([id]) => id !== normFrom);
   const singleAccountOptions = ensureAccountOption(g.acct);
   const normTo = g.toAccount === "" ? "cash" : g.toAccount;
   const amtNum = parseAmount(g.amt);
   const hasValidAmt = Number.isFinite(amtNum) && amtNum > 0;
+  const canSwap =
+    allTransferOptions.length >= 2 &&
+    Boolean(normFrom) &&
+    Boolean(normTo) &&
+    normFrom !== normTo;
   const canSave =
     hasValidAmt &&
     (tr
-      ? allFromOptions.length >= 1 &&
+      ? allTransferOptions.length >= 1 &&
         allToOptions.length >= 1 &&
         normFrom !== normTo
       : singleAccountOptions.length > 0);
+
+  const handleSwapTransferAccounts = () => {
+    if (!canSwap) {
+      triggerHaptic("warning");
+      return;
+    }
+    triggerHaptic("selection");
+    setG((current) => ({
+      ...current,
+      fromAccount: current.toAccount,
+      acct: current.toAccount,
+      toAccount: current.fromAccount,
+    }));
+  };
 
   return (
     <Sheet
@@ -4388,8 +4604,11 @@ function AccountTxDetailSheet({ tx, cards = [], onSave, onDelete, onClose }) {
       {tr ? (
         <>
           <span className="lbl">From</span>
-          <AccountPicker
-            value={g.fromAccount}
+          <TxAccountCardGrid
+            value={normFrom}
+            options={allTransferOptions}
+            cards={cards}
+            ariaLabel="Transfer from account"
             onPick={(value) => {
               setG((current) => ({
                 ...current,
@@ -4397,26 +4616,57 @@ function AccountTxDetailSheet({ tx, cards = [], onSave, onDelete, onClose }) {
                 acct: value,
                 toAccount:
                   current.toAccount === value
-                    ? allFromOptions.find(([id]) => id !== value)?.[0] || ""
+                    ? current.fromAccount && current.fromAccount !== value
+                      ? current.fromAccount
+                      : allTransferOptions.find(([id]) => id !== value)?.[0] || ""
                     : current.toAccount,
               }));
             }}
-            cards={cards}
-            options={allFromOptions}
           />
-          <span className="lbl">To</span>
-          <AccountPicker
-            value={g.toAccount}
-            onPick={(value) => set("toAccount", value)}
+
+          <div className="tx-transfer-to-header">
+            <span className="lbl">To</span>
+            <button
+              type="button"
+              className="tx-transfer-swap-btn"
+              disabled={!canSwap}
+              onClick={handleSwapTransferAccounts}
+              aria-label="Swap From and To accounts"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.1"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M7 4v16m0 0-4-4m4 4 4-4" />
+                <path d="M17 20V4m0 0-4 4m4-4 4 4" />
+              </svg>
+              <span>Swap</span>
+            </button>
+          </div>
+
+          <TxAccountCardGrid
+            value={normTo}
+            options={allTransferOptions}
             cards={cards}
-            options={allToOptions}
+            disabledAccountId={normFrom}
+            disabledReason="Sending from here"
+            ariaLabel="Transfer to account"
+            onPick={(value) => set("toAccount", value)}
           />
         </>
       ) : (
         <>
           <span className="lbl">Account</span>
-          <AccountPicker
+          <TxAccountCardGrid
             value={g.acct}
+            options={singleAccountOptions}
+            cards={cards}
+            ariaLabel="Select account"
             onPick={(v) => {
               setG((current) => ({
                 ...current,
@@ -4424,8 +4674,6 @@ function AccountTxDetailSheet({ tx, cards = [], onSave, onDelete, onClose }) {
                 fromAccount: v,
               }));
             }}
-            cards={cards}
-            options={singleAccountOptions}
           />
         </>
       )}
