@@ -436,23 +436,13 @@ a:active,
   --over: #f0a067;
   --on: #ffffff;
   --shadow: 0 8px 24px rgb(0 0 0 / 6%);
-  --dock-surface: rgb(255 255 255 / 78%);
-  --dock-scrolled-surface: rgb(255 255 255 / 90%);
-  --dock-border: rgb(255 255 255 / 76%);
-  --dock-highlight: rgb(255 255 255 / 80%);
-  --dock-tab: #59675f;
-  --dock-tab-active: var(--g);
-  --dock-active-wash: rgba(0, 0, 0, 0.06);
-  --dock-glass-sheen: linear-gradient(
-    180deg,
-    rgb(255 255 255 / 46%),
-    rgb(255 255 255 / 12%)
-  );
-  --dock-shadow: 0 10px 24px rgb(0 0 0 / 8%), 0 2px 6px rgb(0 0 0 / 3%);
-  --dock-scrolled-shadow:
-    0 12px 24px rgb(0 0 0 / 10%), 0 3px 8px rgb(0 0 0 / 4%);
-  --dock-minimized-shadow:
-    0 8px 18px rgb(0 0 0 / 6%), 0 2px 5px rgb(0 0 0 / 3%);
+  --dock-surface: #ffffff;
+  --dock-ink: #111827;
+  --dock-muted: #828e88;
+  --dock-fab-bg: #111827;
+  --dock-fab-ink: #ffffff;
+  --dock-surface-filter: drop-shadow(0 -4px 24px rgba(0, 0, 0, 0.06));
+  --dock-fab-shadow: 0 10px 22px rgba(17, 24, 39, 0.3);
   box-sizing: border-box;
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -472,23 +462,14 @@ a:active,
     --bad: #ee8b7d;
     --on: #0f172a;
     --shadow: 0 8px 24px rgb(0 0 0 / 22%);
-    --dock-surface: rgb(30 35 33 / 82%);
-    --dock-scrolled-surface: rgb(22 26 24 / 92%);
-    --dock-border: rgb(255 255 255 / 14%);
-    --dock-highlight: rgb(255 255 255 / 20%);
-    --dock-tab: rgb(240 245 242 / 75%);
-    --dock-tab-active: #f8fafc;
-    --dock-active-wash: rgb(255 255 255 / 12%);
-    --dock-glass-sheen: linear-gradient(
-      180deg,
-      rgb(255 255 255 / 12%),
-      rgb(255 255 255 / 1%)
-    );
-    --dock-shadow: 0 12px 32px rgb(0 0 0 / 36%), 0 3px 8px rgb(0 0 0 / 18%);
-    --dock-scrolled-shadow:
-      0 16px 40px rgb(0 0 0 / 42%), 0 4px 12px rgb(0 0 0 / 22%);
-    --dock-minimized-shadow:
-      0 8px 22px rgb(0 0 0 / 28%), 0 2px 6px rgb(0 0 0 / 14%);
+    --dock-surface: #1a1e21;
+    --dock-ink: #f8fafc;
+    --dock-muted: #8b9790;
+    --dock-fab-bg: #f8fafc;
+    --dock-fab-ink: #0f172a;
+    --dock-surface-filter: drop-shadow(0 -1px 0 rgba(255, 255, 255, 0.07))
+      drop-shadow(0 -8px 20px rgba(0, 0, 0, 0.44));
+    --dock-fab-shadow: 0 10px 24px rgba(0, 0, 0, 0.52);
     color-scheme: dark;
   }
 }
@@ -506,23 +487,14 @@ a:active,
   --over: #f2a16f;
   --on: #0f172a;
   --shadow: 0 8px 24px rgb(0 0 0 / 22%);
-  --dock-surface: rgb(30 35 33 / 82%);
-  --dock-scrolled-surface: rgb(22 26 24 / 92%);
-  --dock-border: rgb(255 255 255 / 14%);
-  --dock-highlight: rgb(255 255 255 / 20%);
-  --dock-tab: rgb(240 245 242 / 75%);
-  --dock-tab-active: #f8fafc;
-  --dock-active-wash: rgb(255 255 255 / 12%);
-  --dock-glass-sheen: linear-gradient(
-    180deg,
-    rgb(255 255 255 / 12%),
-    rgb(255 255 255 / 1%)
-  );
-  --dock-shadow: 0 12px 32px rgb(0 0 0 / 36%), 0 3px 8px rgb(0 0 0 / 18%);
-  --dock-scrolled-shadow:
-    0 16px 40px rgb(0 0 0 / 42%), 0 4px 12px rgb(0 0 0 / 22%);
-  --dock-minimized-shadow:
-    0 8px 22px rgb(0 0 0 / 28%), 0 2px 6px rgb(0 0 0 / 14%);
+  --dock-surface: #1a1e21;
+  --dock-ink: #f8fafc;
+  --dock-muted: #8b9790;
+  --dock-fab-bg: #f8fafc;
+  --dock-fab-ink: #0f172a;
+  --dock-surface-filter: drop-shadow(0 -1px 0 rgba(255, 255, 255, 0.07))
+    drop-shadow(0 -8px 20px rgba(0, 0, 0, 0.44));
+  --dock-fab-shadow: 0 10px 24px rgba(0, 0, 0, 0.52);
   color-scheme: dark;
 }
 .mobile-prototype {
@@ -594,7 +566,7 @@ a:active,
   min-height: 0;
   height: 100%;
   margin: 0;
-  padding: 0 18px calc(96px + env(safe-area-inset-bottom, 0px));
+  padding: 0 18px calc(120px + env(safe-area-inset-bottom, 0px));
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -943,8 +915,7 @@ a:active,
   transition: transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .mobile-prototype .mn button:focus-visible,
-.mobile-prototype .mon button:focus-visible,
-.mobile-prototype .tabs nav .fab:focus-visible {
+.mobile-prototype .mon button:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--mut) 45%, transparent);
   outline-offset: 2px;
 }
@@ -3027,309 +2998,228 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--g) 8%, transparent);
   }
 }
-.mobile-prototype .tabs {
-  --dock-spring: cubic-bezier(0.34, 1.2, 0.64, 1);
-  --dock-ease-out: cubic-bezier(0.32, 0.72, 0, 1);
-  --dock-h: 56px;
-  --dock-h-min: 48px;
+/* ---------- Notched Dock ---------- */
+.mobile-prototype .dock {
+  --dock-h: 68px;
+  --notch-w: 122px;
+  --notch-d: 35px;
+  --fab: 56px;
+  --fab-top: -32px;
+  --radius: 0px;
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
   z-index: 5;
-  display: flex;
-  justify-content: center;
-  padding: 0 12px calc(10px + env(safe-area-inset-bottom, 0px));
+  height: calc(var(--dock-h) + env(safe-area-inset-bottom, 0px));
   visibility: visible;
+  transform: translate3d(0, 0, 0);
   transition:
     opacity 160ms ease,
     transform 220ms cubic-bezier(0.2, 0.82, 0.24, 1.08),
     visibility 0s linear;
 }
-@supports (transition-timing-function: linear(0, 1)) {
-  .mobile-prototype .tabs {
-    --dock-spring: linear(
-      0,
-      0.106,
-      0.315,
-      0.527,
-      0.701,
-      0.828,
-      0.911,
-      0.961,
-      0.989,
-      1.002,
-      1.007,
-      1.008,
-      1.007,
-      1.005,
-      1.003,
-      1
-    );
-  }
-}
-.mobile-prototype .tabs[data-keyboard-open="true"],
-.mobile-prototype .tabs[data-hidden="true"] {
+.mobile-prototype .dock[data-keyboard-open="true"],
+.mobile-prototype .dock[data-hidden="true"] {
   visibility: hidden;
   opacity: 0;
   pointer-events: none;
-  transform: translate3d(0, calc(100% + 16px), 0);
+  transform: translate3d(0, calc(100% + 42px), 0);
   transition:
     opacity 160ms ease,
     transform 220ms cubic-bezier(0.2, 0.82, 0.24, 1.08),
     visibility 0s linear 220ms;
 }
-.mobile-prototype .tabs nav {
-  position: relative;
-  isolation: isolate;
-  display: flex;
-  align-items: center;
-  justify-content: space-around;
-  width: 100%;
-  height: var(--dock-h);
-  max-width: 420px;
-  padding: 6px;
-  background: var(--dock-surface);
-  background-image: var(--dock-glass-sheen);
-  border-radius: 24px;
-  border: 1px solid var(--dock-border);
-  box-shadow:
-    inset 0 1px 0 var(--dock-highlight),
-    var(--dock-shadow);
-  -webkit-backdrop-filter: blur(28px) saturate(190%);
-  backdrop-filter: blur(28px) saturate(190%);
-  transform: translateZ(0);
-  transition:
-    height 450ms var(--dock-spring),
-    background-color 300ms ease,
-    border-color 300ms ease,
-    box-shadow 300ms ease,
-    transform 280ms cubic-bezier(0.2, 0.82, 0.24, 1.08);
-}
-@supports not (
-  (-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))
-) {
-  .mobile-prototype .tabs nav {
-    background: var(--card);
-    background-image: none;
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-  }
-}
-.mobile-prototype .tabs[data-scrolled="true"] nav {
-  --dock-surface: var(--dock-scrolled-surface);
-  --dock-shadow: var(--dock-scrolled-shadow);
-  transform: translate3d(0, -3px, 0) scale(0.99);
-}
-.mobile-prototype .tabs[data-minimized="true"] nav {
-  height: var(--dock-h-min);
-  --dock-shadow: var(--dock-minimized-shadow);
-  transition:
-    height 380ms var(--dock-ease-out) 120ms,
-    background-color 300ms ease,
-    border-color 300ms ease,
-    box-shadow 300ms ease,
-    transform 280ms cubic-bezier(0.2, 0.82, 0.24, 1.08);
-}
-.mobile-prototype .dock-active-indicator {
+
+/* Surface = left block + notch + right block (stays crisp at any width) */
+.mobile-prototype .dock__surface {
   position: absolute;
-  top: 6px;
-  bottom: 6px;
-  left: 0;
-  z-index: 0;
-  width: 0;
-  border: 1px solid transparent;
-  border-radius: 18px;
-  background: var(--dock-active-wash);
-  box-shadow: inset 0 1px 0 var(--dock-highlight);
-  opacity: 0;
-  pointer-events: none;
-  transform: translate3d(0, 0, 0);
-  transition: opacity 160ms ease;
-  will-change: transform, opacity;
-}
-.mobile-prototype .dock-active-indicator.is-ready:not(.is-hidden) {
-  border-color: color-mix(in srgb, var(--g) 13%, transparent);
-  opacity: 1;
-  transition:
-    transform 450ms var(--dock-spring),
-    width 450ms var(--dock-spring),
-    opacity 200ms ease;
-}
-.mobile-prototype .dock-active-indicator.is-hidden {
-  border-color: transparent;
-  opacity: 0;
-}
-.mobile-prototype .tabs nav .t {
-  position: relative;
-  z-index: 1;
+  inset: 0;
   display: flex;
+  pointer-events: none;
+  filter: var(--dock-surface-filter);
+}
+.mobile-prototype .dock__side {
   flex: 1;
-  min-width: 0;
+  background: var(--dock-surface);
+}
+.mobile-prototype .dock__side--left {
+  margin-right: -1px;
+  border-top-left-radius: var(--radius);
+}
+.mobile-prototype .dock__side--right {
+  margin-left: -1px;
+  border-top-right-radius: var(--radius);
+}
+
+.mobile-prototype .dock__notch {
+  flex: none;
+  width: var(--notch-w);
+  display: flex;
+  flex-direction: column;
+}
+/* the path overhangs 1px on each side, so no seams show next to the side blocks */
+.mobile-prototype .dock__notch svg {
+  display: block;
+  width: 100%;
+  height: var(--notch-d);
+  flex: none;
+  overflow: visible;
+  fill: none;
+  stroke: none;
+  stroke-width: 0;
+}
+.mobile-prototype .dock__notch path {
+  fill: var(--dock-surface);
+  stroke: none;
+  vector-effect: non-scaling-stroke;
+}
+.mobile-prototype .dock__notch-fill {
+  flex: 1;
+  margin: -1px -1px 0;
+  background: var(--dock-surface);
+}
+
+/* ---------- Tabs ---------- */
+.mobile-prototype .dock__tabs {
+  position: absolute;
+  inset: 0;
+  padding: 2px 18px env(safe-area-inset-bottom, 0px);
+  display: grid;
+  grid-template-columns: 1fr 1fr 78px 1fr 1fr;
+  align-items: center;
+}
+
+.mobile-prototype .dock .tab {
+  display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1px;
-  padding: 4px 6px;
-  border-radius: 14px;
-  color: var(--dock-tab);
-  font-size: 10.5px;
-  font-weight: 700;
-  line-height: 1;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-  transition:
-    background-color 160ms ease,
-    color 160ms ease,
-    transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1.22);
-}
-.mobile-prototype .tabs nav .fab {
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-}
-.mobile-prototype .tabs nav .t .tab-icon {
-  display: grid;
-  width: 22px;
-  height: 22px;
-  flex: 0 0 22px;
-  place-items: center;
-  opacity: 1;
-  transition:
-    transform 450ms var(--dock-spring),
-    background-color 180ms ease,
-    opacity 180ms ease 80ms;
-}
-.mobile-prototype .tabs nav .t .tab-icon svg {
-  display: block;
-  width: 20px;
-  height: 20px;
-  transition:
-    fill 180ms ease,
-    fill-opacity 180ms ease,
-    stroke-width 180ms ease;
-}
-.mobile-prototype .tabs nav .tab-label {
-  display: block;
-  min-height: 0;
-  max-height: 16px;
-  overflow: hidden;
-  line-height: 11px;
-  text-align: center;
-  opacity: 0.84;
-  transition:
-    opacity 180ms ease 140ms,
-    max-height 300ms cubic-bezier(0.32, 0.72, 0, 1);
-}
-.mobile-prototype .tabs[data-minimized="true"] nav .tab-label {
-  max-height: 0;
-  opacity: 0;
-  transition:
-    opacity 120ms ease,
-    max-height 300ms cubic-bezier(0.32, 0.72, 0, 1) 120ms;
-}
-.mobile-prototype .tabs[data-minimized="true"] nav .t {
-  min-height: 44px;
-}
-.mobile-prototype .tabs nav .t:active {
-  transform: scale(0.96);
-  background: transparent;
-}
-.mobile-prototype .tabs nav .t:active .tab-icon {
-  transform: scale(0.9);
-  transition-duration: 110ms;
-  transition-timing-function: ease-out;
-}
-.mobile-prototype .tabs nav .t:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--g) 55%, transparent);
-  outline-offset: 2px;
-  background: transparent;
-}
-@media (hover: hover) and (pointer: fine) {
-  .mobile-prototype .tabs nav .t:hover {
-    color: var(--dock-tab-active);
-  }
-}
-.mobile-prototype .tabs nav .t.on {
-  background: transparent;
-  color: var(--dock-tab-active);
-  font-weight: 800;
-}
-.mobile-prototype .tabs nav .t.on .tab-icon {
-  animation: dock-tab-select 450ms var(--dock-spring) both;
-}
-.mobile-prototype .tabs nav .t.on .tab-icon svg {
-  fill: currentColor;
-  fill-opacity: 0.16;
-  stroke-width: 2.2;
-}
-.mobile-prototype .tabs nav .t.on .tab-label {
-  opacity: 1;
-  animation: dock-label-in 220ms ease-out both;
-}
-.mobile-prototype .tabs[data-minimized="true"] nav .t .tab-label {
-  opacity: 0;
-  animation: none;
-}
-.mobile-prototype .tabs[data-minimized="true"] nav .t:not(.on) .tab-icon {
-  opacity: 0.72;
-  transition-delay: 120ms;
-}
-.mobile-prototype .tabs nav .fab {
-  --fab-y: 0px;
-  --fab-s: 1;
-  position: relative;
-  z-index: 1;
-  flex: none;
-  width: 50px;
-  min-width: 50px;
-  height: 50px;
-  min-height: 50px;
-  border-radius: 50%;
-  background: var(--g);
-  color: var(--on);
-  display: grid;
-  place-items: center;
-  margin: -22px 6px 0;
+  gap: 5px;
+  height: 100%;
   padding: 0;
-  transform: translateY(var(--fab-y)) scale(var(--fab-s));
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
-  transition:
-    transform 450ms var(--dock-spring),
-    box-shadow 160ms ease;
+  border: 0;
+  background: transparent;
+  color: var(--dock-muted);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transform: none;
+  filter: none;
+  transition: color 0.18s ease;
 }
-.mobile-prototype .tabs[data-minimized="true"] nav .fab {
-  --fab-y: 6px;
-  --fab-s: 0.88;
-  transition:
-    transform 380ms var(--dock-ease-out) 120ms,
-    box-shadow 160ms ease;
+.mobile-prototype .dock .tab:not(:disabled):active {
+  transform: none;
+  filter: none;
 }
-.mobile-prototype .tabs nav .fab:active {
-  --fab-s: 0.94;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
-  transition:
-    transform 110ms ease-out,
-    box-shadow 110ms ease-out;
+.mobile-prototype .dock .tab__icon {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  transition: transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
-.mobile-prototype .tabs[data-minimized="true"] nav .fab:active {
-  --fab-s: 0.94;
-}
-:root[data-theme="dark"] .mobile-prototype .tabs nav .fab,
-.mobile-prototype[data-theme="dark"] .tabs nav .fab {
-  box-shadow:
-    0 8px 24px rgba(255, 255, 255, 0.18),
-    0 3px 12px rgba(0, 0, 0, 0.6);
-}
-:root[data-theme="dark"] .mobile-prototype .tabs nav .fab:active,
-.mobile-prototype[data-theme="dark"] .tabs nav .fab:active {
-  box-shadow:
-    0 4px 14px rgba(255, 255, 255, 0.12),
-    0 2px 6px rgba(0, 0, 0, 0.4);
-}
-.mobile-prototype .fab svg {
+.mobile-prototype .dock .tab__icon svg {
   width: 24px;
   height: 24px;
-  stroke-width: 2.6;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transform-origin: center;
+  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.mobile-prototype .dock .tab__label {
+  font-size: 12px;
+  line-height: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  transition: font-weight 0.15s ease;
+}
+
+.mobile-prototype .dock .tab:active .tab__icon {
+  transform: scale(0.91);
+}
+.mobile-prototype .dock .tab:focus-visible {
+  outline: none;
+}
+.mobile-prototype .dock .tab:focus-visible .tab__icon {
+  border-radius: 8px;
+  box-shadow: 0 0 0 2px var(--dock-ink);
+}
+
+/* Active tab */
+.mobile-prototype .dock .tab[aria-current="page"],
+.mobile-prototype .dock .tab.is-active {
+  color: var(--g, var(--dock-ink));
+}
+.mobile-prototype .dock .tab[aria-current="page"] .tab__icon svg,
+.mobile-prototype .dock .tab.is-active .tab__icon svg {
+  stroke-width: 0;
+  fill: currentColor;
+  animation: dock-tab-icon-pop 240ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.mobile-prototype .dock .tab[aria-current="page"] .tab__label,
+.mobile-prototype .dock .tab.is-active .tab__label {
+  font-weight: 750;
+}
+
+@keyframes dock-tab-icon-pop {
+  0% {
+    transform: scale(0.86);
+  }
+  65% {
+    transform: scale(1.06);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* ---------- Center + button ---------- */
+.mobile-prototype .dock .dock__fab {
+  position: absolute;
+  left: 50%;
+  top: var(--fab-top);
+  width: var(--fab);
+  height: var(--fab);
+  margin-left: calc(var(--fab) / -2);
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--dock-fab-bg);
+  color: var(--dock-fab-ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--dock-fab-shadow);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 180ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.mobile-prototype .dock .dock__fab:not(:disabled):active {
+  transform: scale(0.92);
+  filter: none;
+}
+.mobile-prototype .dock .dock__fab:focus-visible {
+  outline: 2px solid var(--dock-ink);
+  outline-offset: 3px;
+}
+.mobile-prototype .dock .dock__fab svg {
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
 }
 .mobile-prototype .ov {
   position: fixed;
@@ -3685,27 +3575,6 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
     transform: scale(1.9);
   }
 }
-@keyframes dock-tab-select {
-  0% {
-    transform: scale(0.92) translateY(1px);
-  }
-  58% {
-    transform: scale(1.02) translateY(-1px);
-  }
-  100% {
-    transform: scale(1) translateY(0);
-  }
-}
-@keyframes dock-label-in {
-  from {
-    opacity: 0.5;
-    transform: translateY(2px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
 @media (prefers-reduced-motion: reduce) {
   .mobile-prototype button:not(:disabled) {
     transition: none !important;
@@ -3729,7 +3598,6 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
   }
 
   .mobile-prototype .profile-sync-status.is-live .profile-sync-indicator::after,
-  .mobile-prototype .tabs nav .t.on .tab-icon,
   .mobile-prototype
     .profile-sync-status.is-setup-needed
     .profile-sync-indicator,
@@ -3741,15 +3609,18 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
   .mobile-prototype .toast,
   .mobile-prototype .expense-row.is-new,
   .mobile-prototype .expense-row.is-duplicate-press,
-  .mobile-prototype .animated-money-value {
+  .mobile-prototype .animated-money-value,
+  .mobile-prototype .dock .tab[aria-current="page"] .tab__icon svg,
+  .mobile-prototype .dock .tab.is-active .tab__icon svg {
     animation: none;
   }
 
   .mobile-prototype .prototype-header-title,
   .mobile-prototype .prototype-header-action svg,
   .mobile-prototype .prototype-header-back svg,
-  .mobile-prototype .tabs nav .t,
-  .mobile-prototype .tabs nav .t .tab-icon,
+  .mobile-prototype .dock .tab,
+  .mobile-prototype .dock .tab__icon,
+  .mobile-prototype .dock .dock__fab,
   .mobile-prototype button.ri,
   .mobile-prototype .sw,
   .mobile-prototype .sw::after,
@@ -3765,7 +3636,6 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
   .mobile-prototype .mon button,
   .mobile-prototype .prototype-header-action,
   .mobile-prototype .prototype-header-back,
-  .mobile-prototype .tabs nav .fab,
   .mobile-prototype .acts button,
   .mobile-prototype .btn,
   .mobile-prototype .chips button,
@@ -3780,61 +3650,17 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
     transition: none;
   }
 
-  .mobile-prototype .dock-active-indicator,
-  .mobile-prototype .dock-active-indicator.is-ready {
-    opacity: 0;
-    transition: opacity 150ms ease !important;
-  }
-  .mobile-prototype .tabs nav,
-  .mobile-prototype .tabs[data-scrolled="true"] nav {
-    transform: none;
-    transition:
-      background-color 150ms ease,
-      border-color 150ms ease,
-      box-shadow 150ms ease !important;
-  }
-  .mobile-prototype .tabs,
-  .mobile-prototype .tabs[data-keyboard-open="true"],
-  .mobile-prototype .tabs[data-hidden="true"] {
+  .mobile-prototype .dock,
+  .mobile-prototype .dock[data-keyboard-open="true"],
+  .mobile-prototype .dock[data-hidden="true"] {
     transform: none;
     transition: opacity 150ms ease;
   }
-  .mobile-prototype .tabs[data-hidden="true"] {
+  .mobile-prototype .dock[data-keyboard-open="true"],
+  .mobile-prototype .dock[data-hidden="true"] {
     transition:
       opacity 150ms ease,
       visibility 0s linear 150ms;
-  }
-  .mobile-prototype .tabs nav .t {
-    transition:
-      background-color 150ms ease,
-      color 150ms ease !important;
-  }
-  .mobile-prototype .tabs[data-minimized="true"] nav {
-    height: var(--dock-h);
-  }
-  .mobile-prototype .tabs[data-minimized="true"] nav .t .tab-label {
-    max-height: 16px;
-    opacity: 0;
-    animation: none;
-    transition: opacity 150ms ease;
-  }
-  .mobile-prototype .tabs[data-minimized="true"] nav .t:not(.on) .tab-icon {
-    opacity: 1;
-    transition: opacity 150ms ease;
-  }
-  .mobile-prototype .tabs nav .fab,
-  .mobile-prototype .tabs[data-minimized="true"] nav .fab,
-  .mobile-prototype .tabs nav .fab:active,
-  .mobile-prototype .tabs[data-minimized="true"] nav .fab:active {
-    --fab-y: 0px;
-    --fab-s: 1;
-    transform: none;
-  }
-  .mobile-prototype .tabs nav .t.on {
-    background: transparent;
-  }
-  .mobile-prototype .tabs nav .t.on .tab-label {
-    animation: none;
   }
 }
 
@@ -4293,7 +4119,7 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
-  bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(118px + env(safe-area-inset-bottom, 0px));
   background: var(--ink);
   color: var(--bg);
   border-radius: 16px;

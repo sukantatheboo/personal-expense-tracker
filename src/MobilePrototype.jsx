@@ -113,18 +113,90 @@ const BK =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 128 122'%3E%3Cg fill='none'%3E%3Cpath fill='%23D12053' d='M96.58 62.45l-53.03-8.31 7.03 31.6z'/%3E%3Cpath fill='%23E2136E' d='M96.58 62.45L56.62 6.93 43.56 54.15z'/%3E%3Cpath fill='%23D12053' d='M42.32 53.51L.45 0l54.83 6.55z'/%3E%3Cpath fill='%239E1638' d='M23.25 31.15L0 9.24h6.12z'/%3E%3Cpath fill='%23D12053' d='M107.89 35.46l-9.84 26.69L82.1 40.09z'/%3E%3Cpath fill='%23E2136E' d='M56.77 84.14l38.61-15.51L97 63.7z'/%3E%3Cpath fill='%239E1638' d='M25.89 113.41l16.54-58.02 8.39 37.75z'/%3E%3Cpath fill='%23E2136E' d='M109.43 35.67l-4.06 11.02 14.64-.24z'/%3E%3C/g%3E%3C/svg%3E";
 
 /* ───────────── icons ───────────── */
+const DOCK_ICONS = {
+  home: {
+    inactive: (
+      <path d="M4.6 9.85 11.02 4.5a1.55 1.55 0 0 1 1.96 0L19.4 9.85a1.65 1.65 0 0 1 .6 1.27v7.58a1.8 1.8 0 0 1-1.8 1.8h-3.4a.8.8 0 0 1-.8-.8v-4.2a1.5 1.5 0 0 0-1.5-1.5h-1a1.5 1.5 0 0 0-1.5 1.5v4.2a.8.8 0 0 1-.8.8H5.8A1.8 1.8 0 0 1 4 18.7v-7.58a1.65 1.65 0 0 1 .6-1.27Z" />
+    ),
+    active: (
+      <path
+        fill="currentColor"
+        stroke="none"
+        d="M10.78 3.63a1.9 1.9 0 0 1 2.44 0l6.6 5.5a2.1 2.1 0 0 1 .76 1.61v7.96a2.3 2.3 0 0 1-2.3 2.3h-3.18a1.1 1.1 0 0 1-1.1-1.1v-4.4a1.1 1.1 0 0 0-1.1-1.1h-1.8a1.1 1.1 0 0 0-1.1 1.1v4.4a1.1 1.1 0 0 1-1.1 1.1H5.72a2.3 2.3 0 0 1-2.3-2.3v-7.96c0-.62.28-1.21.76-1.61l6.6-5.5Z"
+      />
+    ),
+  },
+  activity: {
+    inactive: (
+      <>
+        <rect x="4.5" y="3.5" width="15" height="17" rx="3.2" />
+        <path d="M8.5 8.5h7M8.5 12h7M8.5 15.5H13" />
+      </>
+    ),
+    active: (
+      <path
+        fill="currentColor"
+        fillRule="evenodd"
+        clipRule="evenodd"
+        stroke="none"
+        d="M7.6 3h8.8A3.6 3.6 0 0 1 20 6.6v10.8a3.6 3.6 0 0 1-3.6 3.6H7.6A3.6 3.6 0 0 1 4 17.4V6.6A3.6 3.6 0 0 1 7.6 3Zm.9 4.65a.85.85 0 0 0 0 1.7h7a.85.85 0 0 0 0-1.7h-7Zm0 3.5a.85.85 0 0 0 0 1.7h7a.85.85 0 0 0 0-1.7h-7Zm0 3.5a.85.85 0 0 0 0 1.7H13a.85.85 0 0 0 0-1.7H8.5Z"
+      />
+    ),
+  },
+  accounts: {
+    inactive: (
+      <>
+        <rect x="3" y="5" width="18" height="14" rx="3" />
+        <path d="M3 9.5h18" />
+        <path d="M7 14.5h3.5" />
+      </>
+    ),
+    active: (
+      <>
+        <path
+          fill="currentColor"
+          stroke="none"
+          d="M6 4.5h12A3.5 3.5 0 0 1 21.5 8v.6h-19V8A3.5 3.5 0 0 1 6 4.5Z"
+        />
+        <path
+          fill="currentColor"
+          fillRule="evenodd"
+          clipRule="evenodd"
+          stroke="none"
+          d="M2.5 10.4h19V16a3.5 3.5 0 0 1-3.5 3.5H6A3.5 3.5 0 0 1 2.5 16v-5.6Zm4.5 3.35a.85.85 0 0 0 0 1.7h4a.85.85 0 0 0 0-1.7H7Z"
+        />
+      </>
+    ),
+  },
+  plans: {
+    inactive: (
+      <>
+        <path d="M11 4.06a8 8 0 1 0 8.94 8.94H12a1 1 0 0 1-1-1V4.06Z" />
+        <path d="M14 3.28A8.03 8.03 0 0 1 20.72 10H14.8a.8.8 0 0 1-.8-.8V3.28Z" />
+      </>
+    ),
+    active: (
+      <>
+        <path
+          fill="currentColor"
+          stroke="none"
+          d="M10.45 3.58a.85.85 0 0 1 .95.84v6.78c0 .22.18.4.4.4h6.78a.85.85 0 0 1 .84.95 8.5 8.5 0 1 1-8.97-8.97Z"
+        />
+        <path
+          fill="currentColor"
+          stroke="none"
+          d="M13.6 2.83a.8.8 0 0 1 .93-.79 8.53 8.53 0 0 1 6.43 6.43.8.8 0 0 1-.79.93h-5.37a1.2 1.2 0 0 1-1.2-1.2V2.83Z"
+        />
+      </>
+    ),
+  },
+};
+
 const ICONS = {
-  home: <path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" />,
-  activity: <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />,
-  accounts: (
-    <path d="M3 7h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM3 7l12-4v4M16 14h.01" />
-  ),
-  plans: (
-    <>
-      <circle cx="12" cy="12" r="9" />
-      <circle cx="12" cy="12" r="4" />
-    </>
-  ),
+  home: DOCK_ICONS.home.inactive,
+  activity: DOCK_ICONS.activity.inactive,
+  accounts: DOCK_ICONS.accounts.inactive,
+  plans: DOCK_ICONS.plans.inactive,
   plus: <path d="M12 5v14M5 12h14" />,
   x: <path d="m18 6-12 12M6 6l12 12" />,
   l: <path d="m15 18-6-6 6-6" />,
@@ -2582,7 +2654,7 @@ function Activity({
 
       {/* 2. Quick Filter Pills Bar */}
       {(showFilterTray || cf || quickFilter) && (
-        <div className="chips" data-dock-scroll-lock role="toolbar" aria-label="Activity filter chips">
+        <div className="chips" role="toolbar" aria-label="Activity filter chips">
           <button
             type="button"
             className={!cf && !quickFilter ? "on" : ""}
@@ -7878,7 +7950,6 @@ export default function MobilePrototype({
     };
   }, []);
   const [isScrolled, setIsScrolled] = useState(false);
-  const [dockMinimized, setDockMinimized] = useState(false);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [slideDirection, setSlideDirection] = useState("forward");
   const [animateScreen, setAnimateScreen] = useState(false);
@@ -7890,16 +7961,6 @@ export default function MobilePrototype({
   const sheetTriggerCandidateRef = useRef(null);
   const sheetReturnFocusRef = useRef(null);
   const activitySearchRef = useRef(null);
-  const dockNavRef = useRef(null);
-  const dockIndicatorRef = useRef(null);
-  const dockTabRefs = useRef({});
-  const dockMinimizedRef = useRef(false);
-  const lastTopRef = useRef(null);
-  const dirAccRef = useRef(0);
-  const dockDirectionResetTimerRef = useRef();
-  const nestedScrollResumeTimerRef = useRef();
-  const dockPointerActiveRef = useRef(false);
-  const nestedScrollPointerRef = useRef(false);
   const baseViewportHeightRef = useRef(0);
   const categoryOrder = useMemo(() => {
     const categoryCounts = new Map();
@@ -7982,19 +8043,9 @@ export default function MobilePrototype({
     };
   }, []);
 
-  const resetDockDirectionTimer = () => {
-    clearTimeout(dockDirectionResetTimerRef.current);
-    dockDirectionResetTimerRef.current = undefined;
-  };
-
   const resetScreenScroll = () => {
-    resetDockDirectionTimer();
     if (screenScrollRef.current) screenScrollRef.current.scrollTop = 0;
     setIsScrolled(false);
-    dockMinimizedRef.current = false;
-    setDockMinimized(false);
-    lastTopRef.current = 0;
-    dirAccRef.current = 0;
   };
   const onScreenScroll = (event) => {
     // Ignore scroll events from nested scrollers (for example, the category chips).
@@ -8005,74 +8056,9 @@ export default function MobilePrototype({
       scroller.scrollHeight - scroller.clientHeight,
     );
     const rawScrollTop = scroller.scrollTop;
-    // Keep the last dock state during iOS elastic overscroll at either edge.
     if (rawScrollTop < 0 || rawScrollTop > maxScrollTop) return;
     const top = Math.min(maxScrollTop, Math.max(0, rawScrollTop));
-    if (!dockPointerActiveRef.current) setIsScrolled(top > 60);
-
-    // A finger on the dock or a nested scroller must not change the dock beneath it.
-    if (dockPointerActiveRef.current || nestedScrollPointerRef.current) {
-      lastTopRef.current = top;
-      dirAccRef.current = 0;
-      resetDockDirectionTimer();
-      return;
-    }
-
-    // Short screens and the top edge always keep the full dock available.
-    if (maxScrollTop < 160 || top <= 24) {
-      lastTopRef.current = top;
-      dirAccRef.current = 0;
-      resetDockDirectionTimer();
-      dockMinimizedRef.current = false;
-      setDockMinimized(false);
-      return;
-    }
-
-    // The first valid event establishes a baseline instead of guessing direction.
-    if (lastTopRef.current === null) {
-      lastTopRef.current = top;
-      dirAccRef.current = 0;
-      return;
-    }
-
-    const dy = top - lastTopRef.current;
-    lastTopRef.current = top;
-    if (dy === 0) return;
-
-    const previousDirection = Math.sign(dirAccRef.current);
-    dirAccRef.current =
-      previousDirection === Math.sign(dy) ? dirAccRef.current + dy : dy;
-    dirAccRef.current = Math.max(-11, Math.min(13, dirAccRef.current));
-
-    if (dirAccRef.current > 12 && !dockMinimizedRef.current) {
-      dockMinimizedRef.current = true;
-      setDockMinimized(true);
-    } else if (dirAccRef.current < -10 && dockMinimizedRef.current) {
-      dockMinimizedRef.current = false;
-      setDockMinimized(false);
-    }
-
-    resetDockDirectionTimer();
-    dockDirectionResetTimerRef.current = setTimeout(() => {
-      dirAccRef.current = 0;
-      dockDirectionResetTimerRef.current = undefined;
-    }, 180);
-  };
-
-  const onScreenPointerDownCapture = (event) => {
-    if (!(event.target instanceof Element)) return;
-    if (!event.target.closest("[data-dock-scroll-lock]")) return;
-    clearTimeout(nestedScrollResumeTimerRef.current);
-    nestedScrollResumeTimerRef.current = undefined;
-    nestedScrollPointerRef.current = true;
-    dirAccRef.current = 0;
-    resetDockDirectionTimer();
-  };
-
-  const onDockPointerDownCapture = () => {
-    dockPointerActiveRef.current = true;
-    dirAccRef.current = 0;
-    resetDockDirectionTimer();
+    setIsScrolled(top > 60);
   };
 
   const toast = (msg, undo) => {
@@ -8085,62 +8071,9 @@ export default function MobilePrototype({
       clearTimeout(timer.current);
       clearTimeout(sheetCloseTimer.current);
       clearTimeout(highlightTimer.current);
-      resetDockDirectionTimer();
-      clearTimeout(nestedScrollResumeTimerRef.current);
     },
     [],
   );
-  useEffect(() => {
-    const releasePointer = () => {
-      const wasDockPointerActive = dockPointerActiveRef.current;
-      dockPointerActiveRef.current = false;
-      lastTopRef.current =
-        screenScrollRef.current?.scrollTop ?? lastTopRef.current;
-      dirAccRef.current = 0;
-      resetDockDirectionTimer();
-
-      if (nestedScrollPointerRef.current) {
-        clearTimeout(nestedScrollResumeTimerRef.current);
-        nestedScrollResumeTimerRef.current = setTimeout(() => {
-          nestedScrollPointerRef.current = false;
-          nestedScrollResumeTimerRef.current = undefined;
-          const scroller = screenScrollRef.current;
-          if (!scroller) return;
-          const maxScrollTop = Math.max(
-            0,
-            scroller.scrollHeight - scroller.clientHeight,
-          );
-          if (maxScrollTop < 160 || scroller.scrollTop <= 24) {
-            dockMinimizedRef.current = false;
-            setDockMinimized(false);
-          }
-        }, 180);
-      } else if (wasDockPointerActive) {
-        // Keep the current size until click fires, so the target never shifts under the finger.
-        clearTimeout(nestedScrollResumeTimerRef.current);
-        nestedScrollResumeTimerRef.current = undefined;
-      }
-    };
-    const releaseAll = () => {
-      dockPointerActiveRef.current = false;
-      nestedScrollPointerRef.current = false;
-      clearTimeout(nestedScrollResumeTimerRef.current);
-      nestedScrollResumeTimerRef.current = undefined;
-      dirAccRef.current = 0;
-      lastTopRef.current =
-        screenScrollRef.current?.scrollTop ?? lastTopRef.current;
-      resetDockDirectionTimer();
-    };
-
-    window.addEventListener("pointerup", releasePointer);
-    window.addEventListener("pointercancel", releasePointer);
-    window.addEventListener("blur", releaseAll);
-    return () => {
-      window.removeEventListener("pointerup", releasePointer);
-      window.removeEventListener("pointercancel", releasePointer);
-      window.removeEventListener("blur", releaseAll);
-    };
-  }, []);
   useEffect(() => {
     if (!sheet) return undefined;
     const body = document.body;
@@ -8305,11 +8238,6 @@ export default function MobilePrototype({
         ? activeElement
         : null;
     sheetTriggerCandidateRef.current = null;
-    resetDockDirectionTimer();
-    dockMinimizedRef.current = false;
-    setDockMinimized(false);
-    dirAccRef.current = 0;
-    lastTopRef.current = screenScrollRef.current?.scrollTop ?? 0;
     setSheetClosing(false);
     setSheetExitDuration(SHEET_EXIT_MS);
     setSheetExitFromTransform("translate3d(0, 0, 0)");
@@ -8317,12 +8245,6 @@ export default function MobilePrototype({
     setSheet(nextSheet);
   };
   const nav = (t) => {
-    resetDockDirectionTimer();
-    const currentTop = screenScrollRef.current?.scrollTop ?? 0;
-    dockMinimizedRef.current = false;
-    setDockMinimized(false);
-    dirAccRef.current = 0;
-    lastTopRef.current = currentTop;
     if (t === tab && !appSettingsOpen && !profileSettingsOpen) {
       screenScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
       return;
@@ -8590,50 +8512,6 @@ export default function MobilePrototype({
   const signIn = () => onSignIn?.();
 
   const settingsRoute = appSettingsOpen || profileSettingsOpen;
-  useLayoutEffect(() => {
-    const navNode = dockNavRef.current;
-    const indicatorNode = dockIndicatorRef.current;
-    const activeTabNode = dockTabRefs.current[tab];
-    if (lastTopRef.current === null && screenScrollRef.current) {
-      lastTopRef.current = screenScrollRef.current.scrollTop;
-    }
-    if (!navNode || !indicatorNode || !activeTabNode) return undefined;
-
-    let isReadyAllowed = false;
-    const updateIndicator = () => {
-      const currentTabNode = dockTabRefs.current[tab];
-      if (!currentTabNode || currentTabNode.offsetWidth <= 0) {
-        indicatorNode.classList.remove("is-ready");
-        return;
-      }
-      indicatorNode.style.width = `${currentTabNode.offsetWidth}px`;
-      indicatorNode.style.transform = `translate3d(${currentTabNode.offsetLeft}px, 0, 0)`;
-      if (isReadyAllowed) {
-        indicatorNode.classList.add("is-ready");
-      }
-    };
-    updateIndicator();
-    const readyFrame = window.requestAnimationFrame(() => {
-      isReadyAllowed = true;
-      updateIndicator();
-    });
-
-    const resizeObserver =
-      typeof ResizeObserver === "undefined"
-        ? null
-        : new ResizeObserver(updateIndicator);
-    resizeObserver?.observe(navNode);
-    resizeObserver?.observe(activeTabNode);
-    window.addEventListener("resize", updateIndicator);
-    window.visualViewport?.addEventListener("resize", updateIndicator);
-
-    return () => {
-      window.cancelAnimationFrame(readyFrame);
-      resizeObserver?.disconnect();
-      window.removeEventListener("resize", updateIndicator);
-      window.visualViewport?.removeEventListener("resize", updateIndicator);
-    };
-  }, [tab, settingsRoute, isAppLocked]);
   const routeTitle = profileSettingsOpen
     ? "Profile"
     : appSettingsOpen
@@ -8781,7 +8659,6 @@ export default function MobilePrototype({
         ref={screenScrollRef}
         className={`prototype-screen-scroll${tab === "activity" ? " is-activity" : ""}${tab === "accounts" ? " is-accounts" : ""}`}
         onScroll={onScreenScroll}
-        onPointerDownCapture={onScreenPointerDownCapture}
       >
         <div
           key={screenKey}
@@ -8909,73 +8786,85 @@ export default function MobilePrototype({
         </div>
       </main>
 
-      <div
-        className="tabs"
-        data-scrolled={isScrolled ? "true" : undefined}
-        data-minimized={dockMinimized ? "true" : undefined}
+      <nav
+        className="dock"
+        aria-label="Main"
         data-keyboard-open={keyboardOpen ? "true" : undefined}
         data-hidden={keyboardOpen || settingsRoute ? "true" : undefined}
-        onPointerDownCapture={onDockPointerDownCapture}
         onClickCapture={() =>
           setIsScrolled((screenScrollRef.current?.scrollTop ?? 0) > 60)
         }
       >
-        <nav ref={dockNavRef} aria-label="Main navigation">
-          <span
-            ref={dockIndicatorRef}
-            className={`dock-active-indicator${settingsRoute ? " is-hidden" : ""}`}
-            aria-hidden="true"
-          />
-          {TABS.map(([t, l]) =>
-            t === "add" ? (
+        {/* Surface with notch */}
+        <div className="dock__surface" aria-hidden="true">
+          <div className="dock__side dock__side--left" />
+          <div className="dock__notch">
+            <svg viewBox="0 0 122 35">
+              {/* fillet r30, then a circular scoop r40 centred on the + button */}
+              <path
+                vectorEffect="non-scaling-stroke"
+                d="M-1 0H0.97A30 30 0 0 1 26.7 14.57A40 40 0 0 0 95.3 14.57A30 30 0 0 1 121.03 0H123V36H-1Z"
+              />
+            </svg>
+            <div className="dock__notch-fill" />
+          </div>
+          <div className="dock__side dock__side--right" />
+        </div>
+
+        {/* Tabs */}
+        <div className="dock__tabs">
+          {TABS.map(([t, l]) => {
+            if (t === "add") {
+              return <div key={t} aria-hidden="true" />;
+            }
+            const isActive =
+              !appSettingsOpen && !profileSettingsOpen && tab === t;
+            const dockIcon = DOCK_ICONS[t];
+            return (
               <button
                 key={t}
-                className="fab"
-                aria-label="Add expense"
-                onClick={() => {
-                  triggerHaptic("light");
-                  const activeAcct =
-                    tab === "accounts" && activeAccountRef.current !== undefined
-                      ? activeAccountRef.current
-                      : undefined;
-                  openSheet({
-                    type: "add",
-                    ...(activeAcct !== undefined ? { acct: activeAcct } : {}),
-                  });
-                }}
-              >
-                <Icon n="plus" />
-              </button>
-            ) : (
-              <button
-                key={t}
-                className={
-                  "t " +
-                  (!appSettingsOpen && !profileSettingsOpen && tab === t
-                    ? "on"
-                    : "")
-                }
-                ref={(node) => {
-                  if (node) dockTabRefs.current[t] = node;
-                  else delete dockTabRefs.current[t];
-                }}
-                aria-label={l}
-                aria-current={
-                  !appSettingsOpen && !profileSettingsOpen && tab === t
-                    ? "page"
-                    : undefined
-                }
+                className={`tab${isActive ? " is-active" : ""}`}
+                type="button"
+                aria-current={isActive ? "page" : undefined}
                 onClick={() => nav(t)}
               >
-                <span className="tab-icon">
-                  <Icon n={t} />
+                <span className="tab__icon">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    {dockIcon
+                      ? isActive
+                        ? dockIcon.active
+                        : dockIcon.inactive
+                      : ICONS[t]}
+                  </svg>
                 </span>
-                <span className="tab-label">{l}</span>
+                <span className="tab__label">{l}</span>
               </button>
-            ),
-          )}
-        </nav>
-      </div>
+            );
+          })}
+        </div>
+
+        {/* Center action */}
+        <button
+          className="dock__fab"
+          type="button"
+          aria-label="Add"
+          onClick={() => {
+            triggerHaptic("light");
+            const activeAcct =
+              tab === "accounts" && activeAccountRef.current !== undefined
+                ? activeAccountRef.current
+                : undefined;
+            openSheet({
+              type: "add",
+              ...(activeAcct !== undefined ? { acct: activeAcct } : {}),
+            });
+          }}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            {ICONS.plus}
+          </svg>
+        </button>
+      </nav>
 
       {sheet?.type === "cardOptions" && (
         <CardOptionsSheet
