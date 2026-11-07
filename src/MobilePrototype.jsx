@@ -49,6 +49,7 @@ import {
   cashSvg,
   starSvg,
   refreshSvg,
+  suggestionSvg,
 } from "./categoryAssets.jsx";
 import {
   setAppPin,
@@ -248,8 +249,9 @@ function triggerHaptic(type = "light") {
 }
 
 function CategorySuggestionValue({ category }) {
+  const [, color] = CAT[category] || CAT.Other || ["", "#64748b"];
   return (
-    <span className="category-suggestion-value">
+    <span className="category-suggestion-value" style={{ "--c": color }}>
       <CategorySymbol category={category} />
       <span>{category}</span>
     </span>
@@ -1017,25 +1019,33 @@ function ExpenseRow({
         <b>{title}</b>
         <small>
           {isTx ? (
-            e.type === "transfer" ? (
-              `Transfer · ${getAccountDisplay(e.from || e.acct, cards)[0]} → ${getAccountDisplay(e.to, cards)[0]}`
-            ) : e.type === "income" ? (
-              `Income · ${getAccountDisplay(e.acct, cards)[0]}`
-            ) : (
-              `${e.dir === "up" || e.direction === "increase" ? "Balance increased" : "Balance decreased"} · ${getAccountDisplay(e.acct, cards)[0]}`
-            )
+            <span className="expense-meta-line">
+              {e.type === "transfer"
+                ? `Transfer · ${getAccountDisplay(e.from || e.acct, cards)[0]} → ${getAccountDisplay(e.to, cards)[0]}`
+                : e.type === "income"
+                  ? `Income · ${getAccountDisplay(e.acct, cards)[0]}`
+                  : `${e.dir === "up" || e.direction === "increase" ? "Balance increased" : "Balance decreased"} · ${getAccountDisplay(e.acct, cards)[0]}`}
+            </span>
           ) : (
             <>
-              {e.cat}
-              {cards.length > 0
-                ? " · " + getAccountDisplay(e.acct, cards)[0]
-                : e.acct && e.acct !== "cash"
+              <span className="expense-meta-line">
+                {e.cat}
+                {cards.length > 0
                   ? " · " + getAccountDisplay(e.acct, cards)[0]
-                  : ""}
-              {e.rec ? " · Recurring" : ""}
+                  : e.acct && e.acct !== "cash"
+                    ? " · " + getAccountDisplay(e.acct, cards)[0]
+                    : ""}
+                {e.rec ? " · Recurring" : ""}
+              </span>
               {suggestion && suggestion !== e.cat ? (
-                <span className="category-suggestion-inline">
-                  <span> · Suggested:</span>
+                <span
+                  className="category-suggestion-inline"
+                  style={{ "--c": CAT[suggestion]?.[1] || "#64748b" }}
+                >
+                  <span className="category-suggestion-sep" aria-hidden="true">
+                    {" · "}
+                  </span>
+                  <span className="category-suggestion-label">Suggested:</span>
                   <CategorySuggestionValue category={suggestion} />
                 </span>
               ) : null}
@@ -3753,9 +3763,7 @@ function AddSheet({
   const descInputRef = useRef(null);
   const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
   const custom = f.date !== ld() && f.date !== ago(1);
-  const categorySuggestion = categoryTouched
-    ? ""
-    : suggestedCategory(f.desc, expenses);
+  const categorySuggestion = suggestedCategory(f.desc, expenses);
 
   return (
     <Sheet
@@ -3870,16 +3878,26 @@ function AddSheet({
         }}
       />
       {categorySuggestion && categorySuggestion !== f.cat && (
-        <p
-          className="category-suggestion-hint"
-          role="status"
-          aria-live="polite"
+        <button
+          type="button"
+          className="category-suggestion-action is-inline-hint"
+          style={{ "--c": CAT[categorySuggestion]?.[1] || "#64748b" }}
+          aria-label={`Use suggestion: ${categorySuggestion}`}
+          onClick={() => {
+            triggerHaptic("selection");
+            setCategoryTouched(true);
+            set("cat", categorySuggestion);
+          }}
         >
-          <span>Suggested category:</span>
-          <b>
-            <CategorySuggestionValue category={categorySuggestion} />
-          </b>
-        </p>
+          <img
+            src={suggestionSvg}
+            alt=""
+            className="category-suggestion-bulb-img"
+            aria-hidden="true"
+          />
+          <span className="category-suggestion-label">Suggested:</span>
+          <CategorySuggestionValue category={categorySuggestion} />
+        </button>
       )}
 
       <span className="lbl">Date</span>
@@ -4438,7 +4456,15 @@ function AccountTxDetailSheet({ tx, cards = [], onSave, onDelete, onClose }) {
   );
 }
 
-function DetailSheet({ e, suggestion, cards = [], onSave, onDelete, onClose }) {
+function DetailSheet({
+  e,
+  expenses = [],
+  suggestion,
+  cards = [],
+  onSave,
+  onDelete,
+  onClose,
+}) {
   const [f, setF] = useState({
     desc: e.desc,
     amt: e.amt ?? "",
@@ -4449,6 +4475,8 @@ function DetailSheet({ e, suggestion, cards = [], onSave, onDelete, onClose }) {
   const amtInputRef = useRef(null);
   const descInputRef = useRef(null);
   const set = (key, value) => setF((current) => ({ ...current, [key]: value }));
+  const activeSuggestion =
+    suggestedCategory(f.desc, expenses, e.id) || suggestion || "";
   const amtNum = parseAmount(f.amt);
   const isSavings = f.cat === "Savings";
   const hasSavingsAccount = Boolean(getSavingsAccountId(cards));
@@ -4518,13 +4546,33 @@ function DetailSheet({ e, suggestion, cards = [], onSave, onDelete, onClose }) {
         }}
       />
       <span className="lbl">Category</span>
-      {suggestion && suggestion !== e.cat && (
+      {activeSuggestion && activeSuggestion !== f.cat && (
         <button
           className="category-suggestion-action"
           type="button"
-          onClick={() => set("cat", suggestion)}
+          style={{ "--c": CAT[activeSuggestion]?.[1] || "#64748b" }}
+          aria-label={`Use suggestion: ${activeSuggestion}`}
+          onClick={() => {
+            triggerHaptic("selection");
+            setF((current) => ({
+              ...current,
+              cat: activeSuggestion,
+              ...(activeSuggestion === "Savings" &&
+              hasSavingsAccount &&
+              !current.acct
+                ? { acct: spendableCards[0]?.id || "" }
+                : {}),
+            }));
+          }}
         >
-          Use suggestion: <CategorySuggestionValue category={suggestion} />
+          <img
+            src={suggestionSvg}
+            alt=""
+            className="category-suggestion-bulb-img"
+            aria-hidden="true"
+          />
+          <span className="category-suggestion-label">Suggested:</span>
+          <CategorySuggestionValue category={activeSuggestion} />
         </button>
       )}
       <div className="cg">
@@ -8537,6 +8585,7 @@ export default function MobilePrototype({
         <DetailSheet
           key={detail.id}
           e={detail}
+          expenses={S.exp}
           suggestion={suggestedCategory(detail.desc, S.exp, detail.id)}
           cards={cards}
           onSave={updateExpense}

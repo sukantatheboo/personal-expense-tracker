@@ -18,6 +18,7 @@ import alertSvg from "./assets/spend-trans-icns/alert.svg";
 import cashSvg from "./assets/spend-trans-icns/cash.svg";
 import starSvg from "./assets/spend-trans-icns/star.svg";
 import refreshSvg from "./assets/spend-trans-icns/refresh.svg";
+import suggestionSvg from "./assets/spend-trans-icns/suggestion.svg";
 
 export {
   billsSvg,
@@ -38,6 +39,7 @@ export {
   cashSvg,
   starSvg,
   refreshSvg,
+  suggestionSvg,
 };
 
 export const CATEGORY_ICONS = {
