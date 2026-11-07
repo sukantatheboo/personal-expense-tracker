@@ -2295,10 +2295,14 @@ a:active,
 }
 .mobile-prototype .seg {
   display: flex;
-  background: var(--bg);
+  background: color-mix(in srgb, var(--ink) 5%, var(--bg));
+  border: 1px solid var(--line);
   border-radius: 14px;
   padding: 4px;
   gap: 4px;
+}
+.mobile-prototype .sh .seg {
+  background: var(--bg);
 }
 .mobile-prototype .seg > * {
   flex: 1;
@@ -2306,7 +2310,9 @@ a:active,
   padding: 10px 4px;
   border-radius: 11px;
   font-size: 14px;
-  border: 0;
+  font-weight: 700;
+  color: var(--mut);
+  border: 1px solid transparent;
   background: none;
 }
 .mobile-prototype .seg button {
@@ -2314,6 +2320,7 @@ a:active,
     transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1.18),
     background-color 150ms ease,
     box-shadow 150ms ease,
+    border-color 150ms ease,
     color 150ms ease;
   touch-action: manipulation;
 }
@@ -2322,9 +2329,54 @@ a:active,
 }
 .mobile-prototype .seg .on {
   background: var(--card);
-  box-shadow: var(--shadow);
-  color: var(--g);
+  border-color: rgba(0, 0, 0, 0.05);
+  box-shadow:
+    0 1.5px 5px rgba(0, 0, 0, 0.08),
+    0 0.5px 1.5px rgba(0, 0, 0, 0.03);
+  color: var(--ink);
   font-weight: 800;
+}
+:root[data-theme="dark"] .mobile-prototype .seg,
+.mobile-prototype[data-theme="dark"] .seg {
+  background: color-mix(in srgb, var(--card) 55%, var(--bg));
+  border-color: var(--line);
+}
+:root[data-theme="dark"] .mobile-prototype .sh .seg,
+.mobile-prototype[data-theme="dark"] .sh .seg {
+  background: var(--bg);
+}
+:root[data-theme="dark"] .mobile-prototype .seg > *,
+.mobile-prototype[data-theme="dark"] .seg > * {
+  color: var(--mut);
+}
+:root[data-theme="dark"] .mobile-prototype .seg .on,
+.mobile-prototype[data-theme="dark"] .seg .on {
+  background: var(--card);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.4),
+    0 0.5px 1.5px rgba(255, 255, 255, 0.05);
+  color: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  .mobile-prototype:not([data-theme="light"]) .seg {
+    background: color-mix(in srgb, var(--card) 55%, var(--bg));
+    border-color: var(--line);
+  }
+  .mobile-prototype:not([data-theme="light"]) .sh .seg {
+    background: var(--bg);
+  }
+  .mobile-prototype:not([data-theme="light"]) .seg > * {
+    color: var(--mut);
+  }
+  .mobile-prototype:not([data-theme="light"]) .seg .on {
+    background: var(--card);
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow:
+      0 2px 6px rgba(0, 0, 0, 0.4),
+      0 0.5px 1.5px rgba(255, 255, 255, 0.05);
+    color: #ffffff;
+  }
 }
 .mobile-prototype .seg input {
   padding: 8px 4px;

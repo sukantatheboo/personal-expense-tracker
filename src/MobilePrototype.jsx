@@ -3737,19 +3737,24 @@ function Plans({
 
   return (
     <>
-      <div
-        className="seg"
-        style={{ marginBottom: 14, background: "var(--card)" }}
-      >
+      <div className="seg plans-seg" style={{ marginBottom: 14 }}>
         <button
+          type="button"
           className={plan === "budget" ? "on" : ""}
-          onClick={() => setPlan("budget")}
+          onClick={() => {
+            triggerHaptic("selection");
+            setPlan("budget");
+          }}
         >
           Budget
         </button>
         <button
+          type="button"
           className={plan === "rec" ? "on" : ""}
-          onClick={() => setPlan("rec")}
+          onClick={() => {
+            triggerHaptic("selection");
+            setPlan("rec");
+          }}
         >
           Recurring
         </button>
