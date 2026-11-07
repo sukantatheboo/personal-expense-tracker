@@ -1,4 +1,4 @@
-const CACHE_NAME = "spend-app-v11";
+const CACHE_NAME = "spend-app-v12";
 const APP_FILES = [
   "./",
   "./manifest.webmanifest",

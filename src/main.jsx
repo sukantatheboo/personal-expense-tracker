@@ -7,7 +7,7 @@ try {
   // ignore
 }
 
-// Early theme boot to prevent flash of unstyled theme
+// Early theme boot to prepare underlying app theme while keeping splash chrome dark (#0c130f)
 try {
   const savedTheme = localStorage.getItem("spend-theme-v1");
   const isDark =
@@ -16,10 +16,6 @@ try {
       typeof window !== "undefined" &&
       window.matchMedia?.("(prefers-color-scheme: dark)").matches);
   document.documentElement.dataset.theme = isDark ? "dark" : "light";
-  const color = isDark ? "#0e1411" : "#f4f3ee";
-  document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
-    meta.setAttribute("content", color);
-  });
 } catch {
   // ignore
 }
@@ -35,16 +31,24 @@ createRoot(document.getElementById("root")).render(
 );
 
 if (import.meta.env.PROD && "serviceWorker" in navigator) {
-  navigator.serviceWorker
-    .register(`${import.meta.env.BASE_URL}sw.js`, {
-      scope: import.meta.env.BASE_URL,
-    })
-    .then((registration) => {
-      registration.update();
-    })
-    .catch((error) => {
-      console.error("Service worker registration failed:", error);
-    });
+  const registerServiceWorker = () => {
+    navigator.serviceWorker
+      .register(`${import.meta.env.BASE_URL}sw.js`, {
+        scope: import.meta.env.BASE_URL,
+      })
+      .then((registration) => {
+        registration.update();
+      })
+      .catch((error) => {
+        console.error("Service worker registration failed:", error);
+      });
+  };
+
+  if (document.readyState === "complete") {
+    window.setTimeout(registerServiceWorker, 0);
+  } else {
+    window.addEventListener("load", registerServiceWorker, { once: true });
+  }
 
   let refreshing = false;
   navigator.serviceWorker.addEventListener("controllerchange", () => {

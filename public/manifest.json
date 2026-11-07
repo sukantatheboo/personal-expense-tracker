@@ -1,0 +1,41 @@
+{
+  "id": "./",
+  "name": "Spend",
+  "short_name": "Spend",
+  "description": "Personal expense tracker",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0c130f",
+  "theme_color": "#0c130f",
+  "categories": ["finance", "productivity"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Add Expense",
+      "short_name": "Add",
+      "description": "Quickly record a new expense",
+      "url": "./?action=add-expense",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Add Transaction",
+      "short_name": "Transfer",
+      "description": "Transfer funds or add income",
+      "url": "./?action=add-tx",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "View Activity",
+      "short_name": "Activity",
+      "description": "View monthly activity feed",
+      "url": "./?tab=activity",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

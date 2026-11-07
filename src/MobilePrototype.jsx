@@ -1,5 +1,7 @@
 import {
   Fragment,
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -70,9 +72,10 @@ import {
   shouldLockApp,
   lockAppManually,
 } from "./security.js";
-import MonthEndBanner from "./components/MonthEndBanner.jsx";
-import SpendLogin from "./components/SpendLogin.jsx";
 import "./MobilePrototype.css";
+
+const MonthEndBanner = lazy(() => import("./components/MonthEndBanner.jsx"));
+const SpendLogin = lazy(() => import("./components/SpendLogin.jsx"));
 
 /* ───────────── constants ───────────── */
 const CAT = {
@@ -1679,14 +1682,16 @@ function Home({
   return (
     <>
       {shouldShowBanner && (
-        <MonthEndBanner
-          month={bannerMonth}
-          isPreview={isCurrentMonth}
-          transactions={S?.exp || []}
-          amountOf={(t) => (t.cat === "Savings" ? 0 : t.amt)}
-          categoryOf={(t) => t.cat}
-          currency="৳"
-        />
+        <Suspense fallback={null}>
+          <MonthEndBanner
+            month={bannerMonth}
+            isPreview={isCurrentMonth}
+            transactions={S?.exp || []}
+            amountOf={(t) => (t.cat === "Savings" ? 0 : t.amt)}
+            categoryOf={(t) => t.cat}
+            currency="৳"
+          />
+        </Suspense>
       )}
       <div className="hd">
         <div>
@@ -7495,10 +7500,12 @@ export default function MobilePrototype({
   useLayoutEffect(() => {
     const activeTheme = S.theme === "dark" ? "dark" : "light";
     document.documentElement.dataset.theme = activeTheme;
-    const themeColor = activeTheme === "dark" ? "#0e1411" : "#f4f3ee";
-    document
-      .querySelectorAll('meta[name="theme-color"]')
-      .forEach((meta) => meta.setAttribute("content", themeColor));
+    if (!document.querySelector(".sp-root:not([hidden])")) {
+      const themeColor = activeTheme === "dark" ? "#0e1411" : "#f4f3ee";
+      document
+        .querySelectorAll('meta[name="theme-color"]')
+        .forEach((meta) => meta.setAttribute("content", themeColor));
+    }
   }, [S.theme]);
 
   useEffect(() => {
@@ -8234,17 +8241,19 @@ export default function MobilePrototype({
         className="mobile-prototype is-locked-screen"
         data-theme={S.theme}
       >
-        <SpendLogin
-          verifyPin={handleVerifyPin}
-          biometric={
-            hasBiometricsConfigured()
-              ? { type: "fingerprint", label: "Touch ID" }
-              : null
-          }
-          onBiometric={handleBiometricAuth}
-          onUnlock={handleUnlock}
-          onForgot={handleForgotPin}
-        />
+        <Suspense fallback={null}>
+          <SpendLogin
+            verifyPin={handleVerifyPin}
+            biometric={
+              hasBiometricsConfigured()
+                ? { type: "fingerprint", label: "Touch ID" }
+                : null
+            }
+            onBiometric={handleBiometricAuth}
+            onUnlock={handleUnlock}
+            onForgot={handleForgotPin}
+          />
+        </Suspense>
         <ConfirmationModal
           isOpen={resetPinConfirmOpen}
           title="Reset App PIN?"

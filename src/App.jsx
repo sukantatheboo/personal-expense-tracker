@@ -1,7 +1,25 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
-import MobilePrototype from "./MobilePrototype";
 import SpendSplash from "./components/SpendSplash.jsx";
+
+const loadMobilePrototype = () => import("./MobilePrototype");
+const MobilePrototype = lazy(loadMobilePrototype);
+
+function PrototypeMountSignal({ onMounted }) {
+  useLayoutEffect(() => {
+    onMounted?.();
+  }, [onMounted]);
+  return null;
+}
 import {
   ACCOUNT_OPTIONS,
   CATEGORIES,
@@ -34,6 +52,7 @@ import {
 import {
   disableBackgroundPush,
   enableBackgroundPush,
+  getSupabase,
   pushBackendConfigured,
   supabase,
   supabaseConfigured,
@@ -982,6 +1001,13 @@ export default function App() {
   const [isHydrated, setIsHydrated] = useState(!hasAppPin());
   const isHydratedRef = useRef(!hasAppPin());
   const [ready, setReady] = useState(false);
+  const [prototypeMounted, setPrototypeMounted] = useState(false);
+  const handlePrototypeMounted = useCallback(() => {
+    setPrototypeMounted(true);
+  }, []);
+  useEffect(() => {
+    void loadMobilePrototype();
+  }, []);
   const [expenses, setExpenses] = useState(loadExpenses);
   const [budgets, setBudgets] = useState(loadBudgets);
   const [budgetUpdatedAt, setBudgetUpdatedAt] = useState(loadBudgetUpdatedAt);
@@ -1372,16 +1398,18 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    const browserChromeColor = theme === "dark" ? "#0e1411" : "#f4f3ee";
-    document
-      .querySelectorAll('meta[name="theme-color"]')
-      .forEach((meta) => meta.setAttribute("content", browserChromeColor));
+    if (ready) {
+      const browserChromeColor = theme === "dark" ? "#0e1411" : "#f4f3ee";
+      document
+        .querySelectorAll('meta[name="theme-color"]')
+        .forEach((meta) => meta.setAttribute("content", browserChromeColor));
+    }
     try {
       localStorage.setItem(STORAGE_KEYS.theme, theme);
     } catch {
       // Keep the selected theme for this visit when storage is unavailable.
     }
-  }, [theme]);
+  }, [theme, ready]);
 
   useEffect(() => {
     if (!isHydratedRef.current) return;
@@ -1581,89 +1609,94 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!supabase) return undefined;
+    if (!supabaseConfigured) return undefined;
     let active = true;
-    supabase.auth.getSession().then(({ data, error }) => {
-      if (error) {
-        setAuthStatus(`Could not restore sign-in: ${error.message}`);
-        return;
-      }
-      if (active) {
-        const user = data.session?.user || null;
-        if (user) {
+    let authSubscription = null;
+    getSupabase().then((client) => {
+      if (!client || !active) return;
+      client.auth.getSession().then(({ data, error }) => {
+        if (error) {
+          setAuthStatus(`Could not restore sign-in: ${error.message}`);
+          return;
+        }
+        if (active) {
+          const user = data.session?.user || null;
+          if (user) {
+            notifyNewUserSignedIn(user);
+          }
+          if (user && localDataOwnerRef.current !== user.id) {
+            selectLocalDataForUser(user.id);
+          }
+          authUserIdRef.current = user?.id ?? null;
+          setPushUser(user);
+          if (window.location.hash.includes("type=recovery")) {
+            setAuthMode("update-password");
+            showAuthDialog();
+          }
+          setCloudSyncReady(false);
+          setCloudRealtimeStatus(user ? "connecting" : "disconnected");
+          setCloudSyncActivity(user ? "syncing" : "idle");
+          setNormalizedAccountSync(false);
+          lastSyncedSnapshotRef.current = null;
+          setCloudSyncEnabled(Boolean(user));
+        }
+      });
+      const {
+        data: { subscription },
+      } = client.auth.onAuthStateChange((event, session) => {
+        const user = session?.user || null;
+        const previousUserId = authUserIdRef.current || localDataOwnerRef.current;
+        setPushUser(user);
+        if (user && event === "SIGNED_IN") {
           notifyNewUserSignedIn(user);
+        }
+        if (event === "PASSWORD_RECOVERY") {
+          setAuthMode("update-password");
+          setAuthStatus("");
+          showAuthDialog();
+        }
+        if (
+          authUserIdRef.current === user?.id &&
+          (user || !localDataOwnerRef.current)
+        ) {
+          return;
         }
         if (user && localDataOwnerRef.current !== user.id) {
           selectLocalDataForUser(user.id);
         }
-        authUserIdRef.current = user?.id ?? null;
-        setPushUser(user);
-        if (window.location.hash.includes("type=recovery")) {
-          setAuthMode("update-password");
-          showAuthDialog();
+        if (!user && previousUserId) {
+          saveLocalUserSnapshot(previousUserId, cloudSnapshotRef.current);
+          clearSharedFinancialData();
+          localDataOwnerRef.current = null;
+          clearLocalDataOwner();
+          resetDataForNewUser();
         }
+        authUserIdRef.current = user?.id ?? null;
+        setBackgroundPushEnabled(false);
         setCloudSyncReady(false);
+        cloudVersionRef.current = null;
+        cloudAccountSettingsRef.current = null;
+        lastSyncedSnapshotRef.current = null;
         setCloudRealtimeStatus(user ? "connecting" : "disconnected");
         setCloudSyncActivity(user ? "syncing" : "idle");
         setNormalizedAccountSync(false);
-        lastSyncedSnapshotRef.current = null;
         setCloudSyncEnabled(Boolean(user));
-      }
-    });
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      const user = session?.user || null;
-      const previousUserId = authUserIdRef.current || localDataOwnerRef.current;
-      setPushUser(user);
-      if (user && event === "SIGNED_IN") {
-        notifyNewUserSignedIn(user);
-      }
-      if (event === "PASSWORD_RECOVERY") {
-        setAuthMode("update-password");
         setAuthStatus("");
-        showAuthDialog();
-      }
-      if (
-        authUserIdRef.current === user?.id &&
-        (user || !localDataOwnerRef.current)
-      ) {
-        return;
-      }
-      if (user && localDataOwnerRef.current !== user.id) {
-        selectLocalDataForUser(user.id);
-      }
-      if (!user && previousUserId) {
-        saveLocalUserSnapshot(previousUserId, cloudSnapshotRef.current);
-        clearSharedFinancialData();
-        localDataOwnerRef.current = null;
-        clearLocalDataOwner();
-        resetDataForNewUser();
-      }
-      authUserIdRef.current = user?.id ?? null;
-      setBackgroundPushEnabled(false);
-      setCloudSyncReady(false);
-      cloudVersionRef.current = null;
-      cloudAccountSettingsRef.current = null;
-      lastSyncedSnapshotRef.current = null;
-      setCloudRealtimeStatus(user ? "connecting" : "disconnected");
-      setCloudSyncActivity(user ? "syncing" : "idle");
-      setNormalizedAccountSync(false);
-      setCloudSyncEnabled(Boolean(user));
-      setAuthStatus("");
-      if (!user) {
-        try {
-          localStorage.removeItem(CLOUD_SYNC_USER_KEY);
-        } catch {
-          setCloudSyncStatus(
-            "Cloud sync is off, but this browser could not clear its sync preference.",
-          );
+        if (!user) {
+          try {
+            localStorage.removeItem(CLOUD_SYNC_USER_KEY);
+          } catch {
+            setCloudSyncStatus(
+              "Cloud sync is off, but this browser could not clear its sync preference.",
+            );
+          }
         }
-      }
+      });
+      authSubscription = subscription;
     });
     return () => {
       active = false;
-      subscription.unsubscribe();
+      authSubscription?.unsubscribe();
     };
   }, []);
 
@@ -3849,12 +3882,13 @@ export default function App() {
 
   async function handleAuthSubmit(event) {
     event.preventDefault();
-    if (!supabase) return;
+    const client = supabase || (await getSupabase());
+    if (!client) return;
     setAuthBusy(true);
     setAuthStatus("");
     try {
       if (authMode === "forgot-password") {
-        const { error } = await supabase.auth.resetPasswordForEmail(
+        const { error } = await client.auth.resetPasswordForEmail(
           authEmail.trim(),
           {
             redirectTo: new URL(
@@ -3872,7 +3906,7 @@ export default function App() {
       }
 
       if (authMode === "update-password") {
-        const { error } = await supabase.auth.updateUser({
+        const { error } = await client.auth.updateUser({
           password: authPassword,
         });
         if (error) throw error;
@@ -3884,7 +3918,7 @@ export default function App() {
 
       const result =
         authMode === "sign-up"
-          ? await supabase.auth.signUp({
+          ? await client.auth.signUp({
               email: authEmail.trim(),
               password: authPassword,
               options: {
@@ -3894,7 +3928,7 @@ export default function App() {
                 ).href,
               },
             })
-          : await supabase.auth.signInWithPassword({
+          : await client.auth.signInWithPassword({
               email: authEmail.trim(),
               password: authPassword,
             });
@@ -3936,7 +3970,7 @@ export default function App() {
   }
 
   function openProfileEditor() {
-    if (!pushUser || !supabase) {
+    if (!pushUser || !supabaseConfigured) {
       openSignInModal();
       return;
     }
@@ -3980,7 +4014,8 @@ export default function App() {
       setProfileStatus("Enter a name with 1 to 48 characters.");
       return false;
     }
-    if (!pushUser || !supabase) {
+    const client = supabase || (await getSupabase());
+    if (!pushUser || !client) {
       setProfileStatus("Sign in to edit your profile.");
       return false;
     }
@@ -3988,7 +4023,7 @@ export default function App() {
     setProfileSaving(true);
     setProfileStatus("");
     try {
-      const { data, error } = await supabase.auth.updateUser({
+      const { data, error } = await client.auth.updateUser({
         data: { full_name: name, name },
       });
       if (error) throw error;
@@ -4017,7 +4052,8 @@ export default function App() {
   }
 
   async function signOutOfPush() {
-    if (!supabase || !pushUser) return;
+    const client = supabase || (await getSupabase());
+    if (!client || !pushUser) return;
     setAuthBusy(true);
     try {
       if (cloudSyncEnabled && cloudSyncReady) {
@@ -4026,7 +4062,7 @@ export default function App() {
       if (pushBackendConfigured) {
         await disableBackgroundPush(pushUser.id);
       }
-      const { error } = await supabase.auth.signOut();
+      const { error } = await client.auth.signOut();
       if (error) throw error;
       setBackgroundPushEnabled(false);
       setNotificationStatus(
@@ -4298,78 +4334,86 @@ export default function App() {
 
   return (
     <>
-      {!ready && <SpendSplash onDone={() => setReady(true)} />}
-      <MobilePrototype
-        S={mobilePrototypeData}
-        onUnlock={handleAppUnlock}
-        onShift={addMonth}
-        onExpenseSave={saveMobileExpense}
-        onExpenseUpdate={saveMobileExpenseUpdate}
-        onExpenseDelete={removeExpense}
-        onBudgetSave={(amount) => {
-          setRecordDeleted("budgets", selectedMonth, false);
-          setBudgetUpdatedAt((current) => ({
-            ...current,
-            [selectedMonth]: Date.now(),
-          }));
-          setBudgets((current) => ({
-            ...current,
-            [selectedMonth]: roundMoney(amount),
-          }));
-          setBudgetEditingMonth(null);
-          return true;
-        }}
-        onBudgetClear={clearBudget}
-        onTransactionSave={saveMobileTransaction}
-        onTransactionUpdate={saveMobileTransactionUpdate}
-        onTransactionDelete={removeMobileTransaction}
-        onAddCard={handleAddCard}
-        onUpdateCard={handleUpdateCard}
-        onDeleteCard={handleDeleteCard}
-        onSetPrimaryCard={handleSetPrimaryCard}
-        onMoveCardToFront={handleMoveCardToFront}
-        onToggleRec={toggleMobileRecurring}
-        onRemoveRec={removeMobileRecurring}
-        onTheme={() =>
-          setTheme((current) => (current === "dark" ? "light" : "dark"))
-        }
-        onReminder={updateReminderTime}
-        profile={{
-          name: pushUser
-            ? userDisplayName(pushUser)
-            : localProfileName || "Local profile",
-          email: pushUser?.email || "",
-          initial: pushUser
-            ? userInitial(pushUser)
-            : profileInitial(localProfileName || "Local profile"),
-          connected: Boolean(pushUser),
-          hasName: Boolean(pushUser || localProfileName),
-        }}
-        onEditProfile={openProfileEditor}
-        profileStatus={profileStatus}
-        cloudSyncEnabled={cloudSyncEnabled}
-        cloudSyncReady={cloudSyncReady}
-        normalizedAccountSync={normalizedAccountSync}
-        cloudRealtimeStatus={cloudRealtimeStatus}
-        cloudSyncActivity={cloudSyncActivity}
-        pushBackendConfigured={pushBackendConfigured}
-        notificationPermission={notificationPermission}
-        notificationStatus={notificationStatus}
-        backgroundPushEnabled={backgroundPushEnabled}
-        onToggleNotifications={toggleNotifications}
-        onTestNotification={handleTestNotification}
-        backupStatus={backupStatus}
-        lastBackupAt={lastBackupAt}
-        onBackupDownload={downloadBackup}
-        onEncryptedBackupDownload={downloadEncryptedBackup}
-        onExpensesCsv={exportAllExpensesCsv}
-        onBackupRestore={() => backupFileInputRef.current?.click()}
-        onSignOut={signOutOfPush}
-        onResumeSync={handleResumeSync}
-        accountStatus={cloudSyncStatus || authStatus}
-        authBusy={authBusy}
-        onSignIn={openSignInModal}
-      />
+      {!ready && (
+        <SpendSplash
+          canExit={prototypeMounted}
+          onDone={() => setReady(true)}
+        />
+      )}
+      <Suspense fallback={null}>
+        <PrototypeMountSignal onMounted={handlePrototypeMounted} />
+        <MobilePrototype
+          S={mobilePrototypeData}
+          onUnlock={handleAppUnlock}
+          onShift={addMonth}
+          onExpenseSave={saveMobileExpense}
+          onExpenseUpdate={saveMobileExpenseUpdate}
+          onExpenseDelete={removeExpense}
+          onBudgetSave={(amount) => {
+            setRecordDeleted("budgets", selectedMonth, false);
+            setBudgetUpdatedAt((current) => ({
+              ...current,
+              [selectedMonth]: Date.now(),
+            }));
+            setBudgets((current) => ({
+              ...current,
+              [selectedMonth]: roundMoney(amount),
+            }));
+            setBudgetEditingMonth(null);
+            return true;
+          }}
+          onBudgetClear={clearBudget}
+          onTransactionSave={saveMobileTransaction}
+          onTransactionUpdate={saveMobileTransactionUpdate}
+          onTransactionDelete={removeMobileTransaction}
+          onAddCard={handleAddCard}
+          onUpdateCard={handleUpdateCard}
+          onDeleteCard={handleDeleteCard}
+          onSetPrimaryCard={handleSetPrimaryCard}
+          onMoveCardToFront={handleMoveCardToFront}
+          onToggleRec={toggleMobileRecurring}
+          onRemoveRec={removeMobileRecurring}
+          onTheme={() =>
+            setTheme((current) => (current === "dark" ? "light" : "dark"))
+          }
+          onReminder={updateReminderTime}
+          profile={{
+            name: pushUser
+              ? userDisplayName(pushUser)
+              : localProfileName || "Local profile",
+            email: pushUser?.email || "",
+            initial: pushUser
+              ? userInitial(pushUser)
+              : profileInitial(localProfileName || "Local profile"),
+            connected: Boolean(pushUser),
+            hasName: Boolean(pushUser || localProfileName),
+          }}
+          onEditProfile={openProfileEditor}
+          profileStatus={profileStatus}
+          cloudSyncEnabled={cloudSyncEnabled}
+          cloudSyncReady={cloudSyncReady}
+          normalizedAccountSync={normalizedAccountSync}
+          cloudRealtimeStatus={cloudRealtimeStatus}
+          cloudSyncActivity={cloudSyncActivity}
+          pushBackendConfigured={pushBackendConfigured}
+          notificationPermission={notificationPermission}
+          notificationStatus={notificationStatus}
+          backgroundPushEnabled={backgroundPushEnabled}
+          onToggleNotifications={toggleNotifications}
+          onTestNotification={handleTestNotification}
+          backupStatus={backupStatus}
+          lastBackupAt={lastBackupAt}
+          onBackupDownload={downloadBackup}
+          onEncryptedBackupDownload={downloadEncryptedBackup}
+          onExpensesCsv={exportAllExpensesCsv}
+          onBackupRestore={() => backupFileInputRef.current?.click()}
+          onSignOut={signOutOfPush}
+          onResumeSync={handleResumeSync}
+          accountStatus={cloudSyncStatus || authStatus}
+          authBusy={authBusy}
+          onSignIn={openSignInModal}
+        />
+      </Suspense>
       {authModalOpen &&
         (!pushUser || authMode === "update-password" || authModalClosing) &&
         createPortal(

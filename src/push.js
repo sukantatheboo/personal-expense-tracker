@@ -1,5 +1,3 @@
-import { createClient } from "@supabase/supabase-js";
-
 const cleanEnv = (value) =>
   typeof value === "string" ? value.trim().replace(/^["']|["']$/g, "") : "";
 
@@ -12,9 +10,22 @@ export const pushBackendConfigured = Boolean(
   supabaseConfigured && vapidPublicKey,
 );
 
-export const supabase = supabaseConfigured
-  ? createClient(supabaseUrl, supabaseAnonKey)
-  : null;
+export let supabase = null;
+let supabaseInitPromise = null;
+
+export async function getSupabase() {
+  if (!supabaseConfigured) return null;
+  if (supabase) return supabase;
+  if (!supabaseInitPromise) {
+    supabaseInitPromise = import("@supabase/supabase-js").then(
+      ({ createClient }) => {
+        supabase = createClient(supabaseUrl, supabaseAnonKey);
+        return supabase;
+      },
+    );
+  }
+  return supabaseInitPromise;
+}
 
 function getDeviceId() {
   const key = "spend-push-device-id-v1";
@@ -39,7 +50,8 @@ function vapidKeyBytes(value) {
 }
 
 export async function enableBackgroundPush(userId) {
-  if (!supabase || !vapidPublicKey) {
+  const client = await getSupabase();
+  if (!client || !vapidPublicKey) {
     throw new Error("Background push has not been configured for this app.");
   }
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
@@ -67,7 +79,7 @@ export async function enableBackgroundPush(userId) {
     throw new Error("The browser returned an invalid push subscription.");
   }
 
-  const { error } = await supabase.from("push_devices").upsert(
+  const { error } = await client.from("push_devices").upsert(
     {
       user_id: userId,
       device_id: getDeviceId(),
@@ -81,15 +93,16 @@ export async function enableBackgroundPush(userId) {
 }
 
 export async function disableBackgroundPush(userId) {
-  if (!supabase) throw new Error("Background push has not been configured.");
+  const client = await getSupabase();
+  if (!client) throw new Error("Background push has not been configured.");
   const deviceId = getDeviceId();
-  const { error: remindersError } = await supabase
+  const { error: remindersError } = await client
     .from("push_reminders")
     .delete()
     .eq("user_id", userId)
     .eq("device_id", deviceId);
   if (remindersError) throw remindersError;
-  const { error: deviceError } = await supabase
+  const { error: deviceError } = await client
     .from("push_devices")
     .delete()
     .eq("user_id", userId)
@@ -116,7 +129,8 @@ export async function disableBackgroundPush(userId) {
 }
 
 export async function syncBackgroundSchedules(userId, schedules, reminderTime) {
-  if (!supabase) throw new Error("Background push has not been configured.");
+  const client = await getSupabase();
+  if (!client) throw new Error("Background push has not been configured.");
   if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(reminderTime)) {
     throw new Error("Choose a valid reminder time.");
   }
@@ -149,13 +163,13 @@ export async function syncBackgroundSchedules(userId, schedules, reminderTime) {
   });
 
   if (reminders.length) {
-    const { error } = await supabase
+    const { error } = await client
       .from("push_reminders")
       .upsert(reminders, { onConflict: "user_id,device_id,schedule_id" });
     if (error) throw error;
   }
 
-  const { data: existing, error: loadError } = await supabase
+  const { data: existing, error: loadError } = await client
     .from("push_reminders")
     .select("schedule_id")
     .eq("user_id", userId)
@@ -167,7 +181,7 @@ export async function syncBackgroundSchedules(userId, schedules, reminderTime) {
     .map((r) => r.schedule_id)
     .filter((id) => !currentIds.has(id));
   if (staleIds.length) {
-    const { error } = await supabase
+    const { error } = await client
       .from("push_reminders")
       .delete()
       .eq("user_id", userId)

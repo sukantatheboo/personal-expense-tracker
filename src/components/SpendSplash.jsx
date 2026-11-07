@@ -1,26 +1,17 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 /**
- * SpendSplash — opening animation.
+ * SpendSplash — opening animation with zero-flicker static splash handoff.
  *
- * What was wrong (measured from the screen recording):
- *  1. The effect re-ran while the intro was playing (new `onDone` identity on
- *     every parent render), so the whole sequence restarted from the dot —
- *     twice. Now: the effect runs once, props live in a ref, and the timeline
- *     is anchored to a module-level clock, so even a re-render or remount
- *     resumes mid-flight instead of restarting.
- *  2. The overlay was un-hidden inside useEffect, which runs AFTER first paint,
- *     so the lock screen flashed for a frame. Now: the overlay is opaque and
- *     visible in the very first commit, and animations are created in a layout
- *     effect (before paint).
- *  3. Letters animated `color` (main-thread repaint x10) on top of
- *     transform/opacity. Over a dark background, a plain opacity fade gives the
- *     same mist -> ink look with zero repaints.
- *
- * Only transform + opacity run on the compositor, so they stay smooth even when
- * the app underneath is busy mounting. (The tile's radius morph and the arrow
- * stroke are tiny and main-thread; they finish before the heavy work usually
- * lands, and are the only things that can stutter.)
+ * Syncs seamlessly with the inline `#initial-splash` element in `index.html`:
+ *  1. `#initial-splash` paints on the very first browser frame (before any JS
+ *     downloads or executes) and begins the opening animation via CSS keyframes.
+ *  2. When React mounts `SpendSplash`, it reads the exact sub-millisecond
+ *     `currentTime` from `#initial-splash`'s running CSS animation, starts its
+ *     compositor animations at that exact timestamp underneath `#initial-splash`,
+ *     and fades `#initial-splash` out before removing it from the DOM.
+ *  3. Once the intro hold completes (and the app underneath has mounted),
+ *     `SpendSplash` fades out and restores the document theme background.
  */
 
 const EASE = {
@@ -62,29 +53,82 @@ function alreadySeen(once, key) {
   }
 }
 
+function syncThemeColorMeta() {
+  if (typeof document === "undefined") return;
+  const isDark = document.documentElement.dataset.theme === "dark";
+  const color = isDark ? "#0e1411" : "#f4f3ee";
+  document
+    .querySelectorAll('meta[name="theme-color"]')
+    .forEach((meta) => meta.setAttribute("content", color));
+}
+
+function handoffStaticSplash(immediate = false) {
+  if (typeof document === "undefined") return null;
+  const staticSplash = document.getElementById("initial-splash");
+  if (!staticSplash) return null;
+
+  let animTime = null;
+  try {
+    const tileAnim = staticSplash
+      .querySelector(".sp-tile")
+      ?.getAnimations?.()[0];
+    if (tileAnim && typeof tileAnim.currentTime === "number") {
+      animTime = tileAnim.currentTime;
+    }
+  } catch {
+    // Fallback to performance.now() below
+  }
+
+  if (immediate) {
+    staticSplash.remove();
+    return animTime;
+  }
+
+  if (!staticSplash.classList.contains("sp-handoff")) {
+    staticSplash.classList.add("sp-handoff");
+    window.setTimeout(() => {
+      staticSplash.remove();
+    }, 180);
+  }
+  return animTime;
+}
+
 export default function SpendSplash({
   onDone,
+  canExit = true,
   once = false,
   storageKey = "spend-splash",
   fontFamily = '"Outfit", "Nunito Sans", ui-rounded, system-ui, sans-serif',
-  // Set to null/"" if you bundle the font yourself (recommended, see notes).
   fontUrl = "https://fonts.googleapis.com/css2?family=Outfit:wght@600&display=swap",
 }) {
   const rootRef = useRef(null);
   const firedSkip = useRef(false);
+  const releaseFnRef = useRef(null);
+  const pendingExitRef = useRef(false);
 
   // Always-latest props, deliberately NOT effect dependencies.
   const live = useRef({});
-  live.current = { onDone, once, storageKey, fontFamily, fontUrl };
+  live.current = { onDone, canExit, once, storageKey, fontFamily, fontUrl };
 
   const [skip] = useState(() => alreadySeen(once, storageKey));
 
   useEffect(() => {
     if (!skip || firedSkip.current) return;
     firedSkip.current = true;
+    handoffStaticSplash(true);
+    document.documentElement.style.backgroundColor = "";
+    document.body.style.backgroundColor = "";
+    syncThemeColorMeta();
     document.dispatchEvent(new CustomEvent("spend:splash-done"));
     live.current.onDone?.();
   }, [skip]);
+
+  useEffect(() => {
+    if (canExit && pendingExitRef.current && releaseFnRef.current) {
+      pendingExitRef.current = false;
+      releaseFnRef.current();
+    }
+  }, [canExit]);
 
   useIsoLayoutEffect(() => {
     const root = rootRef.current;
@@ -101,14 +145,24 @@ export default function SpendSplash({
     const letters = root.querySelectorAll(".sp-l");
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-    // ---- timeline anchor: resume instead of restart ----------------------
+    // Read currentTime from the inline `#initial-splash` CSS animation so React
+    // continues from the exact sub-millisecond frame without restarting.
+    const staticAnimTime = handoffStaticSplash(false);
     const now = performance.now();
     if (clock === null || now - lastCleanup > RESUME_WINDOW) {
-      clock = now;
+      if (
+        typeof staticAnimTime === "number" &&
+        Number.isFinite(staticAnimTime) &&
+        staticAnimTime >= 0
+      ) {
+        clock = now - staticAnimTime;
+      } else {
+        clock = 0; // Anchor to document navigation start when static splash was painted
+      }
       releaseAt = null;
     }
-    const sinceStart = () => performance.now() - clock;
-    const elapsed = sinceStart(); // 0 on a fresh start
+    const sinceStart = () => Math.max(0, performance.now() - clock);
+    const elapsed = sinceStart();
 
     // ---- helpers ----------------------------------------------------------
     const anims = [];
@@ -120,7 +174,7 @@ export default function SpendSplash({
     };
     const intro = (el, kf, opts) => play(el, kf, opts, elapsed);
 
-    // Font: inject once, never block the first frame.
+    // Font: inject once asynchronously after first paint, never block FCP.
     const { fontUrl: fUrl, fontFamily: fFam } = live.current;
     if (fUrl && !document.querySelector("link[data-spend-splash-font]")) {
       const link = document.createElement("link");
@@ -135,13 +189,12 @@ export default function SpendSplash({
     let released = false;
     let holdTimer;
 
-    const prevHtmlBg = document.documentElement.style.backgroundColor;
-    const prevBodyBg = document.body.style.backgroundColor;
     document.documentElement.style.backgroundColor = "#0c130f";
     document.body.style.backgroundColor = "#0c130f";
     const restoreBg = () => {
-      document.documentElement.style.backgroundColor = prevHtmlBg;
-      document.body.style.backgroundColor = prevBodyBg;
+      document.documentElement.style.backgroundColor = "";
+      document.body.style.backgroundColor = "";
+      syncThemeColorMeta();
     };
 
     // ---- intro ------------------------------------------------------------
@@ -160,11 +213,11 @@ export default function SpendSplash({
       intro(
         tile,
         [
-          { transform: "scale3d(0,0,1)", easing: EASE.swell },
+          { transform: "scale3d(.07,.07,1)", easing: EASE.swell },
           { transform: "scale3d(.07,.07,1)", offset: 0.2, easing: EASE.pop },
           { transform: "scale3d(1,1,1)" },
         ],
-        { duration: 800 }
+        { duration: 800 },
       );
       intro(
         tile,
@@ -173,7 +226,7 @@ export default function SpendSplash({
           { borderRadius: "50%", offset: 0.2, easing: EASE.pop },
           { borderRadius: "25%" },
         ],
-        { duration: 800 }
+        { duration: 800 },
       );
 
       // 2. Arrow draws itself: shaft first, then the head opens from the tip.
@@ -187,7 +240,7 @@ export default function SpendSplash({
             { strokeDashoffset: len, opacity: 1, offset: 0.001, easing },
             { strokeDashoffset: 0, opacity: 1, offset: 1 },
           ],
-          { delay, duration }
+          { delay, duration },
         );
       };
       draw(shaft, T.shaft, 400, EASE.inOut);
@@ -221,8 +274,8 @@ export default function SpendSplash({
             delay: T.letters + i * T.stagger,
             duration: 480,
             easing: EASE.out,
-          }
-        )
+          },
+        ),
       );
     }
 
@@ -230,18 +283,21 @@ export default function SpendSplash({
     const finish = () => {
       if (finished) return;
       finished = true;
+      handoffStaticSplash(true);
       restoreBg();
       root.hidden = true;
       clock = null;
       releaseAt = null;
       try {
-        if (live.current.once) sessionStorage.setItem(live.current.storageKey, "1");
+        if (live.current.once)
+          sessionStorage.setItem(live.current.storageKey, "1");
       } catch {}
       document.dispatchEvent(new CustomEvent("spend:splash-done"));
       live.current.onDone?.();
     };
 
     const exit = () => {
+      handoffStaticSplash(true);
       restoreBg();
       if (releaseAt === null) releaseAt = sinceStart();
       const since = Math.max(0, sinceStart() - releaseAt);
@@ -254,46 +310,58 @@ export default function SpendSplash({
           { transform: reduce ? "scale3d(1,1,1)" : "scale3d(.94,.94,1)" },
         ],
         { duration: d, easing: EASE.exit },
-        since
+        since,
       );
       const fade = play(
         root,
         [{ opacity: 1 }, { opacity: 0 }],
         { duration: d, easing: EASE.exit },
-        since
+        since,
       );
       fade.onfinish = finish;
     };
 
     // Tap, click, Esc, Enter or Space skips the hold.
     const onKey = (e) => {
-      if (e.key === "Escape" || e.key === "Enter" || e.key === " ") release();
+      if (e.key === "Escape" || e.key === "Enter" || e.key === " ")
+        requestRelease();
     };
     const unlisten = () => {
-      root.removeEventListener("pointerdown", release);
+      root.removeEventListener("pointerdown", requestRelease);
       window.removeEventListener("keydown", onKey);
     };
-    function release() {
+    function executeRelease() {
       if (released || !alive) return;
       released = true;
+      pendingExitRef.current = false;
       clearTimeout(holdTimer);
       unlisten();
       exit();
     }
+    function requestRelease() {
+      if (released || !alive) return;
+      if (live.current.canExit === false) {
+        pendingExitRef.current = true;
+        return;
+      }
+      executeRelease();
+    }
+    releaseFnRef.current = executeRelease;
 
     if (releaseAt !== null) {
       // Remounted during the exit: continue it from where it was.
       released = true;
       exit();
     } else {
-      root.addEventListener("pointerdown", release);
+      root.addEventListener("pointerdown", requestRelease);
       window.addEventListener("keydown", onKey);
       const hold = reduce ? 900 : T.hold;
-      holdTimer = setTimeout(release, Math.max(0, hold - elapsed));
+      holdTimer = setTimeout(requestRelease, Math.max(0, hold - elapsed));
     }
 
     return () => {
       alive = false;
+      releaseFnRef.current = null;
       restoreBg();
       lastCleanup = performance.now();
       clearTimeout(holdTimer);
@@ -365,7 +433,7 @@ const CSS = `
 .sp-tile {
   width: 100%; height: 100%;
   background: var(--sp-green); border-radius: 25%;
-  transform: scale3d(0,0,1);
+  transform: scale3d(.07,.07,1);
   will-change: transform; backface-visibility: hidden;
 }
 .sp-tile svg { display: block; width: 100%; height: 100%; overflow: visible; }

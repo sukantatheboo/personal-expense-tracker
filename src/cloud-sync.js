@@ -1,4 +1,4 @@
-import { supabase } from "./push.js";
+import { getSupabase, supabase } from "./push.js";
 import { emptyAccountData, loadAccountData } from "./data.js";
 
 export const CLOUD_SYNC_USER_KEY = "spend-cloud-sync-user-v1";
@@ -177,7 +177,6 @@ function mergeAccountDataWithRawSnapshot(
           mergedCards.length > 0,
         configured:
           rawSettings.configured === true || normSettings.configured === true,
-        updatedAt: Math.max(rawUpdatedAt, normUpdatedAt),
       },
       transactions: Array.from(txMap.values()),
     },
@@ -185,8 +184,8 @@ function mergeAccountDataWithRawSnapshot(
   );
 }
 
-async function loadLegacyCloudData(userId) {
-  let settingsQuery = supabase
+async function loadLegacyCloudData(client, userId) {
+  let settingsQuery = client
     .from("spend_account_settings")
     .select(
       "start_date, bkash_balance, bank_balance, savings_balance, configured, updated_at",
@@ -196,13 +195,13 @@ async function loadLegacyCloudData(userId) {
 
   const [snapshotResult, initialSettingsResult, transactionsResult] =
     await Promise.all([
-      supabase
+      client
         .from("spend_user_data")
         .select("data, updated_at")
         .eq("user_id", userId)
         .maybeSingle(),
       settingsQuery,
-      supabase
+      client
         .from("spend_account_transactions")
         .select(
           "id, type, amount, transaction_date, description, account, direction, from_account, to_account, created_at, updated_at",
@@ -219,7 +218,7 @@ async function loadLegacyCloudData(userId) {
       settingsResult.error.code === "42703" ||
       settingsResult.error.message?.includes("savings_balance"))
   ) {
-    settingsResult = await supabase
+    settingsResult = await client
       .from("spend_account_settings")
       .select("start_date, bkash_balance, bank_balance, configured, updated_at")
       .eq("user_id", userId)
@@ -331,12 +330,13 @@ async function loadLegacyCloudData(userId) {
 }
 
 export async function loadCloudData(userId) {
-  if (!supabase) throw new Error("Cloud sync is not configured.");
+  const client = await getSupabase();
+  if (!client) throw new Error("Cloud sync is not configured.");
 
   try {
     const [rpcResult, rawSnapshotResult] = await Promise.all([
-      supabase.rpc("load_spend_user_snapshot"),
-      supabase
+      client.rpc("load_spend_user_snapshot"),
+      client
         .from("spend_user_data")
         .select("data, updated_at")
         .eq("user_id", userId)
@@ -374,7 +374,7 @@ export async function loadCloudData(userId) {
     // If RPC or snapshot load encounters any error, fallback to legacy table queries
   }
 
-  return loadLegacyCloudData(userId);
+  return loadLegacyCloudData(client, userId);
 }
 
 function sanitizeCloudPayload(data) {
@@ -402,7 +402,8 @@ function sanitizeCloudPayload(data) {
 
     let direction = tx.direction || tx.dir;
     if (direction === "up" || direction === "increase") direction = "increase";
-    else if (direction === "down" || direction === "decrease") direction = "decrease";
+    else if (direction === "down" || direction === "decrease")
+      direction = "decrease";
 
     const account =
       typeof tx.account === "string"
@@ -459,9 +460,9 @@ function sanitizeCloudPayload(data) {
   };
 }
 
-async function executeSaveQuery(userId, payload, expectedUpdatedAt) {
+async function executeSaveQuery(client, userId, payload, expectedUpdatedAt) {
   if (expectedUpdatedAt) {
-    const updateResult = await supabase
+    const updateResult = await client
       .from("spend_user_data")
       .update({ data: payload })
       .eq("user_id", userId)
@@ -472,8 +473,7 @@ async function executeSaveQuery(userId, payload, expectedUpdatedAt) {
     if (updateResult.error) return updateResult;
     if (updateResult.data) return updateResult;
 
-    // If update returned 0 rows, check if row exists
-    const { data: existing, error: checkError } = await supabase
+    const { data: existing, error: checkError } = await client
       .from("spend_user_data")
       .select("updated_at")
       .eq("user_id", userId)
@@ -481,20 +481,17 @@ async function executeSaveQuery(userId, payload, expectedUpdatedAt) {
 
     if (checkError) return { data: null, error: checkError };
     if (!existing) {
-      // Row doesn't exist yet, insert safely with upsert
-      return await supabase
+      return await client
         .from("spend_user_data")
         .upsert({ user_id: userId, data: payload }, { onConflict: "user_id" })
         .select("updated_at")
         .single();
     }
 
-    // Optimistic concurrency mismatch: row exists with different updated_at
     return { data: null, error: null };
   }
 
-  // Without expectedUpdatedAt, upsert guarantees no duplicate key 23505 crashes
-  return await supabase
+  return await client
     .from("spend_user_data")
     .upsert({ user_id: userId, data: payload }, { onConflict: "user_id" })
     .select("updated_at")
@@ -502,10 +499,12 @@ async function executeSaveQuery(userId, payload, expectedUpdatedAt) {
 }
 
 export async function saveCloudData(userId, data, expectedUpdatedAt = null) {
-  if (!supabase) throw new Error("Cloud sync is not configured.");
+  const client = await getSupabase();
+  if (!client) throw new Error("Cloud sync is not configured.");
 
   const sanitized = sanitizeCloudPayload(data);
   const { data: saved, error } = await executeSaveQuery(
+    client,
     userId,
     sanitized,
     expectedUpdatedAt,
@@ -540,6 +539,7 @@ export async function saveCloudData(userId, data, expectedUpdatedAt = null) {
       },
     };
     const { data: retrySaved, error: retryError } = await executeSaveQuery(
+      client,
       userId,
       fallbackPayload,
       expectedUpdatedAt,
@@ -552,9 +552,10 @@ export async function saveCloudData(userId, data, expectedUpdatedAt = null) {
 }
 
 export async function deleteCloudData(userId) {
-  if (!supabase) throw new Error("Cloud sync is not configured.");
+  const client = await getSupabase();
+  if (!client) throw new Error("Cloud sync is not configured.");
 
-  const { error } = await supabase
+  const { error } = await client
     .from("spend_user_data")
     .delete()
     .eq("user_id", userId);

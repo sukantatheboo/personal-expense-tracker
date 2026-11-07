@@ -28,6 +28,8 @@ export function BkashLogo({ className = "", height = 24 }) {
       <img
         src={bkashSvg}
         alt="bKash"
+        loading="lazy"
+        decoding="async"
         style={{
           height: Math.round(height * 0.95),
           width: "auto",
@@ -58,6 +60,8 @@ export function NagadLogo({ className = "", height = 24 }) {
     <img
       src={nagadImg}
       alt="Nagad"
+      loading="lazy"
+      decoding="async"
       className={`card-brand-img ${className}`}
       style={{
         height,
@@ -79,6 +83,8 @@ export function RocketLogo({ className = "", height = 24 }) {
     <img
       src={rocketImg}
       alt="Rocket"
+      loading="lazy"
+      decoding="async"
       className={`card-brand-img ${className}`}
       style={{
         height,
@@ -101,6 +107,8 @@ export function UpayLogo({ className = "", height = 24 }) {
     <img
       src={upayImg}
       alt="Upay"
+      loading="lazy"
+      decoding="async"
       className={`card-brand-img ${className}`}
       style={{
         height,
@@ -122,6 +130,8 @@ export function BracBankLogo({ className = "", height = 24 }) {
     <img
       src={bracBankSvg}
       alt="BRAC Bank"
+      loading="lazy"
+      decoding="async"
       className={`card-brand-img ${className}`}
       style={{
         height,
@@ -144,6 +154,8 @@ export function CityBankLogo({ className = "", height = 24 }) {
     <img
       src={cityBankImg}
       alt="City Bank"
+      loading="lazy"
+      decoding="async"
       className={`card-brand-img ${className}`}
       style={{
         height,
@@ -165,6 +177,8 @@ export function EblLogo({ className = "", height = 24 }) {
     <img
       src={eblSvg}
       alt="Eastern Bank"
+      loading="lazy"
+      decoding="async"
       className={`card-brand-img ${className}`}
       style={{
         height,
@@ -186,6 +200,8 @@ export function DbblLogo({ className = "", height = 24 }) {
     <img
       src={dbblImg}
       alt="DBBL"
+      loading="lazy"
+      decoding="async"
       className={`card-brand-img ${className}`}
       style={{
         height,
@@ -211,6 +227,8 @@ export function StandardCharteredLogo({ className = "", height = 24 }) {
       <img
         src={scbImg}
         alt="Standard Chartered"
+        loading="lazy"
+        decoding="async"
         style={{
           height,
           width: "auto",
