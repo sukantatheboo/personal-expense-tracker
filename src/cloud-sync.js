@@ -3,6 +3,35 @@ import { emptyAccountData, loadAccountData } from "./data.js";
 
 export const CLOUD_SYNC_USER_KEY = "spend-cloud-sync-user-v1";
 
+export function hasPotentialCloudSession() {
+  if (typeof window === "undefined") return false;
+  try {
+    const hash = window.location.hash || "";
+    const search = window.location.search || "";
+    if (
+      hash.includes("access_token=") ||
+      hash.includes("refresh_token=") ||
+      hash.includes("type=recovery") ||
+      hash.includes("error=") ||
+      search.includes("code=")
+    ) {
+      return true;
+    }
+    if (localStorage.getItem(CLOUD_SYNC_USER_KEY)) {
+      return true;
+    }
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith("sb-") && key.endsWith("-auth-token")) {
+        return true;
+      }
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+
 const LEGACY_DB_ACCOUNTS = new Set(["bkash", "bank", "savings"]);
 
 function isNormalizedAccountSchemaUnavailable(error) {

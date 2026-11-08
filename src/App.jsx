@@ -42,6 +42,7 @@ import {
 } from "./push.js";
 import {
   CLOUD_SYNC_USER_KEY,
+  hasPotentialCloudSession,
   loadCloudData,
   saveCloudData,
   subscribeToCloudChanges,
@@ -53,7 +54,6 @@ import {
   hasAppPin,
   isSessionUnlocked,
 } from "./security.js";
-import { Capacitor } from "@capacitor/core";
 import {
   checkAndNotifyNewMonth,
   checkNotificationPermission,
@@ -1463,38 +1463,41 @@ export default function App() {
     return cleanup;
   }, []);
 
-  useEffect(() => {
-    if (!supabaseConfigured) return undefined;
-    let active = true;
-    let authSubscription = null;
+  const supabaseAuthInitRef = useRef(false);
+  const authSubscriptionRef = useRef(null);
+
+  const initSupabaseAuth = useCallback(() => {
+    if (!supabaseConfigured || supabaseAuthInitRef.current) return;
+    supabaseAuthInitRef.current = true;
     getSupabase().then((client) => {
-      if (!client || !active) return;
+      if (!client) {
+        supabaseAuthInitRef.current = false;
+        return;
+      }
       client.auth.getSession().then(({ data, error }) => {
         if (error) {
           setAuthStatus(`Could not restore sign-in: ${error.message}`);
           return;
         }
-        if (active) {
-          const user = data.session?.user || null;
-          if (user) {
-            notifyNewUserSignedIn(user);
-          }
-          if (user && localDataOwnerRef.current !== user.id) {
-            selectLocalDataForUser(user.id);
-          }
-          authUserIdRef.current = user?.id ?? null;
-          setPushUser(user);
-          if (window.location.hash.includes("type=recovery")) {
-            setAuthMode("update-password");
-            showAuthDialog();
-          }
-          setCloudSyncReady(false);
-          setCloudRealtimeStatus(user ? "connecting" : "disconnected");
-          setCloudSyncActivity(user ? "syncing" : "idle");
-          setNormalizedAccountSync(false);
-          lastSyncedSnapshotRef.current = null;
-          setCloudSyncEnabled(Boolean(user));
+        const user = data.session?.user || null;
+        if (user) {
+          notifyNewUserSignedIn(user);
         }
+        if (user && localDataOwnerRef.current !== user.id) {
+          selectLocalDataForUser(user.id);
+        }
+        authUserIdRef.current = user?.id ?? null;
+        setPushUser(user);
+        if (window.location.hash.includes("type=recovery")) {
+          setAuthMode("update-password");
+          showAuthDialog();
+        }
+        setCloudSyncReady(false);
+        setCloudRealtimeStatus(user ? "connecting" : "disconnected");
+        setCloudSyncActivity(user ? "syncing" : "idle");
+        setNormalizedAccountSync(false);
+        lastSyncedSnapshotRef.current = null;
+        setCloudSyncEnabled(Boolean(user));
       });
       const {
         data: { subscription },
@@ -1548,13 +1551,33 @@ export default function App() {
           }
         }
       });
-      authSubscription = subscription;
+      authSubscriptionRef.current = subscription;
     });
-    return () => {
-      active = false;
-      authSubscription?.unsubscribe();
-    };
   }, []);
+
+  useEffect(() => {
+    if (!supabaseConfigured) return undefined;
+    if (!hasPotentialCloudSession() && !localDataOwnerRef.current) {
+      return undefined;
+    }
+    const startAuth = () => initSupabaseAuth();
+    let idleId;
+    let timerId;
+    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+      idleId = window.requestIdleCallback(startAuth, { timeout: 1500 });
+    } else {
+      timerId = window.setTimeout(startAuth, 350);
+    }
+    return () => {
+      if (idleId && typeof window !== "undefined" && "cancelIdleCallback" in window) {
+        window.cancelIdleCallback(idleId);
+      }
+      if (timerId) window.clearTimeout(timerId);
+      authSubscriptionRef.current?.unsubscribe();
+      authSubscriptionRef.current = null;
+      supabaseAuthInitRef.current = false;
+    };
+  }, [initSupabaseAuth]);
 
   useEffect(() => {
     if (!supabase || !pushUser || !cloudSyncEnabled || !isHydrated) {
@@ -3314,6 +3337,7 @@ export default function App() {
   }
 
   function openSignInModal() {
+    initSupabaseAuth();
     authTriggerRef.current =
       document.activeElement instanceof HTMLElement
         ? document.activeElement
@@ -3394,7 +3418,10 @@ export default function App() {
   }
 
   async function toggleNotifications() {
-    if (Capacitor.isNativePlatform()) {
+    if (
+      typeof window !== "undefined" &&
+      Boolean(window.Capacitor?.isNativePlatform?.())
+    ) {
       const granted = await requestNotificationPermission();
       const perm = await checkNotificationPermission();
       setNotificationPermission(perm);

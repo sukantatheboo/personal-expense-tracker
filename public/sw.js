@@ -1,195 +1,172 @@
-const CACHE_NAME = "spend-app-v14";
-const APP_FILES = [
-  "./",
-  "./manifest.webmanifest",
-  "./favicon.svg",
-  "./icons/icon-180.png",
-  "./icons/icon-192.png",
-  "./icons/icon-512.png",
-  "./icons/icon-maskable-512.png",
+const CACHE_NAME = "spend-shell-v8";
+
+const STATIC_PATHS = [
+  "",
+  "index.html",
+  "manifest.webmanifest",
+  "favicon.svg",
+  "icons/apple-touch-icon.png",
+  "icons/icon-192.png",
+  "icons/icon-512.png",
+  "icons/icon-512-maskable.png",
 ];
+
+function getScopeUrls() {
+  const scope = self.registration.scope;
+  return STATIC_PATHS.map((path) => new URL(path, scope).toString());
+}
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(async (cache) => {
-      await cache.addAll(APP_FILES);
-      const appShell = await cache.match("./");
-      if (!appShell) throw new Error("The app shell was not cached.");
-      const html = await appShell.text();
-      const assets = [...html.matchAll(/(?:src|href)="([^"]+\.(?:js|css))"/g)]
-        .map(([, path]) => new URL(path, self.location.origin))
-        .filter((url) => url.origin === self.location.origin)
-        .map((url) => url.href);
-      await cache.addAll(assets);
-    }),
+    caches
+      .open(CACHE_NAME)
+      .then((cache) =>
+        Promise.allSettled(
+          getScopeUrls().map((url) =>
+            cache.add(new Request(url, { cache: "reload" })),
+          ),
+        ),
+      )
+      .then(() => self.skipWaiting()),
   );
-  self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((names) =>
+      .then((keys) =>
         Promise.all(
-          names
-            .filter(
-              (name) => name.startsWith("spend-app-") && name !== CACHE_NAME,
-            )
-            .map((name) => caches.delete(name)),
+          keys
+            .filter((key) => key !== CACHE_NAME)
+            .map((key) => caches.delete(key)),
         ),
       )
       .then(() => self.clients.claim()),
   );
 });
 
-self.addEventListener("push", (event) => {
-  let payload = {};
-  try {
-    payload = event.data?.json() || {};
-  } catch {
-    payload = { body: event.data?.text() || "" };
+self.addEventListener("fetch", (event) => {
+  const { request } = event;
+  if (request.method !== "GET") return;
+
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin) return;
+
+  const scopeUrl = new URL(self.registration.scope);
+  if (!url.pathname.startsWith(scopeUrl.pathname)) return;
+
+  if (request.mode === "navigate") {
+    const indexUrl = new URL("index.html", self.registration.scope).toString();
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(indexUrl, copy));
+          }
+          return response;
+        })
+        .catch(async () => {
+          const cachedIndex = await caches.match(indexUrl);
+          return cachedIndex || caches.match(request);
+        }),
+    );
+    return;
   }
-  const title =
-    typeof payload.title === "string" ? payload.title : "Spend";
-  const tag =
-    typeof payload.tag === "string" ? payload.tag : undefined;
-  const targetTab = payload.tab || "activity";
-  const options = {
-    body:
-      typeof payload.body === "string"
-        ? payload.body
-        : "A recurring expense is due.",
-    icon: new URL("icons/icon-192.png", self.registration.scope).href,
-    badge: new URL("icons/icon-180.png", self.registration.scope).href,
-    tag,
-    renotify: Boolean(tag),
-    vibrate: [200, 100, 200],
-    data: {
-      url: payload.url || self.registration.scope,
-      tab: targetTab,
-      action: payload.action || "view",
-    },
+
+  // Immutable content-hashed build assets under /assets/ use Cache-First
+  if (url.pathname.includes("/assets/")) {
+    event.respondWith(
+      caches.match(request).then(
+        (cached) =>
+          cached ||
+          fetch(request).then((response) => {
+            if (response.ok && response.type === "basic") {
+              const copy = response.clone();
+              caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+            }
+            return response;
+          }),
+      ),
+    );
+    return;
+  }
+
+  event.respondWith(
+    fetch(request)
+      .then((response) => {
+        if (response.ok && response.type === "basic") {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+        }
+        return response;
+      })
+      .catch(() => caches.match(request)),
+  );
+});
+
+self.addEventListener("push", (event) => {
+  const fallback = {
+    title: "Spend reminder",
+    body: "Review today's recurring expenses in Spend.",
+    url: self.registration.scope,
+    tag: "spend-recurring-reminder",
   };
-  event.waitUntil(self.registration.showNotification(title, options));
+
+  let payload = fallback;
+  if (event.data) {
+    try {
+      payload = { ...fallback, ...event.data.json() };
+    } catch {
+      payload = { ...fallback, body: event.data.text() || fallback.body };
+    }
+  }
+
+  const iconUrl = new URL(
+    "icons/icon-192.png",
+    self.registration.scope,
+  ).toString();
+  const badgeUrl = new URL(
+    "icons/icon-192.png",
+    self.registration.scope,
+  ).toString();
+
+  event.waitUntil(
+    self.registration.showNotification(payload.title, {
+      body: payload.body,
+      icon: iconUrl,
+      badge: badgeUrl,
+      tag: payload.tag || fallback.tag,
+      renotify: false,
+      data: {
+        url: payload.url || self.registration.scope,
+      },
+    }),
+  );
 });
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const notifData = event.notification.data || {};
-  const targetTab = notifData.tab || "activity";
-  const target = new URL(
-    notifData.url || self.registration.scope,
-    self.registration.scope,
-  );
-  if (targetTab) {
-    target.searchParams.set("tab", targetTab);
-  }
+  const targetUrl = new URL(
+    event.notification.data?.url || self.registration.scope,
+    self.location.origin,
+  ).toString();
 
   event.waitUntil(
     self.clients
       .matchAll({ type: "window", includeUncontrolled: true })
       .then((clients) => {
-        const existing = clients.find(
-          (client) => new URL(client.url).origin === target.origin,
+        const matchingClient = clients.find((client) =>
+          client.url.startsWith(self.registration.scope),
         );
-        if (existing) {
-          existing.postMessage({
-            type: "NAVIGATE_TAB",
-            tab: targetTab,
-          });
-          return existing.focus();
+        if (matchingClient && "focus" in matchingClient) {
+          return matchingClient.focus();
         }
-        return self.clients.openWindow(target.href);
+        if (self.clients.openWindow) {
+          return self.clients.openWindow(targetUrl);
+        }
+        return undefined;
       }),
-  );
-});
-
-self.addEventListener("fetch", (event) => {
-  const request = event.request;
-  const url = new URL(request.url);
-  const appPath = new URL(self.registration.scope).pathname;
-
-  // 0. Google Fonts caching (Cache-First) for 0ms startup & offline play
-  if (
-    request.method === "GET" &&
-    (url.origin === "https://fonts.googleapis.com" ||
-      url.origin === "https://fonts.gstatic.com")
-  ) {
-    event.respondWith(
-      caches.match(request).then((cached) => {
-        if (cached) return cached;
-        return fetch(request).then((response) => {
-          if (response.ok) {
-            const copy = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-          }
-          return response;
-        });
-      }),
-    );
-    return;
-  }
-
-  if (
-    request.method !== "GET" ||
-    url.origin !== self.location.origin ||
-    !url.pathname.startsWith(appPath)
-  )
-    return;
-
-  // 1. Immutable hashed assets: Cache-First for instant 0ms launch from device storage
-  if (url.pathname.includes("/assets/")) {
-    event.respondWith(
-      caches.match(request).then((cached) => {
-        if (cached) return cached;
-        return fetch(request).then((response) => {
-          if (response.ok && response.type === "basic") {
-            const copy = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-          }
-          return response;
-        });
-      }),
-    );
-    return;
-  }
-
-  // 2. Navigation / App Shell: Stale-While-Revalidate
-  // Serves cached shell immediately to minimize splash display time, updates in background
-  if (request.mode === "navigate") {
-    event.respondWith(
-      caches.match("./").then((cached) => {
-        const networkFetch = fetch(request)
-          .then((response) => {
-            if (response.ok && response.type === "basic") {
-              const copy = response.clone();
-              caches.open(CACHE_NAME).then((cache) => cache.put("./", copy));
-            }
-            return response;
-          })
-          .catch(() => cached);
-
-        return cached || networkFetch;
-      }),
-    );
-    return;
-  }
-
-  // 3. Static shell metadata and icons: Stale-While-Revalidate
-  event.respondWith(
-    caches.match(request).then((cached) => {
-      const networkFetch = fetch(request)
-        .then((response) => {
-          if (response.ok && response.type === "basic") {
-            const copy = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-          }
-          return response;
-        })
-        .catch(() => cached);
-
-      return cached || networkFetch;
-    }),
   );
 });

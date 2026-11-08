@@ -93,13 +93,29 @@ function handoffStaticSplash(immediate = false) {
   return animTime;
 }
 
+const fUrlBase =
+  ((typeof document !== "undefined" &&
+    document.querySelector('link[rel="preconnect"]')?.href) ||
+    "") + "css2?family=";
+
+function ensureAppFontsLoaded(fUrl) {
+  if (typeof document === "undefined" || !fUrl) return;
+  if (!document.querySelector("link[data-spend-splash-font]")) {
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = fUrl;
+    link.setAttribute("data-spend-splash-font", "");
+    document.head.appendChild(link);
+  }
+}
+
 export default function SpendSplash({
   onDone,
   canExit = true,
   once = false,
   storageKey = "spend-splash",
   fontFamily = '"Outfit", "Nunito Sans", ui-rounded, system-ui, sans-serif',
-  fontUrl = "https://fonts.googleapis.com/css2?family=Outfit:wght@600&display=swap",
+  fontUrl = fUrlBase + "Manrope:wght@500;600;700;800&family=Outfit:wght@600&display=swap",
 }) {
   const rootRef = useRef(null);
   const firedSkip = useRef(false);
@@ -113,6 +129,7 @@ export default function SpendSplash({
   const [skip] = useState(() => alreadySeen(once, storageKey));
 
   useEffect(() => {
+    ensureAppFontsLoaded(live.current.fontUrl);
     if (!skip || firedSkip.current) return;
     firedSkip.current = true;
     handoffStaticSplash(true);

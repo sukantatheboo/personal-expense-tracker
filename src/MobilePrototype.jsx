@@ -9,27 +9,13 @@ import {
   useRef,
   useState,
 } from "react";
-import { Capacitor } from "@capacitor/core";
-import { Haptics, ImpactStyle, NotificationType } from "@capacitor/haptics";
-import { FaPenToSquare } from "react-icons/fa6";
 import {
   flushStorageWriteQueues,
   getSavingsAccountId,
   parseAmount,
   STORAGE_KEYS,
 } from "./data.js";
-import {
-  StackedCardDeck,
-  WalletCard,
-  formatMoney,
-} from "./AccountsCardDeck.jsx";
-import {
-  CARD_PROVIDERS,
-  VisaBadge,
-  MastercardBadge,
-  AmexBadge,
-  MiniCardPreview,
-} from "./cardAssets.jsx";
+import { CARD_PROVIDERS } from "./cardProviders.js";
 import {
   CategorySymbol,
   TransactionSymbol,
@@ -75,6 +61,126 @@ import "./MobilePrototype.css";
 
 const MonthEndBanner = lazy(() => import("./components/MonthEndBanner.jsx"));
 const SpendLogin = lazy(() => import("./components/SpendLogin.jsx"));
+
+const loadAccountsCardDeck = () => import("./AccountsCardDeck.jsx");
+const loadCardAssets = () => import("./cardAssets.jsx");
+
+if (typeof window !== "undefined") {
+  const preloadDeckAndCardAssets = () => {
+    void loadAccountsCardDeck();
+    void loadCardAssets();
+  };
+  if (typeof window.requestIdleCallback === "function") {
+    window.requestIdleCallback(preloadDeckAndCardAssets, { timeout: 1500 });
+  } else {
+    window.setTimeout(preloadDeckAndCardAssets, 600);
+  }
+}
+
+const LazyStackedCardDeck = lazy(() =>
+  loadAccountsCardDeck().then((m) => ({
+    default: m.StackedCardDeck,
+  })),
+);
+const LazyWalletCard = lazy(() =>
+  loadAccountsCardDeck().then((m) => ({
+    default: m.WalletCard,
+  })),
+);
+const LazyVisaBadge = lazy(() =>
+  loadCardAssets().then((m) => ({ default: m.VisaBadge })),
+);
+const LazyMastercardBadge = lazy(() =>
+  loadCardAssets().then((m) => ({ default: m.MastercardBadge })),
+);
+const LazyAmexBadge = lazy(() =>
+  loadCardAssets().then((m) => ({ default: m.AmexBadge })),
+);
+const LazyMiniCardPreview = lazy(() =>
+  loadCardAssets().then((m) => ({ default: m.MiniCardPreview })),
+);
+
+function StackedCardDeck(props) {
+  return (
+    <Suspense fallback={<div style={{ minHeight: 212 }} />}>
+      <LazyStackedCardDeck {...props} />
+    </Suspense>
+  );
+}
+
+function WalletCard(props) {
+  return (
+    <Suspense fallback={<div style={{ minHeight: 190 }} />}>
+      <LazyWalletCard {...props} />
+    </Suspense>
+  );
+}
+
+function VisaBadge(props) {
+  return (
+    <Suspense fallback={null}>
+      <LazyVisaBadge {...props} />
+    </Suspense>
+  );
+}
+
+function MastercardBadge(props) {
+  return (
+    <Suspense fallback={null}>
+      <LazyMastercardBadge {...props} />
+    </Suspense>
+  );
+}
+
+function AmexBadge(props) {
+  return (
+    <Suspense fallback={null}>
+      <LazyAmexBadge {...props} />
+    </Suspense>
+  );
+}
+
+function MiniCardPreview(props) {
+  return (
+    <Suspense
+      fallback={
+        <div
+          className={`mini-card-preview ${props.className || ""}`}
+          style={{
+            background:
+              props.card?.gradient ||
+              props.provider?.gradient ||
+              props.card?.color ||
+              props.provider?.color ||
+              "#1e293b",
+          }}
+          aria-hidden="true"
+        />
+      }
+    >
+      <LazyMiniCardPreview {...props} />
+    </Suspense>
+  );
+}
+
+const cardMoneyFormatter = new Intl.NumberFormat("en-IN", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+function formatMoney(amount) {
+  const num = Number(amount);
+  if (!Number.isFinite(num)) return "৳0.00";
+  const abs = cardMoneyFormatter.format(Math.abs(num));
+  return num < 0 ? `-৳${abs}` : `৳${abs}`;
+}
+
+function isNativePlatform() {
+  return (
+    typeof window !== "undefined" &&
+    Boolean(window.Capacitor?.isNativePlatform?.())
+  );
+}
 
 /* ───────────── constants ───────────── */
 const CAT = {
@@ -257,29 +363,28 @@ function triggerSafariWebHaptic() {
 }
 
 function triggerHaptic(type = "light") {
-  if (Capacitor.isNativePlatform()) {
-    try {
-      if (type === "medium" || (typeof type === "number" && type > 10)) {
-        void Haptics.impact({ style: ImpactStyle.Medium }).catch(() => {});
-      } else if (type === "heavy") {
-        void Haptics.impact({ style: ImpactStyle.Heavy }).catch(() => {});
-      } else if (type === "success") {
-        void Haptics.notification({ type: NotificationType.Success }).catch(
-          () => {},
-        );
-      } else if (type === "warning" || type === "delete") {
-        void Haptics.notification({ type: NotificationType.Warning }).catch(
-          () => {},
-        );
-      } else if (type === "selection") {
-        void Haptics.selectionChanged().catch(() => {});
-      } else {
-        void Haptics.impact({ style: ImpactStyle.Light }).catch(() => {});
-      }
-      return true;
-    } catch {
-      return false;
-    }
+  if (isNativePlatform()) {
+    void import("@capacitor/haptics")
+      .then(({ Haptics, ImpactStyle, NotificationType }) => {
+        if (type === "medium" || (typeof type === "number" && type > 10)) {
+          return Haptics.impact({ style: ImpactStyle.Medium });
+        }
+        if (type === "heavy") {
+          return Haptics.impact({ style: ImpactStyle.Heavy });
+        }
+        if (type === "success") {
+          return Haptics.notification({ type: NotificationType.Success });
+        }
+        if (type === "warning" || type === "delete") {
+          return Haptics.notification({ type: NotificationType.Warning });
+        }
+        if (type === "selection") {
+          return Haptics.selectionChanged();
+        }
+        return Haptics.impact({ style: ImpactStyle.Light });
+      })
+      .catch(() => {});
+    return true;
   }
 
   // Web / PWA fallback tuned for Android vibration motors
@@ -6968,7 +7073,16 @@ function ProfileSettingsPage({
               aria-label="Edit profile name"
               onClick={onEditProfile}
             >
-              <FaPenToSquare aria-hidden="true" focusable="false" />
+              <svg
+                viewBox="0 0 512 512"
+                width="17"
+                height="17"
+                fill="currentColor"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <path d="M471.6 21.7c-21.9-21.9-57.3-21.9-79.2 0L362.3 51.7l97.9 97.9 30.1-30.1c21.9-21.9 21.9-57.3 0-79.2L471.6 21.7zm-299.2 220c-6.1 6.1-10.8 13.6-13.5 21.9l-29.6 88.8c-2.9 8.6-.6 18.1 5.8 24.6s15.9 8.7 24.6 5.8l88.8-29.6c8.2-2.7 15.7-7.4 21.9-13.5L437.7 172.3 339.7 74.3 172.4 241.7zM96 64C43 64 0 107 0 160V416c0 53 43 96 96 96H352c53 0 96-43 96-96V320c0-17.7-14.3-32-32-32s-32 14.3-32 32v96c0 17.7-14.3 32-32 32H96c-17.7 0-32-14.3-32-32V160c0-17.7 14.3-32 32-32h96c17.7 0 32-14.3 32-32s-14.3-32-32-32H96z" />
+              </svg>
             </button>
           </div>
         ) : (
@@ -7451,7 +7565,7 @@ function SecuritySheet({ onClose, onBack, onLockNow }) {
               className="ri settings-action"
               type="button"
               aria-pressed={biometricsConfigured}
-              disabled={!biometricsAvailable && !Capacitor.isNativePlatform()}
+              disabled={!biometricsAvailable && !isNativePlatform()}
               onClick={handleToggleBiometrics}
             >
               <i className="ic" style={{ "--c": "#6366f1" }}>

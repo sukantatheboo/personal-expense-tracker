@@ -1,11 +1,25 @@
-import { Capacitor } from "@capacitor/core";
-import { LocalNotifications } from "@capacitor/local-notifications";
-import { Haptics, NotificationType } from "@capacitor/haptics";
-
 const LAST_NOTIFIED_MONTH_KEY = "spend-notified-month-v2";
 const WELCOME_NOTIFIED_PREFIX = "spend-welcome-notified-v2-";
 
 let channelsConfigured = false;
+
+function isNativePlatform() {
+  return (
+    typeof window !== "undefined" &&
+    Boolean(window.Capacitor?.isNativePlatform?.())
+  );
+}
+
+async function getLocalNotifications() {
+  if (!isNativePlatform()) return null;
+  const mod = await import("@capacitor/local-notifications");
+  return mod.LocalNotifications;
+}
+
+async function getNativeHaptics() {
+  if (!isNativePlatform()) return null;
+  return import("@capacitor/haptics");
+}
 
 /**
  * Web Audio API synthesizer fallback.
@@ -20,7 +34,6 @@ function synthesizeAudioTone(tone = "reminder") {
     }
 
     if (tone === "welcome") {
-      // Warm, celebratory 3-note ascending arpeggio: C5 (523.25) -> E5 (659.25) -> G5 (783.99)
       const notes = [
         { freq: 523.25, start: 0, dur: 0.14, gainVal: 0.35 },
         { freq: 659.25, start: 0.13, dur: 0.14, gainVal: 0.38 },
@@ -46,7 +59,6 @@ function synthesizeAudioTone(tone = "reminder") {
         osc.stop(ctx.currentTime + start + dur);
       });
     } else {
-      // Clean, pleasant 2-note reminder chime: A4 (440) -> E5 (659.25)
       const notes = [
         { freq: 440.0, start: 0, dur: 0.16, gainVal: 0.3 },
         { freq: 659.25, start: 0.14, dur: 0.44, gainVal: 0.36 },
@@ -80,22 +92,19 @@ function synthesizeAudioTone(tone = "reminder") {
  * Play foreground notification tone and trigger haptics.
  */
 export function playNotificationAudioTone(tone = "reminder") {
-  // 1. Native haptic feedback
-  if (Capacitor.isNativePlatform()) {
-    try {
-      if (tone === "welcome") {
-        void Haptics.notification({ type: NotificationType.Success }).catch(
-          () => {},
-        );
-      } else {
-        void Haptics.notification({ type: NotificationType.Warning }).catch(
-          () => {},
-        );
-      }
-    } catch {}
+  if (isNativePlatform()) {
+    void getNativeHaptics()
+      .then((mod) => {
+        if (!mod) return;
+        const { Haptics, NotificationType } = mod;
+        if (tone === "welcome") {
+          return Haptics.notification({ type: NotificationType.Success });
+        }
+        return Haptics.notification({ type: NotificationType.Warning });
+      })
+      .catch(() => {});
   }
 
-  // 2. Audio tone playback (try audio element then fallback to synthesizer)
   const soundFile =
     tone === "welcome" ? "./sounds/welcome.wav" : "./sounds/reminder.wav";
   try {
@@ -116,8 +125,10 @@ export function playNotificationAudioTone(tone = "reminder") {
  * Configure Android notification channels with distinct sounds, vibrations, and importance levels.
  */
 export async function setupNativeNotificationChannels() {
-  if (!Capacitor.isNativePlatform() || channelsConfigured) return;
+  if (!isNativePlatform() || channelsConfigured) return;
   try {
+    const LocalNotifications = await getLocalNotifications();
+    if (!LocalNotifications) return;
     await LocalNotifications.createChannel({
       id: "spend_reminders",
       name: "Spend Reminders",
@@ -157,10 +168,12 @@ export async function setupNativeNotificationChannels() {
  * Check notification permissions across iOS, Android, and Web platforms.
  */
 export async function checkNotificationPermission() {
-  if (Capacitor.isNativePlatform()) {
+  if (isNativePlatform()) {
     try {
+      const LocalNotifications = await getLocalNotifications();
+      if (!LocalNotifications) return "denied";
       const { display } = await LocalNotifications.checkPermissions();
-      return display; // 'granted' | 'denied' | 'prompt'
+      return display;
     } catch {
       return "denied";
     }
@@ -175,9 +188,11 @@ export async function checkNotificationPermission() {
  * Request notification permissions across iOS, Android, and Web platforms.
  */
 export async function requestNotificationPermission() {
-  if (Capacitor.isNativePlatform()) {
+  if (isNativePlatform()) {
     try {
       await setupNativeNotificationChannels();
+      const LocalNotifications = await getLocalNotifications();
+      if (!LocalNotifications) return false;
       const { display } = await LocalNotifications.requestPermissions();
       return display === "granted";
     } catch {
@@ -206,14 +221,13 @@ function hashNotificationId(str) {
 
 /**
  * Send a native built-in notification for iOS and Android (with web fallback).
- * Replaces all HUD / in-app DOM banners with true OS-level system notifications.
  */
 export async function sendNativeBuiltinNotification({
   title,
   body,
   tag,
   tab = "activity",
-  tone = "reminder", // "reminder" | "welcome"
+  tone = "reminder",
   id,
   scheduleAt,
 }) {
@@ -222,43 +236,43 @@ export async function sendNativeBuiltinNotification({
       ? id
       : hashNotificationId(tag || `${title}-${Date.now()}`);
 
-  // Play audio tone and haptic
   playNotificationAudioTone(tone);
 
-  // 1. Native platform (iOS and Android via Capacitor LocalNotifications)
-  if (Capacitor.isNativePlatform()) {
+  if (isNativePlatform()) {
     try {
       await setupNativeNotificationChannels();
-      const channelId =
-        tone === "welcome"
-          ? "spend_welcome"
-          : tag && tag.includes("month")
-            ? "spend_monthly"
-            : "spend_reminders";
+      const LocalNotifications = await getLocalNotifications();
+      if (LocalNotifications) {
+        const channelId =
+          tone === "welcome"
+            ? "spend_welcome"
+            : tag && tag.includes("month")
+              ? "spend_monthly"
+              : "spend_reminders";
 
-      const sound = tone === "welcome" ? "welcome.wav" : "reminder.wav";
+        const sound = tone === "welcome" ? "welcome.wav" : "reminder.wav";
 
-      await LocalNotifications.schedule({
-        notifications: [
-          {
-            id: notifId,
-            title,
-            body,
-            channelId,
-            sound,
-            foreground: true,
-            schedule: scheduleAt ? { at: scheduleAt } : undefined,
-            extra: { tab, tag, tone },
-          },
-        ],
-      });
-      return true;
+        await LocalNotifications.schedule({
+          notifications: [
+            {
+              id: notifId,
+              title,
+              body,
+              channelId,
+              sound,
+              foreground: true,
+              schedule: scheduleAt ? { at: scheduleAt } : undefined,
+              extra: { tab, tag, tone },
+            },
+          ],
+        });
+        return true;
+      }
     } catch (err) {
       console.warn("Native notification dispatch failed:", err);
     }
   }
 
-  // 2. Web / PWA fallback
   if (typeof window !== "undefined" && "Notification" in window) {
     if (window.Notification.permission !== "granted") {
       return false;
@@ -313,8 +327,8 @@ export async function checkAndNotifyNewMonth(currentMonthStr) {
   } catch {}
 
   const shouldNotify = !lastNotifiedMonth
-    ? now.getDate() <= 7 // Active during the 7-day month-end banner window
-    : lastNotifiedMonth < thisMonth; // True month rollover
+    ? now.getDate() <= 7
+    : lastNotifiedMonth < thisMonth;
 
   if (shouldNotify) {
     try {
@@ -335,9 +349,10 @@ export async function checkAndNotifyNewMonth(currentMonthStr) {
     } catch {}
   }
 
-  // Schedule next month's day 1 morning reminder on native iOS/Android (fires even when the app is closed)
-  if (Capacitor.isNativePlatform()) {
+  if (isNativePlatform()) {
     try {
+      const LocalNotifications = await getLocalNotifications();
+      if (!LocalNotifications) return;
       const nextMonthDate = new Date(
         now.getFullYear(),
         now.getMonth() + 1,
@@ -397,29 +412,35 @@ export async function notifyNewUserSignedIn(user) {
     body: `Welcome to Spend${greeting}! Start your expense tracking with Spend and take control of your financial journey.`,
     tag: `spend-welcome-${user.id}`,
     tab: "home",
-    tone: "welcome", // DIFFERENT TONE!
+    tone: "welcome",
   });
 }
 
 /**
- * Setup notification action listeners (e.g., tapping on a native notification opens the app to the relevant tab).
+ * Setup notification action listeners.
  */
 export function setupNotificationListeners(onNavigate) {
   let removeNative = null;
   let removeSw = null;
 
-  if (Capacitor.isNativePlatform()) {
-    LocalNotifications.addListener(
-      "localNotificationActionPerformed",
-      (action) => {
-        const targetTab = action.notification.extra?.tab;
-        if (targetTab && typeof onNavigate === "function") {
-          onNavigate(targetTab);
-        }
-      },
-    )
+  if (isNativePlatform()) {
+    getLocalNotifications()
+      .then((LocalNotifications) => {
+        if (!LocalNotifications) return null;
+        return LocalNotifications.addListener(
+          "localNotificationActionPerformed",
+          (action) => {
+            const targetTab = action.notification.extra?.tab;
+            if (targetTab && typeof onNavigate === "function") {
+              onNavigate(targetTab);
+            }
+          },
+        );
+      })
       .then((handle) => {
-        removeNative = () => handle.remove();
+        if (handle) {
+          removeNative = () => handle.remove();
+        }
       })
       .catch(() => {});
   }
