@@ -7,7 +7,7 @@ try {
   // ignore
 }
 
-// Early theme boot to prepare underlying app theme while keeping splash chrome dark (#0c130f)
+// Early theme boot to prepare underlying app theme and sync status bar chrome
 try {
   const savedTheme = localStorage.getItem("spend-theme-v1");
   const isDark =
@@ -16,6 +16,10 @@ try {
       typeof window !== "undefined" &&
       window.matchMedia?.("(prefers-color-scheme: dark)").matches);
   document.documentElement.dataset.theme = isDark ? "dark" : "light";
+  const themeColor = isDark ? "#0e1411" : "#f4f3ee";
+  document
+    .querySelectorAll('meta[name="theme-color"]')
+    .forEach((meta) => meta.setAttribute("content", themeColor));
 } catch {
   // ignore
 }

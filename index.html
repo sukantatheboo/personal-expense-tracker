@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" style="background-color: #0c130f;">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta
@@ -16,7 +16,16 @@
       name="viewport"
       content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
     />
-    <meta name="theme-color" content="#0c130f" />
+    <meta
+      name="theme-color"
+      content="#f4f3ee"
+      media="(prefers-color-scheme: light)"
+    />
+    <meta
+      name="theme-color"
+      content="#0e1411"
+      media="(prefers-color-scheme: dark)"
+    />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta
@@ -97,8 +106,8 @@
     <title>Spend — Expense tracker</title>
     <style id="spend-critical-splash-css">
       :root {
-        --bg: #0c130f;
-        color-scheme: dark;
+        --bg: #f4f3ee;
+        color-scheme: light;
       }
       @media (prefers-color-scheme: dark) {
         html:not([data-theme="light"]) {
@@ -117,7 +126,6 @@
       html,
       body {
         margin: 0;
-        background-color: #0c130f;
         background: var(--bg);
       }
       .sp-root {
@@ -310,7 +318,7 @@
       }
     </style>
   </head>
-  <body style="background-color: #0c130f; margin: 0;">
+  <body>
     <div id="initial-splash" class="sp-root" role="img" aria-label="Spend">
       <div class="sp-stage">
         <div class="sp-lockup">

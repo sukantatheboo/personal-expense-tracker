@@ -189,8 +189,6 @@ export default function SpendSplash({
     let released = false;
     let holdTimer;
 
-    document.documentElement.style.backgroundColor = "#0c130f";
-    document.body.style.backgroundColor = "#0c130f";
     const restoreBg = () => {
       document.documentElement.style.backgroundColor = "";
       document.body.style.backgroundColor = "";
