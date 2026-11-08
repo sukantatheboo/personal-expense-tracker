@@ -116,8 +116,7 @@ select {
 button,
 a,
 .tab,
-[role="button"],
-.card {
+[role="button"] {
   transition:
     transform 0.1s ease,
     filter 140ms ease;
@@ -126,15 +125,18 @@ a,
 button:active,
 a:active,
 .tab:active,
-[role="button"]:active,
-.card:active {
+[role="button"]:active {
   transform: scale(0.98);
   transition: transform 0.1s;
 }
 
-/* Do not scale the whole card container when interacting with child inputs, dragging rows, or focused forms */
-.card:has(input:focus, textarea:focus, select:focus, .is-swipe-dragging) {
-  transform: none;
+/* Structural cards and containers must never squash, scale, or punch on click */
+.card,
+.card:active,
+.card:hover,
+.card:focus,
+.card:focus-within {
+  transform: none !important;
 }
 .auth-modal-backdrop,
 .profile-editor-backdrop {
@@ -526,7 +528,7 @@ a:active,
 .mobile-prototype button:not(:disabled) {
   touch-action: manipulation;
   transition:
-    transform 190ms cubic-bezier(0.2, 0.8, 0.25, 1.24),
+    transform 160ms cubic-bezier(0.25, 1, 0.5, 1),
     filter 140ms ease;
 }
 .mobile-prototype button:focus-visible {
@@ -537,9 +539,9 @@ a:active,
   outline: none;
 }
 .mobile-prototype button:not(:disabled):active {
-  transform: scale(0.96);
-  filter: brightness(0.96);
-  transition-duration: 85ms;
+  transform: scale(0.98);
+  filter: brightness(0.97);
+  transition-duration: 80ms;
 }
 .mobile-prototype input {
   font: inherit;
@@ -1817,8 +1819,8 @@ a:active,
   background: transparent;
 }
 .mobile-prototype button.ri:active {
-  background: transparent;
-  transform: scale(0.96);
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+  transform: none;
 }
 .mobile-prototype .expense-day-card button.expense-row:active {
   background: var(--card);
@@ -2198,7 +2200,7 @@ a:active,
   padding: 8px 14px;
   font-size: 14px;
   transition:
-    transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1.18),
+    transform 160ms cubic-bezier(0.25, 1, 0.5, 1),
     background-color 150ms ease,
     border-color 150ms ease,
     color 150ms ease;
@@ -2206,7 +2208,7 @@ a:active,
 }
 .mobile-prototype .chips button:active,
 .mobile-prototype .cg button:active {
-  transform: scale(0.96);
+  transform: scale(0.98);
 }
 .mobile-prototype .chips button {
   display: inline-flex;
@@ -2305,7 +2307,7 @@ a:active,
 }
 .mobile-prototype .seg button {
   transition:
-    transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1.18),
+    transform 160ms cubic-bezier(0.25, 1, 0.5, 1),
     background-color 150ms ease,
     box-shadow 150ms ease,
     border-color 150ms ease,
@@ -2313,7 +2315,7 @@ a:active,
   touch-action: manipulation;
 }
 .mobile-prototype .seg button:active {
-  transform: scale(0.96);
+  transform: scale(0.98);
 }
 .mobile-prototype .seg .on {
   background: var(--card);
@@ -2695,7 +2697,7 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
     color-mix(in srgb, var(--account-accent) 18%, transparent);
   scroll-snap-align: start;
   transition:
-    transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1.12),
+    transform 180ms cubic-bezier(0.25, 1, 0.5, 1),
     filter 160ms ease,
     border-color 160ms ease,
     box-shadow 180ms ease;
@@ -2703,9 +2705,9 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
   -webkit-tap-highlight-color: transparent;
 }
 .mobile-prototype button.acc:not(:disabled):active {
-  transform: scale(0.96);
-  filter: brightness(0.96) saturate(1.04);
-  transition-duration: 90ms;
+  transform: scale(0.98);
+  filter: brightness(0.97) saturate(1.02);
+  transition-duration: 80ms;
 }
 .mobile-prototype .acc.is-selected {
   border-color: rgb(255 255 255 / 88%);
@@ -2856,13 +2858,13 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
   box-shadow: var(--shadow);
   font-size: 13px;
   transition:
-    transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1.22),
+    transform 180ms cubic-bezier(0.25, 1, 0.5, 1),
     background-color 160ms ease,
     box-shadow 160ms ease;
   touch-action: manipulation;
 }
 .mobile-prototype .acts button:active {
-  transform: scale(0.96);
+  transform: scale(0.98);
 }
 .mobile-prototype .acts svg {
   display: block;
@@ -2926,13 +2928,13 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
     inset 0 1px 0 rgb(255 255 255 / 18%),
     0 4px 14px rgba(0, 0, 0, 0.14);
   transition:
-    transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1.22),
+    transform 160ms cubic-bezier(0.25, 1, 0.5, 1),
     filter 160ms ease,
     box-shadow 160ms ease;
   touch-action: manipulation;
 }
 .mobile-prototype .btn:active {
-  transform: scale(0.96);
+  transform: scale(0.98);
   filter: brightness(0.96);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 12%);
 }
@@ -3137,7 +3139,7 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
   align-items: center;
   justify-content: center;
   background: transparent;
-  transition: transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform 180ms cubic-bezier(0.25, 1, 0.5, 1);
 }
 .mobile-prototype .dock .tab__icon svg {
   width: 24px;
@@ -3148,7 +3150,7 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
   stroke-linecap: round;
   stroke-linejoin: round;
   transform-origin: center;
-  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform 180ms cubic-bezier(0.25, 1, 0.5, 1);
 }
 .mobile-prototype .dock .tab__label {
   font-size: 12px;
@@ -3159,7 +3161,7 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
 }
 
 .mobile-prototype .dock .tab:active .tab__icon {
-  transform: scale(0.91);
+  transform: scale(0.95);
 }
 .mobile-prototype .dock .tab:focus-visible {
   outline: none;
@@ -3178,7 +3180,7 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
 .mobile-prototype .dock .tab.is-active .tab__icon svg {
   stroke-width: 0;
   fill: currentColor;
-  animation: dock-tab-icon-pop 240ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  animation: dock-tab-icon-pop 200ms cubic-bezier(0.25, 1, 0.5, 1) both;
 }
 .mobile-prototype .dock .tab[aria-current="page"] .tab__label,
 .mobile-prototype .dock .tab.is-active .tab__label {
@@ -3187,10 +3189,7 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
 
 @keyframes dock-tab-icon-pop {
   0% {
-    transform: scale(0.86);
-  }
-  65% {
-    transform: scale(1.06);
+    transform: scale(0.92);
   }
   100% {
     transform: scale(1);
@@ -5091,13 +5090,13 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
   cursor: pointer;
   text-align: left;
   transition:
-    transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1.2),
+    transform 160ms cubic-bezier(0.25, 1, 0.5, 1),
     background-color 150ms ease,
     border-color 150ms ease,
     box-shadow 150ms ease;
 }
 .mobile-prototype .accounts-action-card:active {
-  transform: scale(0.96);
+  transform: scale(0.98);
   background: var(--field);
 }
 .mobile-prototype .action-icon-badge {
