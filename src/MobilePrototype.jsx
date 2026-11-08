@@ -6165,6 +6165,77 @@ function ConfirmationModal({
     </div>
   );
 }
+function ResetPinModal({ isOpen, onConfirm, onCancel }) {
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onCancel?.();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onCancel]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div
+      className="reset-pin-modal-backdrop"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onCancel?.();
+      }}
+    >
+      <div
+        className="reset-pin-modal-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="reset-pin-modal-title"
+      >
+        <div className="reset-pin-icon-badge">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            <circle cx="12" cy="10" r="2.5" />
+            <path d="M12 12.5V16" />
+          </svg>
+        </div>
+
+        <h3 id="reset-pin-modal-title" className="reset-pin-modal-title">
+          Reset App PIN?
+        </h3>
+        <p className="reset-pin-modal-message">
+          This will remove your passcode and clear local data. Synced cloud data remains safe.
+        </p>
+
+        <div className="reset-pin-modal-actions">
+          <button
+            type="button"
+            className="reset-pin-btn is-cancel"
+            onClick={onCancel}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="reset-pin-btn is-destructive"
+            onClick={onConfirm}
+          >
+            Reset PIN
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function CardOptionsSheet({
   initialCardId,
@@ -8713,13 +8784,8 @@ export default function MobilePrototype({
             onForgot={handleForgotPin}
           />
         </Suspense>
-        <ConfirmationModal
+        <ResetPinModal
           isOpen={resetPinConfirmOpen}
-          title="Reset App PIN?"
-          message="Forgot your passcode? Resetting will remove the PIN lock and clear locally encrypted data on this device. Signed-in cloud data can be restored by signing in."
-          confirmLabel="Reset & Clear Data"
-          cancelLabel="Cancel"
-          isDestructive={true}
           onConfirm={handleConfirmResetPin}
           onCancel={() => setResetPinConfirmOpen(false)}
         />
