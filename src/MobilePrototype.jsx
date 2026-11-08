@@ -4219,31 +4219,6 @@ function AddSheet({
         </p>
       )}
 
-      <span className="lbl">What was it for?</span>
-      <input
-        ref={descInputRef}
-        className="in"
-        maxLength={80}
-        aria-label="Expense description"
-        enterKeyHint="done"
-        placeholder={
-          f.cat === "Savings" && hasSavingsAccount
-            ? "e.g. Monthly savings"
-            : "e.g. Lunch"
-        }
-        value={f.desc}
-        onChange={(event) => {
-          const description = event.target.value;
-          set("desc", description);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            event.currentTarget.blur();
-            handleSave();
-          }
-        }}
-      />
       {categorySuggestion && categorySuggestion !== f.cat && (
         <button
           type="button"
@@ -4273,6 +4248,32 @@ function AddSheet({
           />
         </button>
       )}
+
+      <span className="lbl">What was it for?</span>
+      <input
+        ref={descInputRef}
+        className="in"
+        maxLength={80}
+        aria-label="Expense description"
+        enterKeyHint="done"
+        placeholder={
+          f.cat === "Savings" && hasSavingsAccount
+            ? "e.g. Monthly savings"
+            : "e.g. Lunch"
+        }
+        value={f.desc}
+        onChange={(event) => {
+          const description = event.target.value;
+          set("desc", description);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            event.currentTarget.blur();
+            handleSave();
+          }
+        }}
+      />
 
       <span className="lbl">Date</span>
       <div className="seg">
