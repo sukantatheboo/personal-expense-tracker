@@ -143,7 +143,9 @@ export default function SpendSplash({
     const shaft = $(".sp-shaft");
     const arms = root.querySelectorAll(".sp-arm");
     const letters = root.querySelectorAll(".sp-l");
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const reduce = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
 
     // Read currentTime from the inline `#initial-splash` CSS animation so React
     // continues from the exact sub-millisecond frame without restarting.
@@ -386,7 +388,11 @@ export default function SpendSplash({
         <div className="sp-lockup">
           <div className="sp-mark">
             <div className="sp-tile">
-              <svg className="sp-arrow" viewBox="0 0 100 100" aria-hidden="true">
+              <svg
+                className="sp-arrow"
+                viewBox="0 0 100 100"
+                aria-hidden="true"
+              >
                 <path className="sp-shaft" d="M34 66L66 34" />
                 <path className="sp-arm" d="M66 34H44" />
                 <path className="sp-arm" d="M66 34V56" />

@@ -952,9 +952,7 @@ export function MiniCardPreview({ provider, card, className = "" }) {
   const isCash = card?.id === "cash" || card?.type === "cash";
   const provId = card?.provider || card?.id;
   const p =
-    provider ||
-    (provId ? getProviderMeta(provId) : null) ||
-    CARD_PROVIDERS[0];
+    provider || (provId ? getProviderMeta(provId) : null) || CARD_PROVIDERS[0];
   const network = card?.network || p?.defaultNetwork || "visa";
   const category = card?.category || p?.category || "bank";
   const isMfs =

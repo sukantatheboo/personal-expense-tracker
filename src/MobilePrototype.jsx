@@ -13,8 +13,7 @@ import { Capacitor } from "@capacitor/core";
 import { Haptics, ImpactStyle, NotificationType } from "@capacitor/haptics";
 import { FaPenToSquare } from "react-icons/fa6";
 import {
-  ACCOUNT_OPTIONS,
-  DEFAULT_CARDS,
+  flushStorageWriteQueues,
   getSavingsAccountId,
   parseAmount,
   STORAGE_KEYS,
@@ -22,9 +21,6 @@ import {
 import {
   StackedCardDeck,
   WalletCard,
-  renderProviderLogo,
-  formatCardNumber,
-  formatExpiry,
   formatMoney,
 } from "./AccountsCardDeck.jsx";
 import {
@@ -38,7 +34,6 @@ import {
   CategorySymbol,
   TransactionSymbol,
   getCategoryColor,
-  getCategoryIcon,
   getDynamicEntertainmentService,
   foodSvg,
   transportSvg,
@@ -62,6 +57,7 @@ import {
   getPinLockoutRemainingSeconds,
   hasAppPin,
   removeAppPin,
+  resetForgottenPin,
   isBiometricsAvailable,
   hasBiometricsConfigured,
   enableBiometrics,
@@ -109,8 +105,6 @@ const TABS = [
 const SHEET_EXIT_MS = 280;
 const SHEET_REDUCED_EXIT_MS = 160;
 
-const BK =
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 128 122'%3E%3Cg fill='none'%3E%3Cpath fill='%23D12053' d='M96.58 62.45l-53.03-8.31 7.03 31.6z'/%3E%3Cpath fill='%23E2136E' d='M96.58 62.45L56.62 6.93 43.56 54.15z'/%3E%3Cpath fill='%23D12053' d='M42.32 53.51L.45 0l54.83 6.55z'/%3E%3Cpath fill='%239E1638' d='M23.25 31.15L0 9.24h6.12z'/%3E%3Cpath fill='%23D12053' d='M107.89 35.46l-9.84 26.69L82.1 40.09z'/%3E%3Cpath fill='%23E2136E' d='M56.77 84.14l38.61-15.51L97 63.7z'/%3E%3Cpath fill='%239E1638' d='M25.89 113.41l16.54-58.02 8.39 37.75z'/%3E%3Cpath fill='%23E2136E' d='M109.43 35.67l-4.06 11.02 14.64-.24z'/%3E%3C/g%3E%3C/svg%3E";
 
 /* ───────────── icons ───────────── */
 const DOCK_ICONS = {
@@ -207,16 +201,6 @@ const ICONS = {
       <path d="m20 20-3.5-3.5" />
     </>
   ),
-  inc: <path d="M12 5v14m-7-7 7 7 7-7" />,
-  tr: <path d="M7 7h13l-4-4M17 17H4l4 4" />,
-  adj: (
-    <>
-      <path d="M4 8h10M18 8h2M4 16h2M10 16h10" />
-      <circle cx="16" cy="8" r="2" />
-      <circle cx="8" cy="16" r="2" />
-    </>
-  ),
-  bank: <path d="M3 10l9-6 9 6M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 21h18" />,
   calendar: (
     <>
       <rect x="3" y="5" width="18" height="16" rx="2" />
@@ -410,7 +394,10 @@ const activityTime = (item) => {
 
 const tot = (S, m) =>
   (S?.exp || [])
-    .filter((e) => typeof e?.date === "string" && e.date.startsWith(m) && e.amt != null)
+    .filter(
+      (e) =>
+        typeof e?.date === "string" && e.date.startsWith(m) && e.amt != null,
+    )
     .reduce((a, e) => a + e.amt, 0);
 const monthExp = (S) =>
   (S?.exp || [])
@@ -710,7 +697,8 @@ function suggestedCategory(description, expenses = [], excludeId = null) {
   );
   let best = { score: 0, category: "" };
   for (const expense of expenses) {
-    if (!expense || expense.id === excludeId || expense.cat === "Savings") continue;
+    if (!expense || expense.id === excludeId || expense.cat === "Savings")
+      continue;
     const pastWords = new Set(
       String(expense.desc || "")
         .toLocaleLowerCase()
@@ -1295,7 +1283,7 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
 
     // Check if there is an explicit autofocus target or a primary amount input field
     const autoFocusTarget = sheetNode.querySelector(
-      '[data-sheet-autofocus], .amt input, input[autofocus]'
+      "[data-sheet-autofocus], .amt input, input[autofocus]",
     );
 
     sheetNode.focus({ preventScroll: true });
@@ -1305,7 +1293,10 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
         if (!sheetNode.contains(autoFocusTarget)) return;
         try {
           autoFocusTarget.focus({ preventScroll: true });
-          if (typeof autoFocusTarget.select === "function" && autoFocusTarget.value) {
+          if (
+            typeof autoFocusTarget.select === "function" &&
+            autoFocusTarget.value
+          ) {
             autoFocusTarget.select();
           }
         } catch {
@@ -1435,7 +1426,6 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
           );
           overlayRef.current.style.opacity = progress.toFixed(3);
         }
-        
       });
     }
   }, []);
@@ -1470,7 +1460,7 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
 
     if (shouldClose) {
       triggerHaptic("selection");
-      
+
       if (sheetNode) {
         sheetNode.removeAttribute("data-dragging");
         sheetNode.style.transition =
@@ -1487,7 +1477,6 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
         onClose({ kind: "drag", distance, velocity });
       }, 240);
     } else {
-      
       if (sheetNode) {
         sheetNode.removeAttribute("data-dragging");
         sheetNode.style.transition =
@@ -1509,7 +1498,6 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
           overlayNode.style.transition = "";
           overlayNode.style.opacity = "";
         }
-        
       }, 270);
     }
   }, [onClose]);
@@ -1767,8 +1755,7 @@ function Home({
   const isCurrentMonth = monthKey === currentMonthKey;
   const isPastMonth = Boolean(monthKey && monthKey < currentMonthKey);
   const previousMonthKey = shift(currentMonthKey, -1);
-  const shouldShowBanner =
-    isPastMonth || (isCurrentMonth && isNewMonthWindow);
+  const shouldShowBanner = isPastMonth || (isCurrentMonth && isNewMonthWindow);
   const bannerMonth = isPastMonth ? monthKey : previousMonthKey;
   const total = tot(S, monthKey);
   const saved = monthExp(S)
@@ -1827,12 +1814,12 @@ function Home({
   const activeRecurring = (S?.rec || []).filter(
     (r) => r?.on && typeof r?.next === "string",
   );
-  const upcomingRecurring = activeRecurring.filter(
-    (r) => r.next >= todayStr,
-  );
+  const upcomingRecurring = activeRecurring.filter((r) => r.next >= todayStr);
   const nx = (
     upcomingRecurring.length > 0 ? upcomingRecurring : activeRecurring
-  ).sort((x, y) => String(x?.next || "").localeCompare(String(y?.next || "")))[0];
+  ).sort((x, y) =>
+    String(x?.next || "").localeCompare(String(y?.next || "")),
+  )[0];
   const h = currentTime.getHours();
   useEffect(() => setHighlightedCategory(""), [S.m]);
   useEffect(() => {
@@ -1994,7 +1981,9 @@ function Home({
                     <>
                       ⚡ ৳
                       <Amount
-                        value={amountFormatter.format(Math.round(homeVelocity.paceDiff))}
+                        value={amountFormatter.format(
+                          Math.round(homeVelocity.paceDiff),
+                        )}
                         mask={3}
                         shown={shown}
                       />{" "}
@@ -2004,7 +1993,9 @@ function Home({
                     <>
                       ✓ ৳
                       <Amount
-                        value={amountFormatter.format(homeVelocity.dailyRemainingBudget)}
+                        value={amountFormatter.format(
+                          homeVelocity.dailyRemainingBudget,
+                        )}
                         mask={3}
                         shown={shown}
                       />
@@ -2092,7 +2083,10 @@ function Home({
               aria-label={`View ${c} activity, ${M(v)}`}
               onClick={() => onCategory(c)}
             >
-              <span className="dot" style={{ "--c": CAT[c]?.[1] || "#64748b" }} />
+              <span
+                className="dot"
+                style={{ "--c": CAT[c]?.[1] || "#64748b" }}
+              />
               <span>{c}</span>
               <b>{M(v)}</b>
               <em>{total > 0 ? Math.round((v / total) * 100) : 0}%</em>
@@ -2217,11 +2211,14 @@ function Activity({
     }
   }, [cf, feedType, quickFilter]);
 
-  const query = String(q || "").trim().toLowerCase();
+  const query = String(q || "")
+    .trim()
+    .toLowerCase();
 
   const isItemCash = useCallback((item) => {
     if (!item) return false;
-    if (item.sourceType === "expense") return !item.acct || item.acct === "cash";
+    if (item.sourceType === "expense")
+      return !item.acct || item.acct === "cash";
     if (item.type === "transfer") {
       return (
         item.from === "cash" ||
@@ -2240,7 +2237,9 @@ function Activity({
   // 1. Month Expenses
   const monthExpenses = useMemo(() => {
     return (S?.exp || [])
-      .filter((e) => typeof e?.date === "string" && e.date.startsWith(currentMonth))
+      .filter(
+        (e) => typeof e?.date === "string" && e.date.startsWith(currentMonth),
+      )
       .map((e, index) => ({
         ...e,
         sourceType: "expense",
@@ -2251,7 +2250,9 @@ function Activity({
   // 2. Month Transactions (Income, Transfers, Adjustments)
   const monthTransactions = useMemo(() => {
     return (S?.tx || [])
-      .filter((t) => typeof t?.date === "string" && t.date.startsWith(currentMonth))
+      .filter(
+        (t) => typeof t?.date === "string" && t.date.startsWith(currentMonth),
+      )
       .map((t, index) => ({
         ...t,
         sourceType: "tx",
@@ -2293,7 +2294,9 @@ function Activity({
 
   // Counts for Segmented Tabs
   const countExpenses = monthExpenses.length;
-  const countIncome = monthTransactions.filter((t) => t.type === "income").length;
+  const countIncome = monthTransactions.filter(
+    (t) => t.type === "income",
+  ).length;
   const countTransfers = monthTransactions.filter(
     (t) =>
       t.type === "transfer" || t.type === "adjust" || t.type === "adjustment",
@@ -2327,7 +2330,8 @@ function Activity({
   const filteredItems = useMemo(() => {
     return allMonthItems.filter((item) => {
       // 1. Feed Type Filter
-      if (feedType === "expenses" && item.sourceType !== "expense") return false;
+      if (feedType === "expenses" && item.sourceType !== "expense")
+        return false;
       if (
         feedType === "income" &&
         (item.sourceType !== "tx" || item.type !== "income")
@@ -2343,7 +2347,8 @@ function Activity({
         return false;
 
       // 2. Category Filter (applicable to expenses)
-      if (cf && (item.sourceType !== "expense" || item.cat !== cf)) return false;
+      if (cf && (item.sourceType !== "expense" || item.cat !== cf))
+        return false;
 
       // 3. Quick Filter Pills
       if (
@@ -2482,14 +2487,20 @@ function Activity({
           const amtStr = item.amt != null ? String(item.amt) : "";
           const cleanMoneyQuery = query.replace(/[৳,\s]/g, "");
           const [acct] = getAccountDisplay(item.acct || item.from, S?.cards);
-          const [toAcct] = item.to ? getAccountDisplay(item.to, S?.cards) : [""];
+          const [toAcct] = item.to
+            ? getAccountDisplay(item.to, S?.cards)
+            : [""];
           return (
             desc.includes(query) ||
             cat.includes(query) ||
             amtStr.includes(query) ||
             (cleanMoneyQuery && amtStr.includes(cleanMoneyQuery)) ||
-            String(acct || "").toLowerCase().includes(query) ||
-            String(toAcct || "").toLowerCase().includes(query)
+            String(acct || "")
+              .toLowerCase()
+              .includes(query) ||
+            String(toAcct || "")
+              .toLowerCase()
+              .includes(query)
           );
         })
       : false;
@@ -2551,7 +2562,9 @@ function Activity({
               setShowFilterTray((prev) => !prev);
             }}
             aria-label="Filter transactions"
-            aria-expanded={showFilterTray || Boolean(cf) || Boolean(quickFilter)}
+            aria-expanded={
+              showFilterTray || Boolean(cf) || Boolean(quickFilter)
+            }
             title="Filter options"
           >
             <svg
@@ -2582,7 +2595,11 @@ function Activity({
         </div>
 
         {/* 1. Feed Tabs Bar */}
-        <div className="activity-tabs-bar" role="tablist" aria-label="Activity filter">
+        <div
+          className="activity-tabs-bar"
+          role="tablist"
+          aria-label="Activity filter"
+        >
           <button
             type="button"
             role="tab"
@@ -2654,7 +2671,11 @@ function Activity({
 
       {/* 2. Quick Filter Pills Bar */}
       {(showFilterTray || cf || quickFilter) && (
-        <div className="chips" role="toolbar" aria-label="Activity filter chips">
+        <div
+          className="chips"
+          role="toolbar"
+          aria-label="Activity filter chips"
+        >
           <button
             type="button"
             className={!cf && !quickFilter ? "on" : ""}
@@ -2676,7 +2697,9 @@ function Activity({
                 aria-pressed={quickFilter === "needs-amount"}
                 onClick={() => {
                   triggerHaptic("selection");
-                  setQuickFilter(quickFilter === "needs-amount" ? "" : "needs-amount");
+                  setQuickFilter(
+                    quickFilter === "needs-amount" ? "" : "needs-amount",
+                  );
                   setCf("");
                 }}
               >
@@ -2689,7 +2712,9 @@ function Activity({
                   />
                 </span>
                 <span>Needs amt</span>
-                {needsAmountCount > 0 && <span className="chip-badge">{needsAmountCount}</span>}
+                {needsAmountCount > 0 && (
+                  <span className="chip-badge">{needsAmountCount}</span>
+                )}
               </button>
 
               <button
@@ -2698,7 +2723,9 @@ function Activity({
                 aria-pressed={quickFilter === "recurring"}
                 onClick={() => {
                   triggerHaptic("selection");
-                  setQuickFilter(quickFilter === "recurring" ? "" : "recurring");
+                  setQuickFilter(
+                    quickFilter === "recurring" ? "" : "recurring",
+                  );
                   setCf("");
                 }}
               >
@@ -2711,7 +2738,9 @@ function Activity({
                   />
                 </span>
                 <span>Repeat</span>
-                {recurringCount > 0 && <span className="chip-badge">{recurringCount}</span>}
+                {recurringCount > 0 && (
+                  <span className="chip-badge">{recurringCount}</span>
+                )}
               </button>
             </>
           )}
@@ -2823,7 +2852,8 @@ function Activity({
           )}
           <span>·</span>
           <span>
-            {filteredItems.length} {filteredItems.length === 1 ? "item" : "items"}
+            {filteredItems.length}{" "}
+            {filteredItems.length === 1 ? "item" : "items"}
           </span>
           <button
             type="button"
@@ -2937,7 +2967,9 @@ function Activity({
                       ) : dayIncomeSum > 0 && dayExpenseSum > 0 ? (
                         <>
                           <span>-{M(dayExpenseSum)} </span>
-                          <span className="is-positive">(+{M(dayIncomeSum)})</span>
+                          <span className="is-positive">
+                            (+{M(dayIncomeSum)})
+                          </span>
                         </>
                       ) : dayIncomeSum > 0 && dayExpenseSum === 0 ? (
                         <span className="is-positive">+{M(dayIncomeSum)}</span>
@@ -2982,66 +3014,13 @@ function Activity({
   );
 }
 
-function AnimatedAmount({ value }) {
-  const [displayValue, setDisplayValue] = useState(value);
-  const [pulse, setPulse] = useState({ key: 0, direction: "" });
-  const displayedRef = useRef(value);
-
-  useEffect(() => {
-    const from = displayedRef.current;
-    const target = Number(value) || 0;
-    if (Math.abs(target - from) < 0.005) return;
-
-    const reduceMotion = window.matchMedia?.(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
-    if (reduceMotion) {
-      displayedRef.current = target;
-      setDisplayValue(target);
-      return;
-    }
-
-    setPulse((current) => ({
-      key: current.key + 1,
-      direction: target > from ? "up" : "down",
-    }));
-    const startedAt = performance.now();
-    let frameId;
-    const animate = (now) => {
-      const progress = Math.min(1, (now - startedAt) / 300);
-      const eased = 1 - (1 - progress) ** 3;
-      const next = progress === 1 ? target : from + (target - from) * eased;
-      displayedRef.current = next;
-      setDisplayValue(next);
-      if (progress < 1) frameId = requestAnimationFrame(animate);
-    };
-    frameId = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(frameId);
-  }, [value]);
-
-  return (
-    <span className="animated-money" aria-live="off">
-      <span
-        key={pulse.key}
-        className={`animated-money-value${
-          pulse.direction ? ` change-${pulse.direction}` : ""
-        }`}
-      >
-        {M(displayValue)}
-      </span>
-    </span>
-  );
-}
-
 function Accounts({
   S,
   onTx,
   onAddCardClick,
   onOpenCardOptions,
-  onDeleteCard,
   highlightedExpenseId,
   highlightedTransactionId,
-  profile,
   onTab,
   onOpenExpense,
   onOpenTransaction,
@@ -3106,10 +3085,7 @@ function Accounts({
 
   const events = [
     ...S.exp
-      .filter(
-        (expense) =>
-          expense.acct && expense.amt != null,
-      )
+      .filter((expense) => expense.acct && expense.amt != null)
       .map((expense) => {
         const isSavingsTransfer =
           expense.cat === "Savings" && Boolean(savingsAccountId);
@@ -3130,32 +3106,35 @@ function Accounts({
           to: isSavingsTransfer ? savingsAccountId : "",
         };
       }),
-    ...S.tx
-      .map((transaction) => ({
-        id: transaction.id,
-        sourceType: "tx",
-        createdAt: transaction.createdAt,
-        updatedAt: transaction.updatedAt,
-        d: transaction.date,
-        title:
-          capitalizeFirstLetter(transaction.note) ||
-          { income: "Income", transfer: "Transfer", adjust: "Adjustment", adjustment: "Adjustment" }[
-            transaction.type
-          ] || "Transaction",
-        type: transaction.type,
-        cat:
-          transaction.type === "income"
-            ? "Savings"
-            : transaction.type === "transfer"
-              ? "Transport"
-              : "Bills",
-        amount: transaction.amt,
-        account: transaction.acct,
-        from: transaction.acct,
-        to: transaction.to,
-        dir: transaction.dir,
-        direction: transaction.dir,
-      })),
+    ...S.tx.map((transaction) => ({
+      id: transaction.id,
+      sourceType: "tx",
+      createdAt: transaction.createdAt,
+      updatedAt: transaction.updatedAt,
+      d: transaction.date,
+      title:
+        capitalizeFirstLetter(transaction.note) ||
+        {
+          income: "Income",
+          transfer: "Transfer",
+          adjust: "Adjustment",
+          adjustment: "Adjustment",
+        }[transaction.type] ||
+        "Transaction",
+      type: transaction.type,
+      cat:
+        transaction.type === "income"
+          ? "Savings"
+          : transaction.type === "transfer"
+            ? "Transport"
+            : "Bills",
+      amount: transaction.amt,
+      account: transaction.acct,
+      from: transaction.acct,
+      to: transaction.to,
+      dir: transaction.dir,
+      direction: transaction.dir,
+    })),
   ];
 
   const itemCreationTime = (item) => {
@@ -3252,9 +3231,7 @@ function Accounts({
         selectedId={selectedAccount}
         onSelectCard={chooseAccount}
         onAddCardClick={onAddCardClick}
-        onOpenCardDetails={(card) =>
-          card && onOpenCardOptions?.(card.id)
-        }
+        onOpenCardDetails={(card) => card && onOpenCardOptions?.(card.id)}
         onDragOffsetChange={setDeckDragY}
       />
 
@@ -3271,323 +3248,325 @@ function Accounts({
       >
         {/* 2×2 Quick Action Buttons Grid (Income, Transfer, Adjust, Card Options - Preserving Whole App Functionality) */}
         <div className="accounts-actions-grid">
-        <button
-          type="button"
-          className="accounts-action-card"
-          onClick={() => {
-            triggerHaptic("light");
-            if (!cards.length) {
-              onAddCardClick?.();
-              return;
-            }
-            onTx("income", selectedAccount);
-          }}
-          aria-label="Add income to this account"
-        >
-          <div className="action-icon-badge is-income">
-            <TransactionSymbol type="income" />
-          </div>
-          <span className="action-label">Income</span>
-        </button>
-
-        <button
-          type="button"
-          className="accounts-action-card"
-          onClick={() => {
-            triggerHaptic("light");
-            if (!cards.length) {
-              onAddCardClick?.();
-              return;
-            }
-            if (activeCard?.frozen) {
-              onLockedCardNotice?.(activeCard.name);
-              return;
-            }
-            onTx("transfer", selectedAccount);
-          }}
-          aria-label="Transfer between accounts"
-        >
-          <div className="action-icon-badge is-transfer">
-            <TransactionSymbol type="transfer" />
-          </div>
-          <span className="action-label">Transfer</span>
-        </button>
-
-        <button
-          type="button"
-          className="accounts-action-card"
-          onClick={() => {
-            triggerHaptic("light");
-            if (!cards.length) {
-              onAddCardClick?.();
-              return;
-            }
-            onTx("adjust", selectedAccount);
-          }}
-          aria-label="Adjust balance"
-        >
-          <div className="action-icon-badge is-adjust">
-            <TransactionSymbol type="adjust" />
-          </div>
-          <span className="action-label">Adjust</span>
-        </button>
-
-        <button
-          type="button"
-          className="accounts-action-card is-card-options-card"
-          onClick={() => {
-            triggerHaptic("selection");
-            if (!cards.length) {
-              onAddCardClick?.();
-              return;
-            }
-            onOpenCardOptions?.(selectedAccount || activeCard?.id || cards[0]?.id);
-          }}
-          aria-label="Manage cards and view card options"
-        >
-          <div className="action-icon-badge is-card-options">
-            <TransactionSymbol type="card-options" />
-          </div>
-          <span className="action-label">Card Options</span>
-        </button>
-      </div>
-
-      {/* Transactions Section matching Video Header & List */}
-      <div className="accounts-transactions-header">
-        <h2>Transactions</h2>
-        {filteredEvents.length > 8 && (
           <button
             type="button"
-            className="accounts-see-all-link"
+            className="accounts-action-card"
+            onClick={() => {
+              triggerHaptic("light");
+              if (!cards.length) {
+                onAddCardClick?.();
+                return;
+              }
+              onTx("income", selectedAccount);
+            }}
+            aria-label="Add income to this account"
+          >
+            <div className="action-icon-badge is-income">
+              <TransactionSymbol type="income" />
+            </div>
+            <span className="action-label">Income</span>
+          </button>
+
+          <button
+            type="button"
+            className="accounts-action-card"
+            onClick={() => {
+              triggerHaptic("light");
+              if (!cards.length) {
+                onAddCardClick?.();
+                return;
+              }
+              if (activeCard?.frozen) {
+                onLockedCardNotice?.(activeCard.name);
+                return;
+              }
+              onTx("transfer", selectedAccount);
+            }}
+            aria-label="Transfer between accounts"
+          >
+            <div className="action-icon-badge is-transfer">
+              <TransactionSymbol type="transfer" />
+            </div>
+            <span className="action-label">Transfer</span>
+          </button>
+
+          <button
+            type="button"
+            className="accounts-action-card"
+            onClick={() => {
+              triggerHaptic("light");
+              if (!cards.length) {
+                onAddCardClick?.();
+                return;
+              }
+              onTx("adjust", selectedAccount);
+            }}
+            aria-label="Adjust balance"
+          >
+            <div className="action-icon-badge is-adjust">
+              <TransactionSymbol type="adjust" />
+            </div>
+            <span className="action-label">Adjust</span>
+          </button>
+
+          <button
+            type="button"
+            className="accounts-action-card is-card-options-card"
             onClick={() => {
               triggerHaptic("selection");
-              setShowAllTx((prev) => !prev);
+              if (!cards.length) {
+                onAddCardClick?.();
+                return;
+              }
+              onOpenCardOptions?.(
+                selectedAccount || activeCard?.id || cards[0]?.id,
+              );
             }}
+            aria-label="Manage cards and view card options"
           >
-            {showAllTx
-              ? "Show less"
-              : `See all (${filteredEvents.length})`}
+            <div className="action-icon-badge is-card-options">
+              <TransactionSymbol type="card-options" />
+            </div>
+            <span className="action-label">Card Options</span>
           </button>
-        )}
-      </div>
+        </div>
 
-      <div className="accounts-transactions-card">
-        {visibleEvents.length ? (
-          visibleEvents.map((event) => {
-            const amount = displayAmount(event);
-            const isPositive = amount.value > 0;
-            const adjustment = adjustmentBalances.get(event.id);
-            const category = event.cat || "Food";
-            const subtitleMeta =
-              event.type === "transfer"
-                ? `${getAccountName(event.from)} → ${getAccountName(event.to)}`
-                : getAccountName(event.account);
+        {/* Transactions Section matching Video Header & List */}
+        <div className="accounts-transactions-header">
+          <h2>Transactions</h2>
+          {filteredEvents.length > 8 && (
+            <button
+              type="button"
+              className="accounts-see-all-link"
+              onClick={() => {
+                triggerHaptic("selection");
+                setShowAllTx((prev) => !prev);
+              }}
+            >
+              {showAllTx ? "Show less" : `See all (${filteredEvents.length})`}
+            </button>
+          )}
+        </div>
 
-            return (
-              <button
-                type="button"
-                className={`accounts-tx-row${highlightedExpenseId === event.id || highlightedTransactionId === event.id ? " is-new" : ""}`}
-                key={event.id}
-                onClick={() => {
-                  triggerHaptic("selection");
-                  if (event.sourceType === "expense" && onOpenExpense) {
-                    onOpenExpense(event.id);
-                  } else if (event.sourceType === "tx" && onOpenTransaction) {
-                    onOpenTransaction(event.id);
-                  }
-                }}
-              >
-                <div
-                  className={`accounts-tx-icon-circle ${event.sourceType === "tx" || event.type !== "expense" ? `is-${event.type.toLowerCase()}` : `is-${category.toLowerCase()}`}`}
-                  style={
-                    event.sourceType === "expense"
-                      ? { "--c": getCategoryColor(category, event.title) }
-                      : undefined
-                  }
-                >
-                  {event.sourceType === "tx" || event.type !== "expense" ? (
-                    <TransactionSymbol type={event.type} />
-                  ) : (
-                    <CategorySymbol
-                      category={category}
-                      description={event.title}
-                    />
-                  )}
-                </div>
+        <div className="accounts-transactions-card">
+          {visibleEvents.length ? (
+            visibleEvents.map((event) => {
+              const amount = displayAmount(event);
+              const isPositive = amount.value > 0;
+              const adjustment = adjustmentBalances.get(event.id);
+              const category = event.cat || "Food";
+              const subtitleMeta =
+                event.type === "transfer"
+                  ? `${getAccountName(event.from)} → ${getAccountName(event.to)}`
+                  : getAccountName(event.account);
 
-                <div className="accounts-tx-info">
-                  <b className="accounts-tx-title">{event.title}</b>
-                  <small className="accounts-tx-date">
-                    {displayDate(event.d)}
-                    {subtitleMeta ? ` · ${subtitleMeta}` : ""}
-                  </small>
-                  {adjustment && (
-                    <small className="accounts-tx-adj-note">
-                      {M(adjustment.before)} → {M(adjustment.after)}
-                    </small>
-                  )}
-                </div>
-
-                <b
-                  className={`accounts-tx-amount${isPositive ? " is-positive" : ""}`}
-                >
-                  {amount.signed ? (isPositive ? "+" : "−") : ""}
-                  {M(Math.abs(amount.value))}
-                </b>
-              </button>
-            );
-          })
-        ) : (
-          <div
-            className="accounts-tx-empty"
-            style={{ "--card-accent": activeCard?.color || "#2563eb" }}
-          >
-            <div className="accounts-tx-empty-icon-wrap">
-              <div className="accounts-tx-empty-glow" />
-              <div className="accounts-tx-empty-badge">
-                <svg
-                  viewBox="0 0 52 52"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="accounts-tx-empty-svg"
-                  aria-hidden="true"
-                >
-                  <rect
-                    x="11"
-                    y="9"
-                    width="30"
-                    height="34"
-                    rx="7"
-                    className="accounts-tx-empty-doc"
-                  />
-                  <line
-                    x1="18"
-                    y1="18"
-                    x2="34"
-                    y2="18"
-                    stroke="currentColor"
-                    strokeWidth="2.2"
-                    strokeLinecap="round"
-                    opacity="0.85"
-                  />
-                  <line
-                    x1="18"
-                    y1="24"
-                    x2="30"
-                    y2="24"
-                    stroke="currentColor"
-                    strokeWidth="2.2"
-                    strokeLinecap="round"
-                    opacity="0.55"
-                  />
-                  <line
-                    x1="18"
-                    y1="30"
-                    x2="25"
-                    y2="30"
-                    stroke="currentColor"
-                    strokeWidth="2.2"
-                    strokeLinecap="round"
-                    opacity="0.35"
-                  />
-                  <circle
-                    cx="36"
-                    cy="36"
-                    r="9"
-                    className="accounts-tx-empty-bubble"
-                  />
-                  <path
-                    d="M36 32.5V39.5M32.5 36H39.5"
-                    stroke="currentColor"
-                    strokeWidth="2.2"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </div>
-            </div>
-
-            <div className="accounts-tx-empty-text">
-              <h4 className="accounts-tx-empty-title">No transactions yet</h4>
-              <p className="accounts-tx-empty-desc">
-                Activity for{" "}
-                <strong className="accounts-tx-empty-card-name">
-                  {activeCard?.name || "this card"}
-                </strong>{" "}
-                will show up here.
-              </p>
-            </div>
-
-            {activeCard?.frozen ? (
-              <div className="accounts-tx-empty-frozen">
-                <svg
-                  viewBox="0 0 24 24"
-                  width="14"
-                  height="14"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                </svg>
-                <span>Card is locked</span>
+              return (
                 <button
                   type="button"
-                  className="accounts-tx-empty-unlock-btn"
+                  className={`accounts-tx-row${highlightedExpenseId === event.id || highlightedTransactionId === event.id ? " is-new" : ""}`}
+                  key={event.id}
                   onClick={() => {
                     triggerHaptic("selection");
-                    onOpenCardOptions?.(selectedAccount || activeCard?.id || cards[0]?.id);
-                  }}
-                >
-                  Manage
-                </button>
-              </div>
-            ) : (
-              <div className="accounts-tx-empty-actions">
-                <button
-                  type="button"
-                  className="accounts-tx-empty-btn is-primary"
-                  onClick={() => {
-                    triggerHaptic("light");
-                    if (onAddExpense) {
-                      onAddExpense(selectedAccount);
-                    } else {
-                      onTab?.("add");
+                    if (event.sourceType === "expense" && onOpenExpense) {
+                      onOpenExpense(event.id);
+                    } else if (event.sourceType === "tx" && onOpenTransaction) {
+                      onOpenTransaction(event.id);
                     }
                   }}
                 >
+                  <div
+                    className={`accounts-tx-icon-circle ${event.sourceType === "tx" || event.type !== "expense" ? `is-${event.type.toLowerCase()}` : `is-${category.toLowerCase()}`}`}
+                    style={
+                      event.sourceType === "expense"
+                        ? { "--c": getCategoryColor(category, event.title) }
+                        : undefined
+                    }
+                  >
+                    {event.sourceType === "tx" || event.type !== "expense" ? (
+                      <TransactionSymbol type={event.type} />
+                    ) : (
+                      <CategorySymbol
+                        category={category}
+                        description={event.title}
+                      />
+                    )}
+                  </div>
+
+                  <div className="accounts-tx-info">
+                    <b className="accounts-tx-title">{event.title}</b>
+                    <small className="accounts-tx-date">
+                      {displayDate(event.d)}
+                      {subtitleMeta ? ` · ${subtitleMeta}` : ""}
+                    </small>
+                    {adjustment && (
+                      <small className="accounts-tx-adj-note">
+                        {M(adjustment.before)} → {M(adjustment.after)}
+                      </small>
+                    )}
+                  </div>
+
+                  <b
+                    className={`accounts-tx-amount${isPositive ? " is-positive" : ""}`}
+                  >
+                    {amount.signed ? (isPositive ? "+" : "−") : ""}
+                    {M(Math.abs(amount.value))}
+                  </b>
+                </button>
+              );
+            })
+          ) : (
+            <div
+              className="accounts-tx-empty"
+              style={{ "--card-accent": activeCard?.color || "#2563eb" }}
+            >
+              <div className="accounts-tx-empty-icon-wrap">
+                <div className="accounts-tx-empty-glow" />
+                <div className="accounts-tx-empty-badge">
+                  <svg
+                    viewBox="0 0 52 52"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="accounts-tx-empty-svg"
+                    aria-hidden="true"
+                  >
+                    <rect
+                      x="11"
+                      y="9"
+                      width="30"
+                      height="34"
+                      rx="7"
+                      className="accounts-tx-empty-doc"
+                    />
+                    <line
+                      x1="18"
+                      y1="18"
+                      x2="34"
+                      y2="18"
+                      stroke="currentColor"
+                      strokeWidth="2.2"
+                      strokeLinecap="round"
+                      opacity="0.85"
+                    />
+                    <line
+                      x1="18"
+                      y1="24"
+                      x2="30"
+                      y2="24"
+                      stroke="currentColor"
+                      strokeWidth="2.2"
+                      strokeLinecap="round"
+                      opacity="0.55"
+                    />
+                    <line
+                      x1="18"
+                      y1="30"
+                      x2="25"
+                      y2="30"
+                      stroke="currentColor"
+                      strokeWidth="2.2"
+                      strokeLinecap="round"
+                      opacity="0.35"
+                    />
+                    <circle
+                      cx="36"
+                      cy="36"
+                      r="9"
+                      className="accounts-tx-empty-bubble"
+                    />
+                    <path
+                      d="M36 32.5V39.5M32.5 36H39.5"
+                      stroke="currentColor"
+                      strokeWidth="2.2"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                </div>
+              </div>
+
+              <div className="accounts-tx-empty-text">
+                <h4 className="accounts-tx-empty-title">No transactions yet</h4>
+                <p className="accounts-tx-empty-desc">
+                  Activity for{" "}
+                  <strong className="accounts-tx-empty-card-name">
+                    {activeCard?.name || "this card"}
+                  </strong>{" "}
+                  will show up here.
+                </p>
+              </div>
+
+              {activeCard?.frozen ? (
+                <div className="accounts-tx-empty-frozen">
                   <svg
                     viewBox="0 0 24 24"
+                    width="14"
+                    height="14"
                     fill="none"
                     stroke="currentColor"
-                    strokeWidth="2.4"
+                    strokeWidth="2.2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     aria-hidden="true"
                   >
-                    <path d="M12 5v14M5 12h14" />
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                   </svg>
-                  <span>Add Expense</span>
-                </button>
+                  <span>Card is locked</span>
+                  <button
+                    type="button"
+                    className="accounts-tx-empty-unlock-btn"
+                    onClick={() => {
+                      triggerHaptic("selection");
+                      onOpenCardOptions?.(
+                        selectedAccount || activeCard?.id || cards[0]?.id,
+                      );
+                    }}
+                  >
+                    Manage
+                  </button>
+                </div>
+              ) : (
+                <div className="accounts-tx-empty-actions">
+                  <button
+                    type="button"
+                    className="accounts-tx-empty-btn is-primary"
+                    onClick={() => {
+                      triggerHaptic("light");
+                      if (onAddExpense) {
+                        onAddExpense(selectedAccount);
+                      } else {
+                        onTab?.("add");
+                      }
+                    }}
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.4"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 5v14M5 12h14" />
+                    </svg>
+                    <span>Add Expense</span>
+                  </button>
 
-                <button
-                  type="button"
-                  className="accounts-tx-empty-btn is-secondary"
-                  onClick={() => {
-                    triggerHaptic("light");
-                    onTx?.("income", selectedAccount);
-                  }}
-                >
-                  <span>Income</span>
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+                  <button
+                    type="button"
+                    className="accounts-tx-empty-btn is-secondary"
+                    onClick={() => {
+                      triggerHaptic("light");
+                      onTx?.("income", selectedAccount);
+                    }}
+                  >
+                    <span>Income</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </>
   );
@@ -3729,12 +3708,11 @@ function Plans({
                     className={`velocity-tag ${velocity.isOverPace ? "is-over" : "is-good"}`}
                   >
                     {velocity.isOverPace ? (
-                      <>
-                        ⚡ {M(Math.round(velocity.paceDiff))} ahead of pace
-                      </>
+                      <>⚡ {M(Math.round(velocity.paceDiff))} ahead of pace</>
                     ) : velocity.isUnderPace ? (
                       <>
-                        ✓ {M(Math.round(Math.abs(velocity.paceDiff)))} under pace
+                        ✓ {M(Math.round(Math.abs(velocity.paceDiff)))} under
+                        pace
                       </>
                     ) : (
                       <>🎯 Exactly on pace</>
@@ -3967,7 +3945,8 @@ function AddSheet({
   onClose,
 }) {
   const spendableCards = cards.filter((c) => c.type !== "savings" && !c.frozen);
-  const primaryCard = spendableCards.find((c) => c.isPrimary) || spendableCards[0];
+  const primaryCard =
+    spendableCards.find((c) => c.isPrimary) || spendableCards[0];
   const hasSavingsAccount = Boolean(getSavingsAccountId(cards));
 
   const resolvedInitialAcct = useMemo(() => {
@@ -4001,7 +3980,6 @@ function AddSheet({
     acct: resolvedInitialAcct,
     iv: iv || "none",
   });
-  const [categoryTouched, setCategoryTouched] = useState(false);
   const amtInputRef = useRef(null);
   const descInputRef = useRef(null);
   const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
@@ -4018,7 +3996,9 @@ function AddSheet({
       onClose={onClose}
       actions={
         <button className="btn" onClick={handleSave}>
-          {(f.cat === "Savings" || (!f.cat && categorySuggestion === "Savings")) && hasSavingsAccount
+          {(f.cat === "Savings" ||
+            (!f.cat && categorySuggestion === "Savings")) &&
+          hasSavingsAccount
             ? f.iv === "none"
               ? "Save to Savings"
               : "Schedule savings transfer"
@@ -4070,7 +4050,6 @@ function AddSheet({
             key={c}
             className={f.cat === c ? "on" : ""}
             onClick={() => {
-              setCategoryTouched(true);
               setF((current) => ({
                 ...current,
                 cat: c,
@@ -4133,7 +4112,6 @@ function AddSheet({
           aria-label={`Use suggestion: ${categorySuggestion}`}
           onClick={() => {
             triggerHaptic("selection");
-            setCategoryTouched(true);
             set("cat", categorySuggestion);
           }}
         >
@@ -4177,7 +4155,9 @@ function AddSheet({
       </div>
 
       <span className="lbl">
-        {f.cat === "Savings" && hasSavingsAccount ? "Transfer from" : "Paid from"}
+        {f.cat === "Savings" && hasSavingsAccount
+          ? "Transfer from"
+          : "Paid from"}
       </span>
       <AccountPicker
         value={f.acct}
@@ -4246,11 +4226,7 @@ function TxAccountCardGrid({
   const normalizedValue = value === "" ? "cash" : (value ?? "");
 
   return (
-    <div
-      className="tx-account-grid"
-      role="radiogroup"
-      aria-label={ariaLabel}
-    >
+    <div className="tx-account-grid" role="radiogroup" aria-label={ariaLabel}>
       {options.map(([id, label]) => {
         const normId = id === "" ? "cash" : id;
         const card =
@@ -4283,10 +4259,7 @@ function TxAccountCardGrid({
             }}
           >
             <div className="tx-account-card-top">
-              <MiniCardPreview
-                card={card}
-                className="tx-account-mini-card"
-              />
+              <MiniCardPreview card={card} className="tx-account-mini-card" />
               <div className="tx-account-card-badges">
                 {isPrimary && (
                   <span
@@ -4356,7 +4329,14 @@ function TxAccountCardGrid({
   );
 }
 
-function TxSheet({ type, defaultAccount, cards = [], onSave, onClose, onLockedCardNotice }) {
+function TxSheet({
+  type,
+  defaultAccount,
+  cards = [],
+  onSave,
+  onClose,
+  onLockedCardNotice,
+}) {
   const accountOptions = cards.map((c) => [c.id, c.name]);
   const unfrozenFromOptions = cards
     .filter((c) => !c.frozen)
@@ -4685,7 +4665,9 @@ function AccountTxDetailSheet({ tx, cards = [], onSave, onDelete, onClose }) {
     date: tx.date || ld(),
     fromAccount: tx.acct || cards[0]?.id || "cash",
     toAccount:
-      tx.to || cards.find((c) => c.id !== tx.acct)?.id || (cards[0]?.id ? "cash" : ""),
+      tx.to ||
+      cards.find((c) => c.id !== tx.acct)?.id ||
+      (cards[0]?.id ? "cash" : ""),
   });
   const amtInputRef = useRef(null);
   const noteInputRef = useRef(null);
@@ -4699,7 +4681,9 @@ function AccountTxDetailSheet({ tx, cards = [], onSave, onDelete, onClose }) {
   const normTo = g.toAccount === "" ? "cash" : g.toAccount;
   const amtNum = parseAmount(g.amt);
   const hasValidAmt = Number.isFinite(amtNum) && amtNum > 0;
-  const fromCardIsFrozen = Boolean(cards.find((c) => c.id === normFrom)?.frozen);
+  const fromCardIsFrozen = Boolean(
+    cards.find((c) => c.id === normFrom)?.frozen,
+  );
   const toCardIsFrozen = Boolean(cards.find((c) => c.id === normTo)?.frozen);
   const canSwap =
     allTransferOptions.length >= 2 &&
@@ -4765,14 +4749,9 @@ function AccountTxDetailSheet({ tx, cards = [], onSave, onDelete, onClose }) {
             return {
               ...current,
               type: v,
-              acct:
-                v === "transfer"
-                  ? resolvedFrom
-                  : current.acct,
+              acct: v === "transfer" ? resolvedFrom : current.acct,
               fromAccount:
-                v === "transfer"
-                  ? resolvedFrom
-                  : current.fromAccount,
+                v === "transfer" ? resolvedFrom : current.fromAccount,
             };
           });
           setTimeout(() => {
@@ -4845,7 +4824,8 @@ function AccountTxDetailSheet({ tx, cards = [], onSave, onDelete, onClose }) {
                   current.toAccount === value
                     ? current.fromAccount && current.fromAccount !== value
                       ? current.fromAccount
-                      : allTransferOptions.find(([id]) => id !== value)?.[0] || ""
+                      : allTransferOptions.find(([id]) => id !== value)?.[0] ||
+                        ""
                     : current.toAccount,
               }));
             }}
@@ -5026,7 +5006,11 @@ function DetailSheet({
           >
             Save changes
           </button>
-          <button type="button" className="btn del" onClick={() => onDelete(e.id)}>
+          <button
+            type="button"
+            className="btn del"
+            onClick={() => onDelete(e.id)}
+          >
             Delete expense
           </button>
         </>
@@ -5351,24 +5335,11 @@ const CARD_FILTER_TABS = [
   { id: "custom", label: "Custom" },
 ];
 
-function getCardLabel(prov) {
-  if (prov.id === "custom") return { label: "Custom", type: "custom" };
-  if (prov.category === "mfs" || prov.isPhone)
-    return { label: "MFS", type: "mfs" };
-  if (prov.category === "savings") return { label: "Vault", type: "savings" };
-  if (prov.defaultNetwork === "visa") return { label: "Visa", type: "visa" };
-  if (prov.defaultNetwork === "mastercard")
-    return { label: "Mastercard", type: "mastercard" };
-  if (prov.defaultNetwork === "amex") return { label: "Amex", type: "amex" };
-  return { label: "Bank", type: "bank" };
-}
-
 function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
   const [step, setStep] = useState("catalog"); // 'catalog' | 'customize' | 'success'
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
   const [selectedProvider, setSelectedProvider] = useState(CARD_PROVIDERS[0]);
-  const [createdCard, setCreatedCard] = useState(null);
 
   // Form State with Live Synchronization - Clean & Unfilled Initially (Use placeholders instead of pre-typed text)
   const [formData, setFormData] = useState({
@@ -5444,7 +5415,11 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
       setFormData((prev) => ({ ...prev, last4: digits, number: digits }));
     } else {
       const digits = raw.replace(/[^\d+]/g, "").slice(0, 14);
-      setFormData((prev) => ({ ...prev, last4: digits.slice(-4), number: digits }));
+      setFormData((prev) => ({
+        ...prev,
+        last4: digits.slice(-4),
+        number: digits,
+      }));
     }
   };
 
@@ -5470,11 +5445,12 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
     const defaultNum = selectedProvider.numberPlaceholder.replace(/\s+/g, "");
     const defaultLast4 = defaultNum.slice(-4);
     const last4 =
-      (formData.last4 ||
+      (
+        formData.last4 ||
         (formData.number ? formData.number.replace(/\D/g, "").slice(-4) : "")
       ).trim() || defaultLast4;
     const number = selectedProvider.isPhone
-      ? (formData.number.trim() || defaultNum)
+      ? formData.number.trim() || defaultNum
       : `•••• •••• •••• ${last4}`;
     const holderName =
       formData.holderName.trim() || userProfileName || "Cardholder";
@@ -5514,7 +5490,6 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
     };
 
     onAddCard(newCard);
-    setCreatedCard(newCard);
     setStep("success");
     triggerHaptic("success");
   };
@@ -5548,7 +5523,9 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
             : "Custom Amex"
       : selectedProvider.subtitle,
     last4: formData.last4 || (formData.number ? formData.number.slice(-4) : ""),
-    number: formData.last4 ? `•••• •••• •••• ${formData.last4}` : formData.number,
+    number: formData.last4
+      ? `•••• •••• •••• ${formData.last4}`
+      : formData.number,
     expiry: formData.expiry,
     color: formData.color || selectedProvider.color,
     gradient: formData.gradient || selectedProvider.gradient,
@@ -5927,7 +5904,9 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
             </button>
 
             <p className="add-card-safe-disclaimer">
-              🔒 <b>Privacy Notice:</b> Spend is a client-side personal expense tracker. Data is stored on your device. Never enter real CVV, PIN, or full card credentials.
+              🔒 <b>Privacy Notice:</b> Spend is a client-side personal expense
+              tracker. Data is stored on your device. Never enter real CVV, PIN,
+              or full card credentials.
             </p>
           </div>
         </div>
@@ -6124,8 +6103,9 @@ function CardOptionsSheet({
   useEffect(() => {
     if (selectedCard) {
       const cardBal =
-        (selectedCard.id != null ? startBalances[selectedCard.id] : undefined) ??
-        selectedCard.initialBalance;
+        (selectedCard.id != null
+          ? startBalances[selectedCard.id]
+          : undefined) ?? selectedCard.initialBalance;
       setFormData({
         name: selectedCard.name || "",
         holderName: selectedCard.holderName || "Cardholder",
@@ -6162,7 +6142,8 @@ function CardOptionsSheet({
       type: formData.type || selectedCard.type,
       gradient: formData.gradient,
       color: formData.color,
-      last4: formData.last4 || (formData.number ? formData.number.slice(-4) : ""),
+      last4:
+        formData.last4 || (formData.number ? formData.number.slice(-4) : ""),
       number:
         isMfs || isSavings
           ? formData.number || selectedCard.number
@@ -6177,7 +6158,11 @@ function CardOptionsSheet({
   const handleCardNumberChange = (raw) => {
     if (isMfs) {
       const digits = raw.replace(/[^\d+]/g, "").slice(0, 14);
-      setFormData((prev) => ({ ...prev, number: digits, last4: digits.slice(-4) }));
+      setFormData((prev) => ({
+        ...prev,
+        number: digits,
+        last4: digits.slice(-4),
+      }));
     } else {
       const digits = raw.replace(/\D/g, "").slice(0, 4);
       setFormData((prev) => ({
@@ -6202,7 +6187,13 @@ function CardOptionsSheet({
 
   const handleCopyNumber = () => {
     triggerHaptic("success");
-    const raw = String(formData.last4 || formData.number || selectedCard?.last4 || selectedCard?.number || "").trim();
+    const raw = String(
+      formData.last4 ||
+        formData.number ||
+        selectedCard?.last4 ||
+        selectedCard?.number ||
+        "",
+    ).trim();
     const toCopy = raw.includes("•") ? raw : raw.replace(/\s+/g, "");
     if (navigator?.clipboard?.writeText) {
       navigator.clipboard.writeText(toCopy).catch(() => {});
@@ -6427,7 +6418,11 @@ function CardOptionsSheet({
                 >
                   <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                 </svg>
-                <span>{selectedCard?.isPrimary ? "Primary Card ★" : "Set as Primary"}</span>
+                <span>
+                  {selectedCard?.isPrimary
+                    ? "Primary Card ★"
+                    : "Set as Primary"}
+                </span>
               </button>
 
               {cards.length > 1 && cards[0]?.id !== selectedCard?.id && (
@@ -6580,13 +6575,15 @@ function CardOptionsSheet({
                 </div>
 
                 <div className="card-options-field">
-                  <label>{isMfs ? "Phone / Account Number" : "Last 4 Digits"}</label>
+                  <label>
+                    {isMfs ? "Phone / Account Number" : "Last 4 Digits"}
+                  </label>
                   <input
                     type="text"
                     inputMode={isMfs ? "tel" : "numeric"}
                     placeholder={isMfs ? "01712 •••678" : "9018"}
                     maxLength={isMfs ? 16 : 4}
-                    value={isMfs ? (formData.number || "") : (formData.last4 || "")}
+                    value={isMfs ? formData.number || "" : formData.last4 || ""}
                     onChange={(e) => handleCardNumberChange(e.target.value)}
                     autoComplete="off"
                     autoCorrect="off"
@@ -7058,7 +7055,6 @@ function AppSettingsPage({
   notificationPermission,
   notificationStatus,
   backgroundPushEnabled,
-  onSignIn,
   onReminder,
   onToggleNotifications,
   onTestNotification,
@@ -7281,7 +7277,7 @@ function SecuritySheet({ onClose, onBack, onLockNow }) {
   useLayoutEffect(() => {
     if (step === "setup_pin" || step === "confirm_pin") {
       const pinEl = document.querySelector(
-        '[data-sheet-autofocus], .amt input[type="password"]'
+        '[data-sheet-autofocus], .amt input[type="password"]',
       );
       pinEl?.focus({ preventScroll: true });
     }
@@ -7313,6 +7309,7 @@ function SecuritySheet({ onClose, onBack, onLockNow }) {
       setPinConfirm("");
       return;
     }
+    await flushStorageWriteQueues();
     await setAppPin(pinDraft);
     setPinSet(true);
     triggerHaptic("success");
@@ -7321,6 +7318,7 @@ function SecuritySheet({ onClose, onBack, onLockNow }) {
   };
 
   const handleRemovePin = async () => {
+    await flushStorageWriteQueues();
     await removeAppPin();
     await disableBiometrics();
     setPinSet(false);
@@ -7490,10 +7488,7 @@ function SecuritySheet({ onClose, onBack, onLockNow }) {
 
           {pinSet && (
             <div className="security-autolock-wrap">
-              <div
-                className="ri"
-                style={{ borderBottom: 0, paddingBottom: 6 }}
-              >
+              <div className="ri" style={{ borderBottom: 0, paddingBottom: 6 }}>
                 <i className="ic" style={{ "--c": "#0ea5e9" }}>
                   <svg
                     viewBox="0 0 24 24"
@@ -7589,7 +7584,10 @@ function SecuritySheet({ onClose, onBack, onLockNow }) {
 
       {step === "setup_pin" && (
         <form onSubmit={handleDraftPinSubmit}>
-          <p className="hint" style={{ textAlign: "center", margin: "6px 0 0" }}>
+          <p
+            className="hint"
+            style={{ textAlign: "center", margin: "6px 0 0" }}
+          >
             Create a 4-digit passcode
           </p>
           <div className="amt" style={{ margin: "20px 0 16px" }}>
@@ -7637,7 +7635,10 @@ function SecuritySheet({ onClose, onBack, onLockNow }) {
 
       {step === "confirm_pin" && (
         <form onSubmit={handleConfirmPinSubmit}>
-          <p className="hint" style={{ textAlign: "center", margin: "6px 0 0" }}>
+          <p
+            className="hint"
+            style={{ textAlign: "center", margin: "6px 0 0" }}
+          >
             Confirm your 4-digit passcode
           </p>
           <div className="amt" style={{ margin: "20px 0 16px" }}>
@@ -7694,6 +7695,7 @@ function SecuritySheet({ onClose, onBack, onLockNow }) {
 export default function MobilePrototype({
   S,
   onUnlock,
+  onResetPin,
   onShift,
   onExpenseSave,
   onExpenseUpdate,
@@ -7729,7 +7731,6 @@ export default function MobilePrototype({
   onToggleNotifications,
   onTestNotification,
   backupStatus,
-  lastBackupAt,
   onBackupDownload,
   onEncryptedBackupDownload,
   onExpensesCsv,
@@ -7862,14 +7863,13 @@ export default function MobilePrototype({
   const handleConfirmResetPin = useCallback(async () => {
     setResetPinConfirmOpen(false);
     triggerHaptic("delete");
-    await removeAppPin();
+    await flushStorageWriteQueues();
+    await resetForgottenPin();
     await disableBiometrics();
     markActive();
-    if (typeof onUnlock === "function") {
-      await onUnlock();
-    }
+    onResetPin?.();
     setIsAppLocked(false);
-  }, [onUnlock]);
+  }, [onResetPin]);
 
   useEffect(() => {
     let lastActivityCall = 0;
@@ -8023,23 +8023,30 @@ export default function MobilePrototype({
       }
     }
 
-    const handleMessage = (event) => {
-      if (event.data?.type === "NAVIGATE_TAB") {
-        const targetTab = event.data.tab;
-        if (
-          targetTab &&
-          ["home", "activity", "accounts", "plans"].includes(targetTab)
-        ) {
-          setAppSettingsOpen(false);
-          setProfileSettingsOpen(false);
-          setTab(targetTab);
-          triggerHaptic("selection");
-        }
+    const navigateToTab = (targetTab) => {
+      if (
+        targetTab &&
+        ["home", "activity", "accounts", "plans"].includes(targetTab)
+      ) {
+        setAppSettingsOpen(false);
+        setProfileSettingsOpen(false);
+        setTab(targetTab);
+        triggerHaptic("selection");
       }
     };
+    const handleMessage = (event) => {
+      if (event.data?.type === "NAVIGATE_TAB") {
+        navigateToTab(event.data.tab);
+      }
+    };
+    const handleCustomNavigate = (event) => {
+      navigateToTab(event.detail?.tab);
+    };
     navigator.serviceWorker?.addEventListener("message", handleMessage);
+    window.addEventListener("spend:navigate-tab", handleCustomNavigate);
     return () => {
       navigator.serviceWorker?.removeEventListener("message", handleMessage);
+      window.removeEventListener("spend:navigate-tab", handleCustomNavigate);
     };
   }, []);
 
@@ -8196,7 +8203,7 @@ export default function MobilePrototype({
       ? SHEET_REDUCED_EXIT_MS
       : SHEET_EXIT_MS;
     setSheetExitDuration(exitDuration);
-    
+
     sheetCloseTimer.current = window.setTimeout(() => {
       const returnFocus = sheetReturnFocusRef.current;
       sheetReturnFocusRef.current = null;
@@ -8554,8 +8561,8 @@ export default function MobilePrototype({
         <ConfirmationModal
           isOpen={resetPinConfirmOpen}
           title="Reset App PIN?"
-          message="Forgot your passcode? Resetting will remove the PIN lock and any biometric settings so you can access Spend."
-          confirmLabel="Reset PIN"
+          message="Forgot your passcode? Resetting will remove the PIN lock and clear locally encrypted data on this device. Signed-in cloud data can be restored by signing in."
+          confirmLabel="Reset & Clear Data"
           cancelLabel="Cancel"
           isDestructive={true}
           onConfirm={handleConfirmResetPin}
@@ -8689,7 +8696,6 @@ export default function MobilePrototype({
                 notificationPermission={notificationPermission}
                 notificationStatus={notificationStatus}
                 backgroundPushEnabled={backgroundPushEnabled}
-                onSignIn={signIn}
                 onReminder={onReminder}
                 onToggleNotifications={onToggleNotifications}
                 onTestNotification={onTestNotification}
@@ -8749,13 +8755,8 @@ export default function MobilePrototype({
                 onOpenCardOptions={(cardId) =>
                   openSheet({ type: "cardOptions", cardId })
                 }
-                onDeleteCard={(cardId) => {
-                  const undo = onDeleteCard?.(cardId);
-                  toast("Card removed", undo);
-                }}
                 highlightedExpenseId={highlightedExpenseId}
                 highlightedTransactionId={highlightedTransactionId}
-                profile={profile}
                 onTab={nav}
                 onOpenExpense={openExpense}
                 onOpenTransaction={openTransaction}

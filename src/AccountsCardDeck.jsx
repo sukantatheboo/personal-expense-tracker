@@ -82,10 +82,21 @@ export const formatMoney = (n) =>
     maximumFractionDigits: 2,
   }).format(Number(n) || 0);
 
-export function formatCardNumber(raw = "", isPhone = false, showFull = false, isSavings = false) {
+export function formatCardNumber(
+  raw = "",
+  isPhone = false,
+  showFull = false,
+  isSavings = false,
+) {
   const str = String(raw || "").trim();
   if (!str) return "";
-  if (isSavings || str.startsWith("SAV-") || str.startsWith("VAULT-") || str.startsWith("DPS-")) return str;
+  if (
+    isSavings ||
+    str.startsWith("SAV-") ||
+    str.startsWith("VAULT-") ||
+    str.startsWith("DPS-")
+  )
+    return str;
 
   const digits = str.replace(/\D/g, "");
   if (!digits) return str;
@@ -102,7 +113,9 @@ export function formatCardNumber(raw = "", isPhone = false, showFull = false, is
     }
     if (digits.length > 11) {
       const countryCodeLen = digits.length - 10;
-      const prefix = hasPlus ? `+${digits.slice(0, countryCodeLen)}` : digits.slice(0, countryCodeLen);
+      const prefix = hasPlus
+        ? `+${digits.slice(0, countryCodeLen)}`
+        : digits.slice(0, countryCodeLen);
       const rest = digits.slice(countryCodeLen);
       if (showFull) {
         return `${prefix} ${rest.slice(0, 4)} ${rest.slice(4, 7)} ${rest.slice(7)}`;
@@ -264,10 +277,14 @@ export function WalletCard({
             {showBalance && (
               <div className="wallet-card-balance-block">
                 <span className="wallet-card-meta-lbl">BALANCE</span>
-                <b className={`wallet-card-balance-val${balance < 0 && card.type !== "credit" ? " is-overdrawn" : ""}`}>
+                <b
+                  className={`wallet-card-balance-val${balance < 0 && card.type !== "credit" ? " is-overdrawn" : ""}`}
+                >
                   {formatMoney(balance || 0)}
                   {balance < 0 && card.type !== "credit" && (
-                    <span className="wallet-card-overdrawn-badge">OVERDRAWN</span>
+                    <span className="wallet-card-overdrawn-badge">
+                      OVERDRAWN
+                    </span>
                   )}
                 </b>
               </div>
@@ -337,7 +354,8 @@ export function StackedCardDeck({
   const wheelCooldownRef = useRef(0);
 
   const totalCards = cards.length;
-  const safeActiveIndex = totalCards > 0 ? Math.min(activeIndex, totalCards - 1) : 0;
+  const safeActiveIndex =
+    totalCards > 0 ? Math.min(activeIndex, totalCards - 1) : 0;
 
   // Clamp activeIndex if cards array shrinks
   useEffect(() => {
@@ -641,7 +659,9 @@ export function StackedCardDeck({
           </div>
           <div className="wallet-card-empty-copy">
             <strong>No cards or wallets yet</strong>
-            <span>Tap to add a bank card, bKash/Nagad wallet, or savings vault</span>
+            <span>
+              Tap to add a bank card, bKash/Nagad wallet, or savings vault
+            </span>
           </div>
           <span className="wallet-card-empty-cta">+ Add Card</span>
         </button>
@@ -697,7 +717,8 @@ export function StackedCardDeck({
           } else if (phase === "commit-phase1") {
             // Phase 1: Front card leaves to p = 1 in 180ms ease-in
             if (depth === 0) {
-              transitionStyle = "transform 180ms ease-in, opacity 180ms ease-in";
+              transitionStyle =
+                "transform 180ms ease-in, opacity 180ms ease-in";
               transformStyle = `translateY(60px) rotateX(-78deg) scale(1)`;
               opacity = 0.25;
               zIndex = 30;
@@ -711,18 +732,21 @@ export function StackedCardDeck({
             }
           } else if (phase === "commit-phase2") {
             // Phase 2: Order rotated, incoming front card and stack ease into resting slots over 0.5s with spring overshoot
-            transitionStyle = "transform 500ms cubic-bezier(.34, 1.45, .5, 1), opacity 380ms ease, filter 500ms ease";
+            transitionStyle =
+              "transform 500ms cubic-bezier(.34, 1.45, .5, 1), opacity 380ms ease, filter 500ms ease";
             transformStyle = `translateY(${-SLIVER_OFFSET * depth}px) rotateX(0deg) scale(${1 - 0.06 * depth})`;
             zIndex = 30 - depth * 5;
             opacity = depth >= 3 ? 0 : 1;
           } else if (phase === "snap-back") {
             // Spring back to resting positions
-            transitionStyle = "transform 260ms cubic-bezier(.34, 1.45, .5, 1), opacity 260ms ease";
+            transitionStyle =
+              "transform 260ms cubic-bezier(.34, 1.45, .5, 1), opacity 260ms ease";
             transformStyle = `translateY(${-SLIVER_OFFSET * depth}px) rotateX(0deg) scale(${1 - 0.06 * depth})`;
             zIndex = 30 - depth * 5;
           } else {
             // Resting idle state
-            transitionStyle = "transform 500ms cubic-bezier(.34, 1.45, .5, 1), filter 380ms ease, opacity 280ms ease";
+            transitionStyle =
+              "transform 500ms cubic-bezier(.34, 1.45, .5, 1), filter 380ms ease, opacity 280ms ease";
             transformStyle = `translateY(${-SLIVER_OFFSET * depth}px) rotateX(0deg) scale(${1 - 0.06 * depth})`;
             zIndex = 30 - depth * 5;
             opacity = depth >= 3 ? 0 : 1;
@@ -731,11 +755,14 @@ export function StackedCardDeck({
           // Dynamic Depth Shadow & Brightness
           let filterStyle = "";
           if (depth === 0) {
-            filterStyle = "drop-shadow(0 20px 42px rgba(0, 0, 0, 0.40)) brightness(1)";
+            filterStyle =
+              "drop-shadow(0 20px 42px rgba(0, 0, 0, 0.40)) brightness(1)";
           } else if (depth === 1) {
-            filterStyle = "drop-shadow(0 10px 22px rgba(0, 0, 0, 0.22)) brightness(0.96)";
+            filterStyle =
+              "drop-shadow(0 10px 22px rgba(0, 0, 0, 0.22)) brightness(0.96)";
           } else {
-            filterStyle = "drop-shadow(0 6px 14px rgba(0, 0, 0, 0.16)) brightness(0.90)";
+            filterStyle =
+              "drop-shadow(0 6px 14px rgba(0, 0, 0, 0.16)) brightness(0.90)";
           }
 
           const pointerEvents =
@@ -749,7 +776,11 @@ export function StackedCardDeck({
               className={`cards-deck-slot depth-${depth} ${isFront ? "is-front" : "is-back"}`}
               role="button"
               tabIndex={0}
-              aria-label={isFront ? `Card options for ${card.name}` : `Switch to ${card.name}`}
+              aria-label={
+                isFront
+                  ? `Card options for ${card.name}`
+                  : `Switch to ${card.name}`
+              }
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();

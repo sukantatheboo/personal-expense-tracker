@@ -83,7 +83,7 @@ export default function SpendLogin({
         setPin("");
       }
     },
-    [verifyPin, finish]
+    [verifyPin, finish],
   );
 
   const press = useCallback(
@@ -95,7 +95,7 @@ export default function SpendLogin({
       setPin(next);
       if (next.length === pinLength) submit(next);
     },
-    [pin, pinLength, status, submit]
+    [pin, pinLength, status, submit],
   );
 
   const back = useCallback(() => {
@@ -171,7 +171,9 @@ export default function SpendLogin({
             strokeWidth="4.5"
           />
         </svg>
-        <h1 className="sl__title">{done ? "Welcome back" : "Spend is locked"}</h1>
+        <h1 className="sl__title">
+          {done ? "Welcome back" : "Spend is locked"}
+        </h1>
         <p className="sl__sub">
           {done
             ? "Opening your accounts…"
@@ -206,8 +208,7 @@ export default function SpendLogin({
                 <span
                   key={i}
                   className={
-                    "sl__dot" +
-                    (pin.length > i || done ? " sl__dot--on" : "")
+                    "sl__dot" + (pin.length > i || done ? " sl__dot--on" : "")
                   }
                 />
               ))}

@@ -10,29 +10,11 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import SpendSplash from "./components/SpendSplash.jsx";
-
-const loadMobilePrototype = () => import("./MobilePrototype");
-const MobilePrototype = lazy(loadMobilePrototype);
-
-function PrototypeMountSignal({ onMounted }) {
-  useLayoutEffect(() => {
-    onMounted?.();
-  }, [onMounted]);
-  return null;
-}
 import {
-  ACCOUNT_OPTIONS,
-  CATEGORIES,
-  CURRENCIES,
-  DEFAULT_CARDS,
   emptyAccountData,
-  PRIMARY_CURRENCY,
   STORAGE_KEYS,
-  calculateAccountBalance,
   currentMonth,
-  formatCurrency,
   formatDate,
-  formatMonth,
   isAccountId,
   isValidDateString,
   loadAccountData,
@@ -58,7 +40,6 @@ import {
   supabaseConfigured,
   syncBackgroundSchedules,
 } from "./push.js";
-
 import {
   CLOUD_SYNC_USER_KEY,
   loadCloudData,
@@ -70,6 +51,7 @@ import {
   decryptBackup,
   getSessionKey,
   hasAppPin,
+  isSessionUnlocked,
 } from "./security.js";
 import { Capacitor } from "@capacitor/core";
 import {
@@ -82,7 +64,16 @@ import {
   setupNotificationListeners,
 } from "./notifications.js";
 
-const CURRENCY_API = "https://api.frankfurter.dev/v2";
+const loadMobilePrototype = () => import("./MobilePrototype");
+const MobilePrototype = lazy(loadMobilePrototype);
+
+function PrototypeMountSignal({ onMounted }) {
+  useLayoutEffect(() => {
+    onMounted?.();
+  }, [onMounted]);
+  return null;
+}
+
 const LOCAL_DATA_OWNER_KEY = "spend-local-data-owner-v1";
 const LOCAL_USER_SNAPSHOTS_KEY = "spend-local-user-snapshots-v1";
 const BUDGET_UPDATED_AT_KEY = STORAGE_KEYS.budgetUpdatedAt;
@@ -120,15 +111,6 @@ function loadReminderTime() {
     return isValidReminderTime(saved) ? saved : "09:00";
   } catch {
     return "09:00";
-  }
-}
-
-function loadLastBackupAt() {
-  try {
-    const value = localStorage.getItem(LAST_BACKUP_AT_KEY);
-    return value && Number.isFinite(Date.parse(value)) ? value : "";
-  } catch {
-    return "";
   }
 }
 
@@ -216,76 +198,6 @@ function shiftMonth(monthValue, offset) {
   return localDate(shifted).slice(0, 7);
 }
 
-function formatCompactMonth(monthValue) {
-  const [year, month] = (monthValue || currentMonth()).split("-").map(Number);
-  return new Date(year, month - 1, 1).toLocaleDateString(undefined, {
-    month: "short",
-    year: "2-digit",
-  });
-}
-
-function makeExpenseForm() {
-  return {
-    description: "",
-    amount: "",
-    category: "Other",
-    date: localDate(),
-    interval: "none",
-    account: "",
-  };
-}
-
-function formatStartingBalances(settings = {}) {
-  const balances = settings?.balances || {};
-  const formatted = {};
-  for (const [key, value] of Object.entries(balances)) {
-    if (value !== undefined && value !== null) {
-      formatted[key] = String(value);
-    }
-  }
-  return {
-    ...formatted,
-    date: settings?.startDate || localDate(),
-  };
-}
-
-function makeTransactionForm(accountData = null) {
-  const cards = Array.isArray(accountData?.settings?.cards)
-    ? accountData.settings.cards
-    : [];
-  const primaryCard = cards.find((c) => c.isPrimary) || cards[0];
-  const primaryId = primaryCard?.id || "";
-  const otherCard = cards.find((c) => c.id !== primaryId);
-  const secondaryId = otherCard?.id || primaryId;
-  return {
-    type: "income",
-    amount: "",
-    date: localDate(),
-    note: "",
-    account: primaryId,
-    direction: "increase",
-    fromAccount: primaryId,
-    toAccount: secondaryId,
-  };
-}
-
-function accountActivityLabel(activity, cards = []) {
-  if (activity.type === "expense")
-    return `Expense · ${accountName(activity.account, cards)}`;
-  if (activity.type === "income")
-    return `Income · ${accountName(activity.account, cards)}`;
-  if (activity.type === "adjustment")
-    return `${activity.direction === "increase" ? "Balance increased" : "Balance decreased"} · ${accountName(activity.account, cards)}`;
-  return `Transfer · ${accountName(activity.fromAccount, cards)} → ${accountName(activity.toAccount, cards)}`;
-}
-
-function accountActivityPrefix(activity) {
-  if (activity.type === "income") return "+";
-  if (activity.type === "adjustment")
-    return activity.direction === "increase" ? "+" : "−";
-  return activity.type === "expense" ? "−" : "";
-}
-
 function emptyDeletedRecords() {
   return {
     expenses: {},
@@ -320,7 +232,6 @@ function normalizeDeletedRecords(value, now = Date.now()) {
           const updatedAt = Number.isFinite(Number(change.updatedAt))
             ? Number(change.updatedAt)
             : 0;
-          // Prune expired tombstones to protect against 512KB DB column limit
           if (updatedAt > 0 && updatedAt < cutoff) return [];
           return [
             [
@@ -328,8 +239,12 @@ function normalizeDeletedRecords(value, now = Date.now()) {
               {
                 deleted: change.deleted,
                 updatedAt,
-                ...(typeof change.name === "string" ? { name: change.name } : {}),
-                ...(typeof change.color === "string" ? { color: change.color } : {}),
+                ...(typeof change.name === "string"
+                  ? { name: change.name }
+                  : {}),
+                ...(typeof change.color === "string"
+                  ? { color: change.color }
+                  : {}),
               },
             ],
           ];
@@ -554,77 +469,6 @@ function areCloudSnapshotsEqual(left, right) {
   );
 }
 
-function getCloudSyncLabels({
-  signedIn,
-  enabled,
-  ready,
-  normalized,
-  realtimeStatus,
-  activity,
-}) {
-  if (!signedIn) {
-    return {
-      long: "Local only",
-      short: "Local",
-      accessible: "Expense data stays on this device",
-    };
-  }
-  if (!enabled) {
-    return {
-      long: "Cloud sync paused",
-      short: "Paused",
-      accessible: "Expense cloud sync is paused",
-    };
-  }
-  if (activity === "error") {
-    return {
-      long: "Sync issue",
-      short: "Issue",
-      accessible: "Cloud sync needs attention",
-    };
-  }
-  if (realtimeStatus === "offline" || activity === "offline") {
-    return {
-      long: "Offline",
-      short: "Offline",
-      accessible: "Cloud sync is offline",
-    };
-  }
-  if (!ready || activity === "syncing") {
-    return {
-      long: "Syncing…",
-      short: "Syncing",
-      accessible: "Cloud data is syncing",
-    };
-  }
-  if (!normalized) {
-    return {
-      long: "Setup needed",
-      short: "Setup",
-      accessible: "Apply the latest Supabase migration to enable live sync",
-    };
-  }
-  if (realtimeStatus === "live") {
-    return {
-      long: "Live sync",
-      short: "Live",
-      accessible: "Live cloud sync is connected",
-    };
-  }
-  if (realtimeStatus === "reconnecting") {
-    return {
-      long: "Reconnecting",
-      short: "Connecting",
-      accessible: "Cloud sync is reconnecting",
-    };
-  }
-  return {
-    long: "Cloud sync",
-    short: "Cloud",
-    accessible: "Cloud sync is on",
-  };
-}
-
 function hasMeaningfulLocalAccountSettings(data) {
   return hasMeaningfulAccountSettings(data.accountData.settings);
 }
@@ -689,7 +533,8 @@ function mergeAccountSettings(
         const localTime = recordUpdatedAt(localSettings);
         const cloudTime = recordUpdatedAt(cloudSettings);
         if (
-          (preferLocal && (localTime >= cloudTime || mergedBalances[id] === 0)) ||
+          (preferLocal &&
+            (localTime >= cloudTime || mergedBalances[id] === 0)) ||
           localTime > cloudTime
         ) {
           mergedBalances[id] = val;
@@ -698,7 +543,6 @@ function mergeAccountSettings(
     }
   }
 
-  // Prune tombstoned cards from mergedBalances
   for (const [id, tombstone] of Object.entries(deletedCardTombstones)) {
     if (tombstone?.deleted && !cardMap.has(id)) {
       delete mergedBalances[id];
@@ -714,7 +558,9 @@ function mergeAccountSettings(
   const localTime = recordUpdatedAt(localSettings);
   const cloudTime = recordUpdatedAt(cloudSettings);
   const preferLocalCards =
-    preferLocal || localTime > cloudTime || (localTime === cloudTime && preferLocal);
+    preferLocal ||
+    localTime > cloudTime ||
+    (localTime === cloudTime && preferLocal);
   const primaryCards = preferLocalCards ? localCards : cloudCards;
   const secondaryCards = preferLocalCards ? cloudCards : localCards;
 
@@ -914,15 +760,22 @@ function clearLocalDataOwner() {
   }
 }
 
-function clearSharedFinancialData() {
-  for (const key of [
+let localUserSnapshotsCache = null;
+
+function clearSharedFinancialData({ clearUserSnapshots = false } = {}) {
+  const keys = [
     STORAGE_KEYS.expenses,
     STORAGE_KEYS.budgets,
     BUDGET_UPDATED_AT_KEY,
     STORAGE_KEYS.recurring,
     STORAGE_KEYS.accounts,
     STORAGE_KEYS.deletedRecords,
-  ]) {
+  ];
+  if (clearUserSnapshots) {
+    keys.push(LOCAL_USER_SNAPSHOTS_KEY);
+    localUserSnapshotsCache = null;
+  }
+  for (const key of keys) {
     try {
       localStorage.removeItem(key);
     } catch {
@@ -930,8 +783,6 @@ function clearSharedFinancialData() {
     }
   }
 }
-
-let localUserSnapshotsCache = null;
 
 function readLocalUserSnapshots() {
   if (localUserSnapshotsCache && typeof localUserSnapshotsCache === "object") {
@@ -1074,33 +925,6 @@ export default function App() {
   const [profileStatus, setProfileStatus] = useState("");
   const [profileSaving, setProfileSaving] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
-  const [mobileView, setMobileView] = useState("home");
-  const [isMoreOpen, setIsMoreOpen] = useState(false);
-  const [expenseForm, setExpenseForm] = useState(makeExpenseForm);
-  const [expenseMessage, setExpenseMessage] = useState("");
-  const [transactionForm, setTransactionForm] = useState(() =>
-    makeTransactionForm(loadAccountData()),
-  );
-  const [startingBalances, setStartingBalances] = useState(() => {
-    const { settings } = loadAccountData();
-    return formatStartingBalances(settings);
-  });
-  const [budgetAmount, setBudgetAmount] = useState("");
-  const [budgetEditingMonth, setBudgetEditingMonth] = useState(null);
-  const [query, setQuery] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("");
-  const [editingExpenseId, setEditingExpenseId] = useState(null);
-  const [editingAmount, setEditingAmount] = useState("");
-  const [conversionOpen, setConversionOpen] = useState(false);
-  const [currencyOptions, setCurrencyOptions] = useState(
-    CURRENCIES.map(([iso_code, name]) => ({ iso_code, name })),
-  );
-  const [conversionRate, setConversionRate] = useState(null);
-  const [conversionStatus, setConversionStatus] = useState(
-    "Choose a currency to see an estimate.",
-  );
-  const [conversionFailed, setConversionFailed] = useState(false);
-  const [recurringReminder, setRecurringReminder] = useState("");
   const [notificationPermission, setNotificationPermission] = useState(() =>
     typeof window !== "undefined" && "Notification" in window
       ? window.Notification.permission
@@ -1128,14 +952,8 @@ export default function App() {
     useState("disconnected");
   const [cloudSyncActivity, setCloudSyncActivity] = useState("idle");
   const [normalizedAccountSync, setNormalizedAccountSync] = useState(false);
-  const [undoAction, setUndoAction] = useState(null);
   const [cloudSyncRetry, setCloudSyncRetry] = useState(0);
-  const [accountRefreshBusy, setAccountRefreshBusy] = useState(false);
-  const [accountRefreshStatus, setAccountRefreshStatus] = useState("");
-  const [recurringRefreshBusy, setRecurringRefreshBusy] = useState(false);
-  const [recurringRefreshStatus, setRecurringRefreshStatus] = useState("");
   const [backupStatus, setBackupStatus] = useState("");
-  const [lastBackupAt, setLastBackupAt] = useState(loadLastBackupAt);
   const authModalRef = useRef(null);
   const authTriggerRef = useRef(null);
   const authReturnFocusRef = useRef(null);
@@ -1150,7 +968,6 @@ export default function App() {
   const lastSyncedSnapshotRef = useRef(null);
   const cloudSaveQueueRef = useRef(Promise.resolve());
   const liveChangeTimerRef = useRef(null);
-  const undoTimerRef = useRef(null);
   const authUserIdRef = useRef(null);
   const localDataOwnerRef = useRef(loadLocalDataOwner());
   cloudSnapshotRef.current = useMemo(
@@ -1189,18 +1006,7 @@ export default function App() {
     setTheme("light");
     setTargetCurrency("USD");
     setReminderTime("09:00");
-    setStartingBalances(formatStartingBalances(empty.settings));
-    setExpenseForm(makeExpenseForm());
-    setTransactionForm(makeTransactionForm(empty));
-    setBudgetAmount("");
-    setQuery("");
-    setCategoryFilter("");
-    setEditingExpenseId(null);
-    setEditingAmount("");
-    setRecurringReminder("");
     setCloudSyncStatus("");
-    setAccountRefreshStatus("");
-    setRecurringRefreshStatus("");
   }
 
   function adoptLocalDataForUser(userId) {
@@ -1223,14 +1029,8 @@ export default function App() {
           true,
         );
         applyCloudSnapshot(merged);
-        setStartingBalances(
-          formatStartingBalances(merged.accountData?.settings),
-        );
       } else {
         applyCloudSnapshot(snapshot);
-        setStartingBalances(
-          formatStartingBalances(snapshot.accountData?.settings),
-        );
       }
     } else if (!hasMeaningfulLocalData(cloudSnapshotRef.current)) {
       resetDataForNewUser();
@@ -1239,7 +1039,6 @@ export default function App() {
 
   function selectLocalDataForUser(userId) {
     if (hasAppPin() && !getSessionKey()) {
-      // App is locked; wait for unlock hydration before adopting or switching local user
       return;
     }
     const hasSavedSnapshot = Boolean(loadLocalUserSnapshot(userId));
@@ -1364,7 +1163,6 @@ export default function App() {
         const remote = await loadCloudData(userId);
         if (!remote?.data) return null;
 
-        // Break realtime echo loop if remote matches what this client just uploaded
         const isSameVersion =
           cloudVersionRef.current &&
           (remote.updated_at === cloudVersionRef.current ||
@@ -1483,6 +1281,15 @@ export default function App() {
     pushUser?.id,
   ]);
 
+  const handleResetForgottenPin = useCallback(() => {
+    clearSharedFinancialData({ clearUserSnapshots: true });
+    localDataOwnerRef.current = null;
+    clearLocalDataOwner();
+    resetDataForNewUser();
+    isHydratedRef.current = true;
+    setIsHydrated(true);
+  }, []);
+
   const handleAppUnlock = useCallback(async () => {
     const sessionKey = getSessionKey();
     if (!sessionKey && hasAppPin()) return;
@@ -1600,6 +1407,19 @@ export default function App() {
             ),
           );
         }
+        if (
+          !isEncryptedAtRest(LOCAL_USER_SNAPSHOTS_KEY) &&
+          decryptedSnapshots &&
+          typeof decryptedSnapshots === "object"
+        ) {
+          migrateTasks.push(
+            writeStorageAsync(
+              LOCAL_USER_SNAPSHOTS_KEY,
+              decryptedSnapshots,
+              sessionKey,
+            ),
+          );
+        }
         if (migrateTasks.length > 0) {
           await Promise.all(migrateTasks);
         }
@@ -1612,6 +1432,7 @@ export default function App() {
       console.error("Failed to decrypt and hydrate app data on unlock:", err);
     }
   }, [pushUser]);
+
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEYS.currency, targetCurrency);
@@ -1633,7 +1454,11 @@ export default function App() {
       setNotificationPermission(perm);
     });
     const cleanup = setupNotificationListeners((tab) => {
-      if (tab) navigateMobile(tab);
+      if (tab && typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("spend:navigate-tab", { detail: { tab } }),
+        );
+      }
     });
     return cleanup;
   }, []);
@@ -1675,7 +1500,8 @@ export default function App() {
         data: { subscription },
       } = client.auth.onAuthStateChange((event, session) => {
         const user = session?.user || null;
-        const previousUserId = authUserIdRef.current || localDataOwnerRef.current;
+        const previousUserId =
+          authUserIdRef.current || localDataOwnerRef.current;
         setPushUser(user);
         if (user && event === "SIGNED_IN") {
           notifyNewUserSignedIn(user);
@@ -1864,11 +1690,13 @@ export default function App() {
 
     const handleCloudChange = () => {
       if (!active || authUserIdRef.current !== pushUser.id) return;
+      if (hasAppPin() && !isSessionUnlocked()) return;
       window.clearTimeout(liveChangeTimerRef.current);
       setCloudSyncActivity("syncing");
       liveChangeTimerRef.current = window.setTimeout(async () => {
         try {
           if (!active || authUserIdRef.current !== pushUser.id) return;
+          if (hasAppPin() && !isSessionUnlocked()) return;
           await queueCloudSnapshotRefresh(pushUser.id);
         } catch (error) {
           if (active && authUserIdRef.current === pushUser.id) {
@@ -1935,6 +1763,7 @@ export default function App() {
   useEffect(() => {
     if (!supabase || !pushUser || !cloudSyncEnabled || !cloudSyncReady)
       return undefined;
+    if (hasAppPin() && !isSessionUnlocked()) return undefined;
     const timeout = window.setTimeout(async () => {
       try {
         await queueCloudSnapshotSave(pushUser.id);
@@ -2036,7 +1865,13 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, [backgroundPushEnabled, isHydrated, pushUser, recurringSchedules, reminderTime]);
+  }, [
+    backgroundPushEnabled,
+    isHydrated,
+    pushUser,
+    recurringSchedules,
+    reminderTime,
+  ]);
 
   useEffect(() => {
     if (!pushUser || !("serviceWorker" in navigator)) return undefined;
@@ -2060,16 +1895,6 @@ export default function App() {
     };
   }, [pushUser]);
 
-  useEffect(() => {
-    const { settings } = accountData;
-    setStartingBalances(formatStartingBalances(settings));
-  }, [accountData.settings]);
-
-  useEffect(() => {
-    const budget = Number(budgets[selectedMonth] || 0);
-    setBudgetAmount(budget > 0 ? String(budget) : "");
-  }, [budgets, selectedMonth]);
-
   const monthExpenses = useMemo(
     () =>
       expenses.filter((expense) => expense.date.slice(0, 7) === selectedMonth),
@@ -2084,174 +1909,6 @@ export default function App() {
       ),
     [monthExpenses],
   );
-  const previousMonth = useMemo(
-    () => shiftMonth(selectedMonth, -1),
-    [selectedMonth],
-  );
-  const previousMonthTotal = useMemo(
-    () =>
-      expenses
-        .filter((expense) => expense.date.slice(0, 7) === previousMonth)
-        .reduce(
-          (sum, expense) =>
-            sum + (expense.amount === null ? 0 : Number(expense.amount)),
-          0,
-        ),
-    [expenses, previousMonth],
-  );
-  const topCategory = useMemo(() => {
-    const totals = monthExpenses.reduce((map, expense) => {
-      if (expense.amount !== null) {
-        map[expense.category] =
-          (map[expense.category] || 0) + Number(expense.amount);
-      }
-      return map;
-    }, {});
-    return Object.entries(totals).sort((a, b) => b[1] - a[1])[0] || null;
-  }, [monthExpenses]);
-  const categoryBreakdown = useMemo(() => {
-    const totals = monthExpenses.reduce((map, expense) => {
-      if (expense.amount !== null) {
-        map[expense.category] =
-          (map[expense.category] || 0) + Number(expense.amount);
-      }
-      return map;
-    }, {});
-    return Object.entries(totals)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5);
-  }, [monthExpenses]);
-  const nextRecurring = useMemo(
-    () =>
-      recurringSchedules
-        .filter(
-          (schedule) => schedule.active && schedule.nextDate >= localDate(),
-        )
-        .sort((a, b) => a.nextDate.localeCompare(b.nextDate))[0] || null,
-    [recurringSchedules],
-  );
-  const activeRecurringCount = useMemo(
-    () => recurringSchedules.filter((schedule) => schedule.active).length,
-    [recurringSchedules],
-  );
-  const monthlyRecurringTotal = useMemo(
-    () =>
-      recurringSchedules
-        .filter((schedule) => schedule.active)
-        .reduce(
-          (total, schedule) =>
-            total +
-            Number(schedule.amount) *
-              (schedule.interval === "weekly" ? 52 / 12 : 1),
-          0,
-        ),
-    [recurringSchedules],
-  );
-  const orderedRecurringSchedules = useMemo(
-    () =>
-      [...recurringSchedules].sort(
-        (a, b) =>
-          Number(b.active) - Number(a.active) ||
-          a.nextDate.localeCompare(b.nextDate),
-      ),
-    [recurringSchedules],
-  );
-  const visibleExpenses = useMemo(() => {
-    const normalizedQuery = query.trim().toLocaleLowerCase();
-    return monthExpenses
-      .filter(
-        (expense) => !categoryFilter || expense.category === categoryFilter,
-      )
-      .filter(
-        (expense) =>
-          !normalizedQuery ||
-          `${expense.description} ${expense.category}`
-            .toLocaleLowerCase()
-            .includes(normalizedQuery),
-      )
-      .map((expense, index) => ({ expense, index }))
-      .sort((x, y) => {
-        const a = x.expense;
-        const b = y.expense;
-        const timeDiff =
-          Math.max(Number(b.createdAt) || 0, Number(b.updatedAt) || 0) -
-          Math.max(Number(a.createdAt) || 0, Number(a.updatedAt) || 0);
-        return (
-          b.date.localeCompare(a.date) ||
-          timeDiff ||
-          y.index - x.index ||
-          String(b.id || "").localeCompare(String(a.id || ""))
-        );
-      })
-      .map(({ expense }) => expense);
-  }, [monthExpenses, categoryFilter, query]);
-  const recentExpenses = useMemo(
-    () =>
-      [...monthExpenses]
-        .map((expense, index) => ({ expense, index }))
-        .sort((x, y) => {
-          const a = x.expense;
-          const b = y.expense;
-          const timeDiff =
-            Math.max(Number(b.createdAt) || 0, Number(b.updatedAt) || 0) -
-            Math.max(Number(a.createdAt) || 0, Number(a.updatedAt) || 0);
-          return (
-            b.date.localeCompare(a.date) ||
-            timeDiff ||
-            y.index - x.index ||
-            String(b.id || "").localeCompare(String(a.id || ""))
-          );
-        })
-        .map(({ expense }) => expense)
-        .slice(0, 3),
-    [monthExpenses],
-  );
-  const accountBalances = useMemo(() => {
-    const cards = Array.isArray(accountData?.settings?.cards)
-      ? accountData.settings.cards
-      : [];
-    const balances = {};
-    for (const card of cards) {
-      if (card?.id) {
-        balances[card.id] = calculateAccountBalance(
-          card.id,
-          expenses,
-          accountData,
-        );
-      }
-    }
-    return balances;
-  }, [expenses, accountData]);
-  const accountActivity = useMemo(() => {
-    const expenseActivity = expenses
-      .filter(
-        (expense) =>
-          isAccountId(expense.account, accountData) &&
-          expense.amount !== null &&
-          expense.date >= accountData.settings.startDate,
-      )
-      .map((expense) => ({ ...expense, type: "expense" }));
-    const trackedTransactions = accountData.transactions.filter(
-      (transaction) => transaction.date >= accountData.settings.startDate,
-    );
-    return [...trackedTransactions, ...expenseActivity]
-      .map((item, index) => ({ item, index }))
-      .sort((x, y) => {
-        const a = x.item;
-        const b = y.item;
-        const timeDiff =
-          Math.max(Number(b.createdAt) || 0, Number(b.updatedAt) || 0) -
-          Math.max(Number(a.createdAt) || 0, Number(a.updatedAt) || 0);
-        return (
-          b.date.localeCompare(a.date) ||
-          timeDiff ||
-          y.index - x.index ||
-          String(b.id || "").localeCompare(String(a.id || ""))
-        );
-      })
-      .map(({ item }) => item)
-      .slice(0, 8);
-  }, [expenses, accountData]);
 
   const mobilePrototypeData = {
     m: selectedMonth,
@@ -2301,14 +1958,6 @@ export default function App() {
     })),
   };
 
-  const monthBudget = Number(budgets[selectedMonth] || 0);
-  const budgetEditorOpen =
-    monthBudget <= 0 || budgetEditingMonth === selectedMonth;
-  const budgetPercentage =
-    monthBudget > 0 ? (monthlyTotal / monthBudget) * 100 : 0;
-  const budgetProgress = Math.min(100, Math.max(0, budgetPercentage));
-  const conversionReady = conversionOpen && conversionRate !== null;
-
   const NOTIFIED_RECURRING_KEY = "spend-notified-recurring-v1";
   const LAST_DAILY_REMINDER_KEY = "spend-last-daily-reminder-date-v1";
   const BUDGET_ALERT_KEY_PREFIX = "spend-budget-alert-";
@@ -2334,23 +1983,6 @@ export default function App() {
       // Storage unavailable fallback
     }
   }
-
-  const dismissInAppNotification = useCallback(() => {
-    // Retained for backward-compatibility with consumers
-  }, []);
-
-  const showInAppNotification = useCallback(
-    ({ title, body, tab = "activity" }) => {
-      // Replaced HUD banners: routes directly to native built-in notification
-      void sendNativeBuiltinNotification({
-        title,
-        body,
-        tab,
-        tone: "reminder",
-      });
-    },
-    [],
-  );
 
   async function notifyDueExpenses(dueExpenses) {
     if (!dueExpenses.length) return;
@@ -2380,15 +2012,6 @@ export default function App() {
           : `Was overdue and recorded in Activity.`
         : `Recorded in Activity: ${details}.`;
 
-    setRecurringReminder(
-      unnotified.length === 1
-        ? unnotified[0].date === localDate()
-          ? `${unnotified[0].description} is due today and was added to your expenses.`
-          : `${unnotified[0].description} was overdue and was added to your expenses.`
-        : `Recurring expenses due today or earlier were added: ${details}.`,
-    );
-
-    // Native built-in notification for iOS and Android
     await sendNativeBuiltinNotification({
       title,
       body,
@@ -2422,7 +2045,6 @@ export default function App() {
     const body =
       "Don’t forget to track today's expenses to keep your budget on target.";
 
-    // Native built-in notification for iOS and Android
     await sendNativeBuiltinNotification({
       title,
       body,
@@ -2473,6 +2095,7 @@ export default function App() {
 
   const processDueSchedules = useRef(null);
   processDueSchedules.current = () => {
+    if (!isHydratedRef.current || (hasAppPin() && !isSessionUnlocked())) return;
     const today = localDate();
     if (lastRecurringCheckRef.current === today) return;
     lastRecurringCheckRef.current = today;
@@ -2534,6 +2157,8 @@ export default function App() {
 
   useEffect(() => {
     const runChecks = () => {
+      if (!isHydratedRef.current || (hasAppPin() && !isSessionUnlocked()))
+        return;
       processDueSchedules.current?.();
       checkDailyReminder();
       checkBudgetMilestones();
@@ -2541,7 +2166,6 @@ export default function App() {
     };
 
     const initialTimer = window.setTimeout(runChecks, 800);
-
     const intervalTimer = window.setInterval(runChecks, 30_000);
 
     const handleVisibility = () => {
@@ -2558,87 +2182,7 @@ export default function App() {
     };
   }, [checkDailyReminder, checkBudgetMilestones, selectedMonth]);
 
-  useEffect(() => {
-    if (!conversionOpen) return undefined;
-    const controller = new AbortController();
-    let cancelled = false;
-    async function fetchRate() {
-      setConversionStatus(
-        `Getting the latest available ${targetCurrency} rate…`,
-      );
-      setConversionFailed(false);
-      setConversionRate(null);
-      try {
-        const currenciesResponse = await fetch(`${CURRENCY_API}/currencies`, {
-          signal: controller.signal,
-        });
-        if (currenciesResponse.ok) {
-          const values = await currenciesResponse.json();
-          if (Array.isArray(values)) {
-            const cleanCurrencies = values
-              .filter(
-                (item) =>
-                  item &&
-                  /^[A-Z]{3}$/.test(item.iso_code) &&
-                  item.iso_code !== PRIMARY_CURRENCY &&
-                  typeof item.name === "string",
-              )
-              .sort((a, b) => a.name.localeCompare(b.name));
-            if (cleanCurrencies.length && !cancelled) {
-              setCurrencyOptions(cleanCurrencies);
-              if (
-                !cleanCurrencies.some(
-                  (item) => item.iso_code === targetCurrency,
-                )
-              )
-                setTargetCurrency(
-                  cleanCurrencies.some((item) => item.iso_code === "USD")
-                    ? "USD"
-                    : cleanCurrencies[0].iso_code,
-                );
-            }
-          }
-        }
-        const response = await fetch(
-          `${CURRENCY_API}/rate/${PRIMARY_CURRENCY.toLowerCase()}/${targetCurrency.toLowerCase()}`,
-          { signal: controller.signal },
-        );
-        if (!response.ok) throw new Error("Exchange rate request failed");
-        const data = await response.json();
-        const rate = Number(data.rate);
-        if (
-          cancelled ||
-          data.base !== PRIMARY_CURRENCY ||
-          data.quote !== targetCurrency ||
-          !Number.isFinite(rate) ||
-          rate <= 0 ||
-          typeof data.date !== "string"
-        )
-          throw new Error("Exchange rate response was invalid");
-        setConversionRate(rate);
-        const rateText = new Intl.NumberFormat(undefined, {
-          maximumSignificantDigits: 6,
-        }).format(rate);
-        setConversionStatus(
-          `Rate: 1 BDT = ${rateText} ${targetCurrency}. Rate date: ${data.date}.`,
-        );
-      } catch (error) {
-        if (cancelled || error.name === "AbortError") return;
-        setConversionRate(null);
-        setConversionFailed(true);
-        setConversionStatus(
-          `Could not load a ${targetCurrency} rate. Check your connection, then try again.`,
-        );
-      }
-    }
-    fetchRate();
-    return () => {
-      cancelled = true;
-      controller.abort();
-    };
-  }, [conversionOpen, targetCurrency]);
-
-  function saveExpenseData(form, { returnResult = false } = {}) {
+  function saveMobileExpense(form) {
     const description = form.description.trim();
     const amount = parseAmount(form.amount);
     if (
@@ -2647,14 +2191,8 @@ export default function App() {
       (amount !== null && (!Number.isFinite(amount) || amount <= 0)) ||
       (form.interval !== "none" && amount === null)
     ) {
-      setExpenseMessage(
-        form.interval !== "none" && amount === null
-          ? "Recurring expenses need an amount."
-          : "Check the description, amount, and date, then try again.",
-      );
       return false;
     }
-    setExpenseMessage("");
     let createdExpenseId = null;
     if (form.interval === "none") {
       const createdAt = Date.now();
@@ -2723,17 +2261,7 @@ export default function App() {
       }
     }
     setSelectedMonth(form.date.slice(0, 7));
-    setExpenseForm(makeExpenseForm());
-    return returnResult ? { success: true, expenseId: createdExpenseId } : true;
-  }
-
-  function handleExpenseSubmit(event) {
-    event.preventDefault();
-    if (saveExpenseData(expenseForm)) navigateMobile("activity");
-  }
-
-  function saveMobileExpense(form) {
-    return saveExpenseData(form, { returnResult: true });
+    return { success: true, expenseId: createdExpenseId };
   }
 
   function saveMobileExpenseUpdate(expenseId, form) {
@@ -2767,86 +2295,6 @@ export default function App() {
     );
     setSelectedMonth(date.slice(0, 7));
     return true;
-  }
-
-  function handleOpeningBalancesSubmit(event) {
-    if (event?.preventDefault) event.preventDefault();
-    const date = startingBalances?.date;
-    if (!isValidDateString(date)) return;
-
-    const cards = Array.isArray(accountData?.settings?.cards)
-      ? accountData.settings.cards
-      : [];
-    const nextBalances = {};
-    for (const card of cards) {
-      const val = Number(startingBalances[card.id] ?? 0);
-      if (!Number.isFinite(val) || val < 0) return;
-      nextBalances[card.id] = roundMoney(val);
-    }
-    setAccountData((current) => ({
-      ...current,
-      settings: {
-        ...current.settings,
-        startDate: date,
-        updatedAt: Date.now(),
-        balances: {
-          ...current.settings.balances,
-          ...nextBalances,
-        },
-        configured: true,
-      },
-    }));
-  }
-
-  function handleAccountTransactionSubmit(event) {
-    event.preventDefault();
-    const amount = Number(transactionForm.amount);
-    if (
-      !Number.isFinite(amount) ||
-      amount <= 0 ||
-      !isValidDateString(transactionForm.date)
-    )
-      return;
-    const createdAt = Date.now();
-    const transaction = {
-      id: makeId(),
-      createdAt,
-      updatedAt: createdAt,
-      type: transactionForm.type,
-      amount: roundMoney(amount),
-      date: transactionForm.date,
-      description: capitalizeFirst(transactionForm.note),
-    };
-    if (transactionForm.type === "income") {
-      transaction.account = transactionForm.account;
-    } else if (transactionForm.type === "adjustment") {
-      transaction.account = transactionForm.account;
-      transaction.direction = transactionForm.direction;
-    } else if (transactionForm.type === "transfer") {
-      transaction.fromAccount = transactionForm.fromAccount;
-      transaction.toAccount = transactionForm.toAccount;
-      if (transaction.fromAccount === transaction.toAccount) return;
-    } else {
-      return;
-    }
-    setAccountData((current) => ({
-      ...current,
-      transactions: [...current.transactions, transaction],
-    }));
-    setTransactionForm(makeTransactionForm(accountData));
-  }
-
-  function changeTransferAccount(field, value) {
-    setTransactionForm((current) => {
-      const updated = { ...current, [field]: value };
-      if (updated.fromAccount === updated.toAccount) {
-        const cards = accountData?.settings?.cards || [];
-        const fallback = cards.find((c) => c.id !== value)?.id || "";
-        if (field === "fromAccount") updated.toAccount = fallback;
-        else updated.fromAccount = fallback;
-      }
-      return updated;
-    });
   }
 
   function saveMobileTransaction(form) {
@@ -2890,7 +2338,6 @@ export default function App() {
       ...current,
       transactions: [...current.transactions, transaction],
     }));
-    setTransactionForm(makeTransactionForm(accountData));
     return { success: true, transactionId: transaction.id };
   }
 
@@ -2956,7 +2403,7 @@ export default function App() {
       transactions: current.transactions.filter((item) => item.id !== txId),
     }));
     setRecordDeleted("accountTransactions", txId, true);
-    const restore = () => {
+    return () => {
       setRecordDeleted("accountTransactions", txId, false);
       setAccountData((current) =>
         current.transactions.some((item) => item.id === txId)
@@ -2964,8 +2411,6 @@ export default function App() {
           : { ...current, transactions: [...current.transactions, existingTx] },
       );
     };
-    offerUndo("Transaction removed", restore);
-    return restore;
   }
 
   function handleAddCard(newCard) {
@@ -2989,22 +2434,20 @@ export default function App() {
     const rawNumber = String(newCard?.number || "").replace(/\D/g, "");
     const last4 = newCard?.last4 || (rawNumber ? rawNumber.slice(-4) : "");
 
-    // Explicitly delete full card number and CVV before saving
     const { cvv: _cvv, number: _number, ...safeCard } = newCard || {};
 
     const rawBal = Number(newCard?.initialBalance);
     const initialBalance =
       Number.isFinite(rawBal) && rawBal >= 0 ? roundMoney(rawBal) : 0;
 
-    // Payment cards (and any card with >=15 digits) store ONLY masked representation
-    // Savings vaults and MFS phone numbers preserve their non-PAN identifiers
     let storedNumber = "";
     if (isSavings) {
       storedNumber =
         String(newCard?.number || "").trim() || (last4 ? `SAV-${last4}` : "");
     } else if (isMfs && rawNumber.length < 15) {
       storedNumber =
-        String(newCard?.number || "").trim() || (last4 ? `01••• •••${last4}` : "");
+        String(newCard?.number || "").trim() ||
+        (last4 ? `01••• •••${last4}` : "");
     } else {
       storedNumber = last4 ? `•••• •••• •••• ${last4}` : "";
     }
@@ -3067,8 +2510,8 @@ export default function App() {
         ? current.settings.cards
         : [];
       const remainingCards = currentCards.filter((c) => c.id !== cardId);
-      // If we deleted the primary card, designate the first remaining card as primary
-      const wasPrimary = existingCard?.isPrimary || current.settings.primaryCardId === cardId;
+      const wasPrimary =
+        existingCard?.isPrimary || current.settings.primaryCardId === cardId;
       const nextCards = remainingCards.map((c, idx) =>
         wasPrimary && idx === 0 ? { ...c, isPrimary: true, updatedAt: now } : c,
       );
@@ -3080,7 +2523,8 @@ export default function App() {
           ...current.settings,
           updatedAt: now,
           cardsConfigured: true,
-          primaryCardId: nextCards.find((c) => c.isPrimary)?.id || nextCards[0]?.id || "",
+          primaryCardId:
+            nextCards.find((c) => c.isPrimary)?.id || nextCards[0]?.id || "",
           cards: nextCards,
           balances: nextBalances,
         },
@@ -3093,7 +2537,7 @@ export default function App() {
     });
 
     if (existingCard) {
-      const restore = () => {
+      return () => {
         const restoreTime = Date.now();
         setRecordDeleted("cards", cardId, false);
         setAccountData((current) => {
@@ -3122,8 +2566,6 @@ export default function App() {
           };
         });
       };
-      offerUndo(`${existingCard.name || "Card"} deleted`, restore);
-      return restore;
     }
     return undefined;
   }
@@ -3148,10 +2590,11 @@ export default function App() {
 
     const rawNumber = String(updatedCard?.number || "").replace(/\D/g, "");
     const last4 = isSavings
-      ? (rawNumber ? rawNumber.slice(-4) : updatedCard?.last4 || "")
-      : (updatedCard?.last4 || (rawNumber ? rawNumber.slice(-4) : ""));
+      ? rawNumber
+        ? rawNumber.slice(-4)
+        : updatedCard?.last4 || ""
+      : updatedCard?.last4 || (rawNumber ? rawNumber.slice(-4) : "");
 
-    // Explicitly delete full card number and CVV before saving
     const { cvv: _cvv, number: _number, ...safeCard } = updatedCard || {};
 
     const hasNumberUpdate =
@@ -3199,11 +2642,19 @@ export default function App() {
             const effectiveLast4 = hasNumberUpdate
               ? last4
               : c.last4 ||
-                String(c.number || "").replace(/\D/g, "").slice(-4);
+                String(c.number || "")
+                  .replace(/\D/g, "")
+                  .slice(-4);
             const effectiveNumber = hasNumberUpdate
               ? targetNumber
               : c.number ||
-                (isSavings ? (effectiveLast4 ? `SAV-${effectiveLast4}` : "") : (effectiveLast4 ? `•••• •••• •••• ${effectiveLast4}` : ""));
+                (isSavings
+                  ? effectiveLast4
+                    ? `SAV-${effectiveLast4}`
+                    : ""
+                  : effectiveLast4
+                    ? `•••• •••• •••• ${effectiveLast4}`
+                    : "");
             resolvedLast4 = effectiveLast4;
             resolvedNumber = effectiveNumber;
             return {
@@ -3268,7 +2719,6 @@ export default function App() {
       currentCards.find((c) => c.id === cardId)?.isPrimary ||
       previousPrimaryId === cardId;
 
-    // Toggle: if already primary, unset it; otherwise set it
     const nextPrimaryId = isCurrentlyPrimary ? null : cardId;
 
     setAccountData((current) => {
@@ -3377,7 +2827,7 @@ export default function App() {
       current.filter((item) => item.id !== scheduleId),
     );
     setRecordDeleted("recurringSchedules", scheduleId, true);
-    const restore = () => {
+    return () => {
       setRecordDeleted("recurringSchedules", scheduleId, false);
       setRecurringSchedules((current) =>
         current.some((item) => item.id === scheduleId)
@@ -3385,23 +2835,6 @@ export default function App() {
           : [...current, schedule],
       );
     };
-    offerUndo("Recurring expense removed", restore);
-    return restore;
-  }
-
-  function saveMissingExpenseAmount(event, expense) {
-    event.preventDefault();
-    const amount = Number(editingAmount);
-    if (!Number.isFinite(amount) || amount <= 0) return;
-    setExpenses((current) =>
-      current.map((item) =>
-        item.id === expense.id
-          ? { ...item, amount: roundMoney(amount), updatedAt: Date.now() }
-          : item,
-      ),
-    );
-    setEditingExpenseId(null);
-    setEditingAmount("");
   }
 
   function setRecordDeleted(collection, id, isDeleted, metadata = {}) {
@@ -3444,57 +2877,13 @@ export default function App() {
   }
 
   function removeExpense(expenseOrId) {
-    // MobilePrototype passes its display model (desc/amt/cat), while the
-    // canonical expense record uses description/amount/category. Always retain
-    // the canonical object so Undo cannot restore a display-only projection.
     const expenseId =
       typeof expenseOrId === "object" ? expenseOrId?.id : expenseOrId;
     const expense = expenses.find((item) => item.id === expenseId);
     if (!expense) return undefined;
     setExpenses((current) => current.filter((item) => item.id !== expense.id));
     setExpenseDeleted(expense, true);
-    const restore = () => restoreExpense(expense);
-    offerUndo("Expense removed", restore);
-    return restore;
-  }
-
-  function removeAccountActivity(activity) {
-    if (activity.type === "expense") {
-      const expense = expenses.find((item) => item.id === activity.id);
-      if (expense) removeExpense(expense);
-    } else {
-      setAccountData((current) => ({
-        ...current,
-        transactions: current.transactions.filter(
-          (item) => item.id !== activity.id,
-        ),
-      }));
-      setRecordDeleted("accountTransactions", activity.id, true);
-      offerUndo("Account activity removed", () => {
-        setRecordDeleted("accountTransactions", activity.id, false);
-        setAccountData((current) =>
-          current.transactions.some((item) => item.id === activity.id)
-            ? current
-            : { ...current, transactions: [...current.transactions, activity] },
-        );
-      });
-    }
-  }
-
-  function saveBudget(event) {
-    event.preventDefault();
-    const amount = Number(budgetAmount);
-    if (!Number.isFinite(amount) || amount <= 0) return;
-    setRecordDeleted("budgets", selectedMonth, false);
-    setBudgetUpdatedAt((current) => ({
-      ...current,
-      [selectedMonth]: Date.now(),
-    }));
-    setBudgets((current) => ({
-      ...current,
-      [selectedMonth]: roundMoney(amount),
-    }));
-    setBudgetEditingMonth(null);
+    return () => restoreExpense(expense);
   }
 
   function clearBudget() {
@@ -3510,7 +2899,7 @@ export default function App() {
         [selectedMonth]: Date.now(),
       }));
       setRecordDeleted("budgets", selectedMonth, true);
-      const restore = () => {
+      return () => {
         setRecordDeleted("budgets", selectedMonth, false);
         setBudgetUpdatedAt((current) => ({
           ...current,
@@ -3521,59 +2910,8 @@ export default function App() {
           [selectedMonth]: previousBudget,
         }));
       };
-      offerUndo("Budget cleared", restore);
-      return restore;
     }
-  }
-
-  function offerUndo(label, undo) {
-    if (undoTimerRef.current) window.clearTimeout(undoTimerRef.current);
-    setUndoAction({ label, undo });
-    undoTimerRef.current = window.setTimeout(() => setUndoAction(null), 6000);
-  }
-
-  function undoLastAction() {
-    if (!undoAction) return;
-    undoAction.undo();
-    setUndoAction(null);
-    if (undoTimerRef.current) window.clearTimeout(undoTimerRef.current);
-  }
-
-  function exportExpenses() {
-    if (!visibleExpenses.length) return;
-    const data = [
-      [
-        "Date",
-        "Description",
-        "Category",
-        "Amount (BDT)",
-        "Payment account",
-        "Type",
-      ],
-      ...visibleExpenses.map((expense) => [
-        expense.date,
-        expense.description,
-        expense.category,
-        expense.amount === null ? "" : expense.amount,
-        isAccountId(expense.account, accountData)
-          ? accountName(expense.account, accountData.settings.cards)
-          : "Cash / Other",
-        expense.recurringId ? "Recurring" : "One-time",
-      ]),
-    ];
-    const csv = `\uFEFF${data
-      .map((row) => row.map(csvCell).join(","))
-      .join("\r\n")}`;
-    const url = URL.createObjectURL(
-      new Blob([csv], { type: "text/csv;charset=utf-8" }),
-    );
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `spend-${selectedMonth}.csv`;
-    document.body.append(link);
-    link.click();
-    link.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return undefined;
   }
 
   function downloadBackup() {
@@ -3606,7 +2944,6 @@ export default function App() {
     link.click();
     link.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    setLastBackupAt(exportedAt);
     try {
       localStorage.setItem(LAST_BACKUP_AT_KEY, exportedAt);
     } catch {
@@ -3649,7 +2986,6 @@ export default function App() {
       link.click();
       link.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-      setLastBackupAt(exportedAt);
       try {
         localStorage.setItem(LAST_BACKUP_AT_KEY, exportedAt);
       } catch {}
@@ -3723,7 +3059,9 @@ export default function App() {
             data: decryptedData,
           };
         } catch {
-          alert("Decryption failed: Incorrect password or corrupted backup file.");
+          alert(
+            "Decryption failed: Incorrect password or corrupted backup file.",
+          );
           setBackupStatus("Decryption failed. Incorrect password.");
           input.value = "";
           return;
@@ -3806,11 +3144,6 @@ export default function App() {
         })),
       };
       setAccountData(restoredAccountData);
-      setStartingBalances(
-        formatStartingBalances(restoredAccounts.settings),
-      );
-      // Retain original tombstone timestamps from the backup so historical deletions
-      // do not act as new deletions wiping out changes on other synchronized devices
       setDeletedRecords(restoredDeletedRecords);
       setTheme(data.theme);
       setTargetCurrency(data.targetCurrency);
@@ -3863,57 +3196,6 @@ export default function App() {
         ? snapshot.reminderTime
         : "09:00",
     );
-  }
-
-  async function refreshAccounts() {
-    if (accountRefreshBusy) return;
-    setAccountRefreshBusy(true);
-    setAccountRefreshStatus("Refreshing account balances…");
-    try {
-      if (pushUser && cloudSyncEnabled && cloudSyncReady) {
-        await queueCloudSnapshotSave(pushUser.id);
-        await queueCloudSnapshotRefresh(pushUser.id, "manual");
-      } else {
-        const localAccountData = loadAccountData(undefined, deletedRecords);
-        setAccountData(localAccountData);
-        setStartingBalances(
-          formatStartingBalances(localAccountData.settings),
-        );
-      }
-      setAccountRefreshStatus("Account balances updated.");
-    } catch (error) {
-      setAccountRefreshStatus(`Could not refresh accounts: ${error.message}`);
-    } finally {
-      setAccountRefreshBusy(false);
-    }
-  }
-
-  async function refreshRecurringSchedules() {
-    if (recurringRefreshBusy) return;
-    setRecurringRefreshBusy(true);
-    setRecurringRefreshStatus("Refreshing recurring expenses…");
-    try {
-      if (pushUser && cloudSyncEnabled && cloudSyncReady) {
-        await queueCloudSnapshotSave(pushUser.id);
-        const refreshed = await queueCloudSnapshotRefresh(
-          pushUser.id,
-          "manual",
-        );
-        if (!refreshed) {
-          throw new Error("No cloud data was returned.");
-        }
-        setRecurringRefreshStatus("Schedules refreshed.");
-      } else {
-        setRecurringSchedules(loadRecurringSchedules());
-        setRecurringRefreshStatus("Schedules refreshed on this device.");
-      }
-    } catch (error) {
-      setRecurringRefreshStatus(
-        `Could not refresh recurring expenses: ${error.message}`,
-      );
-    } finally {
-      setRecurringRefreshBusy(false);
-    }
   }
 
   async function handleAuthSubmit(event) {
@@ -4311,10 +3593,6 @@ export default function App() {
     }
   }, [notificationPermission]);
 
-  function toggleConversion() {
-    setConversionOpen((open) => !open);
-  }
-
   function updateReminderTime(value) {
     if (!isValidReminderTime(value)) {
       setNotificationStatus("Choose a valid reminder time.");
@@ -4330,57 +3608,21 @@ export default function App() {
     }
   }
 
-  function retryConversion() {
-    // Changing the target to itself triggers a fresh request through the effect.
-    setConversionOpen(false);
-    window.setTimeout(() => setConversionOpen(true), 0);
-  }
-
   function addMonth(offset) {
     setSelectedMonth((month) => shiftMonth(month, offset));
   }
 
-  function navigateMobile(view) {
-    setIsMoreOpen(false);
-    setMobileView(view);
-    if (window.matchMedia("(max-width: 800px)").matches) window.scrollTo(0, 0);
-  }
-
-  const countText =
-    visibleExpenses.length === monthExpenses.length
-      ? `${visibleExpenses.length} ${visibleExpenses.length === 1 ? "expense" : "expenses"}`
-      : `${visibleExpenses.length} of ${monthExpenses.length} shown`;
-  const mobileSectionTitle = {
-    activity: "Activity",
-    add: "Add expense",
-    budget: "Budget",
-    accounts: "Accounts",
-    more: "Appearance",
-    profile: "Profile",
-    recurring: "Recurring expenses",
-  }[mobileView];
-  const cloudSyncLabels = getCloudSyncLabels({
-    signedIn: Boolean(pushUser),
-    enabled: cloudSyncEnabled,
-    ready: cloudSyncReady,
-    normalized: normalizedAccountSync,
-    realtimeStatus: cloudRealtimeStatus,
-    activity: cloudSyncActivity,
-  });
-
   return (
     <>
       {!ready && (
-        <SpendSplash
-          canExit={prototypeMounted}
-          onDone={() => setReady(true)}
-        />
+        <SpendSplash canExit={prototypeMounted} onDone={() => setReady(true)} />
       )}
       <Suspense fallback={null}>
         <PrototypeMountSignal onMounted={handlePrototypeMounted} />
         <MobilePrototype
           S={mobilePrototypeData}
           onUnlock={handleAppUnlock}
+          onResetPin={handleResetForgottenPin}
           onShift={addMonth}
           onExpenseSave={saveMobileExpense}
           onExpenseUpdate={saveMobileExpenseUpdate}
@@ -4395,7 +3637,6 @@ export default function App() {
               ...current,
               [selectedMonth]: roundMoney(amount),
             }));
-            setBudgetEditingMonth(null);
             return true;
           }}
           onBudgetClear={clearBudget}
@@ -4438,7 +3679,6 @@ export default function App() {
           onToggleNotifications={toggleNotifications}
           onTestNotification={handleTestNotification}
           backupStatus={backupStatus}
-          lastBackupAt={lastBackupAt}
           onBackupDownload={downloadBackup}
           onEncryptedBackupDownload={downloadEncryptedBackup}
           onExpensesCsv={exportAllExpensesCsv}

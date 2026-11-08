@@ -40,35 +40,6 @@ export const CATEGORIES = [
   "Other",
 ];
 
-export const CURRENCIES = [
-  ["USD", "US Dollar"],
-  ["EUR", "Euro"],
-  ["GBP", "British Pound"],
-  ["INR", "Indian Rupee"],
-  ["AED", "UAE Dirham"],
-  ["SAR", "Saudi Riyal"],
-  ["CAD", "Canadian Dollar"],
-  ["AUD", "Australian Dollar"],
-  ["JPY", "Japanese Yen"],
-  ["SGD", "Singapore Dollar"],
-  ["MYR", "Malaysian Ringgit"],
-  ["PKR", "Pakistani Rupee"],
-  ["CNY", "Chinese Yuan"],
-  ["THB", "Thai Baht"],
-];
-
-export const DEFAULT_CARDS = [];
-
-export const ACCOUNT_OPTIONS = [];
-
-export function getAccountOptions(accountData) {
-  const cards = accountData?.settings?.cards;
-  if (Array.isArray(cards)) {
-    return cards.map((c) => [c.id, c.name]);
-  }
-  return [];
-}
-
 export function hasSeededDemoBalances(balances) {
   if (!balances || typeof balances !== "object") return false;
   return (
@@ -102,8 +73,6 @@ export function isPureUnconfiguredDemoState(saved) {
   );
   return isLegacyDemoCards;
 }
-
-export const PRIMARY_CURRENCY = "BDT";
 
 export function localDate(date = new Date()) {
   return [
@@ -167,6 +136,13 @@ export async function readStorageAsync(
 }
 
 const writeQueues = new Map();
+
+export async function flushStorageWriteQueues() {
+  const pending = [...writeQueues.values()];
+  if (pending.length > 0) {
+    await Promise.allSettled(pending);
+  }
+}
 
 export async function writeStorageAsync(
   key,
@@ -251,10 +227,12 @@ export function isAccountId(value, accountData = null) {
   const trimmed = value.trim();
   if (!trimmed) return false;
   if (trimmed === "cash") return true;
-  if (ACCOUNT_OPTIONS.some(([id]) => id === trimmed)) return true;
-  if (DEFAULT_CARDS.some((c) => c.id === trimmed)) return true;
   if (trimmed.startsWith("card_")) return true;
-  if (Array.isArray(accountData) && accountData.some((c) => (c?.id || c?.[0]) === trimmed)) return true;
+  if (
+    Array.isArray(accountData) &&
+    accountData.some((c) => (c?.id || c?.[0]) === trimmed)
+  )
+    return true;
   if (accountData?.settings?.cards?.some((c) => c.id === trimmed)) return true;
   if (
     accountData?.settings?.balances &&
@@ -414,7 +392,6 @@ export function loadAccountData(
         continue;
       }
 
-      const existingMatch = DEFAULT_CARDS.find((d) => d.id === id);
       const isMfs = Boolean(
         card?.isPhone ||
         card?.category === "mfs" ||
@@ -431,11 +408,7 @@ export function loadAccountData(
       );
 
       const rawNumber = String(card?.number || "").replace(/\D/g, "");
-      const rawLast4 =
-        card?.last4 ||
-        (rawNumber ? rawNumber.slice(-4) : "") ||
-        existingMatch?.last4 ||
-        "";
+      const rawLast4 = card?.last4 || (rawNumber ? rawNumber.slice(-4) : "");
 
       // Explicitly delete full card number and CVV before saving / loading
       const { cvv: _cvv, number: _number, ...safeCard } = card || {};
@@ -443,28 +416,28 @@ export function loadAccountData(
       let storedNumber = "";
       if (isSavings) {
         storedNumber =
-          String(card?.number || "").trim() || (rawLast4 ? `SAV-${rawLast4}` : "");
+          String(card?.number || "").trim() ||
+          (rawLast4 ? `SAV-${rawLast4}` : "");
       } else if (isMfs && rawNumber.length < 15) {
         storedNumber =
-          String(card?.number || "").trim() || (rawLast4 ? `01••• •••${rawLast4}` : "");
+          String(card?.number || "").trim() ||
+          (rawLast4 ? `01••• •••${rawLast4}` : "");
       } else {
         storedNumber = rawLast4 ? `•••• •••• •••• ${rawLast4}` : "";
       }
 
       cardMap.set(id, {
-        ...(existingMatch || {}),
         ...safeCard,
         id,
-        name: card.name || existingMatch?.name || id,
-        holderName:
-          card.holderName || existingMatch?.holderName || "Cardholder",
-        type: card.type || existingMatch?.type || "credit",
-        network: card.network || existingMatch?.network || "visa",
+        name: card.name || id,
+        holderName: card.holderName || "Cardholder",
+        type: card.type || "credit",
+        network: card.network || "visa",
         last4: rawLast4,
         number: storedNumber,
-        expiry: card.expiry || existingMatch?.expiry || "",
-        color: card.color || existingMatch?.color || "#1e293b",
-        gradient: card.gradient || existingMatch?.gradient || "",
+        expiry: card.expiry || "",
+        color: card.color || "#1e293b",
+        gradient: card.gradient || "",
         createdAt,
         updatedAt,
       });
@@ -511,35 +484,25 @@ export function loadAccountData(
       : 0;
     for (const accountId of allReferencedAccountIds) {
       if (deletedCardTombstones[accountId]?.deleted) continue;
-      // If cards are already configured, only reconstruct if there is a positive balance to prevent losing funds
       if (cardsAlreadyConfigured && !(Number(rawBalances[accountId]) > 0)) {
         continue;
       }
       if (!cardMap.has(accountId)) {
-        const defaultMatch = DEFAULT_CARDS.find((d) => d.id === accountId);
-        if (defaultMatch) {
-          cardMap.set(accountId, {
-            ...defaultMatch,
-            createdAt: stableTime,
-            updatedAt: stableTime,
-          });
-        } else {
-          cardMap.set(accountId, {
-            id: accountId,
-            name: accountId.startsWith("card_") ? "Account" : accountId,
-            holderName: "Cardholder",
-            type: "debit",
-            network: "visa",
-            last4: "",
-            number: "",
-            expiry: "",
-            color: "#1e293b",
-            gradient:
-              "linear-gradient(135deg, #334155 0%, #1e293b 60%, #0f172a 100%)",
-            createdAt: stableTime,
-            updatedAt: stableTime,
-          });
-        }
+        cardMap.set(accountId, {
+          id: accountId,
+          name: accountId.startsWith("card_") ? "Account" : accountId,
+          holderName: "Cardholder",
+          type: "debit",
+          network: "visa",
+          last4: "",
+          number: "",
+          expiry: "",
+          color: "#1e293b",
+          gradient:
+            "linear-gradient(135deg, #334155 0%, #1e293b 60%, #0f172a 100%)",
+          createdAt: stableTime,
+          updatedAt: stableTime,
+        });
       }
     }
   }
@@ -629,7 +592,9 @@ export function loadAccountData(
 
 export function parseAmount(val) {
   if (val === "" || val == null) return null;
-  let str = String(val).trim().replace(/[৳$€£\s]/g, "");
+  let str = String(val)
+    .trim()
+    .replace(/[৳$€£\s]/g, "");
   if (!str) return null;
   if (str.includes(",") && str.includes(".")) {
     if (str.indexOf(",") < str.indexOf(".")) {
@@ -653,36 +618,12 @@ export function roundMoney(value) {
   return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
 }
 
-export function formatCurrency(value, currency = PRIMARY_CURRENCY) {
-  const amount = Number(value);
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency,
-      currencyDisplay: "code",
-    }).format(amount);
-  } catch {
-    return `${currency} ${amount.toLocaleString(undefined, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`;
-  }
-}
-
 export function formatDate(value) {
   if (!isValidDateString(value)) return value;
   const [year, month, day] = value.split("-").map(Number);
   return new Date(year, month - 1, day).toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
-    year: "numeric",
-  });
-}
-
-export function formatMonth(monthValue) {
-  const [year, month] = monthValue.split("-").map(Number);
-  return new Date(year, month - 1, 1).toLocaleDateString(undefined, {
-    month: "long",
     year: "numeric",
   });
 }
@@ -721,53 +662,4 @@ export function getSavingsAccountId(cards = []) {
   const exact = cards.find((c) => c?.id === "savings");
   if (exact) return exact.id;
   return "";
-}
-
-export function calculateAccountBalance(accountId, expenses, accountData) {
-  const { balances = {}, cards = [] } = accountData?.settings || {};
-  const savingsId = getSavingsAccountId(cards);
-  let balance = Number(balances[accountId] || 0);
-
-  for (const expense of expenses) {
-    if (expense.amount !== null) {
-      if (expense.category === "Savings" && savingsId) {
-        if (
-          accountId === savingsId &&
-          expense.account &&
-          expense.account !== savingsId &&
-          isAccountId(expense.account, accountData)
-        )
-          balance += Number(expense.amount);
-        else if (expense.account === accountId && accountId !== savingsId)
-          balance -= Number(expense.amount);
-      } else if (expense.account === accountId) {
-        balance -= Number(expense.amount);
-      }
-    }
-  }
-
-  for (const transaction of accountData.transactions) {
-    if (!transaction || typeof transaction !== "object") continue;
-    const amount = Number(transaction.amount ?? transaction.amt ?? 0);
-    const txType = transaction.type;
-    const account = transaction.account ?? transaction.acct;
-
-    if (txType === "income" && account === accountId) {
-      balance += amount;
-    } else if ((txType === "adjustment" || txType === "adjust") && account === accountId) {
-      const isUp =
-        transaction.direction === "increase" ||
-        transaction.direction === "up" ||
-        transaction.dir === "up" ||
-        transaction.dir === "increase";
-      balance += isUp ? amount : -amount;
-    } else if (txType === "transfer") {
-      const fromAcct = transaction.fromAccount ?? transaction.acct;
-      const toAcct = transaction.toAccount ?? transaction.to;
-      if (fromAcct === accountId) balance -= amount;
-      if (toAcct === accountId) balance += amount;
-    }
-  }
-
-  return roundMoney(balance);
 }

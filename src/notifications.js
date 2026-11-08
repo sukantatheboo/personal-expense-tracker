@@ -12,8 +12,7 @@ let channelsConfigured = false;
  */
 function synthesizeAudioTone(tone = "reminder") {
   try {
-    const AudioContextClass =
-      window.AudioContext || window.webkitAudioContext;
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     if (!AudioContextClass) return;
     const ctx = new AudioContextClass();
     if (ctx.state === "suspended") {
@@ -85,9 +84,13 @@ export function playNotificationAudioTone(tone = "reminder") {
   if (Capacitor.isNativePlatform()) {
     try {
       if (tone === "welcome") {
-        void Haptics.notification({ type: NotificationType.Success }).catch(() => {});
+        void Haptics.notification({ type: NotificationType.Success }).catch(
+          () => {},
+        );
       } else {
-        void Haptics.notification({ type: NotificationType.Warning }).catch(() => {});
+        void Haptics.notification({ type: NotificationType.Warning }).catch(
+          () => {},
+        );
       }
     } catch {}
   }
@@ -127,7 +130,8 @@ export async function setupNativeNotificationChannels() {
     await LocalNotifications.createChannel({
       id: "spend_welcome",
       name: "Spend Welcome",
-      description: "Welcome notification when signing in with unique celebratory tone",
+      description:
+        "Welcome notification when signing in with unique celebratory tone",
       importance: 4,
       sound: "welcome.wav",
       vibration: true,
@@ -136,7 +140,8 @@ export async function setupNativeNotificationChannels() {
     await LocalNotifications.createChannel({
       id: "spend_monthly",
       name: "Monthly Expense Tracking",
-      description: "Reminders to start expense tracking when a new month begins",
+      description:
+        "Reminders to start expense tracking when a new month begins",
       importance: 4,
       sound: "reminder.wav",
       vibration: true,
@@ -307,10 +312,9 @@ export async function checkAndNotifyNewMonth(currentMonthStr) {
     lastNotifiedMonth = localStorage.getItem(LAST_NOTIFIED_MONTH_KEY) || "";
   } catch {}
 
-  const shouldNotify =
-    !lastNotifiedMonth
-      ? now.getDate() <= 7 // Active during the 7-day month-end banner window
-      : lastNotifiedMonth < thisMonth; // True month rollover
+  const shouldNotify = !lastNotifiedMonth
+    ? now.getDate() <= 7 // Active during the 7-day month-end banner window
+    : lastNotifiedMonth < thisMonth; // True month rollover
 
   if (shouldNotify) {
     try {

@@ -20,6 +20,9 @@ const BACKGROUNDED_AT_KEY = "spend-backgrounded-at-v1";
 const SESSION_UNLOCKED_KEY = "spend-session-unlocked-v1";
 const DATA_SALT_KEY = "spend-security-data-salt-v1";
 
+const IDB_KEYSTORE_DB = "spend-security-keystore-v1";
+const IDB_KEYSTORE_STORE = "crypto-keys";
+
 export const ENCRYPTED_STORAGE_FORMAT = "spend-encrypted-v1";
 
 /**
@@ -36,6 +39,21 @@ export const SENSITIVE_STORAGE_KEYS = [
   "spend-local-user-snapshots-v1",
 ];
 
+// Purge any legacy plaintext biometric keys that may have been written to localStorage
+try {
+  if (typeof localStorage !== "undefined") {
+    localStorage.removeItem(BIOMETRIC_KEY_STORAGE);
+    localStorage.removeItem(`spend-secure-${BIOMETRIC_KEY_STORAGE}`);
+    Object.keys(localStorage).forEach((k) => {
+      if (k.startsWith("spend-secure-")) {
+        localStorage.removeItem(k);
+      }
+    });
+  }
+} catch {
+  // ignore
+}
+
 // In-memory runtime session unlock state (module-scoped, private).
 // Not accessible via window or DevTools console, and immune to sessionStorage manipulation.
 let isSessionUnlockedInMemory = false;
@@ -44,7 +62,7 @@ let isSessionUnlockedInMemory = false;
 // Wiped on app lock, window reload, or logout.
 let activeSessionKey = null;
 
-// In-memory cached session key for current app run to assist biometric unlocks.
+// In-memory cached session key for current app run to assist biometric unlocks when biometrics is enabled.
 let biometricCachedKey = null;
 
 export function getSessionKey() {
@@ -62,9 +80,94 @@ export function isSessionUnlocked() {
 
 function setSessionUnlocked(unlocked) {
   isSessionUnlockedInMemory = Boolean(unlocked);
-  // Clear any legacy or attacker-injected sessionStorage keys
   try {
     sessionStorage.removeItem(SESSION_UNLOCKED_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+function lockRuntimeSession() {
+  setSessionUnlocked(false);
+  setSessionKey(null);
+  if (!hasBiometricsConfigured()) {
+    biometricCachedKey = null;
+  }
+}
+
+/* ───────────── IndexedDB Non-Extractable CryptoKey Store (Web / PWA) ───────────── */
+function openKeystoreDb() {
+  return new Promise((resolve, reject) => {
+    if (typeof indexedDB === "undefined") {
+      reject(new Error("IndexedDB unavailable"));
+      return;
+    }
+    const request = indexedDB.open(IDB_KEYSTORE_DB, 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(IDB_KEYSTORE_STORE)) {
+        db.createObjectStore(IDB_KEYSTORE_STORE);
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function saveNonExtractableBiometricKey(sessionKey) {
+  if (!sessionKey) return false;
+  try {
+    const rawKey = await crypto.subtle.exportKey("raw", sessionKey);
+    const nonExtractableKey = await crypto.subtle.importKey(
+      "raw",
+      rawKey,
+      { name: "AES-GCM", length: 256 },
+      false, // non-extractable: raw key material can never be exported from IndexedDB
+      ["encrypt", "decrypt"],
+    );
+    const db = await openKeystoreDb();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_KEYSTORE_STORE, "readwrite");
+      tx.objectStore(IDB_KEYSTORE_STORE).put(
+        nonExtractableKey,
+        BIOMETRIC_KEY_STORAGE,
+      );
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function loadNonExtractableBiometricKey() {
+  try {
+    const db = await openKeystoreDb();
+    const key = await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_KEYSTORE_STORE, "readonly");
+      const req = tx.objectStore(IDB_KEYSTORE_STORE).get(BIOMETRIC_KEY_STORAGE);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error);
+    });
+    db.close();
+    return key instanceof CryptoKey ? key : null;
+  } catch {
+    return null;
+  }
+}
+
+async function clearNonExtractableBiometricKey() {
+  try {
+    const db = await openKeystoreDb();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_KEYSTORE_STORE, "readwrite");
+      tx.objectStore(IDB_KEYSTORE_STORE).delete(BIOMETRIC_KEY_STORAGE);
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
   } catch {
     // ignore
   }
@@ -73,114 +176,68 @@ function setSessionUnlocked(unlocked) {
 /**
  * Native Hardware Security Integration (iOS Keychain / Android Keystore)
  *
- * Provides a unified secure storage bridge for Capacitor mobile applications:
- * - Uses @byteowls/capacitor-secure-storage (iOS Keychain / Android Keystore) when available.
- * - Uses @capacitor/preferences as a secondary native device store.
- * - Falls back to AES-256-GCM encrypted Web Crypto storage in browser environments.
+ * Strictly uses native hardware-backed SecureStoragePlugin when available.
+ * Never falls back to plaintext localStorage or unencrypted SharedPreferences.
  */
+function getHardwareSecurePlugin() {
+  const cap = typeof window !== "undefined" ? window.Capacitor : null;
+  return (
+    cap?.Plugins?.SecureStoragePlugin ||
+    cap?.Plugins?.SecureStorage ||
+    (typeof window !== "undefined" ? window.SecureStoragePlugin : null)
+  );
+}
+
 export const NativeSecureStorage = {
   isAvailable() {
-    return true;
+    return Boolean(getHardwareSecurePlugin());
   },
 
   async setItem(key, value) {
     try {
+      const plugin = getHardwareSecurePlugin();
+      if (!plugin) return false;
       const valStr = typeof value === "string" ? value : JSON.stringify(value);
-      const cap = typeof window !== "undefined" ? window.Capacitor : null;
-      const plugin =
-        cap?.Plugins?.SecureStoragePlugin ||
-        cap?.Plugins?.SecureStorage ||
-        (typeof window !== "undefined" ? window.SecureStoragePlugin : null);
-      if (plugin) {
-        await plugin.set({ key, value: valStr });
-        return true;
-      }
-      const prefs = cap?.Plugins?.Preferences;
-      if (prefs) {
-        await prefs.set({ key, value: valStr });
-        return true;
-      }
-      if (typeof localStorage !== "undefined") {
-        localStorage.setItem(`spend-secure-${key}`, valStr);
-        return true;
-      }
+      await plugin.set({ key, value: valStr });
+      return true;
     } catch (err) {
       console.warn("NativeSecureStorage.setItem error:", err);
+      return false;
     }
-    return false;
   },
 
   async getItem(key) {
     try {
-      const cap = typeof window !== "undefined" ? window.Capacitor : null;
-      const plugin =
-        cap?.Plugins?.SecureStoragePlugin ||
-        cap?.Plugins?.SecureStorage ||
-        (typeof window !== "undefined" ? window.SecureStoragePlugin : null);
-      if (plugin) {
-        const res = await plugin.get({ key });
-        if (res?.value != null) return res.value;
-      }
-      const prefs = cap?.Plugins?.Preferences;
-      if (prefs) {
-        const res = await prefs.get({ key });
-        if (res?.value != null) return res.value;
-      }
-      if (typeof localStorage !== "undefined") {
-        return (
-          localStorage.getItem(`spend-secure-${key}`) ??
-          localStorage.getItem(key) ??
-          null
-        );
-      }
+      const plugin = getHardwareSecurePlugin();
+      if (!plugin) return null;
+      const res = await plugin.get({ key });
+      return res?.value ?? null;
     } catch {
       return null;
     }
-    return null;
   },
 
   async removeItem(key) {
     try {
-      const cap = typeof window !== "undefined" ? window.Capacitor : null;
-      const plugin =
-        cap?.Plugins?.SecureStoragePlugin ||
-        cap?.Plugins?.SecureStorage ||
-        (typeof window !== "undefined" ? window.SecureStoragePlugin : null);
+      const plugin = getHardwareSecurePlugin();
       if (plugin) {
         await plugin.remove({ key });
-        return true;
-      }
-      const prefs = cap?.Plugins?.Preferences;
-      if (prefs) {
-        await prefs.remove({ key });
-        return true;
       }
       if (typeof localStorage !== "undefined") {
         localStorage.removeItem(`spend-secure-${key}`);
         localStorage.removeItem(key);
-        return true;
       }
+      return true;
     } catch {
       return false;
     }
-    return false;
   },
 
   async clear() {
     try {
-      const cap = typeof window !== "undefined" ? window.Capacitor : null;
-      const plugin =
-        cap?.Plugins?.SecureStoragePlugin ||
-        cap?.Plugins?.SecureStorage ||
-        (typeof window !== "undefined" ? window.SecureStoragePlugin : null);
+      const plugin = getHardwareSecurePlugin();
       if (plugin) {
         await plugin.clear();
-        return true;
-      }
-      const prefs = cap?.Plugins?.Preferences;
-      if (prefs) {
-        await prefs.clear();
-        return true;
       }
       if (typeof localStorage !== "undefined") {
         Object.keys(localStorage).forEach((k) => {
@@ -188,14 +245,36 @@ export const NativeSecureStorage = {
             localStorage.removeItem(k);
           }
         });
-        return true;
       }
+      return true;
     } catch {
       return false;
     }
-    return false;
   },
 };
+
+async function persistBiometricSessionKey(sessionKey) {
+  if (!sessionKey || !hasBiometricsConfigured()) return;
+  biometricCachedKey = sessionKey;
+  await saveNonExtractableBiometricKey(sessionKey);
+  if (NativeSecureStorage.isAvailable()) {
+    try {
+      const rawKey = await crypto.subtle.exportKey("raw", sessionKey);
+      await NativeSecureStorage.setItem(
+        BIOMETRIC_KEY_STORAGE,
+        bufferToBase64(rawKey),
+      );
+    } catch {
+      // ignore if key is non-extractable
+    }
+  }
+}
+
+async function clearPersistedBiometricKey() {
+  biometricCachedKey = null;
+  await clearNonExtractableBiometricKey();
+  await NativeSecureStorage.removeItem(BIOMETRIC_KEY_STORAGE);
+}
 
 function ensureSubtleCrypto() {
   if (
@@ -312,7 +391,7 @@ export async function deriveEncryptionKey(pin, saltBytes) {
     },
     baseKey,
     { name: "AES-GCM", length: 256 },
-    true, // extractable so hardware Keychain / Keystore can store it when biometrics is enabled
+    true,
     ["encrypt", "decrypt"],
   );
 
@@ -325,7 +404,6 @@ export async function deriveEncryptionKey(pin, saltBytes) {
  */
 export async function encryptData(plainData, key = activeSessionKey) {
   if (!key) {
-    // If no encryption key is active (PIN lock disabled), return plaintext JSON
     return JSON.stringify(plainData);
   }
   ensureSubtleCrypto();
@@ -368,7 +446,6 @@ export async function decryptData(storedStringOrObj, key = activeSessionKey) {
     }
   }
 
-  // Detect encrypted envelope
   if (
     parsed &&
     typeof parsed === "object" &&
@@ -392,7 +469,6 @@ export async function decryptData(storedStringOrObj, key = activeSessionKey) {
     return JSON.parse(decoder.decode(decryptedBuffer));
   }
 
-  // Return unencrypted data as-is for backward compatibility
   return parsed;
 }
 
@@ -422,7 +498,6 @@ export async function encryptAllSensitiveData(
         parsed.format === ENCRYPTED_STORAGE_FORMAT
       ) {
         if (!oldSessionKey) {
-          // Already encrypted and no previous key provided to re-encrypt
           continue;
         }
         try {
@@ -511,21 +586,10 @@ export async function setAppPin(pin) {
   setSessionUnlocked(true);
   markActive();
 
-  // If biometrics configured, store in hardware security
   if (hasBiometricsConfigured()) {
-    try {
-      const rawKey = await crypto.subtle.exportKey("raw", sessionKey);
-      await NativeSecureStorage.setItem(
-        BIOMETRIC_KEY_STORAGE,
-        bufferToBase64(rawKey),
-      );
-      biometricCachedKey = sessionKey;
-    } catch {
-      // ignore
-    }
+    await persistBiometricSessionKey(sessionKey);
   }
 
-  // Encrypt existing plaintext records or re-encrypt with new sessionKey
   await encryptAllSensitiveData(sessionKey, oldSessionKey);
 
   return true;
@@ -566,7 +630,6 @@ export async function verifyAppPin(pin) {
   if (constantTimeEqual(computedHash, storedHash)) {
     resetPinFailures();
 
-    // Derive data encryption session key
     const dataSaltStr = localStorage.getItem(DATA_SALT_KEY);
     let dataSalt;
     if (dataSaltStr) {
@@ -581,15 +644,8 @@ export async function verifyAppPin(pin) {
     setSessionUnlocked(true);
     markActive();
 
-    biometricCachedKey = sessionKey;
-    try {
-      const rawKey = await crypto.subtle.exportKey("raw", sessionKey);
-      await NativeSecureStorage.setItem(
-        BIOMETRIC_KEY_STORAGE,
-        bufferToBase64(rawKey),
-      );
-    } catch {
-      // ignore
+    if (hasBiometricsConfigured()) {
+      await persistBiometricSessionKey(sessionKey);
     }
 
     return true;
@@ -600,54 +656,43 @@ export async function verifyAppPin(pin) {
 
 export function hasAppPin() {
   return Boolean(
-    localStorage.getItem(PIN_STORAGE_KEY) &&
-      localStorage.getItem(PIN_SALT_KEY),
+    localStorage.getItem(PIN_STORAGE_KEY) && localStorage.getItem(PIN_SALT_KEY),
   );
 }
 
+/**
+ * Removes App PIN when the user is already authenticated/unlocked (e.g. Settings -> Turn Off).
+ * Decrypts all encrypted records back to standard localStorage using the active session key.
+ */
 export async function removeAppPin() {
-  let keyToDecrypt = activeSessionKey || biometricCachedKey;
-  if (!keyToDecrypt) {
+  if (!isSessionUnlocked() || !activeSessionKey) {
+    throw new Error("App must be unlocked before turning off the PIN.");
+  }
+
+  await decryptAllSensitiveData(activeSessionKey);
+
+  localStorage.removeItem(PIN_STORAGE_KEY);
+  localStorage.removeItem(PIN_SALT_KEY);
+  localStorage.removeItem(DATA_SALT_KEY);
+  localStorage.removeItem(BIOMETRIC_KEY_ID);
+  clearBackgroundedAt();
+  await clearPersistedBiometricKey();
+  resetPinFailures();
+  setSessionKey(null);
+  setSessionUnlocked(true);
+}
+
+/**
+ * Resets a forgotten App PIN from the lock screen without knowing the PIN.
+ * Never decrypts data: wipes locally encrypted sensitive records so an attacker
+ * cannot bypass the lock screen to read encrypted financial data.
+ */
+export async function resetForgottenPin() {
+  for (const key of SENSITIVE_STORAGE_KEYS) {
     try {
-      const storedKeyB64 = await NativeSecureStorage.getItem(
-        BIOMETRIC_KEY_STORAGE,
-      );
-      if (storedKeyB64) {
-        const keyBuffer = base64ToBuffer(storedKeyB64);
-        keyToDecrypt = await crypto.subtle.importKey(
-          "raw",
-          keyBuffer,
-          { name: "AES-GCM", length: 256 },
-          true,
-          ["encrypt", "decrypt"],
-        );
-      }
+      localStorage.removeItem(key);
     } catch {
       // ignore
-    }
-  }
-  if (keyToDecrypt) {
-    try {
-      await decryptAllSensitiveData(keyToDecrypt);
-    } catch (err) {
-      console.warn("Failed to decrypt records when removing PIN:", err);
-    }
-  } else {
-    for (const key of SENSITIVE_STORAGE_KEYS) {
-      try {
-        const raw = localStorage.getItem(key);
-        if (!raw) continue;
-        const parsed = JSON.parse(raw);
-        if (
-          parsed &&
-          typeof parsed === "object" &&
-          parsed.format === ENCRYPTED_STORAGE_FORMAT
-        ) {
-          localStorage.removeItem(key);
-        }
-      } catch {
-        // ignore
-      }
     }
   }
   localStorage.removeItem(PIN_STORAGE_KEY);
@@ -655,12 +700,7 @@ export async function removeAppPin() {
   localStorage.removeItem(DATA_SALT_KEY);
   localStorage.removeItem(BIOMETRIC_KEY_ID);
   clearBackgroundedAt();
-  try {
-    await NativeSecureStorage.removeItem(BIOMETRIC_KEY_STORAGE);
-  } catch {
-    // ignore
-  }
-  biometricCachedKey = null;
+  await clearPersistedBiometricKey();
   resetPinFailures();
   setSessionKey(null);
   setSessionUnlocked(true);
@@ -669,14 +709,17 @@ export async function removeAppPin() {
 /* ───────────── Biometric Authentication (WebAuthn & Native Keystore/Keychain) ───────────── */
 export async function isBiometricsAvailable() {
   if (typeof window !== "undefined" && window.Capacitor?.isNativePlatform?.()) {
-    return true;
+    const capPlugins = window.Capacitor?.Plugins;
+    if (capPlugins?.NativeBiometric || capPlugins?.BiometricAuth) {
+      return true;
+    }
   }
   if (
     typeof window === "undefined" ||
     !window.isSecureContext ||
     !window.PublicKeyCredential ||
-    typeof window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable !==
-      "function"
+    typeof window.PublicKeyCredential
+      .isUserVerifyingPlatformAuthenticatorAvailable !== "function"
   ) {
     return false;
   }
@@ -700,24 +743,16 @@ export async function enableBiometrics(currentPin) {
       return false;
     }
 
-    if (activeSessionKey) {
-      try {
-        const rawKey = await crypto.subtle.exportKey("raw", activeSessionKey);
-        await NativeSecureStorage.setItem(
-          BIOMETRIC_KEY_STORAGE,
-          bufferToBase64(rawKey),
-        );
-      } catch {
-        // ignore
-      }
-      biometricCachedKey = activeSessionKey;
-    }
-
-    if (
+    const capPlugins =
+      typeof window !== "undefined" ? window.Capacitor?.Plugins : null;
+    const isNativeBiometricAvailable =
       typeof window !== "undefined" &&
-      window.Capacitor?.isNativePlatform?.()
-    ) {
+      window.Capacitor?.isNativePlatform?.() &&
+      Boolean(capPlugins?.NativeBiometric || capPlugins?.BiometricAuth);
+
+    if (isNativeBiometricAvailable) {
       localStorage.setItem(BIOMETRIC_KEY_ID, "native-biometric");
+      await persistBiometricSessionKey(activeSessionKey);
       return true;
     }
 
@@ -747,6 +782,7 @@ export async function enableBiometrics(currentPin) {
 
     if (credential && credential.rawId) {
       localStorage.setItem(BIOMETRIC_KEY_ID, bufferToBase64(credential.rawId));
+      await persistBiometricSessionKey(activeSessionKey);
       return true;
     }
     return false;
@@ -757,12 +793,7 @@ export async function enableBiometrics(currentPin) {
 
 export async function disableBiometrics() {
   localStorage.removeItem(BIOMETRIC_KEY_ID);
-  biometricCachedKey = null;
-  try {
-    await NativeSecureStorage.removeItem(BIOMETRIC_KEY_STORAGE);
-  } catch {
-    // ignore
-  }
+  await clearPersistedBiometricKey();
 }
 
 export async function authenticateWithBiometrics() {
@@ -770,25 +801,29 @@ export async function authenticateWithBiometrics() {
     const credentialId = localStorage.getItem(BIOMETRIC_KEY_ID);
     if (!credentialId) return { ok: false, reason: "not_configured" };
 
+    const capPlugins =
+      typeof window !== "undefined" ? window.Capacitor?.Plugins : null;
     const isNative =
-      typeof window !== "undefined" && window.Capacitor?.isNativePlatform?.();
+      typeof window !== "undefined" &&
+      window.Capacitor?.isNativePlatform?.() &&
+      credentialId === "native-biometric";
 
-    let authenticated = false;
+    let verifiedByAuthenticator = false;
+
     if (isNative) {
-      const storedKeyB64 = await NativeSecureStorage.getItem(
-        BIOMETRIC_KEY_STORAGE,
-      );
-      if (storedKeyB64) {
-        const keyBuffer = base64ToBuffer(storedKeyB64);
-        const importedKey = await crypto.subtle.importKey(
-          "raw",
-          keyBuffer,
-          { name: "AES-GCM", length: 256 },
-          true,
-          ["encrypt", "decrypt"],
-        );
-        setSessionKey(importedKey);
-        authenticated = true;
+      if (capPlugins?.NativeBiometric?.verifyIdentity) {
+        await capPlugins.NativeBiometric.verifyIdentity({
+          reason: "Unlock Spend",
+          title: "Biometric Unlock",
+        });
+        verifiedByAuthenticator = true;
+      } else if (capPlugins?.BiometricAuth?.authenticate) {
+        await capPlugins.BiometricAuth.authenticate({
+          reason: "Unlock Spend",
+        });
+        verifiedByAuthenticator = true;
+      } else {
+        return { ok: false, reason: "not_configured" };
       }
     } else {
       if (credentialId === "native-biometric") {
@@ -808,36 +843,41 @@ export async function authenticateWithBiometrics() {
           timeout: 60000,
         },
       });
+      verifiedByAuthenticator = Boolean(assertion);
+    }
 
-      if (assertion) {
-        if (biometricCachedKey) {
-          setSessionKey(biometricCachedKey);
-          authenticated = true;
-        } else {
-          const storedKeyB64 = await NativeSecureStorage.getItem(
-            BIOMETRIC_KEY_STORAGE,
-          );
-          if (storedKeyB64) {
-            const keyBuffer = base64ToBuffer(storedKeyB64);
-            const importedKey = await crypto.subtle.importKey(
-              "raw",
-              keyBuffer,
-              { name: "AES-GCM", length: 256 },
-              true,
-              ["encrypt", "decrypt"],
-            );
-            setSessionKey(importedKey);
-            authenticated = true;
-          }
-        }
+    if (!verifiedByAuthenticator) {
+      return { ok: false, reason: "auth_failed" };
+    }
+
+    let restoredKey = biometricCachedKey;
+    if (!restoredKey) {
+      restoredKey = await loadNonExtractableBiometricKey();
+    }
+    if (!restoredKey && NativeSecureStorage.isAvailable()) {
+      const storedKeyB64 = await NativeSecureStorage.getItem(
+        BIOMETRIC_KEY_STORAGE,
+      );
+      if (storedKeyB64) {
+        const keyBuffer = base64ToBuffer(storedKeyB64);
+        restoredKey = await crypto.subtle.importKey(
+          "raw",
+          keyBuffer,
+          { name: "AES-GCM", length: 256 },
+          false,
+          ["encrypt", "decrypt"],
+        );
       }
     }
 
-    if (authenticated && activeSessionKey) {
+    if (restoredKey) {
+      biometricCachedKey = restoredKey;
+      setSessionKey(restoredKey);
       setSessionUnlocked(true);
       markActive();
       return true;
     }
+
     return { ok: false, reason: "key_missing" };
   } catch (err) {
     console.warn("Biometric authentication error:", err);
@@ -901,9 +941,7 @@ export function markBackgrounded() {
   const timeoutMinutes = getLockTimeoutMinutes();
   setBackgroundedAt(Date.now());
   if (timeoutMinutes === 0) {
-    // "Immediately": lock session as soon as the app leaves foreground
-    setSessionUnlocked(false);
-    setSessionKey(null);
+    lockRuntimeSession();
   }
 }
 
@@ -918,20 +956,16 @@ export function shouldLockApp() {
   if (backgroundedAt != null) {
     const elapsedMinutes = (Date.now() - backgroundedAt) / 60000;
     if (timeoutMinutes === 0 || elapsedMinutes >= timeoutMinutes) {
-      setSessionUnlocked(false);
-      setSessionKey(null);
+      lockRuntimeSession();
       clearBackgroundedAt();
       return true;
     }
-    // Returned to foreground within allowed timeout window: keep session unlocked
     clearBackgroundedAt();
     markActive();
     return false;
   }
 
-  // 2. The app is in the foreground (user is actively inside the app).
-  // "Immediately" (timeoutMinutes === 0) requires passcode upon leaving the app,
-  // NEVER while actively inside the app in the foreground.
+  // 2. "Immediately" (timeoutMinutes === 0) locks upon leaving the app, not while active in foreground
   if (timeoutMinutes === 0) {
     return false;
   }
@@ -940,8 +974,7 @@ export function shouldLockApp() {
   const lastActive = Number(localStorage.getItem(LAST_ACTIVE_KEY)) || 0;
   const elapsedMinutes = (Date.now() - lastActive) / 60000;
   if (elapsedMinutes >= timeoutMinutes) {
-    setSessionUnlocked(false);
-    setSessionKey(null);
+    lockRuntimeSession();
     return true;
   }
 
@@ -950,8 +983,7 @@ export function shouldLockApp() {
 
 export function lockAppManually() {
   if (hasAppPin()) {
-    setSessionUnlocked(false);
-    setSessionKey(null);
+    lockRuntimeSession();
     clearBackgroundedAt();
   }
 }
@@ -992,8 +1024,6 @@ export async function encryptBackup(plainData, password) {
   const format = "spend-encrypted-backup";
   const version = 1;
 
-  // Bind envelope metadata using AES-GCM Additional Authenticated Data (AAD)
-  // to prevent unauthenticated header/metadata tampering
   const additionalData = encoder.encode(
     JSON.stringify({ format, version, exportedAt }),
   );
@@ -1056,7 +1086,6 @@ export async function decryptBackup(encryptedPayload, password) {
     ["decrypt"],
   );
 
-  // Attempt decryption with authenticated metadata (AAD)
   const additionalData = encoder.encode(
     JSON.stringify({
       format: encryptedPayload.format,
@@ -1074,7 +1103,6 @@ export async function decryptBackup(encryptedPayload, password) {
     const decoder = new TextDecoder();
     return JSON.parse(decoder.decode(decryptedBuffer));
   } catch {
-    // Backward compatibility: fallback to decrypting without AAD for legacy backups
     try {
       const decryptedBuffer = await crypto.subtle.decrypt(
         { name: "AES-GCM", iv },
