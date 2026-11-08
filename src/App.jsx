@@ -820,7 +820,12 @@ function mergeCloudSnapshots(
         ),
       },
       deletedRecords,
-      theme: cloud.theme === "dark" ? "dark" : "light",
+      theme:
+        cloud.theme === "dark"
+          ? "dark"
+          : cloud.theme === "light"
+            ? "light"
+            : local.theme,
       targetCurrency:
         typeof cloud.targetCurrency === "string" &&
         /^[A-Z]{3}$/.test(cloud.targetCurrency)

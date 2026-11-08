@@ -282,8 +282,8 @@ export default function SpendSplash({
       if (finished) return;
       finished = true;
       handoffStaticSplash(true);
-      restoreBg();
       root.hidden = true;
+      restoreBg();
       clock = null;
       releaseAt = null;
       try {

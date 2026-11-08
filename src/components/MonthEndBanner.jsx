@@ -349,11 +349,24 @@ export default function MonthRecap({
     const prevOverflow = document.body.style.overflow;
     const prevBg = document.body.style.backgroundColor;
     document.body.style.overflow = "hidden";
-    document.body.style.backgroundColor = BG[i % BG.length];
     return () => {
       document.body.style.overflow = prevOverflow;
       document.body.style.backgroundColor = prevBg;
+      const isDark = document.documentElement.dataset.theme === "dark";
+      const restoreColor = isDark ? "#0e1411" : "#f4f3ee";
+      document
+        .querySelectorAll('meta[name="theme-color"]')
+        .forEach((meta) => meta.setAttribute("content", restoreColor));
     };
+  }, [active]);
+
+  useEffect(() => {
+    if (!active) return;
+    const slideColor = BG[i % BG.length];
+    document.body.style.backgroundColor = slideColor;
+    document
+      .querySelectorAll('meta[name="theme-color"]')
+      .forEach((meta) => meta.setAttribute("content", slideColor));
   }, [active, i]);
 
   useEffect(() => {
