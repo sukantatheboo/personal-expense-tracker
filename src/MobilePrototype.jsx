@@ -62,19 +62,28 @@ import "./MobilePrototype.css";
 const MonthEndBanner = lazy(() => import("./components/MonthEndBanner.jsx"));
 const SpendLogin = lazy(() => import("./components/SpendLogin.jsx"));
 
-const loadAccountsCardDeck = () => import("./AccountsCardDeck.jsx");
-const loadCardAssets = () => import("./cardAssets.jsx");
+let accountsDeckModule = null;
+const loadAccountsCardDeck = () => {
+  if (accountsDeckModule) return Promise.resolve(accountsDeckModule);
+  return import("./AccountsCardDeck.jsx").then((m) => {
+    accountsDeckModule = m;
+    return m;
+  });
+};
 
+let cardAssetsModule = null;
+const loadCardAssets = () => {
+  if (cardAssetsModule) return Promise.resolve(cardAssetsModule);
+  return import("./cardAssets.jsx").then((m) => {
+    cardAssetsModule = m;
+    return m;
+  });
+};
+
+// Start fetching immediately in the background without any 1.5s idle delay
 if (typeof window !== "undefined") {
-  const preloadDeckAndCardAssets = () => {
-    void loadAccountsCardDeck();
-    void loadCardAssets();
-  };
-  if (typeof window.requestIdleCallback === "function") {
-    window.requestIdleCallback(preloadDeckAndCardAssets, { timeout: 1500 });
-  } else {
-    window.setTimeout(preloadDeckAndCardAssets, 600);
-  }
+  void loadAccountsCardDeck();
+  void loadCardAssets();
 }
 
 const LazyStackedCardDeck = lazy(() =>
@@ -101,6 +110,10 @@ const LazyMiniCardPreview = lazy(() =>
 );
 
 function StackedCardDeck(props) {
+  if (accountsDeckModule?.StackedCardDeck) {
+    const Component = accountsDeckModule.StackedCardDeck;
+    return <Component {...props} />;
+  }
   return (
     <Suspense fallback={<div style={{ minHeight: 212 }} />}>
       <LazyStackedCardDeck {...props} />
@@ -109,6 +122,10 @@ function StackedCardDeck(props) {
 }
 
 function WalletCard(props) {
+  if (accountsDeckModule?.WalletCard) {
+    const Component = accountsDeckModule.WalletCard;
+    return <Component {...props} />;
+  }
   return (
     <Suspense fallback={<div style={{ minHeight: 190 }} />}>
       <LazyWalletCard {...props} />
@@ -117,6 +134,10 @@ function WalletCard(props) {
 }
 
 function VisaBadge(props) {
+  if (cardAssetsModule?.VisaBadge) {
+    const Component = cardAssetsModule.VisaBadge;
+    return <Component {...props} />;
+  }
   return (
     <Suspense fallback={null}>
       <LazyVisaBadge {...props} />
@@ -125,6 +146,10 @@ function VisaBadge(props) {
 }
 
 function MastercardBadge(props) {
+  if (cardAssetsModule?.MastercardBadge) {
+    const Component = cardAssetsModule.MastercardBadge;
+    return <Component {...props} />;
+  }
   return (
     <Suspense fallback={null}>
       <LazyMastercardBadge {...props} />
@@ -133,6 +158,10 @@ function MastercardBadge(props) {
 }
 
 function AmexBadge(props) {
+  if (cardAssetsModule?.AmexBadge) {
+    const Component = cardAssetsModule.AmexBadge;
+    return <Component {...props} />;
+  }
   return (
     <Suspense fallback={null}>
       <LazyAmexBadge {...props} />
@@ -141,6 +170,10 @@ function AmexBadge(props) {
 }
 
 function MiniCardPreview(props) {
+  if (cardAssetsModule?.MiniCardPreview) {
+    const Component = cardAssetsModule.MiniCardPreview;
+    return <Component {...props} />;
+  }
   return (
     <Suspense
       fallback={
@@ -3131,14 +3164,21 @@ function Accounts({
   onOpenTransaction,
   onLockedCardNotice,
   onAddExpense,
+  initialSelectedAccount,
   onActiveAccountChange,
 }) {
   const cards = Array.isArray(S.cards) ? S.cards : [];
   const savingsAccountId = getSavingsAccountId(cards);
   const balances = Object.fromEntries(cards.map((c) => [c.id, bal(S, c.id)]));
-  const [selectedAccount, setSelectedAccount] = useState(
-    () => cards[0]?.id || "",
-  );
+  const [selectedAccount, setSelectedAccount] = useState(() => {
+    if (
+      initialSelectedAccount &&
+      cards.some((c) => c.id === initialSelectedAccount)
+    ) {
+      return initialSelectedAccount;
+    }
+    return cards[0]?.id || "";
+  });
   const [showAllTx, setShowAllTx] = useState(false);
   const [deckDragY, setDeckDragY] = useState(0);
   const prevCardCountRef = useRef(cards.length);
@@ -8880,6 +8920,7 @@ export default function MobilePrototype({
                   )
                 }
                 onAddExpense={(acct) => openSheet({ type: "add", acct })}
+                initialSelectedAccount={activeAccountRef.current}
                 onActiveAccountChange={(acct) => {
                   activeAccountRef.current = acct;
                 }}

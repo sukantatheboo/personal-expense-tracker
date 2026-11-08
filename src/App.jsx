@@ -888,6 +888,8 @@ export default function App() {
   }, []);
   useEffect(() => {
     void loadMobilePrototype();
+    void import("./AccountsCardDeck.jsx");
+    void import("./cardAssets.jsx");
   }, []);
   const [expenses, setExpenses] = useState(loadExpenses);
   const [budgets, setBudgets] = useState(loadBudgets);
