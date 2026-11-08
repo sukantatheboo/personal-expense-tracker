@@ -1,3 +1,5 @@
+import { nextOccurrenceDate } from "./data.js";
+
 const cleanEnv = (value) =>
   typeof value === "string" ? value.trim().replace(/^["']|["']$/g, "") : "";
 
@@ -138,8 +140,24 @@ export async function syncBackgroundSchedules(userId, schedules, reminderTime) {
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
   const deviceId = getDeviceId();
   const [hours, minutes] = reminderTime.split(":").map(Number);
+  const nowMs = Date.now();
+
   const reminders = schedules.map((schedule) => {
-    const [year, month, day] = schedule.nextDate.split("-").map(Number);
+    let targetDate = schedule.nextDate;
+    let [year, month, day] = targetDate.split("-").map(Number);
+    let notifyDate = new Date(year, month - 1, day, hours, minutes);
+    let guard = 0;
+    while (notifyDate.getTime() <= nowMs && guard < 240) {
+      targetDate = nextOccurrenceDate(
+        targetDate,
+        schedule.interval,
+        schedule.dayOfMonth,
+      );
+      [year, month, day] = targetDate.split("-").map(Number);
+      notifyDate = new Date(year, month - 1, day, hours, minutes);
+      guard += 1;
+    }
+
     return {
       user_id: userId,
       device_id: deviceId,
@@ -147,14 +165,8 @@ export async function syncBackgroundSchedules(userId, schedules, reminderTime) {
       description: schedule.description,
       interval: schedule.interval,
       day_of_month: schedule.dayOfMonth,
-      next_date: schedule.nextDate,
-      next_notify_at: new Date(
-        year,
-        month - 1,
-        day,
-        hours,
-        minutes,
-      ).toISOString(),
+      next_date: targetDate,
+      next_notify_at: notifyDate.toISOString(),
       timezone,
       reminder_time: reminderTime,
       active: schedule.active,

@@ -18,6 +18,18 @@ if (vapidSubject && vapidPublicKey && vapidPrivateKey) {
 
 const STALE_MS = 12 * 60 * 60 * 1000; // don't send reminders that are over 12h late
 
+function timingSafeEqualStr(a: string, b: string): boolean {
+  const enc = new TextEncoder();
+  const aBytes = enc.encode(a);
+  const bBytes = enc.encode(b);
+  if (aBytes.byteLength !== bBytes.byteLength) return false;
+  let diff = 0;
+  for (let i = 0; i < aBytes.byteLength; i += 1) {
+    diff |= aBytes[i] ^ bBytes[i];
+  }
+  return diff === 0;
+}
+
 // ---- date helpers: keep in sync with nextOccurrenceDate in src/data.js ----
 function addDays(date: string, days: number) {
   const d = new Date(`${date}T00:00:00Z`);
@@ -67,7 +79,8 @@ function zonedTimeToUtc(date: string, time: string, timeZone: string) {
 
 Deno.serve(async (req) => {
   const cronSecret = Deno.env.get("CRON_SECRET");
-  if (!cronSecret || req.headers.get("x-cron-secret") !== cronSecret) {
+  const providedSecret = req.headers.get("x-cron-secret") || "";
+  if (!cronSecret || !providedSecret || !timingSafeEqualStr(providedSecret, cronSecret)) {
     return new Response("forbidden", { status: 403 });
   }
 
@@ -100,6 +113,17 @@ Deno.serve(async (req) => {
 
   let sent = 0;
   for (const r of due) {
+    const device = byDevice.get(`${r.user_id}:${r.device_id}`);
+    if (!device) {
+      // Clean up orphaned push_reminders whose device subscription no longer exists
+      await supabase
+        .from("push_reminders")
+        .delete()
+        .eq("user_id", r.user_id)
+        .eq("device_id", r.device_id);
+      continue;
+    }
+
     // move the row to its next FUTURE occurrence
     let date: string = r.next_date;
     let notifyAt = new Date(r.next_notify_at);
@@ -111,7 +135,12 @@ Deno.serve(async (req) => {
     // claim first, so two overlapping runs can never send the same reminder twice
     const { data: claimed } = await supabase
       .from("push_reminders")
-      .update({ next_date: date, next_notify_at: notifyAt.toISOString() })
+      .update({
+        next_date: date,
+        next_notify_at: notifyAt.toISOString(),
+        pending_notification: false,
+        claim_until: null,
+      })
       .eq("user_id", r.user_id)
       .eq("device_id", r.device_id)
       .eq("schedule_id", r.schedule_id)
@@ -121,8 +150,6 @@ Deno.serve(async (req) => {
 
     if (now.getTime() - new Date(r.next_notify_at).getTime() > STALE_MS) continue; // too old to be useful
 
-    const device = byDevice.get(`${r.user_id}:${r.device_id}`);
-    if (!device) continue;
     try {
       await webpush.sendNotification(
         device.subscription,
@@ -139,8 +166,17 @@ Deno.serve(async (req) => {
     } catch (err) {
       const status = (err as { statusCode?: number }).statusCode;
       if (status === 404 || status === 410) {
-        await supabase.from("push_devices").delete()
-          .eq("user_id", r.user_id).eq("device_id", r.device_id); // subscription expired
+        // Subscription expired: remove both device and its reminders so orphaned rows do not accumulate
+        await supabase
+          .from("push_reminders")
+          .delete()
+          .eq("user_id", r.user_id)
+          .eq("device_id", r.device_id);
+        await supabase
+          .from("push_devices")
+          .delete()
+          .eq("user_id", r.user_id)
+          .eq("device_id", r.device_id);
       } else {
         console.error("push failed", status, (err as { body?: unknown }).body ?? err);
       }

@@ -9,10 +9,6 @@ function isNormalizedAccountSchemaUnavailable(error) {
   return error?.code === "42P01" || error?.code === "PGRST205";
 }
 
-function isSnapshotRpcUnavailable(error) {
-  return error?.code === "42883" || error?.code === "PGRST202";
-}
-
 function isLegacyAccountConstraintError(error) {
   return (
     error?.code === "22023" ||
@@ -129,7 +125,6 @@ function mergeAccountDataWithRawSnapshot(
       : {}),
   };
 
-  // Prune tombstoned cards from mergedBalances
   for (const [id, tombstone] of Object.entries(deletedCardTombstones)) {
     if (tombstone?.deleted && !cardMap.has(id)) {
       delete mergedBalances[id];
@@ -169,7 +164,6 @@ function mergeAccountDataWithRawSnapshot(
     if (tombstone?.deleted && tombstone.updatedAt >= txTime) continue;
     txMap.set(tx.id, tx);
   }
-  // Only fall back to raw snapshot transactions if normalized transactions are completely absent
   if (normTransactions.length === 0 && !normalizedAccountData) {
     for (const tx of rawTransactions) {
       if (!tx?.id) continue;
@@ -293,7 +287,7 @@ async function loadLegacyCloudData(client, userId) {
     legacyAccounts.settings.cards.length > 0;
   const legacyBalances = legacyAccounts?.settings?.balances || {};
   const baseBalances = { ...legacyBalances };
-  if (!hasCards && !legacyAccounts?.settings?.cardsConfigured) {
+  if (!hasCards && !legacyAccounts?.settings?.cardsConfigured && settingsResult.data) {
     if (Number(settingsResult.data.bkash_balance) > 0)
       baseBalances.bkash = settingsResult.data.bkash_balance;
     if (Number(settingsResult.data.bank_balance) > 0)
@@ -360,44 +354,32 @@ export async function loadCloudData(userId) {
   if (!client) throw new Error("Cloud sync is not configured.");
 
   try {
-    const [rpcResult, rawSnapshotResult] = await Promise.all([
-      client.rpc("load_spend_user_snapshot"),
-      client
-        .from("spend_user_data")
-        .select("data, updated_at")
-        .eq("user_id", userId)
-        .maybeSingle(),
-    ]);
+    const rpcResult = await client.rpc("load_spend_user_snapshot");
 
     if (!rpcResult.error && rpcResult.data) {
       const rpcData = rpcResult.data;
-      const rawData = rawSnapshotResult?.data?.data ?? null;
       const effectiveRpcData = rpcData.data ?? null;
-      const rawUpdatedAt = rawSnapshotResult?.data?.updated_at;
-      const effectiveUpdatedAt = rawUpdatedAt || rpcData.updated_at;
-
-      if (effectiveRpcData && rawData) {
+      if (effectiveRpcData) {
         return {
           ...rpcData,
-          updated_at: effectiveUpdatedAt,
+          updated_at: rpcData.updated_at ?? null,
           data: {
-            ...rawData,
             ...effectiveRpcData,
             accountData: mergeAccountDataWithRawSnapshot(
               effectiveRpcData.accountData,
-              rawData,
+              effectiveRpcData,
             ),
           },
         };
       }
       return {
         ...rpcData,
-        updated_at: effectiveUpdatedAt,
-        data: effectiveRpcData || rawData || null,
+        updated_at: rpcData.updated_at ?? null,
+        data: null,
       };
     }
   } catch {
-    // If RPC or snapshot load encounters any error, fallback to legacy table queries
+    // Fallback to legacy table queries if RPC is unavailable
   }
 
   return loadLegacyCloudData(client, userId);
@@ -575,17 +557,6 @@ export async function saveCloudData(userId, data, expectedUpdatedAt = null) {
   }
 
   throw error;
-}
-
-export async function deleteCloudData(userId) {
-  const client = await getSupabase();
-  if (!client) throw new Error("Cloud sync is not configured.");
-
-  const { error } = await client
-    .from("spend_user_data")
-    .delete()
-    .eq("user_id", userId);
-  if (error) throw error;
 }
 
 export function subscribeToCloudChanges(

@@ -1,9 +1,10 @@
 -- Backend & Sync Robustness Migration
 -- 1. Ensure authenticated users have execute permissions on load_spend_user_snapshot
 -- 2. Make sync_spend_accounts_from_snapshot resilient against malformed rows, support direction normalization,
---    cleanly handle transaction clearing, and prevent wiping un-synced concurrent transactions
+--    guard against stale timestamp overwrites, and cleanly handle transaction clearing
 -- 3. Expand push_devices endpoint check constraint for Windows/Edge Push Services (wns.windows.com / notify.windows.com)
--- 4. Preserve push reminder progress timezone fallback
+-- 4. Fix preserve_push_reminder_progress trigger so Edge Function next_date advances and user schedule edits are never blocked
+-- 5. Return authoritative spend_user_data.updated_at in load_spend_user_snapshot for optimistic concurrency control
 
 -- Update push_devices endpoint check constraint to support all major browser push notification services
 alter table public.push_devices
@@ -14,7 +15,16 @@ alter table public.push_devices
     endpoint ~ '^https://([a-zA-Z0-9.-]+\.)?(fcm\.googleapis\.com|web\.push\.apple\.com|services\.mozilla\.com|notify\.windows\.com|wns\.windows\.com)/'
   );
 
--- Timezone-safe preserve_push_reminder_progress
+-- Clean up any orphaned push_reminders without a matching push_devices row
+delete from public.push_reminders r
+where not exists (
+  select 1
+  from public.push_devices d
+  where d.user_id = r.user_id
+    and d.device_id = r.device_id
+);
+
+-- Timezone-safe preserve_push_reminder_progress that properly resets pending_notification when advancing next_date
 create or replace function public.preserve_push_reminder_progress()
 returns trigger
 language plpgsql
@@ -33,24 +43,35 @@ begin
     return new;
   end if;
 
+  -- If the Edge Function or client explicitly advanced next_date forward, clear pending claim state
+  if new.next_date > old.next_date then
+    new.pending_notification := false;
+    new.claim_until := null;
+    if new.next_notify_at is not distinct from old.next_notify_at then
+      begin
+        new.next_notify_at := (new.next_date + new.reminder_time::time) at time zone v_tz;
+      exception when others then
+        new.next_notify_at := (new.next_date + new.reminder_time::time) at time zone 'UTC';
+      end;
+    end if;
+    new.updated_at := now();
+    return new;
+  end if;
+
   if new.claim_until is not null
      and new.claim_until > coalesce(old.claim_until, '-infinity'::timestamptz)
      and new.next_notify_at = new.claim_until then
     new.next_date := old.next_date;
     new.pending_notification := true;
-  elsif old.pending_notification and new.next_date <= old.next_date then
+  elsif old.pending_notification and new.next_date <= old.next_date and new.pending_notification then
     new.next_notify_at := old.next_notify_at;
     new.next_date := old.next_date;
     new.pending_notification := true;
-  elsif new.pending_notification then
-    if old.pending_notification then
-      new.next_date := old.next_date;
-      if new.next_notify_at <= old.next_notify_at then
-        new.next_notify_at := old.next_notify_at;
-      end if;
-    end if;
   else
-    if new.next_date < old.next_date then
+    if new.next_date < old.next_date
+       and new.reminder_time is not distinct from old.reminder_time
+       and new.interval is not distinct from old.interval
+       and new.day_of_month is not distinct from old.day_of_month then
       new.next_date := old.next_date;
     end if;
     begin
@@ -139,20 +160,24 @@ begin
     configured = excluded.configured,
     updated_at = excluded.updated_at
   where (
-    public.spend_account_settings.start_date,
-    public.spend_account_settings.bkash_balance,
-    public.spend_account_settings.bank_balance,
-    public.spend_account_settings.savings_balance,
-    public.spend_account_settings.configured
-  ) is distinct from (
-    excluded.start_date,
-    excluded.bkash_balance,
-    excluded.bank_balance,
-    excluded.savings_balance,
-    excluded.configured
-  )
-  or public.spend_account_settings.updated_at is null
-  or excluded.updated_at > public.spend_account_settings.updated_at;
+    (
+      public.spend_account_settings.start_date,
+      public.spend_account_settings.bkash_balance,
+      public.spend_account_settings.bank_balance,
+      public.spend_account_settings.savings_balance,
+      public.spend_account_settings.configured
+    ) is distinct from (
+      excluded.start_date,
+      excluded.bkash_balance,
+      excluded.bank_balance,
+      excluded.savings_balance,
+      excluded.configured
+    )
+    and (
+      public.spend_account_settings.updated_at is null
+      or excluded.updated_at >= public.spend_account_settings.updated_at
+    )
+  );
 
   for v_tx in select value from jsonb_array_elements(v_transactions)
   loop
@@ -174,7 +199,6 @@ begin
     v_from_account := nullif(btrim(coalesce(v_tx->>'fromAccount', '')), '');
     v_to_account := nullif(btrim(coalesce(v_tx->>'toAccount', '')), '');
 
-    -- Skip invalid rows gracefully to protect snapshot writes
     if v_id is null or char_length(v_id) > 120 or v_amount <= 0 or v_date is null then
       continue;
     end if;
@@ -274,7 +298,8 @@ begin
       excluded.from_account,
       excluded.to_account,
       excluded.deleted_at
-    );
+    )
+    and excluded.updated_at >= public.spend_account_transactions.updated_at;
   end loop;
 
   -- Soft-delete transactions present in DB but absent from the current snapshot.
@@ -329,7 +354,7 @@ begin
 end;
 $$;
 
--- Enhanced load_spend_user_snapshot function with cardsConfigured & permissions
+-- Enhanced load_spend_user_snapshot function returning authoritative r.updated_at for optimistic concurrency
 create or replace function public.load_spend_user_snapshot()
 returns jsonb
 language plpgsql
@@ -386,8 +411,7 @@ begin
           order by t.created_at asc, t.id asc
         ),
         '[]'::jsonb
-      ) as items,
-      max(t.updated_at) as latest_updated_at
+      ) as items
     from public.spend_account_transactions t
     where t.user_id = auth.uid()
       and t.deleted_at is null
@@ -431,14 +455,7 @@ begin
       )
     end,
     'updated_at',
-    case
-      when r.data is null then null
-      else greatest(
-        r.updated_at,
-        coalesce(s.updated_at, r.updated_at),
-        coalesce(tx.latest_updated_at, r.updated_at)
-      )
-    end,
+    r.updated_at,
     'normalizedAccountSync',
     case
       when r.data ? '_encrypted' or coalesce((r.data->>'_encrypted')::boolean, false) then false
