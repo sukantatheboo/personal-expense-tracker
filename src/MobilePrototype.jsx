@@ -17,6 +17,7 @@ import {
   setHapticsEnabled,
   STORAGE_KEYS,
 } from "./data.js";
+import { triggerHaptic } from "./haptics.js";
 import { CARD_PROVIDERS } from "./cardProviders.js";
 import {
   CategorySymbol,
@@ -382,82 +383,6 @@ const ICONS = {
   ),
 };
 const Icon = ({ n }) => <svg viewBox="0 0 24 24">{ICONS[n]}</svg>;
-
-function triggerSafariWebHaptic() {
-  if (!isHapticsEnabled()) return;
-  if (typeof document === "undefined") return;
-  try {
-    let trigger = document.getElementById("safari-haptic-trigger");
-    if (!trigger) {
-      trigger = document.createElement("input");
-      trigger.id = "safari-haptic-trigger";
-      trigger.type = "checkbox";
-      trigger.setAttribute("switch", "");
-      trigger.setAttribute("aria-hidden", "true");
-      trigger.tabIndex = -1;
-      trigger.style.cssText =
-        "position:fixed;opacity:0;pointer-events:none;left:-9999px;width:0;height:0;";
-      document.body.appendChild(trigger);
-    }
-    trigger.click();
-  } catch {
-    // ignore
-  }
-}
-
-function triggerHaptic(type = "light") {
-  if (!isHapticsEnabled()) return false;
-  if (isNativePlatform()) {
-    void import("@capacitor/haptics")
-      .then(({ Haptics, ImpactStyle, NotificationType }) => {
-        if (type === "medium" || (typeof type === "number" && type > 10)) {
-          return Haptics.impact({ style: ImpactStyle.Medium });
-        }
-        if (type === "heavy") {
-          return Haptics.impact({ style: ImpactStyle.Heavy });
-        }
-        if (type === "success") {
-          return Haptics.notification({ type: NotificationType.Success });
-        }
-        if (type === "warning" || type === "delete") {
-          return Haptics.notification({ type: NotificationType.Warning });
-        }
-        if (type === "selection") {
-          return Haptics.selectionChanged();
-        }
-        return Haptics.impact({ style: ImpactStyle.Light });
-      })
-      .catch(() => {});
-    return true;
-  }
-
-  // Web / PWA fallback tuned for Android vibration motors
-  if (
-    typeof navigator !== "undefined" &&
-    typeof navigator.vibrate === "function"
-  ) {
-    try {
-      const patterns = {
-        selection: 15,
-        light: 22,
-        medium: 40,
-        heavy: 60,
-        success: [25, 45, 30],
-        warning: [35, 40, 20],
-        delete: [35, 40, 20],
-      };
-      const pattern =
-        typeof type === "number" ? Math.max(15, type) : patterns[type] || 22;
-      return navigator.vibrate(pattern);
-    } catch {
-      return false;
-    }
-  }
-
-  // iOS Safari Web / WebKit Taptic Engine tick fallback (iOS 17.4+)
-  triggerSafariWebHaptic();
-  return true;
-}
 
 function CategorySuggestionValue({ category, description }) {
   const [, color] = CAT[category] || CAT.Other || ["", "#64748b"];
@@ -861,6 +786,82 @@ function suggestedCategory(description, expenses = [], excludeId = null) {
   return best.score >= 0.5 && best.category !== "Savings" ? best.category : "";
 }
 
+function HeroAmountField({
+  value,
+  onChange,
+  inputRef,
+  placeholder = "0",
+  ariaLabel = "Amount in taka",
+  enterKeyHint = "next",
+  onEnter,
+}) {
+  const raw = String(value ?? "");
+  const displayStr = raw.length > 0 ? raw : String(placeholder || "0");
+  const charLen = Math.max(displayStr.length, 1);
+  const inputWidthCh = Math.min(11.5, Math.max(1.12, charLen * 0.88 + 0.22));
+  const scaleClass =
+    displayStr.length >= 9 ? "is-compact" : displayStr.length >= 6 ? "is-medium" : "";
+
+  return (
+    <div
+      className={`amt amt-hero-redesigned ${raw ? "has-value" : "is-empty"} ${scaleClass}`}
+      onClick={(e) => {
+        if (e.target !== inputRef?.current) {
+          inputRef?.current?.focus({ preventScroll: true });
+        }
+      }}
+    >
+      <div className="amt-hero-inner">
+        <span className="amt-hero-currency" aria-hidden="true">
+          ৳
+        </span>
+        <input
+          ref={inputRef}
+          inputMode="decimal"
+          enterKeyHint={enterKeyHint}
+          aria-label={ariaLabel}
+          placeholder={placeholder}
+          value={raw}
+          style={{ width: `${inputWidthCh}ch` }}
+          onChange={(e) => {
+            let next = e.target.value.replace(/,/g, ".").replace(/[^0-9.]/g, "");
+            const firstDot = next.indexOf(".");
+            if (firstDot !== -1) {
+              next =
+                next.slice(0, firstDot + 1) +
+                next.slice(firstDot + 1).replace(/\./g, "");
+            }
+            onChange(next);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              onEnter?.(e);
+            }
+          }}
+        />
+        {raw.length > 0 && (
+          <button
+            type="button"
+            className="amt-hero-clear"
+            aria-label="Clear amount"
+            onClick={(e) => {
+              e.stopPropagation();
+              triggerHaptic("light");
+              onChange("");
+              inputRef?.current?.focus({ preventScroll: true });
+            }}
+          >
+            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+              <path d="m18 6-12 12M6 6l12 12" strokeWidth="2.5" />
+            </svg>
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ExpenseRow({
   e,
   cards = [],
@@ -899,6 +900,9 @@ function ExpenseRow({
   const [duplicatePress, setDuplicatePress] = useState(false);
   const swipeRef = useRef(swipe);
   const canDelete = Boolean(isTx ? onDeleteTransaction || onDelete : onDelete);
+  const canDuplicate = Boolean(onDuplicate && !isTx);
+  const canQuickEdit = Boolean(isTx ? onOpenTransaction || onOpen : onOpen);
+  const canSwipeRight = canDuplicate || canQuickEdit;
 
   const updateSwipe = (next) => {
     swipeRef.current = next;
@@ -917,6 +921,37 @@ function ExpenseRow({
       suppressClickRef.current = false;
     }, 500);
   };
+
+  const springRowClosed = useCallback(() => {
+    updateSwipe({ offset: 0, phase: "idle" });
+    shellRef.current?.removeAttribute("data-swipe-dir");
+    shellRef.current?.removeAttribute("data-threshold");
+    if (rowRef.current) {
+      rowRef.current.style.transition =
+        "transform 260ms cubic-bezier(0.2, 0.9, 0.28, 1)";
+      rowRef.current.style.transform = "translate3d(0, 0, 0)";
+    }
+  }, []);
+
+  const executeRightSwipeAction = useCallback(() => {
+    springRowClosed();
+    if (canDuplicate) {
+      const duplicated = onDuplicate(e);
+      if (duplicated !== false) {
+        triggerHaptic("medium");
+        setDuplicatePress(true);
+        clearTimeout(duplicatePressTimerRef.current);
+        duplicatePressTimerRef.current = setTimeout(
+          () => setDuplicatePress(false),
+          520,
+        );
+      }
+    } else if (canQuickEdit) {
+      triggerHaptic("selection");
+      if (isTx && onOpenTransaction) onOpenTransaction(e.id);
+      else onOpen?.(e.id);
+    }
+  }, [canDuplicate, canQuickEdit, e, isTx, onDuplicate, onOpen, onOpenTransaction, springRowClosed]);
 
   // Senior Native Dev Swipe-to-Delete Pipeline
   const executeDeleteAnimation = useCallback(
@@ -984,20 +1019,15 @@ function ExpenseRow({
         !rowRef.current.contains(event.target) &&
         (!shellRef.current || !shellRef.current.contains(event.target))
       ) {
-        updateSwipe({ offset: 0, phase: "idle" });
-        if (rowRef.current) {
-          rowRef.current.style.transition =
-            "transform 240ms cubic-bezier(0.2, 0.9, 0.28, 1)";
-          rowRef.current.style.transform = "translate3d(0, 0, 0)";
-        }
+        springRowClosed();
       }
     };
     window.addEventListener("pointerdown", handleOutside, true);
     return () => window.removeEventListener("pointerdown", handleOutside, true);
-  }, [swipe.phase]);
+  }, [swipe.phase, springRowClosed]);
 
   const startGesture = (event) => {
-    if (!canDelete && !onDuplicate) return;
+    if (!canDelete && !canSwipeRight) return;
     if (event.button != null && event.button !== 0) return;
     if (["deleting", "collapsing"].includes(swipeRef.current.phase)) return;
     clearHoldTimer();
@@ -1068,8 +1098,7 @@ function ExpenseRow({
       clearHoldTimer();
     }
 
-    if (!gesture.horizontal && canDelete) {
-      // Intent check: swiping horizontally
+    if (!gesture.horizontal && (canDelete || canSwipeRight)) {
       const isHorizontalIntent =
         (absDx > 6 && absDx > absDy * 1.1) ||
         (gesture.initialOffset !== 0 && absDx > 5);
@@ -1098,21 +1127,29 @@ function ExpenseRow({
 
       let targetOffset = gesture.initialOffset + dx;
 
-      // Real iOS/Android swipe mechanics:
-      // Swiping right-to-left (dx < 0) reveals the red delete box
       if (targetOffset < 0) {
-        // Soft rubber-band resistance beyond -140px
-        if (targetOffset < -140) {
+        if (!canDelete) {
+          targetOffset = targetOffset * 0.2;
+        } else if (targetOffset < -140) {
           targetOffset = -140 + (targetOffset - -140) * 0.25;
         }
+        shellRef.current?.setAttribute("data-swipe-dir", "left");
+      } else if (targetOffset > 0) {
+        if (!canSwipeRight) {
+          targetOffset = targetOffset * 0.25;
+        } else if (targetOffset > 125) {
+          targetOffset = 125 + (targetOffset - 125) * 0.25;
+        }
+        shellRef.current?.setAttribute("data-swipe-dir", "right");
       } else {
-        // Soft rubber-band resistance when pulling right
-        targetOffset = targetOffset * 0.25;
+        shellRef.current?.removeAttribute("data-swipe-dir");
       }
 
-      // Check deletion threshold for haptic cue
       const deleteThreshold = Math.max(92, gesture.width * 0.32);
-      const isPastThreshold = targetOffset <= -deleteThreshold;
+      const rightThreshold = Math.max(84, gesture.width * 0.28);
+      const isPastThreshold =
+        (canDelete && targetOffset <= -deleteThreshold) ||
+        (canSwipeRight && targetOffset >= rightThreshold);
       if (isPastThreshold && !gesture.passedHaptic) {
         gesture.passedHaptic = true;
         triggerHaptic("selection");
@@ -1159,7 +1196,10 @@ function ExpenseRow({
     shellRef.current?.removeAttribute("data-threshold");
 
     if (event?.type === "pointercancel") {
-      const resetOffset = gesture.initialOffset === -80 ? -80 : 0;
+      const resetOffset =
+        gesture.initialOffset === -80 || gesture.initialOffset === 80
+          ? gesture.initialOffset
+          : 0;
       updateSwipe({
         offset: resetOffset,
         phase: resetOffset === 0 ? "idle" : "revealed",
@@ -1172,49 +1212,66 @@ function ExpenseRow({
       return;
     }
 
-    if (gesture.horizontal && canDelete) {
+    if (gesture.horizontal && (canDelete || canSwipeRight)) {
       const dx = (event?.clientX ?? gesture.lastX) - gesture.startX;
       const currentOffset = pendingOffsetRef.current;
       const elapsed = Math.max(1, performance.now() - gesture.startedAt);
       const velocity = dx / elapsed;
       const deleteThreshold = Math.max(95, gesture.width * 0.32);
+      const rightThreshold = Math.max(86, gesture.width * 0.28);
       const revealThreshold = 40;
 
       suppressNextClick();
 
-      // Case 1: Full swipe left to delete directly
+      // Left-swipe (negative offset): Delete or Skip
       const shouldFullDelete =
-        currentOffset <= -deleteThreshold || (dx < -36 && velocity < -0.42);
+        canDelete &&
+        (currentOffset <= -deleteThreshold || (dx < -36 && velocity < -0.42));
+      // Right-swipe (positive offset): Duplicate or Edit
+      const shouldFullRightAction =
+        canSwipeRight &&
+        (currentOffset >= rightThreshold || (dx > 36 && velocity > 0.42));
 
       if (shouldFullDelete) {
         executeDeleteAnimation();
-      } else if (currentOffset <= -revealThreshold) {
-        // Case 2: Partial swipe left reveals Delete action button
+      } else if (shouldFullRightAction) {
+        executeRightSwipeAction();
+      } else if (canDelete && currentOffset <= -revealThreshold) {
+        shellRef.current?.setAttribute("data-swipe-dir", "left");
         updateSwipe({ offset: -80, phase: "revealed" });
         if (rowRef.current) {
           rowRef.current.style.transition =
             "transform 260ms cubic-bezier(0.2, 0.9, 0.28, 1)";
           rowRef.current.style.transform = "translate3d(-80px, 0, 0)";
         }
-      } else {
-        // Case 3: Released below threshold -> smoothly springs back closed
-        updateSwipe({ offset: 0, phase: "idle" });
+      } else if (canSwipeRight && currentOffset >= revealThreshold) {
+        shellRef.current?.setAttribute("data-swipe-dir", "right");
+        updateSwipe({ offset: 80, phase: "revealed" });
         if (rowRef.current) {
           rowRef.current.style.transition =
             "transform 260ms cubic-bezier(0.2, 0.9, 0.28, 1)";
-          rowRef.current.style.transform = "translate3d(0, 0, 0)";
+          rowRef.current.style.transform = "translate3d(80px, 0, 0)";
         }
+      } else {
+        springRowClosed();
       }
     }
   };
 
-  const isPositive = isTx
-    ? e.type === "income" ||
-      ((e.type === "adjust" || e.type === "adjustment") &&
-        (e.dir === "up" || e.direction === "increase"))
-    : e.type === "income" || e.type === "refund" || Boolean(e.refund);
+  const hasExplicitSign = typeof e?.signedDirection === "string";
+  const isPositive = hasExplicitSign
+    ? e.signedDirection === "positive"
+    : isTx
+      ? e.type === "income" ||
+        ((e.type === "adjust" || e.type === "adjustment") &&
+          (e.dir === "up" || e.direction === "increase"))
+      : e.type === "income" || e.type === "refund" || Boolean(e.refund);
 
-  const isNeutral = isTx ? e.type === "transfer" : e.cat === "Savings";
+  const isNeutral = hasExplicitSign
+    ? e.signedDirection === "neutral"
+    : isTx
+      ? e.type === "transfer"
+      : e.cat === "Savings";
   const amountClass = isPositive
     ? "am is-positive"
     : isNeutral
@@ -1235,10 +1292,10 @@ function ExpenseRow({
   const gestureHint =
     canDelete && (onDuplicate || isTx)
       ? e.rec
-        ? "Tap to edit, swipe left to skip this occurrence, or press and hold to duplicate."
+        ? "Tap to edit, swipe left to skip this occurrence, or swipe right to duplicate."
         : isTx
           ? "Tap to edit or swipe left to delete."
-          : "Tap to edit, swipe left to delete, or press and hold to duplicate."
+          : "Tap to edit, swipe left to delete, or swipe right to duplicate."
       : "Tap to edit.";
 
   const rowClasses = [
@@ -1259,7 +1316,7 @@ function ExpenseRow({
       className={rowClasses}
       type="button"
       style={
-        canDelete && swipe.offset !== 0
+        (canDelete || canSwipeRight) && swipe.offset !== 0
           ? { transform: `translate3d(${swipe.offset}px, 0, 0)` }
           : undefined
       }
@@ -1294,12 +1351,7 @@ function ExpenseRow({
           return;
         }
         if (swipeRef.current.phase === "revealed") {
-          updateSwipe({ offset: 0, phase: "idle" });
-          if (rowRef.current) {
-            rowRef.current.style.transition =
-              "transform 240ms cubic-bezier(0.2, 0.9, 0.28, 1)";
-            rowRef.current.style.transform = "translate3d(0, 0, 0)";
-          }
+          springRowClosed();
           return;
         }
         if (isTx) {
@@ -1320,7 +1372,14 @@ function ExpenseRow({
       <span className="nm">
         <b>{title}</b>
         <small>
-          {isTx ? (
+          {e.customMeta ? (
+            <>
+              <span className="expense-meta-line">{e.customMeta}</span>
+              {e.customSubNote && (
+                <span className="accounts-tx-adj-note">{e.customSubNote}</span>
+              )}
+            </>
+          ) : isTx ? (
             <span className="expense-meta-line">
               {e.type === "transfer"
                 ? `Transfer · ${getAccountDisplay(e.from || e.acct, cards)[0]} → ${getAccountDisplay(e.to, cards)[0]}`
@@ -1374,36 +1433,67 @@ function ExpenseRow({
     </button>
   );
 
-  if (!canDelete) return row;
+  if (!canDelete && !canSwipeRight) return row;
 
   return (
     <div
       ref={shellRef}
-      className={`expense-swipe-shell${swipe.phase === "dragging" ? " is-dragging" : ""}${swipe.phase === "revealed" ? " is-revealed" : ""}${["deleting", "collapsing"].includes(swipe.phase) ? " is-deleting" : ""}${swipe.phase === "collapsing" ? " is-collapsing" : ""}${e.rec ? " is-skip-shell" : ""}`}
+      className={`expense-swipe-shell${swipe.phase === "dragging" ? " is-dragging" : ""}${swipe.phase === "revealed" ? " is-revealed" : ""}${["deleting", "collapsing"].includes(swipe.phase) ? " is-deleting" : ""}${swipe.phase === "collapsing" ? " is-collapsing" : ""}${e.rec ? " is-skip-shell" : ""}${swipe.offset > 0 ? " is-right-swipe" : ""}`}
     >
-      {/* Real-App Right-to-Left Swipe Delete Action Button */}
-      <button
-        className={`expense-swipe-delete is-right${e.rec ? " is-skip" : ""}`}
-        type="button"
-        tabIndex={swipe.phase === "revealed" ? 0 : -1}
-        aria-hidden={swipe.phase !== "revealed"}
-        aria-label={
-          e.rec ? `Skip ${title} for this occurrence` : `Delete ${title}`
-        }
-        onClick={(event) => {
-          event.stopPropagation();
-          executeDeleteAnimation();
-        }}
-      >
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          {e.rec ? (
-            <path d="M4 5h16v15H4zM8 3v4m8-4v4M4 10h16m-8 3v4m-2-2h4" />
-          ) : (
-            <path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 3v6m4-6v6" />
-          )}
-        </svg>
-        <span>{e.rec ? "Skip" : "Delete"}</span>
-      </button>
+      {/* Left-to-Right Swipe Action Button (Duplicate / Edit) */}
+      {canSwipeRight && (
+        <button
+          className={`expense-swipe-delete is-left ${canDuplicate ? "is-duplicate" : "is-edit"}`}
+          type="button"
+          tabIndex={swipe.phase === "revealed" && swipe.offset > 0 ? 0 : -1}
+          inert={!(swipe.phase === "revealed" && swipe.offset > 0) ? true : undefined}
+          aria-label={canDuplicate ? `Duplicate ${title}` : `Edit ${title}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            event.currentTarget.blur();
+            executeRightSwipeAction();
+          }}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            {canDuplicate ? (
+              <>
+                <rect x="9" y="9" width="11" height="11" rx="2" />
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+              </>
+            ) : (
+              <path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+            )}
+          </svg>
+          <span>{canDuplicate ? "Repeat" : "Edit"}</span>
+        </button>
+      )}
+
+      {/* Right-to-Left Swipe Delete Action Button */}
+      {canDelete && (
+        <button
+          className={`expense-swipe-delete is-right${e.rec ? " is-skip" : ""}`}
+          type="button"
+          tabIndex={swipe.phase === "revealed" && swipe.offset < 0 ? 0 : -1}
+          inert={!(swipe.phase === "revealed" && swipe.offset < 0) ? true : undefined}
+          aria-label={
+            e.rec ? `Skip ${title} for this occurrence` : `Delete ${title}`
+          }
+          onClick={(event) => {
+            event.stopPropagation();
+            event.currentTarget.blur();
+            executeDeleteAnimation();
+          }}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            {e.rec ? (
+              <path d="M4 5h16v15H4zM8 3v4m8-4v4M4 10h16m-8 3v4m-2-2h4" />
+            ) : (
+              <path d="M4 7h16M9 7V4h6v3m3 0-1 13H7L6 7m4 3v6m4-6v6" />
+            )}
+          </svg>
+          <span>{e.rec ? "Skip" : "Delete"}</span>
+        </button>
+      )}
 
       {row}
     </div>
@@ -1417,12 +1507,34 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
   const scrollRef = useRef(null);
   const rAFRef = useRef(null);
   const pendingDyRef = useRef(0);
+  const [detent, setDetent] = useState("default"); // "default" | "expanded"
+  const detentRef = useRef("default");
+
+  const updateDetent = useCallback((nextDetent) => {
+    detentRef.current = nextDetent;
+    setDetent(nextDetent);
+  }, []);
+
+  const setRootDragProgress = useCallback((progressValue) => {
+    const root = sheetRef.current?.closest(".mobile-prototype");
+    if (!root) return;
+    if (progressValue == null) {
+      root.style.removeProperty("--sheet-drag-progress");
+    } else {
+      root.style.setProperty(
+        "--sheet-drag-progress",
+        String(Math.max(0, Math.min(1, progressValue)).toFixed(3)),
+      );
+    }
+  }, []);
 
   useEffect(() => {
     return () => {
       if (rAFRef.current) {
         cancelAnimationFrame(rAFRef.current);
       }
+      const root = document.querySelector(".mobile-prototype");
+      root?.style.removeProperty("--sheet-drag-progress");
     };
   }, []);
 
@@ -1480,7 +1592,7 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
         sheetNode.querySelectorAll(
           'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
         ),
-      ).filter((node) => !node.closest('[aria-hidden="true"]'));
+      ).filter((node) => !node.closest('[aria-hidden="true"], [inert], [hidden]'));
       if (!focusable.length) {
         event.preventDefault();
         sheetNode.focus({ preventScroll: true });
@@ -1543,41 +1655,46 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
     if (overlayNode) overlayNode.style.transition = "none";
   }, []);
 
-  const moveDrag = useCallback((clientY) => {
-    const drag = dragRef.current;
-    if (!drag || !drag.active) return;
+  const moveDrag = useCallback(
+    (clientY) => {
+      const drag = dragRef.current;
+      if (!drag || !drag.active) return;
 
-    const now = performance.now();
-    drag.recentPoints.push({ y: clientY, t: now });
-    if (drag.recentPoints.length > 5) {
-      drag.recentPoints.shift();
-    }
+      const now = performance.now();
+      drag.recentPoints.push({ y: clientY, t: now });
+      if (drag.recentPoints.length > 5) {
+        drag.recentPoints.shift();
+      }
 
-    let offset = clientY - drag.startY;
-    if (offset < 0) {
-      offset = offset * 0.18;
-    }
-    drag.currentOffset = offset;
-    pendingDyRef.current = offset;
+      let offset = clientY - drag.startY;
+      if (offset < 0) {
+        offset = detentRef.current === "expanded" ? offset * 0.16 : offset * 0.35;
+      }
+      drag.currentOffset = offset;
+      pendingDyRef.current = offset;
 
-    if (!rAFRef.current) {
-      rAFRef.current = requestAnimationFrame(() => {
-        rAFRef.current = null;
-        if (!dragRef.current?.active) return;
-        const currentOffset = pendingDyRef.current;
-        if (sheetRef.current) {
-          sheetRef.current.style.transform = `translate3d(0, ${currentOffset}px, 0)`;
-        }
-        if (overlayRef.current) {
-          const progress = Math.max(
+      if (!rAFRef.current) {
+        rAFRef.current = requestAnimationFrame(() => {
+          rAFRef.current = null;
+          if (!dragRef.current?.active) return;
+          const currentOffset = pendingDyRef.current;
+          if (sheetRef.current) {
+            sheetRef.current.style.transform = `translate3d(0, ${currentOffset}px, 0)`;
+          }
+          const dragDismissRatio = Math.max(
             0,
-            Math.min(1, 1 - currentOffset / (drag.sheetHeight * 0.85)),
+            Math.min(1, currentOffset / (drag.sheetHeight * 0.85)),
           );
-          overlayRef.current.style.opacity = progress.toFixed(3);
-        }
-      });
-    }
-  }, []);
+          setRootDragProgress(dragDismissRatio);
+          if (overlayRef.current) {
+            const progress = 1 - dragDismissRatio;
+            overlayRef.current.style.opacity = progress.toFixed(3);
+          }
+        });
+      }
+    },
+    [setRootDragProgress],
+  );
 
   const endDrag = useCallback(() => {
     if (rAFRef.current) {
@@ -1599,6 +1716,65 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
     const distance = drag.currentOffset;
     const sheetHeight = drag.sheetHeight;
 
+    // Upward pull snaps to 92% expanded detent
+    if (detentRef.current === "default" && (distance <= -28 || velocity < -0.35)) {
+      triggerHaptic("selection");
+      updateDetent("expanded");
+      setRootDragProgress(0);
+      const sheetNode = sheetRef.current;
+      if (sheetNode) {
+        sheetNode.removeAttribute("data-dragging");
+        sheetNode.style.transition =
+          "transform 280ms cubic-bezier(0.2, 0.9, 0.28, 1)";
+        sheetNode.style.transform = "translate3d(0, 0, 0)";
+        window.setTimeout(() => {
+          setRootDragProgress(null);
+          if (sheetNode && !dragRef.current?.active) {
+            sheetNode.style.transition = "";
+            sheetNode.style.transform = "";
+          }
+        }, 290);
+      }
+      return;
+    }
+
+    // Downward pull from expanded detent snaps back to default detent unless flicked hard
+    if (
+      detentRef.current === "expanded" &&
+      distance >= 36 &&
+      distance < sheetHeight * 0.42 &&
+      velocity <= 0.65
+    ) {
+      triggerHaptic("selection");
+      updateDetent("default");
+      setRootDragProgress(0);
+      const sheetNode = sheetRef.current;
+      const overlayNode = overlayRef.current;
+      if (sheetNode) {
+        sheetNode.removeAttribute("data-dragging");
+        sheetNode.style.transition =
+          "transform 280ms cubic-bezier(0.2, 0.9, 0.28, 1)";
+        sheetNode.style.transform = "translate3d(0, 0, 0)";
+      }
+      if (overlayNode) {
+        overlayNode.style.transition =
+          "opacity 240ms cubic-bezier(0.2, 0.9, 0.28, 1)";
+        overlayNode.style.opacity = "1";
+      }
+      window.setTimeout(() => {
+        setRootDragProgress(null);
+        if (sheetNode && !dragRef.current?.active) {
+          sheetNode.style.transition = "";
+          sheetNode.style.transform = "";
+        }
+        if (overlayNode && !dragRef.current?.active) {
+          overlayNode.style.transition = "";
+          overlayNode.style.opacity = "";
+        }
+      }, 290);
+      return;
+    }
+
     const shouldClose =
       distance >= 70 ||
       distance >= sheetHeight * 0.18 ||
@@ -1609,6 +1785,7 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
 
     if (shouldClose) {
       triggerHaptic("selection");
+      setRootDragProgress(1);
 
       if (sheetNode) {
         sheetNode.removeAttribute("data-dragging");
@@ -1623,9 +1800,11 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
       }
 
       window.setTimeout(() => {
+        setRootDragProgress(null);
         onClose({ kind: "drag", distance, velocity });
       }, 240);
     } else {
+      setRootDragProgress(0);
       if (sheetNode) {
         sheetNode.removeAttribute("data-dragging");
         sheetNode.style.transition =
@@ -1639,6 +1818,7 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
       }
 
       window.setTimeout(() => {
+        setRootDragProgress(null);
         if (sheetNode && !dragRef.current?.active) {
           sheetNode.style.transition = "";
           sheetNode.style.transform = "";
@@ -1649,7 +1829,7 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
         }
       }, 270);
     }
-  }, [onClose]);
+  }, [onClose, setRootDragProgress, updateDetent]);
 
   const onTopPointerDown = useCallback(
     (event) => {
@@ -1689,7 +1869,7 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
     let isPulling = false;
 
     const onTouchStart = (e) => {
-      if (e.touches.length !== 1) return;
+      if (e.touches.length !== 1 || dragRef.current?.active) return;
       touchStartY = e.touches[0].clientY;
       touchStartX = e.touches[0].clientX;
       initialScrollTop = scrollNode.scrollTop;
@@ -1698,6 +1878,7 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
 
     const onTouchMove = (e) => {
       if (e.touches.length !== 1) return;
+      if (!isPulling && dragRef.current?.active) return;
       const clientY = e.touches[0].clientY;
       const clientX = e.touches[0].clientX;
       const dy = clientY - touchStartY;
@@ -1755,7 +1936,8 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
     >
       <div
         ref={sheetRef}
-        className="sh"
+        className={`sh${detent === "expanded" ? " is-expanded-detent" : ""}`}
+        data-detent={detent}
         role="dialog"
         aria-modal="true"
         aria-labelledby="sheet-title"
@@ -1771,6 +1953,10 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
           className="sheet-drag-zone"
           aria-hidden="true"
           onPointerDown={onTopPointerDown}
+          onDoubleClick={() => {
+            triggerHaptic("selection");
+            updateDetent(detent === "expanded" ? "default" : "expanded");
+          }}
         >
           <div className="grab" />
         </div>
@@ -1891,10 +2077,14 @@ function Home({
   onCategory,
   onBudget,
   onOpen,
+  onDelete,
+  onSkip,
+  onDuplicate,
   highlightedExpenseId,
 }) {
   const [currentTime, setCurrentTime] = useState(() => new Date());
   const [highlightedCategory, setHighlightedCategory] = useState("");
+  const stackScrubRef = useRef({ active: false, lastCat: "" });
   const { shown, toggle } = useReveal(5000);
   const todayStr = ld();
   const currentMonthKey = todayStr.slice(0, 7);
@@ -2204,19 +2394,64 @@ function Home({
               <h2>Where it went</h2>
               {saved > 0 && <small>Includes saved money</small>}
             </div>
-            <span>{M(total)}</span>
+            {highlightedCategory && by[highlightedCategory] != null ? (
+              <span
+                className="stack-scrub-pill"
+                style={{ "--c": CAT[highlightedCategory]?.[1] || "#64748b" }}
+              >
+                <span className="stack-scrub-dot" aria-hidden="true" />
+                <b>{highlightedCategory}</b>
+                <span>{M(by[highlightedCategory])}</span>
+              </span>
+            ) : (
+              <span>{M(total)}</span>
+            )}
           </div>
-          <div className="stack" role="group" aria-label="Spending by category">
+          <div
+            className="stack"
+            role="group"
+            aria-label="Spending by category (drag across bar to inspect)"
+            onPointerDown={(e) => {
+              const el = document.elementFromPoint(e.clientX, e.clientY);
+              const seg = el?.closest?.("[data-stack-cat]");
+              const cat = seg?.getAttribute("data-stack-cat") || "";
+              stackScrubRef.current = { active: true, lastCat: cat, moved: false };
+            }}
+            onPointerMove={(e) => {
+              if (!stackScrubRef.current.active) return;
+              const el = document.elementFromPoint(e.clientX, e.clientY);
+              const seg = el?.closest?.("[data-stack-cat]");
+              const cat = seg?.getAttribute("data-stack-cat") || "";
+              if (cat && cat !== stackScrubRef.current.lastCat) {
+                stackScrubRef.current.lastCat = cat;
+                stackScrubRef.current.moved = true;
+                triggerHaptic("selection");
+                setHighlightedCategory(cat);
+              }
+            }}
+            onPointerUp={() => {
+              stackScrubRef.current.active = false;
+            }}
+            onPointerCancel={() => {
+              stackScrubRef.current.active = false;
+            }}
+          >
             {cs.map(([c, v]) => (
               <button
                 key={c}
                 type="button"
+                data-stack-cat={c}
                 className={`stack-segment${highlightedCategory === c ? " is-highlighted" : ""}`}
                 aria-label={`${c}: ${M(v)}`}
                 aria-pressed={highlightedCategory === c}
-                onClick={() =>
-                  setHighlightedCategory((current) => (current === c ? "" : c))
-                }
+                onClick={() => {
+                  if (stackScrubRef.current.moved) {
+                    stackScrubRef.current.moved = false;
+                    return;
+                  }
+                  triggerHaptic("selection");
+                  setHighlightedCategory((current) => (current === c ? "" : c));
+                }}
                 style={{
                   width: total > 0 ? (v / total) * 100 + "%" : "0%",
                   background: CAT[c]?.[1] || "#64748b",
@@ -2248,7 +2483,7 @@ function Home({
         <h2>Recent</h2>
         <button onClick={() => onTab("activity")}>See all</button>
       </div>
-      <div className="card" style={{ margin: 0, padding: "6px 14px" }}>
+      <div className="card expense-day-card" style={{ margin: 0, padding: "3px 14px" }}>
         {list.length ? (
           list
             .slice(0, 5)
@@ -2258,6 +2493,10 @@ function Home({
                 e={e}
                 cards={S?.cards || []}
                 onOpen={onOpen}
+                onDelete={onDelete}
+                onSkip={onSkip}
+                onDuplicate={onDuplicate}
+                suggestion={suggestedCategory(e.desc, S.exp, e.id)}
                 isNew={highlightedExpenseId === e.id}
               />
             ))
@@ -3091,6 +3330,9 @@ function Accounts({
   onTab,
   onOpenExpense,
   onOpenTransaction,
+  onDeleteExpense,
+  onDeleteTransaction,
+  onDuplicateExpense,
   onLockedCardNotice,
   onAddExpense,
   initialSelectedAccount,
@@ -3434,58 +3676,51 @@ function Accounts({
                   ? `${getAccountName(event.from)} → ${getAccountName(event.to)}`
                   : getAccountName(event.account);
 
+              const rowItem = {
+                id: event.id,
+                sourceType: event.sourceType,
+                type: event.type,
+                cat: category,
+                desc: event.title,
+                note: event.title,
+                title: event.title,
+                amt: Math.abs(amount.value),
+                date: event.d,
+                acct: event.account,
+                from: event.from,
+                to: event.to,
+                dir: event.dir,
+                direction: event.direction,
+                refund: isPositive && event.sourceType === "expense",
+                signedDirection: amount.signed
+                  ? isPositive
+                    ? "positive"
+                    : "negative"
+                  : "neutral",
+                customMeta: `${displayDate(event.d)} · ${subtitleMeta}`,
+                customSubNote: adjustment
+                  ? `Balance: ${M(adjustment.before)} → ${M(adjustment.after)}`
+                  : "",
+              };
+
               return (
-                <button
-                  type="button"
-                  className={`accounts-tx-row${highlightedExpenseId === event.id || highlightedTransactionId === event.id ? " is-new" : ""}`}
-                  key={event.id}
-                  onClick={() => {
-                    triggerHaptic("selection");
-                    if (event.sourceType === "expense" && onOpenExpense) {
-                      onOpenExpense(event.id);
-                    } else if (event.sourceType === "tx" && onOpenTransaction) {
-                      onOpenTransaction(event.id);
-                    }
-                  }}
-                >
-                  <div
-                    className={`accounts-tx-icon-circle ${event.sourceType === "tx" || event.type !== "expense" ? `is-${event.type.toLowerCase()}` : `is-${category.toLowerCase()}`}`}
-                    style={
-                      event.sourceType === "expense"
-                        ? { "--c": getCategoryColor(category, event.title) }
-                        : undefined
-                    }
-                  >
-                    {event.sourceType === "tx" || event.type !== "expense" ? (
-                      <TransactionSymbol type={event.type} />
-                    ) : (
-                      <CategorySymbol
-                        category={category}
-                        description={event.title}
-                      />
-                    )}
-                  </div>
-
-                  <div className="accounts-tx-info">
-                    <b className="accounts-tx-title">{event.title}</b>
-                    <small className="accounts-tx-date">
-                      {displayDate(event.d)}
-                      {subtitleMeta ? ` · ${subtitleMeta}` : ""}
-                    </small>
-                    {adjustment && (
-                      <small className="accounts-tx-adj-note">
-                        {M(adjustment.before)} → {M(adjustment.after)}
-                      </small>
-                    )}
-                  </div>
-
-                  <b
-                    className={`accounts-tx-amount${isPositive ? " is-positive" : ""}`}
-                  >
-                    {amount.signed ? (isPositive ? "+" : "−") : ""}
-                    {M(Math.abs(amount.value))}
-                  </b>
-                </button>
+                <ExpenseRow
+                  key={`${event.sourceType}-${event.id}`}
+                  e={rowItem}
+                  cards={cards}
+                  onOpen={onOpenExpense}
+                  onOpenTransaction={onOpenTransaction}
+                  onDelete={onDeleteExpense}
+                  onDeleteTransaction={onDeleteTransaction}
+                  onDuplicate={event.sourceType === "expense" ? () => {
+                    const orig = S.exp.find((x) => x.id === event.id);
+                    return orig ? onDuplicateExpense?.(orig) : false;
+                  } : undefined}
+                  isNew={
+                    highlightedExpenseId === event.id ||
+                    highlightedTransactionId === event.id
+                  }
+                />
               );
             })
           ) : (
@@ -3557,9 +3792,11 @@ function Plans({
   onShift,
   onBudget,
   onAddRec,
+  onOpenRec,
   onToggleRec,
-  onRemoveRec,
 }) {
+  const [scrubDay, setScrubDay] = useState(null);
+  const scrubRef = useRef({ active: false, lastDay: null });
   const savingsThisMonth = monthExp(S)
     .filter((expense) => expense.cat === "Savings" && expense.amt != null)
     .reduce((sum, expense) => sum + expense.amt, 0);
@@ -3567,10 +3804,72 @@ function Plans({
     t = Math.max(0, tot(S, S.m) - savingsThisMonth),
     pc = b ? t / b : 0,
     C = 2 * Math.PI * 62;
-  const act = S.rec.filter((r) => r.on);
+  const orderedRec = useMemo(() => {
+    const parseTime = (val) => {
+      if (typeof val === "number" && Number.isFinite(val)) return val;
+      if (typeof val === "string") {
+        const parsed = Date.parse(val);
+        return Number.isFinite(parsed) ? parsed : 0;
+      }
+      return 0;
+    };
+    return [...(S.rec || [])]
+      .map((r, index) => ({ r, index, createdTime: parseTime(r?.createdAt) }))
+      .sort((a, bItem) => {
+        if (a.createdTime > 0 && bItem.createdTime > 0 && a.createdTime !== bItem.createdTime) {
+          return bItem.createdTime - a.createdTime;
+        }
+        if (a.createdTime > 0 && bItem.createdTime === 0) return -1;
+        if (bItem.createdTime > 0 && a.createdTime === 0) return 1;
+        return bItem.index - a.index;
+      })
+      .map(({ r }) => r);
+  }, [S.rec]);
+  const billsAndOthersRec = useMemo(
+    () => orderedRec.filter((r) => r.cat !== "Savings"),
+    [orderedRec],
+  );
+  const savingsRec = useMemo(
+    () => orderedRec.filter((r) => r.cat === "Savings"),
+    [orderedRec],
+  );
+  const act = orderedRec.filter((r) => r.on);
   const est = act
     .filter((schedule) => schedule.cat !== "Savings")
     .reduce((a, r) => a + r.amt * (r.iv === "weekly" ? 4 : 1), 0);
+  const savingsMonthlyEst = act
+    .filter((schedule) => schedule.cat === "Savings")
+    .reduce((a, r) => a + r.amt * (r.iv === "weekly" ? 4 : 1), 0);
+
+  const dailySeries = useMemo(() => {
+    const [y, mNum] = (S.m || ld().slice(0, 7)).split("-").map(Number);
+    const daysInMonth = new Date(y, mNum, 0).getDate() || 30;
+    const sums = Array.from({ length: daysInMonth }, (_, idx) => ({
+      day: idx + 1,
+      date: `${S.m}-${String(idx + 1).padStart(2, "0")}`,
+      amt: 0,
+    }));
+    for (const e of S.exp || []) {
+      if (
+        e &&
+        typeof e.date === "string" &&
+        e.date.startsWith(S.m) &&
+        e.cat !== "Savings" &&
+        e.amt != null
+      ) {
+        const dNum = Number(e.date.slice(8, 10));
+        if (dNum >= 1 && dNum <= daysInMonth) {
+          sums[dNum - 1].amt += Number(e.amt) || 0;
+        }
+      }
+    }
+    const maxAmt = Math.max(1, ...sums.map((d) => d.amt));
+    return { sums, maxAmt, daysInMonth };
+  }, [S.exp, S.m]);
+
+  useEffect(() => {
+    setScrubDay(null);
+  }, [S.m]);
 
   const todayStr = ld();
   const isCurrentMonth = S.m === todayStr.slice(0, 7);
@@ -3713,6 +4012,77 @@ function Plans({
                 </div>
               </div>
             )}
+            {t > 0 && (
+              <div className="budget-scrub-card">
+                <div className="budget-scrub-header">
+                  <span className="lbl">Daily Spending Pulse</span>
+                  {scrubDay ? (
+                    <span className="budget-scrub-tooltip">
+                      <b>{fD(scrubDay.date)}</b> · {M(scrubDay.amt)}
+                    </span>
+                  ) : (
+                    <span className="budget-scrub-hint">Drag across bars to inspect</span>
+                  )}
+                </div>
+                <div
+                  className="budget-scrub-bars"
+                  role="group"
+                  aria-label="Daily spending chart"
+                  onPointerDown={(e) => {
+                    const el = document.elementFromPoint(e.clientX, e.clientY);
+                    const bar = el?.closest?.("[data-day-idx]");
+                    if (!bar) return;
+                    const idx = Number(bar.getAttribute("data-day-idx"));
+                    const entry = dailySeries.sums[idx];
+                    if (entry) {
+                      scrubRef.current = { active: true, lastDay: entry.day };
+                      triggerHaptic("selection");
+                      setScrubDay(entry);
+                    }
+                  }}
+                  onPointerMove={(e) => {
+                    if (!scrubRef.current.active) return;
+                    const el = document.elementFromPoint(e.clientX, e.clientY);
+                    const bar = el?.closest?.("[data-day-idx]");
+                    if (!bar) return;
+                    const idx = Number(bar.getAttribute("data-day-idx"));
+                    const entry = dailySeries.sums[idx];
+                    if (entry && entry.day !== scrubRef.current.lastDay) {
+                      scrubRef.current.lastDay = entry.day;
+                      triggerHaptic("selection");
+                      setScrubDay(entry);
+                    }
+                  }}
+                  onPointerUp={() => {
+                    scrubRef.current.active = false;
+                  }}
+                  onPointerCancel={() => {
+                    scrubRef.current.active = false;
+                  }}
+                >
+                  {dailySeries.sums.map((item, idx) => {
+                    const hPct = item.amt > 0 ? Math.max(16, Math.round((item.amt / dailySeries.maxAmt) * 100)) : 8;
+                    const isSelected = scrubDay?.day === item.day;
+                    return (
+                      <div
+                        key={item.day}
+                        data-day-idx={idx}
+                        className={`budget-scrub-bar-wrap${isSelected ? " is-active" : ""}${item.amt > 0 ? " has-spend" : ""}`}
+                        onClick={() => {
+                          triggerHaptic("selection");
+                          setScrubDay((curr) => (curr?.day === item.day ? null : item));
+                        }}
+                      >
+                        <span
+                          className="budget-scrub-bar"
+                          style={{ height: `${hPct}%` }}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </>
         ) : (
           <div className="emp-illustrated">
@@ -3733,6 +4103,71 @@ function Plans({
     </>
   );
 
+  const renderRecurringRow = (r) => {
+    const acctName =
+      S?.cards?.length > 0
+        ? getAccountDisplay(r.acct, S.cards)[0]
+        : r.acct && r.acct !== "cash"
+          ? getAccountDisplay(r.acct, S?.cards)[0]
+          : "";
+    return (
+      <div
+        className="ri recurring-item-row"
+        key={r.id}
+        role="button"
+        tabIndex={0}
+        aria-label={`Edit ${r.desc}, ${M(r.amt)}`}
+        style={{ opacity: r.on ? 1 : 0.55 }}
+        onClick={() => {
+          triggerHaptic("selection");
+          onOpenRec?.(r.id);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            if (event.target !== event.currentTarget) return;
+            event.preventDefault();
+            triggerHaptic("selection");
+            onOpenRec?.(r.id);
+          }
+        }}
+      >
+        <i
+          className="ic"
+          style={{
+            "--c":
+              getCategoryColor(r.cat, r.desc) ||
+              CAT[r.cat]?.[1] ||
+              "#64748b",
+          }}
+        >
+          <CategorySymbol category={r.cat} description={r.desc} />
+        </i>
+        <span className="nm">
+          <b>{r.desc}</b>
+          <small>
+            {r.on
+              ? (r.iv === "weekly" ? "Weekly" : "Monthly") +
+                " · next " +
+                dayMonth(r.next)
+              : "Paused"}
+            {acctName ? ` · ${acctName}` : ""} · {M(r.amt)}
+          </small>
+        </span>
+        <button
+          className={"sw " + (r.on ? "on" : "")}
+          type="button"
+          aria-label={`${r.on ? "Pause" : "Resume"} ${r.desc}`}
+          aria-pressed={Boolean(r.on)}
+          onClick={(event) => {
+            event.stopPropagation();
+            triggerHaptic("selection");
+            onToggleRec(r.id);
+          }}
+        />
+      </div>
+    );
+  };
+
   const recurring = (
     <>
       <div className="two">
@@ -3749,49 +4184,50 @@ function Plans({
           </div>
         </div>
       </div>
-      <div className="card" style={{ padding: "6px 14px" }}>
-        {S.rec.length ? (
-          S.rec.map((r) => (
-            <div className="ri" key={r.id} style={{ opacity: r.on ? 1 : 0.55 }}>
-              <i
-                className="ic"
-                style={{
-                  "--c":
-                    getCategoryColor(r.cat, r.desc) ||
-                    CAT[r.cat]?.[1] ||
-                    "#64748b",
-                }}
-              >
-                <CategorySymbol category={r.cat} description={r.desc} />
-              </i>
-              <span className="nm">
-                <b>{r.desc}</b>
-                <small>
-                  {r.on
-                    ? (r.iv === "weekly" ? "Weekly" : "Monthly") +
-                      " · next " +
-                      dayMonth(r.next)
-                    : "Paused"}{" "}
-                  · {M(r.amt)}
-                </small>
+      {orderedRec.length ? (
+        <div className="recurring-sections">
+          <div className="recurring-section-block">
+            <div className="day recurring-section-header">
+              <span>Bills &amp; Others</span>
+              <span>
+                {billsAndOthersRec.length
+                  ? `${M(est)}/mo · ${billsAndOthersRec.length}`
+                  : "None"}
               </span>
-              <button
-                className={"sw " + (r.on ? "on" : "")}
-                type="button"
-                aria-label={`${r.on ? "Pause" : "Resume"} ${r.desc}`}
-                aria-pressed={r.on}
-                onClick={() => onToggleRec(r.id)}
-              />
-              <button
-                className="remove-rec"
-                aria-label="Remove"
-                onClick={() => onRemoveRec(r.id)}
-              >
-                ×
-              </button>
             </div>
-          ))
-        ) : (
+            <div className="card recurring-section-card" style={{ padding: "6px 14px", margin: 0 }}>
+              {billsAndOthersRec.length ? (
+                billsAndOthersRec.map(renderRecurringRow)
+              ) : (
+                <div className="recurring-section-empty">
+                  <span>No recurring bills or other expenses yet</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="recurring-section-block">
+            <div className="day recurring-section-header">
+              <span>Savings</span>
+              <span>
+                {savingsRec.length
+                  ? `${M(savingsMonthlyEst)}/mo · ${savingsRec.length}`
+                  : "None"}
+              </span>
+            </div>
+            <div className="card recurring-section-card" style={{ padding: "6px 14px", margin: 0 }}>
+              {savingsRec.length ? (
+                savingsRec.map(renderRecurringRow)
+              ) : (
+                <div className="recurring-section-empty">
+                  <span>No recurring savings scheduled yet</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="card" style={{ padding: "6px 14px" }}>
           <div className="emp-illustrated">
             <div className="emp-illustrated-icon">
               <AnimatedRecurringIcon />
@@ -3802,8 +4238,8 @@ function Plans({
               automatically.
             </small>
           </div>
-        )}
-      </div>
+        </div>
+      )}
       <button className="btn" onClick={onAddRec}>
         Add recurring expense
       </button>
@@ -3920,26 +4356,17 @@ function AddSheet({
           ? "Savings transfer"
           : "New expense"}
       </h3>
-      <div className="amt">
-        <span>৳</span>
-        <input
-          ref={amtInputRef}
-          inputMode="decimal"
-          enterKeyHint="next"
-          aria-label={
-            f.cat === "Savings" ? "Savings transfer amount" : "Expense amount"
-          }
-          placeholder="0"
-          value={f.amt}
-          onChange={(e) => set("amt", e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              descInputRef.current?.focus();
-            }
-          }}
-        />
-      </div>
+      <HeroAmountField
+        value={f.amt}
+        onChange={(val) => set("amt", val)}
+        inputRef={amtInputRef}
+        placeholder="0"
+        enterKeyHint="next"
+        ariaLabel={
+          f.cat === "Savings" ? "Savings transfer amount" : "Expense amount"
+        }
+        onEnter={() => descInputRef.current?.focus()}
+      />
       <p className="hint">
         {f.cat === "Savings" && f.iv === "none"
           ? "Enter an amount to record a savings transfer."
@@ -4362,28 +4789,21 @@ function TxSheet({
           ],
         ]}
       />
-      <div className="amt">
-        <span>৳</span>
-        <input
-          ref={amtInputRef}
-          inputMode="decimal"
-          enterKeyHint="next"
-          aria-label={`${g.type === "adjust" ? "Adjustment" : g.type === "transfer" ? "Transfer" : "Income"} amount in taka`}
-          placeholder="0"
-          value={g.amt}
-          onChange={(e) => set("amt", e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              if (g.type === "adjust") {
-                reasonSelectRef.current?.focus();
-              } else {
-                noteInputRef.current?.focus();
-              }
-            }
-          }}
-        />
-      </div>
+      <HeroAmountField
+        value={g.amt}
+        onChange={(val) => set("amt", val)}
+        inputRef={amtInputRef}
+        placeholder="0"
+        enterKeyHint="next"
+        ariaLabel={`${g.type === "adjust" ? "Adjustment" : g.type === "transfer" ? "Transfer" : "Income"} amount in taka`}
+        onEnter={() => {
+          if (g.type === "adjust") {
+            reasonSelectRef.current?.focus();
+          } else {
+            noteInputRef.current?.focus();
+          }
+        }}
+      />
 
       {tr && accountOptions.length < 2 && (
         <p className="hint">
@@ -4690,28 +5110,21 @@ function AccountTxDetailSheet({ tx, cards = [], onSave, onDelete, onClose }) {
           ],
         ]}
       />
-      <div className="amt">
-        <span>৳</span>
-        <input
-          ref={amtInputRef}
-          inputMode="decimal"
-          enterKeyHint="next"
-          aria-label="Transaction amount in taka"
-          placeholder="0"
-          value={g.amt}
-          onChange={(e) => set("amt", e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              if (g.type === "adjust") {
-                reasonSelectRef.current?.focus();
-              } else {
-                noteInputRef.current?.focus();
-              }
-            }
-          }}
-        />
-      </div>
+      <HeroAmountField
+        value={g.amt}
+        onChange={(val) => set("amt", val)}
+        inputRef={amtInputRef}
+        placeholder="0"
+        enterKeyHint="next"
+        ariaLabel="Transaction amount in taka"
+        onEnter={() => {
+          if (g.type === "adjust") {
+            reasonSelectRef.current?.focus();
+          } else {
+            noteInputRef.current?.focus();
+          }
+        }}
+      />
 
       {tr ? (
         <>
@@ -4925,24 +5338,15 @@ function DetailSheet({
       }
     >
       <h3 id="sheet-title">Edit expense</h3>
-      <div className="amt">
-        <span>৳</span>
-        <input
-          ref={amtInputRef}
-          inputMode="decimal"
-          enterKeyHint="next"
-          aria-label="Expense amount in taka"
-          placeholder="0"
-          value={f.amt}
-          onChange={(event) => set("amt", event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              descInputRef.current?.focus();
-            }
-          }}
-        />
-      </div>
+      <HeroAmountField
+        value={f.amt}
+        onChange={(val) => set("amt", val)}
+        inputRef={amtInputRef}
+        placeholder="0"
+        enterKeyHint="next"
+        ariaLabel="Expense amount in taka"
+        onEnter={() => descInputRef.current?.focus()}
+      />
       <span className="lbl">What was it for?</span>
       <input
         ref={descInputRef}
@@ -5061,6 +5465,206 @@ function DetailSheet({
   );
 }
 
+function RecurringDetailSheet({
+  r,
+  expenses = [],
+  cards = [],
+  onSave,
+  onDelete,
+  onClose,
+}) {
+  const [f, setF] = useState({
+    desc: r.desc || "",
+    amt: r.amt ?? "",
+    cat: r.cat || "Bills",
+    next: r.next || ld(),
+    acct: r.acct || "",
+    iv: r.iv || "monthly",
+    on: Boolean(r.on),
+  });
+  const amtInputRef = useRef(null);
+  const descInputRef = useRef(null);
+  const set = (key, value) => setF((current) => ({ ...current, [key]: value }));
+  const activeSuggestion = suggestedCategory(f.desc, expenses) || "";
+  const amtNum = parseAmount(f.amt);
+  const isSavings = f.cat === "Savings";
+  const hasSavingsAccount = Boolean(getSavingsAccountId(cards));
+  const spendableCards = cards.filter((c) => c.type !== "savings" && !c.frozen);
+  const canSave =
+    Boolean(f.desc?.trim()) &&
+    Boolean(f.next) &&
+    Number.isFinite(amtNum) &&
+    amtNum > 0 &&
+    (!isSavings || !hasSavingsAccount || Boolean(f.acct));
+
+  return (
+    <Sheet
+      onClose={onClose}
+      actionsClassName="is-paired"
+      actions={
+        <>
+          <button
+            type="button"
+            className="btn"
+            disabled={!canSave}
+            onClick={() => canSave && onSave(r.id, f)}
+          >
+            Save changes
+          </button>
+          <button
+            type="button"
+            className="btn del"
+            onClick={() => onDelete(r.id)}
+          >
+            Delete
+          </button>
+        </>
+      }
+    >
+      <h3 id="sheet-title">
+        {isSavings ? "Edit recurring savings" : "Edit recurring expense"}
+      </h3>
+      <HeroAmountField
+        value={f.amt}
+        onChange={(val) => set("amt", val)}
+        inputRef={amtInputRef}
+        placeholder="0"
+        enterKeyHint="next"
+        ariaLabel="Recurring amount in taka"
+        onEnter={() => descInputRef.current?.focus()}
+      />
+      <span className="lbl">What was it for?</span>
+      <input
+        ref={descInputRef}
+        className="in"
+        maxLength={80}
+        aria-label="Recurring description"
+        enterKeyHint="done"
+        value={f.desc}
+        onChange={(event) => set("desc", event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            event.currentTarget.blur();
+            if (canSave) onSave(r.id, f);
+          }
+        }}
+      />
+      <span className="lbl">Category</span>
+      {activeSuggestion && activeSuggestion !== f.cat && (
+        <button
+          className="category-suggestion-action"
+          type="button"
+          style={{
+            "--c":
+              getCategoryColor(activeSuggestion, f.desc) ||
+              CAT[activeSuggestion]?.[1] ||
+              "#64748b",
+          }}
+          aria-label={`Use suggestion: ${activeSuggestion}`}
+          onClick={() => {
+            triggerHaptic("selection");
+            setF((current) => ({
+              ...current,
+              cat: activeSuggestion,
+              ...(activeSuggestion === "Savings" &&
+              hasSavingsAccount &&
+              !current.acct
+                ? { acct: spendableCards[0]?.id || "" }
+                : {}),
+            }));
+          }}
+        >
+          <img
+            src={suggestionSvg}
+            alt=""
+            className="category-suggestion-bulb-img"
+            aria-hidden="true"
+          />
+          <span className="category-suggestion-label">Suggested:</span>
+          <CategorySuggestionValue
+            category={activeSuggestion}
+            description={f.desc}
+          />
+        </button>
+      )}
+      <div className="cg">
+        {Object.keys(CAT).map((category) => (
+          <button
+            type="button"
+            key={category}
+            className={f.cat === category ? "on" : ""}
+            onClick={() => {
+              setF((current) => ({
+                ...current,
+                cat: category,
+                ...(category === "Savings" && hasSavingsAccount && !current.acct
+                  ? { acct: spendableCards[0]?.id || "" }
+                  : {}),
+              }));
+            }}
+          >
+            <CategorySymbol
+              category={category}
+              description={category === "Entertainment" ? f.desc : ""}
+            />
+            <span>{category}</span>
+          </button>
+        ))}
+      </div>
+      <span className="lbl">Next scheduled date</span>
+      <input
+        className="in"
+        type="date"
+        aria-label="Next scheduled date"
+        value={f.next}
+        onChange={(event) => {
+          if (event.target.value) set("next", event.target.value);
+        }}
+      />
+      <span className="lbl">
+        {isSavings && hasSavingsAccount ? "Transfer from" : "Paid from"}
+      </span>
+      <AccountPicker
+        value={f.acct}
+        onPick={(value) => set("acct", value)}
+        cards={cards}
+        options={
+          isSavings && hasSavingsAccount && spendableCards.length > 0
+            ? spendableCards.map((c) => [c.id, c.name])
+            : [
+                ["", "Cash"],
+                ...spendableCards.map((c) => [c.id, c.name]),
+                ...(f.acct &&
+                f.acct !== "cash" &&
+                !spendableCards.some((c) => c.id === f.acct)
+                  ? [[f.acct, getAccountDisplay(f.acct, cards)[0]]]
+                  : []),
+              ]
+        }
+      />
+      <span className="lbl">Repeat</span>
+      <Seg
+        value={f.iv}
+        onPick={(v) => set("iv", v)}
+        options={[
+          ["weekly", "Weekly"],
+          ["monthly", "Monthly"],
+        ]}
+      />
+      <span className="lbl">Status</span>
+      <Seg
+        value={f.on ? "on" : "off"}
+        onPick={(v) => set("on", v === "on")}
+        options={[
+          ["on", "Active"],
+          ["off", "Paused"],
+        ]}
+      />
+    </Sheet>
+  );
+}
+
 function BudgetSheet({ S, onSave, onClear, onClose }) {
   const currentBudget = S?.bud?.[S.m] || "";
   const [v, setV] = useState(currentBudget);
@@ -5092,25 +5696,18 @@ function BudgetSheet({ S, onSave, onClear, onClose }) {
       <p className="hint" style={{ textAlign: "left" }}>
         {fM(S?.m || "")}
       </p>
-      <div className="amt">
-        <span>৳</span>
-        <input
-          ref={amtInputRef}
-          inputMode="decimal"
-          enterKeyHint="done"
-          aria-label="Monthly budget amount in taka"
-          placeholder="20000"
-          value={v}
-          onChange={(x) => setV(x.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              const num = parseAmount(v);
-              onSave(num);
-            }
-          }}
-        />
-      </div>
+      <HeroAmountField
+        value={v}
+        onChange={(val) => setV(val)}
+        inputRef={amtInputRef}
+        placeholder="20000"
+        enterKeyHint="done"
+        ariaLabel="Monthly budget amount in taka"
+        onEnter={() => {
+          const num = parseAmount(v);
+          onSave(num);
+        }}
+      />
     </Sheet>
   );
 }
@@ -8201,6 +8798,7 @@ export default function MobilePrototype({
   onSetPrimaryCard,
   onMoveCardToFront,
   onToggleRec,
+  onUpdateRec,
   onRemoveRec,
   onTheme,
   onReminder,
@@ -8274,6 +8872,9 @@ export default function MobilePrototype({
   const [toastMsg, setToastMsg] = useState(null);
   const [isAppLocked, setIsAppLocked] = useState(() => shouldLockApp());
   const [resetPinConfirmOpen, setResetPinConfirmOpen] = useState(false);
+  const [isPrivacyShielded, setIsPrivacyShielded] = useState(false);
+  const [ptrState, setPtrState] = useState({ pullY: 0, phase: "idle" });
+  const ptrGestureRef = useRef({ active: false, startY: 0, startX: 0, passedThreshold: false });
 
   const handleToggleHaptics = useCallback(() => {
     setHapticsState((current) => {
@@ -8385,15 +8986,18 @@ export default function MobilePrototype({
 
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
+        setIsPrivacyShielded(false);
         if (shouldLockApp()) {
           setIsAppLocked(true);
         }
       } else if (document.visibilityState === "hidden") {
+        setIsPrivacyShielded(true);
         markBackgrounded();
       }
     };
 
     const handlePageHide = () => {
+      setIsPrivacyShielded(true);
       markBackgrounded();
     };
 
@@ -8415,10 +9019,12 @@ export default function MobilePrototype({
           "appStateChange",
           ({ isActive }) => {
             if (isActive) {
+              setIsPrivacyShielded(false);
               if (shouldLockApp()) {
                 setIsAppLocked(true);
               }
             } else {
+              setIsPrivacyShielded(true);
               markBackgrounded();
             }
           },
@@ -8765,7 +9371,7 @@ export default function MobilePrototype({
   };
   const captureSheetTrigger = (event) => {
     const target = event.target instanceof Element ? event.target : null;
-    const button = target?.closest("button");
+    const button = target?.closest('button, [role="button"]');
     sheetTriggerCandidateRef.current =
       button && !button.closest(".sh") ? button : null;
   };
@@ -8793,6 +9399,12 @@ export default function MobilePrototype({
       screenScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
+    if (
+      document.activeElement instanceof HTMLElement &&
+      screenScrollRef.current?.contains(document.activeElement)
+    ) {
+      document.activeElement.blur();
+    }
     if (t !== tab || appSettingsOpen || profileSettingsOpen) {
       triggerHaptic("selection");
     }
@@ -8807,11 +9419,14 @@ export default function MobilePrototype({
   };
   const openExpense = (id) => openSheet({ type: "det", id });
   const openTransaction = (id) => openSheet({ type: "txDet", id });
+  const openRecurring = (id) => openSheet({ type: "recDet", id });
   const openBudget = () => openSheet({ type: "bud" });
   const detail =
     sheet?.type === "det" ? S.exp.find((x) => x.id === sheet.id) : null;
   const txDetail =
     sheet?.type === "txDet" ? S.tx.find((x) => x.id === sheet.id) : null;
+  const recDetail =
+    sheet?.type === "recDet" ? S.rec.find((x) => x.id === sheet.id) : null;
 
   const saveExpense = (f) => {
     const resolvedCat = f.cat || "Other";
@@ -9026,8 +9641,46 @@ export default function MobilePrototype({
     triggerHaptic("delete");
     toast("Transaction removed", undo);
   };
+  const updateRecurring = (id, form) => {
+    const amount = parseAmount(form.amt);
+    const isSavings = form.cat === "Savings";
+    if (
+      !form.desc?.trim() ||
+      !form.next ||
+      !Number.isFinite(amount) ||
+      amount <= 0
+    ) {
+      return toast(
+        isSavings
+          ? "Recurring savings need an amount and description."
+          : "Recurring expenses need an amount and description.",
+      );
+    }
+    if (isSavings && !form.acct && Boolean(getSavingsAccountId(cards))) {
+      return toast("Select an account to transfer from.");
+    }
+    const updated = onUpdateRec?.(id, {
+      description: form.desc.trim(),
+      amount,
+      category: form.cat,
+      interval: form.iv,
+      nextDate: form.next,
+      account: form.acct,
+      active: Boolean(form.on),
+    });
+    if (!updated) {
+      return toast("Could not update this recurring expense.");
+    }
+    close();
+    triggerHaptic("success");
+    toast(
+      isSavings ? "Recurring savings updated" : "Recurring expense updated",
+    );
+  };
   const removeRecurring = (id) => {
     const undo = onRemoveRec(id);
+    close();
+    triggerHaptic("delete");
     toast("Recurring expense removed", undo);
   };
   const advanced = () => {
@@ -9207,10 +9860,116 @@ export default function MobilePrototype({
         ref={screenScrollRef}
         className={`prototype-screen-scroll${tab === "activity" ? " is-activity" : ""}${tab === "accounts" ? " is-accounts" : ""}`}
         onScroll={onScreenScroll}
+        onTouchStart={(e) => {
+          if (sheet || ptrState.phase === "refreshing" || e.touches.length !== 1) return;
+          const scroller = screenScrollRef.current;
+          if (!scroller || scroller.scrollTop > 2) return;
+          if (e.target.closest?.(".cards-deck-stage, .stack, .chips, .account-picker-container")) return;
+          ptrGestureRef.current = {
+            active: true,
+            pulling: false,
+            startY: e.touches[0].clientY,
+            startX: e.touches[0].clientX,
+            passedThreshold: false,
+          };
+        }}
+        onTouchMove={(e) => {
+          const g = ptrGestureRef.current;
+          if (!g.active || sheet || e.touches.length !== 1) return;
+          const scroller = screenScrollRef.current;
+          if (!scroller || scroller.scrollTop > 2) {
+            g.active = false;
+            if (ptrState.pullY > 0) setPtrState({ pullY: 0, phase: "idle" });
+            return;
+          }
+          const dy = e.touches[0].clientY - g.startY;
+          const dx = e.touches[0].clientX - g.startX;
+          if (!g.pulling) {
+            if (dy > 10 && dy > Math.abs(dx) * 1.25) {
+              g.pulling = true;
+            } else if (Math.abs(dx) > 10 || dy < -4) {
+              g.active = false;
+              return;
+            } else {
+              return;
+            }
+          }
+          const damped = Math.min(96, Math.round(Math.pow(Math.max(0, dy - 10), 0.78) * 2.1));
+          const ready = damped >= 56;
+          if (ready && !g.passedThreshold) {
+            g.passedThreshold = true;
+            triggerHaptic("selection");
+          } else if (!ready && g.passedThreshold) {
+            g.passedThreshold = false;
+          }
+          setPtrState({ pullY: damped, phase: ready ? "ready" : "pulling" });
+        }}
+        onTouchEnd={() => {
+          const g = ptrGestureRef.current;
+          if (!g.active) return;
+          g.active = false;
+          if (ptrState.phase === "ready") {
+            triggerHaptic("medium");
+            setPtrState({ pullY: 48, phase: "refreshing" });
+            if (profile?.connected && onResumeSync) {
+              try {
+                onResumeSync();
+              } catch {}
+            }
+            window.setTimeout(() => {
+              triggerHaptic("success");
+              setPtrState({ pullY: 0, phase: "idle" });
+            }, 680);
+          } else if (ptrState.pullY > 0) {
+            setPtrState({ pullY: 0, phase: "idle" });
+          }
+        }}
+        onTouchCancel={() => {
+          ptrGestureRef.current.active = false;
+          if (ptrState.pullY > 0) setPtrState({ pullY: 0, phase: "idle" });
+        }}
       >
+        {(ptrState.pullY > 0 || ptrState.phase === "refreshing") && (
+          <div
+            className={`ptr-container is-${ptrState.phase}`}
+            style={{ height: `${ptrState.pullY}px` }}
+            aria-live="polite"
+          >
+            <div
+              className="ptr-pill"
+              style={{
+                transform: `scale(${Math.min(1, 0.65 + ptrState.pullY / 110).toFixed(2)})`,
+                opacity: Math.min(1, ptrState.pullY / 36).toFixed(2),
+              }}
+            >
+              <svg
+                className="ptr-spinner"
+                viewBox="0 0 24 24"
+                style={
+                  ptrState.phase !== "refreshing"
+                    ? { transform: `rotate(${Math.round(ptrState.pullY * 3.8)}deg)` }
+                    : undefined
+                }
+                aria-hidden="true"
+              >
+                <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+                <polyline points="21 3 21 9 15 9" />
+              </svg>
+              <span>
+                {ptrState.phase === "refreshing"
+                  ? profile?.connected
+                    ? "Syncing…"
+                    : "Refreshing…"
+                  : ptrState.phase === "ready"
+                    ? "Release to refresh"
+                    : "Pull to refresh"}
+              </span>
+            </div>
+          </div>
+        )}
         <div
-          key={screenKey}
-          className={`prototype-screen-enter${animateScreen ? ` ${slideDirection === "forward" ? "slides-from-right" : "slides-from-left"}` : ""}`}
+          key={settingsRoute ? screenKey : "main-tabs"}
+          className={`prototype-screen-enter${settingsRoute && animateScreen ? ` ${slideDirection === "forward" ? "slides-from-right" : "slides-from-left"}` : ""}`}
         >
           <div className="prototype-screen-content">
             {profileSettingsOpen ? (
@@ -9250,83 +10009,107 @@ export default function MobilePrototype({
                 backupStatus={backupStatus}
               />
             ) : (
-              tab === "home" && (
-                <Home
-                  S={S}
-                  profile={profile}
-                  onShift={onShift}
-                  onTab={(nextTab) => {
-                    if (nextTab === "activity") {
-                      setCf("");
+              <>
+                <div
+                  className={`prototype-tab-panel${tab === "home" ? ` is-active${animateScreen ? ` ${slideDirection === "forward" ? "slides-from-right" : "slides-from-left"}` : ""}` : " is-inactive"}`}
+                  inert={tab !== "home" ? true : undefined}
+                  hidden={tab !== "home"}
+                >
+                  <Home
+                    S={S}
+                    profile={profile}
+                    onShift={onShift}
+                    onTab={(nextTab) => {
+                      if (nextTab === "activity") {
+                        setCf("");
+                        setQ("");
+                      }
+                      nav(nextTab);
+                    }}
+                    onCategory={(category) => {
+                      setCf(category);
                       setQ("");
+                      nav("activity");
+                    }}
+                    onBudget={openBudget}
+                    onOpen={openExpense}
+                    onDelete={deleteExpenseDirectly}
+                    onSkip={skipRecurringExpense}
+                    onDuplicate={duplicateExpense}
+                    highlightedExpenseId={highlightedExpenseId}
+                  />
+                </div>
+                <div
+                  className={`prototype-tab-panel${tab === "activity" ? ` is-active${animateScreen ? ` ${slideDirection === "forward" ? "slides-from-right" : "slides-from-left"}` : ""}` : " is-inactive"}`}
+                  inert={tab !== "activity" ? true : undefined}
+                  hidden={tab !== "activity"}
+                >
+                  <Activity
+                    S={S}
+                    q={q}
+                    setQ={setQ}
+                    cf={cf}
+                    setCf={setCf}
+                    onOpen={openExpense}
+                    onDelete={deleteExpenseDirectly}
+                    onSkip={skipRecurringExpense}
+                    onDuplicate={duplicateExpense}
+                    onOpenTransaction={openTransaction}
+                    onDeleteTransaction={deleteTransaction}
+                    searchRef={activitySearchRef}
+                    highlightedExpenseId={highlightedExpenseId}
+                    highlightedTransactionId={highlightedTransactionId}
+                  />
+                </div>
+                <div
+                  className={`prototype-tab-panel${tab === "accounts" ? ` is-active${animateScreen ? ` ${slideDirection === "forward" ? "slides-from-right" : "slides-from-left"}` : ""}` : " is-inactive"}`}
+                  inert={tab !== "accounts" ? true : undefined}
+                  hidden={tab !== "accounts"}
+                >
+                  <Accounts
+                    S={S}
+                    onTx={(t, acct) => openSheet({ type: "tx", t, acct })}
+                    onAddCardClick={() => openSheet({ type: "addCard" })}
+                    onOpenCardOptions={(cardId) =>
+                      openSheet({ type: "cardOptions", cardId })
                     }
-                    nav(nextTab);
-                  }}
-                  onCategory={(category) => {
-                    setCf(category);
-                    setQ("");
-                    nav("activity");
-                  }}
-                  onBudget={openBudget}
-                  onOpen={openExpense}
-                  highlightedExpenseId={highlightedExpenseId}
-                />
-              )
-            )}
-            {!appSettingsOpen && !profileSettingsOpen && tab === "activity" && (
-              <Activity
-                S={S}
-                q={q}
-                setQ={setQ}
-                cf={cf}
-                setCf={setCf}
-                onOpen={openExpense}
-                onDelete={deleteExpenseDirectly}
-                onSkip={skipRecurringExpense}
-                onDuplicate={duplicateExpense}
-                onOpenTransaction={openTransaction}
-                onDeleteTransaction={deleteTransaction}
-                searchRef={activitySearchRef}
-                highlightedExpenseId={highlightedExpenseId}
-                highlightedTransactionId={highlightedTransactionId}
-              />
-            )}
-            {!appSettingsOpen && !profileSettingsOpen && tab === "accounts" && (
-              <Accounts
-                S={S}
-                onTx={(t, acct) => openSheet({ type: "tx", t, acct })}
-                onAddCardClick={() => openSheet({ type: "addCard" })}
-                onOpenCardOptions={(cardId) =>
-                  openSheet({ type: "cardOptions", cardId })
-                }
-                highlightedExpenseId={highlightedExpenseId}
-                highlightedTransactionId={highlightedTransactionId}
-                onTab={nav}
-                onOpenExpense={openExpense}
-                onOpenTransaction={openTransaction}
-                onLockedCardNotice={(cardName) =>
-                  toast(
-                    `${cardName || "This card"} is locked. Unlock it in Card Options first.`,
-                  )
-                }
-                onAddExpense={(acct) => openSheet({ type: "add", acct })}
-                initialSelectedAccount={activeAccountRef.current}
-                onActiveAccountChange={(acct) => {
-                  activeAccountRef.current = acct;
-                }}
-              />
-            )}
-            {!appSettingsOpen && !profileSettingsOpen && tab === "plans" && (
-              <Plans
-                S={S}
-                plan={plan}
-                setPlan={setPlan}
-                onShift={onShift}
-                onBudget={openBudget}
-                onAddRec={() => openSheet({ type: "add", iv: "monthly" })}
-                onToggleRec={onToggleRec}
-                onRemoveRec={removeRecurring}
-              />
+                    highlightedExpenseId={highlightedExpenseId}
+                    highlightedTransactionId={highlightedTransactionId}
+                    onTab={nav}
+                    onOpenExpense={openExpense}
+                    onOpenTransaction={openTransaction}
+                    onDeleteExpense={deleteExpenseDirectly}
+                    onDeleteTransaction={deleteTransaction}
+                    onDuplicateExpense={duplicateExpense}
+                    onLockedCardNotice={(cardName) =>
+                      toast(
+                        `${cardName || "This card"} is locked. Unlock it in Card Options first.`,
+                      )
+                    }
+                    onAddExpense={(acct) => openSheet({ type: "add", acct })}
+                    initialSelectedAccount={activeAccountRef.current}
+                    onActiveAccountChange={(acct) => {
+                      activeAccountRef.current = acct;
+                    }}
+                  />
+                </div>
+                <div
+                  className={`prototype-tab-panel${tab === "plans" ? ` is-active${animateScreen ? ` ${slideDirection === "forward" ? "slides-from-right" : "slides-from-left"}` : ""}` : " is-inactive"}`}
+                  inert={tab !== "plans" ? true : undefined}
+                  hidden={tab !== "plans"}
+                >
+                  <Plans
+                    S={S}
+                    plan={plan}
+                    setPlan={setPlan}
+                    onShift={onShift}
+                    onBudget={openBudget}
+                    onAddRec={() => openSheet({ type: "add", iv: "monthly" })}
+                    onOpenRec={openRecurring}
+                    onToggleRec={onToggleRec}
+                  />
+                </div>
+              </>
             )}
           </div>
         </div>
@@ -9504,6 +10287,17 @@ export default function MobilePrototype({
           onClose={close}
         />
       )}
+      {recDetail && (
+        <RecurringDetailSheet
+          key={recDetail.id}
+          r={recDetail}
+          expenses={S.exp}
+          cards={cards}
+          onSave={updateRecurring}
+          onDelete={removeRecurring}
+          onClose={close}
+        />
+      )}
       {sheet?.type === "bud" && (
         <BudgetSheet
           S={S}
@@ -9570,6 +10364,19 @@ export default function MobilePrototype({
               Undo
             </button>
           )}
+        </div>
+      )}
+
+      {isPrivacyShielded && (
+        <div className="app-privacy-shield" aria-hidden="true">
+          <div className="app-privacy-shield-badge">
+            <svg viewBox="0 0 24 24" width="24" height="24">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              <rect x="9" y="11" width="6" height="5" rx="1" />
+              <path d="M10.5 11V9.5a1.5 1.5 0 0 1 3 0V11" />
+            </svg>
+          </div>
+          <b>Spend Protected</b>
         </div>
       )}
     </div>

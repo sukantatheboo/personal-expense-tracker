@@ -323,6 +323,20 @@ export function loadRecurringSchedules(
   return Array.isArray(saved)
     ? saved.filter(isValidRecurringSchedule).map((schedule) => ({
         ...schedule,
+        ...(typeof schedule.createdAt === "number" &&
+        Number.isFinite(schedule.createdAt)
+          ? { createdAt: schedule.createdAt }
+          : typeof schedule.createdAt === "string" &&
+              Number.isFinite(Date.parse(schedule.createdAt))
+            ? { createdAt: Date.parse(schedule.createdAt) }
+            : {}),
+        ...(typeof schedule.updatedAt === "number" &&
+        Number.isFinite(schedule.updatedAt)
+          ? { updatedAt: schedule.updatedAt }
+          : typeof schedule.updatedAt === "string" &&
+              Number.isFinite(Date.parse(schedule.updatedAt))
+            ? { updatedAt: Date.parse(schedule.updatedAt) }
+            : {}),
         account: isAccountId(schedule.account, accountData)
           ? schedule.account
           : "",

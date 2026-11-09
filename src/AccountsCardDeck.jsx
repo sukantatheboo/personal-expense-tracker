@@ -23,61 +23,9 @@ import {
   renderProviderLogo,
 } from "./cardAssets.jsx";
 
-import { isHapticsEnabled } from "./data.js";
+import { triggerHaptic } from "./haptics.js";
 
-export { renderProviderLogo };
-
-/* ───────────── Native & Web Haptics Engine ───────────── */
-function triggerSafariWebHaptic() {
-  if (!isHapticsEnabled()) return;
-  if (typeof document === "undefined") return;
-  try {
-    let trigger = document.getElementById("safari-haptic-trigger");
-    if (!trigger) {
-      trigger = document.createElement("input");
-      trigger.id = "safari-haptic-trigger";
-      trigger.type = "checkbox";
-      trigger.setAttribute("switch", "");
-      trigger.setAttribute("aria-hidden", "true");
-      trigger.tabIndex = -1;
-      trigger.style.cssText =
-        "position:fixed;opacity:0;pointer-events:none;left:-9999px;width:0;height:0;";
-      document.body.appendChild(trigger);
-    }
-    trigger.click();
-  } catch {
-    // ignore
-  }
-}
-
-export function triggerHaptic(type = "light") {
-  if (!isHapticsEnabled()) return false;
-  try {
-    // Web / PWA fallback tuned for mobile vibration
-    if (
-      typeof navigator !== "undefined" &&
-      typeof navigator.vibrate === "function"
-    ) {
-      const patterns = {
-        selection: 12,
-        light: 20,
-        medium: 35,
-        heavy: 55,
-        success: [25, 45, 30],
-        warning: [35, 40, 20],
-        delete: [35, 40, 20],
-      };
-      const pattern =
-        typeof type === "number" ? Math.max(10, type) : patterns[type] || 20;
-      navigator.vibrate(pattern);
-      return true;
-    }
-  } catch {}
-
-  // iOS Safari Web / WebKit Taptic Engine tick fallback (iOS 17.4+)
-  triggerSafariWebHaptic();
-  return true;
-}
+export { renderProviderLogo, triggerHaptic };
 
 /* ───────────── Currency & Number Formatters ───────────── */
 export const formatMoney = (n) =>

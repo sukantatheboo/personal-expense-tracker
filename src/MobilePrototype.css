@@ -74,7 +74,6 @@ textarea {
   font: inherit;
   letter-spacing: inherit;
 }
-
 /* no double-tap zoom on buttons and interactive elements */
 button,
 a,
@@ -1961,34 +1960,49 @@ a:active,
   letter-spacing: -0.01em;
   white-space: nowrap;
 }
-.mobile-prototype .remove-rec {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  min-width: 28px;
-  height: 28px;
-  min-height: 28px;
-  padding: 0;
-  border-radius: 50%;
-  background: transparent;
+.mobile-prototype .recurring-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+.mobile-prototype .recurring-section-block {
+  display: flex;
+  flex-direction: column;
+}
+.mobile-prototype .recurring-section-header {
+  margin: 2px 4px 6px;
+}
+.mobile-prototype .recurring-item-row {
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background-color 150ms ease,
+    transform 140ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 180ms ease;
+}
+.mobile-prototype .recurring-item-row:active {
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+  transform: scale(0.99);
+}
+.mobile-prototype .recurring-item-row:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--g) 48%, transparent);
+  outline-offset: -2px;
+  border-radius: 12px;
+}
+.mobile-prototype .recurring-section-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+  padding: 10px 6px;
   color: var(--mut);
-  font-size: 22px;
-  line-height: 1;
-  flex: none;
-}
-.mobile-prototype .remove-rec:focus-visible {
-  background: transparent;
-  color: var(--bad);
-}
-.mobile-prototype .remove-rec:active {
-  background: transparent;
-  transform: scale(0.96);
-}
-@media (hover: hover) and (pointer: fine) {
-  .mobile-prototype .remove-rec:hover {
-    background: transparent;
-    color: var(--bad);
-  }
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
 }
 .mobile-prototype .day {
   display: flex;
@@ -8616,4 +8630,405 @@ html[data-theme="dark"]
   .reset-pin-modal-card {
     animation: none;
   }
+}
+
+/* ───────────── Native UX Upgrade 1: Redesigned Hero Currency Input (No Boxy Border) ───────────── */
+.mobile-prototype .amt.amt-hero-redesigned {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 10px 0 8px;
+  padding: 14px 18px;
+  border-radius: 22px;
+  background: color-mix(in srgb, var(--ink) 3.5%, var(--bg));
+  border: 1.5px solid color-mix(in srgb, var(--line) 85%, transparent);
+  cursor: text;
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.mobile-prototype .amt.amt-hero-redesigned:focus-within {
+  background: color-mix(in srgb, var(--ink) 4.5%, var(--card));
+  border-color: color-mix(in srgb, var(--g) 42%, var(--line));
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.05);
+}
+
+.mobile-prototype .amt-hero-inner {
+  position: relative;
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px;
+  max-width: 100%;
+}
+
+.mobile-prototype .amt.amt-hero-redesigned .amt-hero-currency {
+  font-size: 34px;
+  font-weight: 800;
+  color: var(--mut);
+  line-height: 1;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: color 160ms ease, font-size 160ms ease;
+}
+
+.mobile-prototype .amt.amt-hero-redesigned.has-value .amt-hero-currency {
+  color: var(--ink);
+}
+
+.mobile-prototype .amt.amt-hero-redesigned input {
+  width: auto;
+  min-width: 1.15ch;
+  max-width: 100%;
+  padding: 0;
+  margin: 0;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+  font-size: 54px;
+  font-weight: 850;
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+  text-align: left;
+  color: var(--ink);
+  caret-color: var(--g);
+  font-variant-numeric: tabular-nums;
+  transition: font-size 160ms cubic-bezier(0.2, 0.9, 0.28, 1);
+}
+
+.mobile-prototype .amt.amt-hero-redesigned input:focus {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.mobile-prototype .amt.amt-hero-redesigned input::placeholder {
+  color: color-mix(in srgb, var(--mut) 46%, transparent);
+}
+
+.mobile-prototype .amt.amt-hero-redesigned.is-medium .amt-hero-currency {
+  font-size: 28px;
+}
+.mobile-prototype .amt.amt-hero-redesigned.is-medium input {
+  font-size: 44px;
+}
+
+.mobile-prototype .amt.amt-hero-redesigned.is-compact .amt-hero-currency {
+  font-size: 24px;
+}
+.mobile-prototype .amt.amt-hero-redesigned.is-compact input {
+  font-size: 36px;
+}
+
+.mobile-prototype .amt-hero-clear {
+  align-self: center;
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+  color: var(--mut);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.mobile-prototype .amt-hero-clear:active {
+  transform: scale(0.9);
+}
+
+/* ───────────── Native UX Upgrade 2: Stacked Sheet 3D Depth Scaling (scale(0.94)), Detents & Blurred Sticky Header ───────────── */
+.mobile-prototype .prototype-header.is-scrolled {
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+}
+
+.mobile-prototype .prototype-header,
+.mobile-prototype #app {
+  transition:
+    transform 320ms cubic-bezier(0.2, 0.9, 0.28, 1),
+    border-radius 320ms cubic-bezier(0.2, 0.9, 0.28, 1),
+    filter 320ms cubic-bezier(0.2, 0.9, 0.28, 1);
+  transform-origin: center top;
+}
+
+.mobile-prototype[data-sheet-open="true"]:not([data-sheet-closing="true"])
+  .prototype-header,
+.mobile-prototype[data-sheet-open="true"]:not([data-sheet-closing="true"])
+  #app {
+  transform: scale(calc(0.94 + var(--sheet-drag-progress, 0) * 0.06))
+    translate3d(0, calc(6px * (1 - var(--sheet-drag-progress, 0))), 0);
+  filter: brightness(calc(0.91 + var(--sheet-drag-progress, 0) * 0.09));
+}
+
+.mobile-prototype[data-sheet-open="true"]:not([data-sheet-closing="true"])
+  .prototype-header {
+  border-radius: calc(24px * (1 - var(--sheet-drag-progress, 0)))
+    calc(24px * (1 - var(--sheet-drag-progress, 0))) 0 0;
+}
+
+.mobile-prototype .sh {
+  transition: max-height 280ms cubic-bezier(0.2, 0.9, 0.28, 1);
+}
+
+.mobile-prototype .sh.is-expanded-detent {
+  max-height: calc(var(--mobile-visible-height, 100dvh) - 8px);
+  min-height: min(92dvh, calc(var(--mobile-visible-height, 100dvh) - 8px));
+}
+
+.mobile-prototype .ov {
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+/* ───────────── GPU-Mounted Persistent Tab Panels ───────────── */
+.mobile-prototype .prototype-tab-panel.is-inactive {
+  display: none;
+}
+
+.mobile-prototype .prototype-tab-panel.is-active {
+  display: block;
+}
+
+.mobile-prototype .prototype-tab-panel.is-active.slides-from-right {
+  animation: prototype-screen-from-right 230ms cubic-bezier(0.22, 0.75, 0.25, 1)
+    both;
+}
+
+.mobile-prototype .prototype-tab-panel.is-active.slides-from-left {
+  animation: prototype-screen-from-left 230ms cubic-bezier(0.22, 0.75, 0.25, 1)
+    both;
+}
+
+/* ───────────── Native UX Upgrade 3: Bi-Directional Swipe Actions on Expense & Card Rows ───────────── */
+.mobile-prototype .accounts-transactions-card {
+  overflow: hidden;
+  padding: 4px 14px;
+}
+
+.mobile-prototype .accounts-transactions-card .expense-row {
+  position: relative;
+  z-index: 2;
+  min-height: 58px;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 2px;
+  border: 0;
+  border-radius: 0;
+  background: var(--card);
+  touch-action: pan-y;
+}
+
+.mobile-prototype .expense-swipe-shell[data-swipe-dir="right"].is-dragging,
+.mobile-prototype .expense-swipe-shell[data-swipe-dir="right"].is-revealed,
+.mobile-prototype .expense-swipe-shell.is-right-swipe.is-dragging,
+.mobile-prototype .expense-swipe-shell.is-right-swipe.is-revealed {
+  background: #059669;
+}
+
+:root[data-theme="dark"]
+  .mobile-prototype
+  .expense-swipe-shell[data-swipe-dir="right"].is-dragging,
+:root[data-theme="dark"]
+  .mobile-prototype
+  .expense-swipe-shell[data-swipe-dir="right"].is-revealed,
+:root[data-theme="dark"]
+  .mobile-prototype
+  .expense-swipe-shell.is-right-swipe.is-dragging,
+:root[data-theme="dark"]
+  .mobile-prototype
+  .expense-swipe-shell.is-right-swipe.is-revealed {
+  background: #10b981;
+}
+
+.mobile-prototype
+  .expense-swipe-shell[data-swipe-dir="right"][data-threshold="true"]
+  .expense-swipe-delete.is-left {
+  background: #047857;
+}
+
+/* ───────────── Native UX Upgrade 4: Elastic Pull-to-Refresh Indicator ───────────── */
+.mobile-prototype .ptr-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  overflow: hidden;
+  pointer-events: none;
+  transition: height 220ms cubic-bezier(0.2, 0.9, 0.28, 1);
+}
+
+.mobile-prototype .ptr-container.is-pulling,
+.mobile-prototype .ptr-container.is-ready {
+  transition: none;
+}
+
+.mobile-prototype .ptr-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 13px;
+  border-radius: 999px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.mobile-prototype .ptr-spinner {
+  width: 16px;
+  height: 16px;
+  stroke: var(--g);
+  stroke-width: 2.3;
+  fill: none;
+}
+
+.mobile-prototype .ptr-container.is-refreshing .ptr-spinner {
+  animation: ptr-spin 680ms linear infinite;
+}
+
+@keyframes ptr-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ───────────── Native UX Upgrade 5: Interactive Scrubbable Charts & App-Switcher Privacy Shield ───────────── */
+.mobile-prototype .stack {
+  touch-action: pan-y;
+  cursor: pointer;
+}
+
+.mobile-prototype .stack-scrub-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--c, #64748b) 14%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--c, #64748b) 32%, transparent);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.mobile-prototype .stack-scrub-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--c, #64748b);
+}
+
+.mobile-prototype .budget-scrub-card {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  text-align: left;
+}
+
+.mobile-prototype .budget-scrub-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+  min-height: 22px;
+}
+
+.mobile-prototype .budget-scrub-tooltip {
+  font-size: 12px;
+  font-weight: 750;
+  color: var(--ink);
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--card);
+  border: 1px solid var(--line);
+}
+
+.mobile-prototype .budget-scrub-hint {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--mut);
+}
+
+.mobile-prototype .budget-scrub-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 54px;
+  padding-top: 4px;
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.mobile-prototype .budget-scrub-bar-wrap {
+  flex: 1 1 0;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  cursor: pointer;
+}
+
+.mobile-prototype .budget-scrub-bar {
+  display: block;
+  width: 100%;
+  min-height: 4px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--ink) 14%, transparent);
+  transition:
+    height 180ms ease,
+    background-color 140ms ease,
+    transform 120ms ease;
+}
+
+.mobile-prototype .budget-scrub-bar-wrap.has-spend .budget-scrub-bar {
+  background: color-mix(in srgb, #10b981 62%, var(--ink) 12%);
+}
+
+.mobile-prototype .budget-scrub-bar-wrap.is-active .budget-scrub-bar {
+  background: var(--g);
+  transform: scaleY(1.06);
+}
+
+.mobile-prototype .app-privacy-shield {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: color-mix(in srgb, var(--bg) 76%, transparent);
+  backdrop-filter: blur(22px) saturate(1.2);
+  -webkit-backdrop-filter: blur(22px) saturate(1.2);
+  color: var(--ink);
+  pointer-events: none;
+}
+
+.mobile-prototype .app-privacy-shield-badge {
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.14);
+  display: grid;
+  place-items: center;
+  color: var(--g);
 }

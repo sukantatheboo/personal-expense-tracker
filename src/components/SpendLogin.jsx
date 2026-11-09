@@ -238,7 +238,7 @@ export default function SpendLogin({
         </div>
       </div>
 
-      <div className="sl__sheet" aria-hidden={!open}>
+      <div className="sl__sheet" inert={!open ? true : undefined}>
         <div className="sl__pad">
           {DIGITS.map((d) => (
             <button
@@ -254,7 +254,10 @@ export default function SpendLogin({
           <button
             type="button"
             className="sl__key sl__key--ghost"
-            onClick={() => setOpen(false)}
+            onClick={(e) => {
+              e.currentTarget.blur();
+              setOpen(false);
+            }}
             aria-label="Hide keypad"
             tabIndex={open ? 0 : -1}
           >

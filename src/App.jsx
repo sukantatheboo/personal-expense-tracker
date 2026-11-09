@@ -2128,11 +2128,14 @@ export default function App() {
     })),
     rec: recurringSchedules.map((schedule) => ({
       id: schedule.id,
+      createdAt: schedule.createdAt,
+      updatedAt: schedule.updatedAt,
       desc: schedule.description,
       amt: schedule.amount,
       cat: schedule.category,
       iv: schedule.interval,
       next: schedule.nextDate,
+      dayOfMonth: schedule.dayOfMonth,
       on: schedule.active ? 1 : 0,
       acct: schedule.account,
     })),
@@ -2434,11 +2437,13 @@ export default function App() {
         );
         generated += 1;
       }
+      const now = Date.now();
       setRecurringSchedules((current) => [
         ...current,
         {
           id: scheduleId,
-          updatedAt: Date.now(),
+          createdAt: now,
+          updatedAt: now,
           description,
           amount: roundMoney(amount),
           category: form.category,
@@ -3020,20 +3025,85 @@ export default function App() {
     );
   }
 
+  function saveMobileRecurringUpdate(scheduleId, form) {
+    const description = String(form.description ?? form.desc ?? "").trim();
+    const amount = parseAmount(form.amount ?? form.amt);
+    const category = [
+      "Food",
+      "Transport",
+      "Bills",
+      "Home",
+      "Shopping",
+      "Health",
+      "Entertainment",
+      "Education",
+      "Savings",
+      "Other",
+    ].includes(form.category ?? form.cat)
+      ? (form.category ?? form.cat)
+      : "Other";
+    const interval = ["weekly", "monthly"].includes(form.interval ?? form.iv)
+      ? (form.interval ?? form.iv)
+      : "monthly";
+    const nextDate = form.nextDate ?? form.next;
+    const account = form.account ?? form.acct ?? "";
+    if (
+      !scheduleId ||
+      !description ||
+      !Number.isFinite(amount) ||
+      amount <= 0 ||
+      !isValidDateString(nextDate)
+    ) {
+      return false;
+    }
+    const existing = recurringSchedules.find((item) => item.id === scheduleId);
+    if (!existing) return false;
+    setRecurringSchedules((current) =>
+      current.map((schedule) => {
+        if (schedule.id !== scheduleId) return schedule;
+        const nextDateChanged = nextDate !== schedule.nextDate;
+        const dayOfMonth = nextDateChanged
+          ? Number(nextDate.slice(-2))
+          : schedule.dayOfMonth || Number(nextDate.slice(-2));
+        return {
+          ...schedule,
+          description,
+          amount: roundMoney(amount),
+          category,
+          interval,
+          nextDate,
+          dayOfMonth,
+          account: isAccountId(account, accountData) ? account : "",
+          ...(typeof form.active === "boolean"
+            ? { active: form.active }
+            : form.on !== undefined
+              ? { active: Boolean(form.on) }
+              : {}),
+          updatedAt: Date.now(),
+        };
+      }),
+    );
+    return true;
+  }
+
   function removeMobileRecurring(scheduleId) {
-    const schedule = recurringSchedules.find((item) => item.id === scheduleId);
-    if (!schedule) return undefined;
+    const index = recurringSchedules.findIndex(
+      (item) => item.id === scheduleId,
+    );
+    if (index === -1) return undefined;
+    const schedule = recurringSchedules[index];
     setRecurringSchedules((current) =>
       current.filter((item) => item.id !== scheduleId),
     );
     setRecordDeleted("recurringSchedules", scheduleId, true);
     return () => {
       setRecordDeleted("recurringSchedules", scheduleId, false);
-      setRecurringSchedules((current) =>
-        current.some((item) => item.id === scheduleId)
-          ? current
-          : [...current, schedule],
-      );
+      setRecurringSchedules((current) => {
+        if (current.some((item) => item.id === scheduleId)) return current;
+        const next = [...current];
+        next.splice(Math.min(index, next.length), 0, schedule);
+        return next;
+      });
     };
   }
 
@@ -3979,6 +4049,7 @@ export default function App() {
           onSetPrimaryCard={handleSetPrimaryCard}
           onMoveCardToFront={handleMoveCardToFront}
           onToggleRec={toggleMobileRecurring}
+          onUpdateRec={saveMobileRecurringUpdate}
           onRemoveRec={removeMobileRecurring}
           onTheme={(nextMode) =>
             setTheme((current) =>
