@@ -4120,26 +4120,19 @@ export default function App() {
               aria-labelledby="auth-modal-title"
               onKeyDown={trapAuthModalFocus}
             >
-              <div className="auth-modal-heading">
-                <div>
-                  <h2 id="auth-modal-title">
-                    {authMode === "sign-up"
-                      ? "Create your Spend account"
-                      : authMode === "forgot-password"
-                        ? "Reset your password"
-                        : authMode === "update-password"
-                          ? "Choose a new password"
-                          : "Sign in to Spend"}
-                  </h2>
-                  <p>
-                    {!supabaseConfigured
-                      ? "Sign-in is not configured in this version. Your expenses remain available on this device."
-                      : authMode === "forgot-password"
-                        ? "We’ll email you a secure password reset link."
-                        : authMode === "update-password"
-                          ? "Choose a new password for your Spend account."
-                          : "Use your account for automatic cloud sync. Background reminders are optional."}
-                  </p>
+              <div className="auth-modal-top">
+                <div className="auth-modal-logo" aria-hidden="true">
+                  <svg viewBox="0 0 44 44" width="44" height="44" fill="none">
+                    <rect width="44" height="44" rx="12" fill="#2D6B50" />
+                    <path
+                      d="M15 29 29 15M19 15h10v10"
+                      fill="none"
+                      stroke="#fff"
+                      strokeWidth="3.2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
                 </div>
                 <button
                   className="auth-modal-close"
@@ -4151,9 +4144,43 @@ export default function App() {
                     setShowAuthPassword(false);
                   }}
                 >
-                  ×
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="20"
+                    height="20"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
                 </button>
               </div>
+
+              <div className="auth-modal-heading">
+                <h2 id="auth-modal-title">
+                  {authMode === "sign-up"
+                    ? "Create your account"
+                    : authMode === "forgot-password"
+                      ? "Reset your password"
+                      : authMode === "update-password"
+                        ? "Choose a new password"
+                        : "Sign in to Spend"}
+                </h2>
+                <p>
+                  {!supabaseConfigured
+                    ? "Sign-in is not configured in this version. Your expenses remain available on this device."
+                    : authMode === "forgot-password"
+                      ? "We’ll email you a secure password reset link."
+                      : authMode === "update-password"
+                        ? "Choose a new password for your Spend account."
+                        : "Use your account for automatic cloud sync."}
+                </p>
+              </div>
+
               {supabaseConfigured ? (
                 <>
                   <form
@@ -4161,7 +4188,7 @@ export default function App() {
                     onSubmit={handleAuthSubmit}
                   >
                     <div className="push-auth-fields auth-modal-fields">
-                      <div>
+                      <div className="auth-input-group">
                         <label htmlFor="push-email">Email</label>
                         <input
                           id="push-email"
@@ -4169,12 +4196,13 @@ export default function App() {
                           autoComplete="email"
                           autoFocus
                           required
+                          placeholder="you@example.com"
                           value={authEmail}
                           onChange={(event) => setAuthEmail(event.target.value)}
                         />
                       </div>
                       {authMode !== "forgot-password" && (
-                        <div>
+                        <div className="auth-input-group">
                           <label htmlFor="push-password">
                             {authMode === "update-password"
                               ? "New password"
@@ -4192,6 +4220,7 @@ export default function App() {
                               }
                               minLength="6"
                               required
+                              placeholder="Password"
                               value={authPassword}
                               onChange={(event) =>
                                 setAuthPassword(event.target.value)
@@ -4219,8 +4248,30 @@ export default function App() {
                         </div>
                       )}
                     </div>
+
+                    {authMode === "sign-in" && (
+                      <div className="auth-forgot-row">
+                        <button
+                          className="auth-forgot-password"
+                          type="button"
+                          disabled={authBusy}
+                          onClick={() => {
+                            setAuthMode("forgot-password");
+                            setAuthStatus("");
+                            setAuthPassword("");
+                          }}
+                        >
+                          Forgot password?
+                        </button>
+                      </div>
+                    )}
+
                     <div className="push-auth-actions">
-                      <button type="submit" disabled={authBusy}>
+                      <button
+                        type="submit"
+                        className="auth-modal-submit-btn"
+                        disabled={authBusy}
+                      >
                         {authBusy
                           ? "Please wait…"
                           : authMode === "forgot-password"
@@ -4231,43 +4282,9 @@ export default function App() {
                                 ? "Create account"
                                 : "Sign in"}
                       </button>
-                      {authMode !== "update-password" && (
-                        <button
-                          className="push-account-action"
-                          type="button"
-                          disabled={authBusy}
-                          onClick={() => {
-                            setAuthMode((mode) => {
-                              if (mode === "forgot-password") return "sign-in";
-                              return mode === "sign-up" ? "sign-in" : "sign-up";
-                            });
-                            setAuthStatus("");
-                            setAuthPassword("");
-                          }}
-                        >
-                          {authMode === "forgot-password"
-                            ? "Back to sign in"
-                            : authMode === "sign-up"
-                              ? "I already have an account"
-                              : "Create an account"}
-                        </button>
-                      )}
                     </div>
                   </form>
-                  {authMode === "sign-in" && (
-                    <button
-                      className="auth-forgot-password"
-                      type="button"
-                      disabled={authBusy}
-                      onClick={() => {
-                        setAuthMode("forgot-password");
-                        setAuthStatus("");
-                        setAuthPassword("");
-                      }}
-                    >
-                      Forgot your password?
-                    </button>
-                  )}
+
                   {authStatus && (
                     <p
                       className="auth-modal-status"
@@ -4276,6 +4293,60 @@ export default function App() {
                     >
                       {authStatus}
                     </p>
+                  )}
+
+                  {authMode !== "update-password" && (
+                    <div className="auth-modal-footer">
+                      {authMode === "sign-in" ? (
+                        <>
+                          <span>New here? </span>
+                          <button
+                            className="auth-switch-mode-btn"
+                            type="button"
+                            disabled={authBusy}
+                            onClick={() => {
+                              setAuthMode("sign-up");
+                              setAuthStatus("");
+                              setAuthPassword("");
+                            }}
+                          >
+                            Create an account
+                          </button>
+                        </>
+                      ) : authMode === "sign-up" ? (
+                        <>
+                          <span>Already have an account? </span>
+                          <button
+                            className="auth-switch-mode-btn"
+                            type="button"
+                            disabled={authBusy}
+                            onClick={() => {
+                              setAuthMode("sign-in");
+                              setAuthStatus("");
+                              setAuthPassword("");
+                            }}
+                          >
+                            Sign in
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <span>Remember your password? </span>
+                          <button
+                            className="auth-switch-mode-btn"
+                            type="button"
+                            disabled={authBusy}
+                            onClick={() => {
+                              setAuthMode("sign-in");
+                              setAuthStatus("");
+                              setAuthPassword("");
+                            }}
+                          >
+                            Sign in
+                          </button>
+                        </>
+                      )}
+                    </div>
                   )}
                 </>
               ) : (

@@ -8328,6 +8328,56 @@ function AppSettingsPage({
   );
 }
 
+function PasscodeInputField({
+  value,
+  onChange,
+  onComplete,
+  hasError,
+  autoFocus = true,
+  ariaLabel = "Passcode",
+}) {
+  const inputRef = useRef(null);
+
+  return (
+    <div
+      className={`sec-pin-capsule${hasError ? " is-error" : ""}${value.length === 4 ? " is-filled" : ""}`}
+      onClick={() => inputRef.current?.focus({ preventScroll: true })}
+    >
+      <input
+        ref={inputRef}
+        type="password"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        maxLength={4}
+        autoFocus={autoFocus}
+        data-sheet-autofocus
+        aria-label={ariaLabel}
+        value={value}
+        onChange={(e) => {
+          const next = e.target.value.replace(/\D/g, "").slice(0, 4);
+          onChange(next);
+          if (next.length === 4) {
+            onComplete?.(next);
+          }
+        }}
+        className="sec-pin-hidden-input"
+        autoComplete="off"
+      />
+      <div className="sec-pin-dots" aria-hidden="true">
+        {[0, 1, 2, 3].map((idx) => {
+          const isFilled = idx < value.length;
+          return (
+            <span
+              key={idx}
+              className={`sec-pin-dot${isFilled ? " is-filled" : ""}`}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function SecuritySheet({ onClose, onBack, onLockNow }) {
   const [pinSet, setPinSet] = useState(() => hasAppPin());
   const [biometricsAvailable, setBiometricsAvailable] = useState(false);
@@ -8348,8 +8398,11 @@ function SecuritySheet({ onClose, onBack, onLockNow }) {
     if (step === "confirm_pin") {
       setStep("setup_pin");
       setPinConfirm("");
+      setPinError("");
     } else if (step === "setup_pin") {
       setStep("overview");
+      setPinDraft("");
+      setPinError("");
     } else if (onBack) {
       onBack();
     } else {
@@ -8364,7 +8417,7 @@ function SecuritySheet({ onClose, onBack, onLockNow }) {
   useLayoutEffect(() => {
     if (step === "setup_pin" || step === "confirm_pin") {
       const pinEl = document.querySelector(
-        '[data-sheet-autofocus], .amt input[type="password"]',
+        '.sec-pin-hidden-input, [data-sheet-autofocus]',
       );
       pinEl?.focus({ preventScroll: true });
     }
@@ -8376,6 +8429,15 @@ function SecuritySheet({ onClose, onBack, onLockNow }) {
     setPinError("");
     setStep("setup_pin");
   };
+
+  const commitPin = useCallback(async (pin) => {
+    await flushStorageWriteQueues();
+    await setAppPin(pin);
+    setPinSet(true);
+    triggerHaptic("success");
+    setStatusMsg("PIN passcode enabled successfully.");
+    setStep("overview");
+  }, []);
 
   const handleDraftPinSubmit = (e) => {
     e?.preventDefault();
@@ -8396,12 +8458,7 @@ function SecuritySheet({ onClose, onBack, onLockNow }) {
       setPinConfirm("");
       return;
     }
-    await flushStorageWriteQueues();
-    await setAppPin(pinDraft);
-    setPinSet(true);
-    triggerHaptic("success");
-    setStatusMsg("PIN passcode enabled successfully.");
-    setStep("overview");
+    await commitPin(pinDraft);
   };
 
   const handleRemovePin = async () => {
@@ -8444,7 +8501,7 @@ function SecuritySheet({ onClose, onBack, onLockNow }) {
       <div className="security-sheet-header">
         <button
           type="button"
-          className="prototype-header-back security-sheet-back-btn"
+          className="security-sheet-back-btn"
           aria-label={step === "overview" ? "Back to settings" : "Back"}
           onClick={handleBack}
         >
@@ -8455,184 +8512,204 @@ function SecuritySheet({ onClose, onBack, onLockNow }) {
 
       {step === "overview" && (
         <div className="security-sheet-content">
-          {!pinSet ? (
-            <button
-              className="ri settings-action"
-              type="button"
-              onClick={handleStartSetPin}
-            >
-              <i className="ic" style={{ "--c": "#10b981" }}>
-                <svg
-                  viewBox="0 0 24 24"
-                  width="20"
-                  height="20"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                </svg>
-              </i>
-              <span className="nm">
-                <b>4-Digit Passcode</b>
-                <small>Not set</small>
-              </span>
-              <span className="settings-chevron" aria-hidden="true">
-                <Icon n="r" />
-              </span>
-            </button>
-          ) : (
-            <div className="ri" style={{ justifyContent: "space-between" }}>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 12,
-                  minWidth: 0,
-                }}
-              >
-                <i className="ic" style={{ "--c": "#10b981" }}>
-                  <svg
-                    viewBox="0 0 24 24"
-                    width="20"
-                    height="20"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                  </svg>
-                </i>
-                <span className="nm">
-                  <b>4-Digit Passcode</b>
-                  <small>Active</small>
-                </span>
-              </div>
-              <div className="security-row-actions">
+          <div className="mfs-settings-section">
+            <span className="mfs-settings-section-label">APP ACCESS</span>
+            <div className="mfs-settings-group">
+              {!pinSet ? (
                 <button
+                  className="ri mfs-settings-row"
                   type="button"
-                  className="security-sub-btn"
                   onClick={handleStartSetPin}
                 >
-                  Change
+                  <i className="ic mfs-row-icon" style={{ "--c": "#10b981" }}>
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.1"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                    </svg>
+                  </i>
+                  <span className="nm">
+                    <b>4-Digit Passcode</b>
+                    <small>Not set</small>
+                  </span>
+                  <span className="mfs-row-badge">Set up</span>
+                  <span className="settings-chevron" aria-hidden="true">
+                    <Icon n="r" />
+                  </span>
                 </button>
+              ) : (
+                <div
+                  className="ri mfs-settings-row"
+                  style={{ justifyContent: "space-between" }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 12,
+                      minWidth: 0,
+                    }}
+                  >
+                    <i className="ic mfs-row-icon" style={{ "--c": "#10b981" }}>
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.1"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                      </svg>
+                    </i>
+                    <span className="nm">
+                      <b>4-Digit Passcode</b>
+                      <small>Active</small>
+                    </span>
+                  </div>
+                  <div className="security-row-actions">
+                    <button
+                      type="button"
+                      className="security-sub-btn"
+                      onClick={handleStartSetPin}
+                    >
+                      Change
+                    </button>
+                    <button
+                      type="button"
+                      className="security-sub-btn is-danger"
+                      onClick={handleRemovePin}
+                    >
+                      Turn Off
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {pinSet && (
                 <button
+                  className="ri mfs-settings-row"
                   type="button"
-                  className="security-sub-btn is-danger"
-                  onClick={handleRemovePin}
+                  aria-pressed={biometricsConfigured}
+                  disabled={!biometricsAvailable && !isNativePlatform()}
+                  onClick={handleToggleBiometrics}
                 >
-                  Turn Off
+                  <i className="ic mfs-row-icon" style={{ "--c": "#6366f1" }}>
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.1"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+                      <path d="M9 9h.01M15 9h.01M10 13a2 2 0 0 0 4 0m-2 0v2" />
+                    </svg>
+                  </i>
+                  <span className="nm">
+                    <b>Biometric Unlock</b>
+                    <small>
+                      {biometricsConfigured
+                        ? "Face ID / Touch ID"
+                        : biometricsAvailable
+                          ? "Off"
+                          : "Unavailable on this device"}
+                    </small>
+                  </span>
+                  <span
+                    className={"sw " + (biometricsConfigured ? "on" : "")}
+                    aria-hidden="true"
+                  />
                 </button>
-              </div>
+              )}
+
+              {pinSet && (
+                <div className="mfs-settings-row is-appearance security-autolock-row">
+                  <div className="mfs-appearance-top">
+                    <i className="ic mfs-row-icon" style={{ "--c": "#0ea5e9" }}>
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.1"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        <circle cx="12" cy="12" r="10" />
+                        <polyline points="12 6 12 12 16 14" />
+                      </svg>
+                    </i>
+                    <span className="nm">
+                      <b>Auto-Lock</b>
+                      <small>Require passcode after backgrounding</small>
+                    </span>
+                  </div>
+                  <div
+                    className="mfs-theme-seg"
+                    role="radiogroup"
+                    aria-label="Auto-lock timeout"
+                  >
+                    {[
+                      [0, "Immediately"],
+                      [1, "1 min"],
+                      [5, "5 min"],
+                    ].map(([mins, label]) => (
+                      <button
+                        key={mins}
+                        type="button"
+                        role="radio"
+                        aria-checked={timeoutMinutes === mins}
+                        className={`mfs-theme-seg-btn${timeoutMinutes === mins ? " is-active" : ""}`}
+                        onClick={() => handleTimeoutChange(mins)}
+                      >
+                        <span>{label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-          )}
+          </div>
 
-          {pinSet && (
-            <button
-              className="ri settings-action"
-              type="button"
-              aria-pressed={biometricsConfigured}
-              disabled={!biometricsAvailable && !isNativePlatform()}
-              onClick={handleToggleBiometrics}
-            >
-              <i className="ic" style={{ "--c": "#6366f1" }}>
-                <svg
-                  viewBox="0 0 24 24"
-                  width="20"
-                  height="20"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
-                  <path d="M9 9h.01M15 9h.01M10 13a2 2 0 0 0 4 0m-2 0v2" />
-                </svg>
-              </i>
-              <span className="nm">
-                <b>Biometric Unlock</b>
-                <small>
-                  {biometricsConfigured
-                    ? "Face ID / Touch ID"
-                    : biometricsAvailable
-                      ? "Off"
-                      : "Unavailable on this device"}
-                </small>
-              </span>
-              <span
-                className={"sw " + (biometricsConfigured ? "on" : "")}
-                aria-hidden="true"
-              />
-            </button>
-          )}
-
-          {pinSet && (
-            <div className="security-autolock-wrap">
-              <div className="ri" style={{ borderBottom: 0, paddingBottom: 6 }}>
-                <i className="ic" style={{ "--c": "#0ea5e9" }}>
+          <div className="mfs-settings-section" style={{ marginTop: 14 }}>
+            <span className="mfs-settings-section-label">DATA PRIVACY</span>
+            <div className="mfs-settings-group">
+              <div className="ri mfs-settings-row">
+                <i className="ic mfs-row-icon" style={{ "--c": "#10b981" }}>
                   <svg
                     viewBox="0 0 24 24"
-                    width="20"
-                    height="20"
                     fill="none"
                     stroke="currentColor"
-                    strokeWidth="2.2"
+                    strokeWidth="2.1"
                     strokeLinecap="round"
                     strokeLinejoin="round"
+                    aria-hidden="true"
                   >
-                    <circle cx="12" cy="12" r="10" />
-                    <polyline points="12 6 12 12 16 14" />
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                   </svg>
                 </i>
                 <span className="nm">
-                  <b>Auto-Lock</b>
-                  <small>Require passcode</small>
+                  <b>Cloud Encryption</b>
+                  <small>End-to-end encrypted on this device</small>
+                </span>
+                <span className="security-badge-e2e">
+                  <span className="security-badge-dot" />
+                  Protected
                 </span>
               </div>
-              <div style={{ padding: "0 4px 10px" }}>
-                <Seg
-                  value={timeoutMinutes}
-                  onPick={handleTimeoutChange}
-                  options={[
-                    [0, "Immediately"],
-                    [1, "1 min"],
-                    [5, "5 min"],
-                  ]}
-                />
-              </div>
             </div>
-          )}
-
-          <div className="ri">
-            <i className="ic" style={{ "--c": "#10b981" }}>
-              <svg
-                viewBox="0 0 24 24"
-                width="20"
-                height="20"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-              </svg>
-            </i>
-            <span className="nm">
-              <b>Cloud Encryption</b>
-              <small>End-to-end encrypted</small>
-            </span>
-            <span className="security-badge-e2e">
-              <span className="security-badge-dot" />
-              Protected
-            </span>
           </div>
 
           {statusMsg && (
@@ -8640,7 +8717,7 @@ function SecuritySheet({ onClose, onBack, onLockNow }) {
               className="settings-status"
               role="status"
               aria-live="polite"
-              style={{ marginTop: 12 }}
+              style={{ marginTop: 14 }}
             >
               {statusMsg}
             </p>
@@ -8650,19 +8727,27 @@ function SecuritySheet({ onClose, onBack, onLockNow }) {
             <div style={{ marginTop: 18 }}>
               <button
                 type="button"
-                className="btn"
-                style={{
-                  width: "100%",
-                  background: "var(--card)",
-                  border: "1px solid var(--line)",
-                  color: "var(--ink)",
-                }}
+                className="security-lock-now-btn"
                 onClick={() => {
                   lockAppManually();
                   onLockNow?.();
                 }}
               >
-                Lock App Now
+                <svg
+                  viewBox="0 0 24 24"
+                  width="16"
+                  height="16"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+                <span>Lock App Now</span>
               </button>
             </div>
           )}
@@ -8670,48 +8755,81 @@ function SecuritySheet({ onClose, onBack, onLockNow }) {
       )}
 
       {step === "setup_pin" && (
-        <form onSubmit={handleDraftPinSubmit}>
-          <p
-            className="hint"
-            style={{ textAlign: "center", margin: "6px 0 0" }}
-          >
-            Create a 4-digit passcode
-          </p>
-          <div className="amt" style={{ margin: "20px 0 16px" }}>
-            <input
-              type="password"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              maxLength={4}
-              autoFocus
-              data-sheet-autofocus
-              placeholder="••••"
-              value={pinDraft}
-              onChange={(e) =>
-                setPinDraft(e.target.value.replace(/\D/g, "").slice(0, 4))
-              }
-              style={{ textAlign: "center", letterSpacing: "0.4em" }}
-            />
-          </div>
-          {pinError && (
-            <p
-              className="security-pin-error-msg"
-              style={{ textAlign: "center" }}
+        <form onSubmit={handleDraftPinSubmit} className="security-flow-wrap">
+          <div className="security-flow-icon-wrap">
+            <svg
+              viewBox="0 0 24 24"
+              width="24"
+              height="24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.1"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
             >
-              {pinError}
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+          </div>
+          <h4 className="security-flow-title">Create a 4-digit passcode</h4>
+          <p className="security-flow-sub">
+            Enter 4 digits to lock Spend on this device
+          </p>
+
+          <PasscodeInputField
+            value={pinDraft}
+            onChange={(next) => {
+              setPinDraft(next);
+              setPinError("");
+            }}
+            onComplete={(fullPin) => {
+              triggerHaptic("selection");
+              setTimeout(() => {
+                setStep("confirm_pin");
+              }, 160);
+            }}
+            hasError={Boolean(pinError)}
+            ariaLabel="Create 4-digit passcode"
+          />
+
+          {pinError && (
+            <p className="security-pin-error-msg" role="alert">
+              <svg
+                viewBox="0 0 24 24"
+                width="14"
+                height="14"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+              <span>{pinError}</span>
             </p>
           )}
-          <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+
+          <div className="security-flow-actions">
             <button
               type="button"
-              className="btn del"
-              onClick={() => setStep("overview")}
+              className="security-flow-btn is-secondary"
+              onClick={() => {
+                triggerHaptic("light");
+                setStep("overview");
+                setPinDraft("");
+                setPinError("");
+              }}
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="btn"
+              className="security-flow-btn is-primary"
               disabled={pinDraft.length !== 4}
             >
               Continue
@@ -8721,51 +8839,88 @@ function SecuritySheet({ onClose, onBack, onLockNow }) {
       )}
 
       {step === "confirm_pin" && (
-        <form onSubmit={handleConfirmPinSubmit}>
-          <p
-            className="hint"
-            style={{ textAlign: "center", margin: "6px 0 0" }}
-          >
-            Confirm your 4-digit passcode
-          </p>
-          <div className="amt" style={{ margin: "20px 0 16px" }}>
-            <input
-              type="password"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              maxLength={4}
-              autoFocus
-              data-sheet-autofocus
-              placeholder="••••"
-              value={pinConfirm}
-              onChange={(e) =>
-                setPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 4))
-              }
-              style={{ textAlign: "center", letterSpacing: "0.4em" }}
-            />
-          </div>
-          {pinError && (
-            <p
-              className="security-pin-error-msg"
-              style={{ textAlign: "center" }}
+        <form onSubmit={handleConfirmPinSubmit} className="security-flow-wrap">
+          <div className="security-flow-icon-wrap">
+            <svg
+              viewBox="0 0 24 24"
+              width="24"
+              height="24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.1"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
             >
-              {pinError}
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              <path d="m9 12 2 2 4-4" />
+            </svg>
+          </div>
+          <h4 className="security-flow-title">Confirm your passcode</h4>
+          <p className="security-flow-sub">
+            Re-enter the 4 digits to verify
+          </p>
+
+          <PasscodeInputField
+            value={pinConfirm}
+            onChange={(next) => {
+              setPinConfirm(next);
+              setPinError("");
+            }}
+            onComplete={(fullPin) => {
+              if (fullPin !== pinDraft) {
+                triggerHaptic("warning");
+                setPinError("PINs do not match. Please try again.");
+                setTimeout(() => {
+                  setPinConfirm("");
+                }, 400);
+                return;
+              }
+              setTimeout(() => {
+                commitPin(pinDraft);
+              }, 160);
+            }}
+            hasError={Boolean(pinError)}
+            ariaLabel="Confirm 4-digit passcode"
+          />
+
+          {pinError && (
+            <p className="security-pin-error-msg" role="alert">
+              <svg
+                viewBox="0 0 24 24"
+                width="14"
+                height="14"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+              <span>{pinError}</span>
             </p>
           )}
-          <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+
+          <div className="security-flow-actions">
             <button
               type="button"
-              className="btn del"
+              className="security-flow-btn is-secondary"
               onClick={() => {
+                triggerHaptic("light");
                 setStep("setup_pin");
                 setPinConfirm("");
+                setPinError("");
               }}
             >
               Back
             </button>
             <button
               type="submit"
-              className="btn"
+              className="security-flow-btn is-primary"
               disabled={pinConfirm.length !== 4}
             >
               Confirm
