@@ -4690,21 +4690,21 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
   gap: 5px;
 }
 .mobile-prototype .emp-illustrated-icon {
-  width: 56px;
-  height: 56px;
-  border-radius: 18px;
+  width: 76px;
+  height: 76px;
+  border-radius: 24px;
   background: var(--bg);
   border: 1px solid var(--line);
   display: grid;
   place-items: center;
   color: var(--mut);
-  margin-bottom: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+  margin-bottom: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04);
 }
 [data-theme="dark"] .mobile-prototype .emp-illustrated-icon {
   background: rgba(255, 255, 255, 0.04);
   border-color: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
 }
 .mobile-prototype .emp-svg {
   width: 32px;
@@ -6064,23 +6064,23 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
 
 .mobile-prototype .accounts-tx-empty-icon-wrap {
   position: relative;
-  width: 64px;
-  height: 64px;
-  margin-bottom: 14px;
+  width: 82px;
+  height: 82px;
+  margin-bottom: 16px;
   display: grid;
   place-items: center;
 }
 
 .mobile-prototype .accounts-tx-empty-glow {
   position: absolute;
-  inset: -6px;
+  inset: -8px;
   border-radius: 50%;
   background: radial-gradient(
     circle,
     var(--card-accent, #3b82f6) 0%,
     transparent 72%
   );
-  filter: blur(12px);
+  filter: blur(16px);
   opacity: 0.28;
   pointer-events: none;
   transition: opacity 240ms ease;
@@ -6088,17 +6088,17 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
 
 [data-theme="dark"] .mobile-prototype .accounts-tx-empty-glow {
   opacity: 0.22;
-  filter: blur(14px);
+  filter: blur(16px);
 }
 
 .mobile-prototype .accounts-tx-empty-badge {
   position: relative;
-  width: 58px;
-  height: 58px;
-  border-radius: 18px;
+  width: 76px;
+  height: 76px;
+  border-radius: 24px;
   background: var(--bg);
   border: 1px solid var(--line);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
   display: grid;
   place-items: center;
   color: var(--card-accent, #3b82f6);
@@ -6107,7 +6107,7 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
 [data-theme="dark"] .mobile-prototype .accounts-tx-empty-badge {
   background: rgba(255, 255, 255, 0.04);
   border-color: rgba(255, 255, 255, 0.09);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.38);
 }
 
 .mobile-prototype .accounts-tx-empty-svg {

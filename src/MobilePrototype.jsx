@@ -60,6 +60,13 @@ import {
   lockAppManually,
 } from "./security.js";
 import "./MobilePrototype.css";
+import {
+  AnimatedBudgetIcon,
+  AnimatedRecurringIcon,
+  AnimatedExpensesIcon,
+  AnimatedTransactionsIcon,
+  AnimatedActivityIcon,
+} from "./components/AnimatedEmptyIcons.jsx";
 
 const MonthEndBanner = lazy(() => import("./components/MonthEndBanner.jsx"));
 const SpendLogin = lazy(() => import("./components/SpendLogin.jsx"));
@@ -2257,58 +2264,7 @@ function Home({
         ) : (
           <div className="emp-illustrated">
             <div className="emp-illustrated-icon">
-              <svg
-                viewBox="0 0 48 48"
-                fill="none"
-                className="emp-svg"
-                aria-hidden="true"
-              >
-                <rect
-                  x="11"
-                  y="8"
-                  width="26"
-                  height="32"
-                  rx="6"
-                  className="emp-doc"
-                />
-                <line
-                  x1="17"
-                  y1="16"
-                  x2="31"
-                  y2="16"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  opacity="0.85"
-                />
-                <line
-                  x1="17"
-                  y1="22"
-                  x2="27"
-                  y2="22"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  opacity="0.55"
-                />
-                <line
-                  x1="17"
-                  y1="28"
-                  x2="23"
-                  y2="28"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  opacity="0.35"
-                />
-                <circle cx="34" cy="34" r="8" className="emp-chip" />
-                <path
-                  d="M34 31V37M31 34H37"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
-              </svg>
+              <AnimatedExpensesIcon />
             </div>
             <b>No expenses this month</b>
             <small>Tap + below to add your first expense</small>
@@ -3013,38 +2969,7 @@ function Activity({
         {!filteredItems.length ? (
           <div className="emp-illustrated">
             <div className="emp-illustrated-icon">
-              <svg
-                viewBox="0 0 48 48"
-                fill="none"
-                className="emp-svg"
-                aria-hidden="true"
-              >
-                <circle
-                  cx="21"
-                  cy="21"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                />
-                <line
-                  x1="28.5"
-                  y1="28.5"
-                  x2="38"
-                  y2="38"
-                  stroke="currentColor"
-                  strokeWidth="2.4"
-                  strokeLinecap="round"
-                />
-                <circle
-                  cx="21"
-                  cy="21"
-                  r="4.5"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeDasharray="2.5 2.5"
-                  opacity="0.5"
-                />
-              </svg>
+              <AnimatedActivityIcon />
             </div>
             <b>
               {hasFilter
@@ -3571,64 +3496,7 @@ function Accounts({
               <div className="accounts-tx-empty-icon-wrap">
                 <div className="accounts-tx-empty-glow" />
                 <div className="accounts-tx-empty-badge">
-                  <svg
-                    viewBox="0 0 52 52"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="accounts-tx-empty-svg"
-                    aria-hidden="true"
-                  >
-                    <rect
-                      x="11"
-                      y="9"
-                      width="30"
-                      height="34"
-                      rx="7"
-                      className="accounts-tx-empty-doc"
-                    />
-                    <line
-                      x1="18"
-                      y1="18"
-                      x2="34"
-                      y2="18"
-                      stroke="currentColor"
-                      strokeWidth="2.2"
-                      strokeLinecap="round"
-                      opacity="0.85"
-                    />
-                    <line
-                      x1="18"
-                      y1="24"
-                      x2="30"
-                      y2="24"
-                      stroke="currentColor"
-                      strokeWidth="2.2"
-                      strokeLinecap="round"
-                      opacity="0.55"
-                    />
-                    <line
-                      x1="18"
-                      y1="30"
-                      x2="25"
-                      y2="30"
-                      stroke="currentColor"
-                      strokeWidth="2.2"
-                      strokeLinecap="round"
-                      opacity="0.35"
-                    />
-                    <circle
-                      cx="36"
-                      cy="36"
-                      r="9"
-                      className="accounts-tx-empty-bubble"
-                    />
-                    <path
-                      d="M36 32.5V39.5M32.5 36H39.5"
-                      stroke="currentColor"
-                      strokeWidth="2.2"
-                      strokeLinecap="round"
-                    />
-                  </svg>
+                  <AnimatedTransactionsIcon />
                 </div>
               </div>
 
@@ -3643,7 +3511,7 @@ function Accounts({
                 </p>
               </div>
 
-              {activeCard?.frozen ? (
+              {activeCard?.frozen && (
                 <div className="accounts-tx-empty-frozen">
                   <svg
                     viewBox="0 0 24 24"
@@ -3671,45 +3539,6 @@ function Accounts({
                     }}
                   >
                     Manage
-                  </button>
-                </div>
-              ) : (
-                <div className="accounts-tx-empty-actions">
-                  <button
-                    type="button"
-                    className="accounts-tx-empty-btn is-primary"
-                    onClick={() => {
-                      triggerHaptic("light");
-                      if (onAddExpense) {
-                        onAddExpense(selectedAccount);
-                      } else {
-                        onTab?.("add");
-                      }
-                    }}
-                  >
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.4"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                    >
-                      <path d="M12 5v14M5 12h14" />
-                    </svg>
-                    <span>Add Expense</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    className="accounts-tx-empty-btn is-secondary"
-                    onClick={() => {
-                      triggerHaptic("light");
-                      onTx?.("income", selectedAccount);
-                    }}
-                  >
-                    <span>Income</span>
                   </button>
                 </div>
               )}
@@ -3888,30 +3717,7 @@ function Plans({
         ) : (
           <div className="emp-illustrated">
             <div className="emp-illustrated-icon">
-              <svg
-                viewBox="0 0 48 48"
-                fill="none"
-                className="emp-svg"
-                aria-hidden="true"
-              >
-                <circle
-                  cx="24"
-                  cy="24"
-                  r="16"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  opacity="0.35"
-                />
-                <circle
-                  cx="24"
-                  cy="24"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  opacity="0.65"
-                />
-                <circle cx="24" cy="24" r="4" fill="currentColor" />
-              </svg>
+              <AnimatedBudgetIcon />
             </div>
             <b>No budget set for {fM(S.m)}</b>
             <small>
@@ -3988,55 +3794,7 @@ function Plans({
         ) : (
           <div className="emp-illustrated">
             <div className="emp-illustrated-icon">
-              <svg
-                viewBox="0 0 48 48"
-                fill="none"
-                className="emp-svg"
-                aria-hidden="true"
-              >
-                <rect
-                  x="9"
-                  y="11"
-                  width="30"
-                  height="28"
-                  rx="6"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                />
-                <line
-                  x1="9"
-                  y1="20"
-                  x2="39"
-                  y2="20"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  opacity="0.4"
-                />
-                <line
-                  x1="16"
-                  y1="8"
-                  x2="16"
-                  y2="13"
-                  stroke="currentColor"
-                  strokeWidth="2.4"
-                  strokeLinecap="round"
-                />
-                <line
-                  x1="32"
-                  y1="8"
-                  x2="32"
-                  y2="13"
-                  stroke="currentColor"
-                  strokeWidth="2.4"
-                  strokeLinecap="round"
-                />
-                <path
-                  d="M21 28H27M24 25V31"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
-              </svg>
+              <AnimatedRecurringIcon />
             </div>
             <b>No recurring expenses</b>
             <small>
