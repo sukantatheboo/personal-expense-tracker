@@ -15,11 +15,42 @@ export const STORAGE_KEYS = {
   accounts: "spend-account-balances-v1",
   deletedRecords: "spend-deleted-records-v1",
   theme: "spend-theme-v1",
+  haptics: "spend-haptics-enabled-v1",
   currency: "spend-target-currency-v1",
   reminderTime: "spend-reminder-time-v1",
   profileName: "spend-profile-name-v1",
+  profileAvatar: "spend-profile-avatar-v1",
+  profileUpdatedAt: "spend-profile-updated-at-v1",
   preferredAccount: "spend-preferred-account-v1",
 };
+
+let hapticsEnabledCache = null;
+
+export function isHapticsEnabled() {
+  if (typeof hapticsEnabledCache === "boolean") return hapticsEnabledCache;
+  try {
+    const saved = localStorage.getItem(STORAGE_KEYS.haptics);
+    if (saved === "false" || saved === "0") {
+      hapticsEnabledCache = false;
+      return false;
+    }
+    hapticsEnabledCache = true;
+    return true;
+  } catch {
+    return true;
+  }
+}
+
+export function setHapticsEnabled(enabled) {
+  const next = Boolean(enabled);
+  hapticsEnabledCache = next;
+  try {
+    localStorage.setItem(STORAGE_KEYS.haptics, next ? "true" : "false");
+  } catch {
+    // Keep in-memory preference for this session if storage is unavailable.
+  }
+  return next;
+}
 
 const SENSITIVE_STORAGE_KEY_SET = new Set(SENSITIVE_STORAGE_KEYS);
 

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { getCategoryIcon } from "../categoryAssets.jsx";
+import { isHapticsEnabled } from "../data.js";
 import "./MonthEndBanner.css";
 
 /* ---------- distinct tints matching all 10 app categories ---------- */
@@ -169,7 +170,8 @@ export function buildRecap(
 
 const BG = ["#16241b", "#1f3329", "#171d2e", "#22392e", "#16241b"];
 const fmt = (n) => Math.round(n).toLocaleString("en-US");
-const buzz = () => typeof navigator !== "undefined" && navigator.vibrate?.(8);
+const buzz = () =>
+  isHapticsEnabled() && typeof navigator !== "undefined" && navigator.vibrate?.(8);
 
 function useCountUp(target, run, delay = 250, ms = 1100) {
   const [v, setV] = useState(0);

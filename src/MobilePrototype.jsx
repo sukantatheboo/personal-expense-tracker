@@ -12,7 +12,9 @@ import {
 import {
   flushStorageWriteQueues,
   getSavingsAccountId,
+  isHapticsEnabled,
   parseAmount,
+  setHapticsEnabled,
   STORAGE_KEYS,
 } from "./data.js";
 import { CARD_PROVIDERS } from "./cardProviders.js";
@@ -375,6 +377,7 @@ const ICONS = {
 const Icon = ({ n }) => <svg viewBox="0 0 24 24">{ICONS[n]}</svg>;
 
 function triggerSafariWebHaptic() {
+  if (!isHapticsEnabled()) return;
   if (typeof document === "undefined") return;
   try {
     let trigger = document.getElementById("safari-haptic-trigger");
@@ -396,6 +399,7 @@ function triggerSafariWebHaptic() {
 }
 
 function triggerHaptic(type = "light") {
+  if (!isHapticsEnabled()) return false;
   if (isNativePlatform()) {
     void import("@capacitor/haptics")
       .then(({ Haptics, ImpactStyle, NotificationType }) => {
@@ -5356,65 +5360,277 @@ function BudgetSheet({ S, onSave, onClear, onClose }) {
 function SettingsSheet({
   S,
   profile,
+  hapticsEnabled = true,
+  onToggleHaptics,
   onTheme,
   onAdvanced,
   onProfileSettings,
   onSecurity,
   onClose,
 }) {
-  const dark = S.theme === "dark";
+  const themeMode =
+    S?.themeMode ||
+    (S?.theme === "auto" || S?.theme === "light" || S?.theme === "dark"
+      ? S.theme
+      : "auto");
+  const pinActive = hasAppPin();
+  const isConnected = Boolean(profile?.connected);
+
+  const handlePickTheme = (mode) => {
+    if (mode === themeMode) return;
+    triggerHaptic("selection");
+    onTheme?.(mode);
+  };
+
   return (
     <Sheet onClose={onClose}>
-      <h3 id="sheet-title">Settings</h3>
-      <button
-        className="ri settings-profile-row"
-        type="button"
-        aria-label="Open profile and sync settings"
-        onClick={onProfileSettings}
-      >
-        <i className="ic" style={{ "--c": "var(--g)" }}>
-          {profile?.initial || "S"}
-        </i>
-        <span className="nm">
-          <b>{profile?.name || "Local profile"}</b>
-          <small>{profile?.email || "Data stays on this device"}</small>
-        </span>
-        <span className="settings-chevron" aria-hidden="true">
-          <Icon n="r" />
-        </span>
-      </button>
-      <button
-        className="ri"
-        type="button"
-        aria-pressed={dark}
-        onClick={onTheme}
-      >
-        <span className="nm">
-          <b>Dark mode</b>
-          <small>{dark ? "On" : "Off"}</small>
-        </span>
-        <span className={"sw " + (dark ? "on" : "")} aria-hidden="true" />
-      </button>
-      <button className="ri" type="button" onClick={onAdvanced}>
-        <span className="nm">
-          <b>App settings</b>
-          <small>Reminders &amp; backups</small>
-        </span>
-        <span className="settings-chevron" aria-hidden="true">
-          <Icon n="r" />
-        </span>
-      </button>
-      <button className="ri" type="button" onClick={onSecurity}>
-        <span className="nm">
-          <b>Security &amp; App Lock</b>
-          <small>
-            {hasAppPin() ? "Passcode active" : "Set PIN passcode & biometrics"}
-          </small>
-        </span>
-        <span className="settings-chevron" aria-hidden="true">
-          <Icon n="r" />
-        </span>
-      </button>
+      <div className="mfs-settings-sheet">
+        <h3 id="sheet-title" className="mfs-settings-sheet-title">
+          Settings
+        </h3>
+
+        {/* Identity & Sync Card */}
+        <button
+          className="ri settings-profile-row mfs-settings-profile-card"
+          type="button"
+          aria-label="Open profile and sync settings"
+          onClick={() => {
+            triggerHaptic("selection");
+            onProfileSettings?.();
+          }}
+        >
+          <i
+            className={`ic mfs-profile-avatar${profile?.avatar ? " has-photo" : ""}`}
+            style={{ "--c": "var(--g)" }}
+          >
+            {profile?.avatar ? (
+              <img
+                src={profile.avatar}
+                alt=""
+                className="mfs-avatar-img"
+                draggable="false"
+              />
+            ) : (
+              profile?.initial || "S"
+            )}
+          </i>
+          <span className="nm">
+            <b>{profile?.name || "Local profile"}</b>
+            <small>{profile?.email || "Data stays on this device"}</small>
+          </span>
+          <span
+            className={`mfs-profile-status-pill${isConnected ? " is-synced" : ""}`}
+          >
+            <span className="mfs-profile-status-dot" aria-hidden="true" />
+            {isConnected ? "Synced" : "Local"}
+          </span>
+          <span className="settings-chevron" aria-hidden="true">
+            <Icon n="r" />
+          </span>
+        </button>
+
+        {/* Section 1: Appearance & Haptics */}
+        <div className="mfs-settings-section">
+          <span className="mfs-settings-section-label">PREFERENCES</span>
+          <div className="mfs-settings-group">
+            <div className="mfs-settings-row is-appearance">
+              <div className="mfs-appearance-top">
+                <i className="ic mfs-row-icon" style={{ "--c": "#6366f1" }}>
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.1"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="4" />
+                    <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+                  </svg>
+                </i>
+                <span className="nm">
+                  <b>Appearance</b>
+                  <small>
+                    {themeMode === "auto"
+                      ? "Matches device theme"
+                      : themeMode === "dark"
+                        ? "Dark theme active"
+                        : "Light theme active"}
+                  </small>
+                </span>
+              </div>
+              <div
+                className="mfs-theme-seg"
+                role="radiogroup"
+                aria-label="Appearance theme"
+              >
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={themeMode === "auto"}
+                  className={`mfs-theme-seg-btn${themeMode === "auto" ? " is-active" : ""}`}
+                  onClick={() => handlePickTheme("auto")}
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.1"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M12 3v18" />
+                    <path d="M12 7a5 5 0 0 1 0 10" fill="currentColor" stroke="none" />
+                  </svg>
+                  <span>Auto</span>
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={themeMode === "light"}
+                  className={`mfs-theme-seg-btn${themeMode === "light" ? " is-active" : ""}`}
+                  onClick={() => handlePickTheme("light")}
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.1"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="4.5" />
+                    <path d="M12 2.5v2.2M12 19.3v2.2M5.28 5.28l1.56 1.56M17.16 17.16l1.56 1.56M2.5 12h2.2M19.3 12h2.2M5.28 18.72l1.56-1.56M17.16 6.84l1.56-1.56" />
+                  </svg>
+                  <span>Light</span>
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={themeMode === "dark"}
+                  className={`mfs-theme-seg-btn${themeMode === "dark" ? " is-active" : ""}`}
+                  onClick={() => handlePickTheme("dark")}
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.1"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                  </svg>
+                  <span>Dark</span>
+                </button>
+              </div>
+            </div>
+
+            <button
+              className="ri mfs-settings-row"
+              type="button"
+              aria-pressed={hapticsEnabled}
+              onClick={() => onToggleHaptics?.()}
+            >
+              <i className="ic mfs-row-icon" style={{ "--c": "#0ea5e9" }}>
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.1"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect x="7" y="4" width="10" height="16" rx="2.5" />
+                  <path d="M3.5 8.5c-1.2 2.1-1.2 4.9 0 7" />
+                  <path d="M20.5 8.5c1.2 2.1 1.2 4.9 0 7" />
+                </svg>
+              </i>
+              <span className="nm">
+                <b>Haptic feedback</b>
+                <small>Touch vibrations on iOS &amp; Android</small>
+              </span>
+              <span
+                className={"sw " + (hapticsEnabled ? "on" : "")}
+                aria-hidden="true"
+              />
+            </button>
+          </div>
+        </div>
+
+        {/* Section 2: App & Security */}
+        <div className="mfs-settings-section">
+          <span className="mfs-settings-section-label">APP &amp; SECURITY</span>
+          <div className="mfs-settings-group">
+            <button
+              className="ri mfs-settings-row"
+              type="button"
+              onClick={() => {
+                triggerHaptic("selection");
+                onAdvanced?.();
+              }}
+            >
+              <i className="ic mfs-row-icon" style={{ "--c": "#f59e0b" }}>
+                <Icon n="bell" />
+              </i>
+              <span className="nm">
+                <b>App settings</b>
+                <small>Reminders &amp; backups</small>
+              </span>
+              <span className="settings-chevron" aria-hidden="true">
+                <Icon n="r" />
+              </span>
+            </button>
+
+            <button
+              className="ri mfs-settings-row"
+              type="button"
+              onClick={() => {
+                triggerHaptic("selection");
+                onSecurity?.();
+              }}
+            >
+              <i className="ic mfs-row-icon" style={{ "--c": "#10b981" }}>
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.1"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                  <rect x="9" y="11" width="6" height="5" rx="1" />
+                  <path d="M10.5 11V9.5a1.5 1.5 0 0 1 3 0V11" />
+                </svg>
+              </i>
+              <span className="nm">
+                <b>Security &amp; App Lock</b>
+                <small>
+                  {pinActive
+                    ? "Passcode active"
+                    : "Set PIN passcode & biometrics"}
+                </small>
+              </span>
+              <span
+                className={`mfs-row-badge${pinActive ? " is-active" : ""}`}
+              >
+                {pinActive ? "Active" : "Off"}
+              </span>
+              <span className="settings-chevron" aria-hidden="true">
+                <Icon n="r" />
+              </span>
+            </button>
+          </div>
+        </div>
+      </div>
     </Sheet>
   );
 }
@@ -7114,7 +7330,49 @@ function CardOptionsSheet({
   );
 }
 
+function compressAvatarImage(file) {
+  return new Promise((resolve, reject) => {
+    if (!file || !file.type?.startsWith("image/")) {
+      reject(new Error("Choose a valid image file."));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Could not read image file."));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("Could not decode image."));
+      img.onload = () => {
+        try {
+          const size = 192;
+          const canvas = document.createElement("canvas");
+          canvas.width = size;
+          canvas.height = size;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            reject(new Error("Canvas unavailable."));
+            return;
+          }
+          const minSide = Math.min(img.width, img.height);
+          const sx = Math.max(0, (img.width - minSide) / 2);
+          const sy = Math.max(0, (img.height - minSide) / 2);
+          ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, size, size);
+          let dataUrl = canvas.toDataURL("image/webp", 0.84);
+          if (!dataUrl.startsWith("data:image/webp")) {
+            dataUrl = canvas.toDataURL("image/jpeg", 0.84);
+          }
+          resolve(dataUrl);
+        } catch (err) {
+          reject(err);
+        }
+      };
+      img.src = String(reader.result || "");
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 function ProfileSettingsPage({
+  S,
   profile,
   cloudSyncEnabled,
   cloudSyncReady,
@@ -7125,10 +7383,16 @@ function ProfileSettingsPage({
   profileStatus,
   authBusy,
   onEditProfile,
+  onAvatarChange,
+  onManageCards,
   onSignIn,
   onSignOut,
   onResumeSync,
 }) {
+  const fileInputRef = useRef(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoError, setPhotoError] = useState("");
+
   const isOffline =
     cloudSyncActivity === "offline" || cloudRealtimeStatus === "offline";
   const hasSyncError = cloudSyncActivity === "error";
@@ -7148,6 +7412,7 @@ function ProfileSettingsPage({
     !isOffline &&
     !hasSyncError &&
     cloudSyncActivity !== "syncing";
+
   const syncLabel = (() => {
     if (!profile?.connected) return "Local only";
     if (!cloudSyncEnabled) return "Sync paused";
@@ -7155,122 +7420,299 @@ function ProfileSettingsPage({
     if (hasSyncError) return "Sync issue";
     if (needsSyncSetup) return "Setup required";
     if (isSyncing) return "Syncing…";
-    if (isLive) return "Synced";
+    if (isLive) return "Live sync";
     if (cloudRealtimeStatus === "reconnecting") return "Reconnecting…";
     return "Cloud sync on";
   })();
 
-  return (
-    <>
-      <p className="settings-page-intro">
-        {profile?.connected
-          ? "Manage your name, account, and cloud sync."
-          : "Sign in to add a profile name and sync across devices."}
-      </p>
+  const cards = Array.isArray(S?.cards) ? S.cards : [];
+  const primaryCard = cards.find((c) => c.isPrimary) || cards[0] || null;
 
-      <section className="card app-settings-card">
-        <h2>Your profile</h2>
-        {profile?.connected ? (
-          <div className="ri settings-profile-row">
-            <i className="ic" style={{ "--c": "var(--g)" }}>
-              {profile.initial || "S"}
-            </i>
-            <span className="nm">
-              <b>{profile.name || "Account"}</b>
-              <small>{profile.email || "Signed-in account"}</small>
-            </span>
+  const handlePickPhotoClick = () => {
+    triggerHaptic("selection");
+    setPhotoError("");
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (event) => {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = "";
+    if (!file) return;
+    setPhotoBusy(true);
+    setPhotoError("");
+    try {
+      const dataUrl = await compressAvatarImage(file);
+      await onAvatarChange?.(dataUrl);
+      triggerHaptic("success");
+    } catch (err) {
+      triggerHaptic("warning");
+      setPhotoError(err?.message || "Could not process this photo.");
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+
+  const handleRemovePhoto = async () => {
+    triggerHaptic("delete");
+    setPhotoError("");
+    await onAvatarChange?.("");
+  };
+
+  return (
+    <div className="mfs-profile-page">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={handleFileChange}
+      />
+
+      {/* Hero Identity Card */}
+      <section className="card mfs-profile-hero-card">
+        <div className="mfs-profile-hero-top">
+          <div className="mfs-profile-hero-avatar-wrap">
             <button
-              className="settings-profile-edit"
               type="button"
-              aria-label="Edit profile name"
-              onClick={onEditProfile}
+              className={`mfs-profile-hero-avatar${profile?.avatar ? " has-photo" : ""}`}
+              onClick={handlePickPhotoClick}
+              disabled={photoBusy}
+              aria-label="Change profile picture"
+            >
+              {profile?.avatar ? (
+                <img
+                  src={profile.avatar}
+                  alt=""
+                  className="mfs-avatar-img"
+                  draggable="false"
+                />
+              ) : (
+                <span>{profile?.initial || "S"}</span>
+              )}
+            </button>
+            <button
+              type="button"
+              className="mfs-profile-camera-badge"
+              onClick={handlePickPhotoClick}
+              disabled={photoBusy}
+              aria-label="Upload profile photo"
+              title="Upload profile photo"
             >
               <svg
-                viewBox="0 0 512 512"
-                width="17"
-                height="17"
-                fill="currentColor"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.1"
+                strokeLinecap="round"
+                strokeLinejoin="round"
                 aria-hidden="true"
-                focusable="false"
               >
-                <path d="M471.6 21.7c-21.9-21.9-57.3-21.9-79.2 0L362.3 51.7l97.9 97.9 30.1-30.1c21.9-21.9 21.9-57.3 0-79.2L471.6 21.7zm-299.2 220c-6.1 6.1-10.8 13.6-13.5 21.9l-29.6 88.8c-2.9 8.6-.6 18.1 5.8 24.6s15.9 8.7 24.6 5.8l88.8-29.6c8.2-2.7 15.7-7.4 21.9-13.5L437.7 172.3 339.7 74.3 172.4 241.7zM96 64C43 64 0 107 0 160V416c0 53 43 96 96 96H352c53 0 96-43 96-96V320c0-17.7-14.3-32-32-32s-32 14.3-32 32v96c0 17.7-14.3 32-32 32H96c-17.7 0-32-14.3-32-32V160c0-17.7 14.3-32 32-32h96c17.7 0 32-14.3 32-32s-14.3-32-32-32H96z" />
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                <circle cx="12" cy="13" r="4" />
               </svg>
             </button>
           </div>
-        ) : (
+
+          <div className="mfs-profile-hero-meta">
+            <div className="mfs-profile-hero-name-row">
+              <h2 className="mfs-profile-hero-name">
+                {profile?.name || "Local profile"}
+              </h2>
+              <span
+                className={`mfs-profile-status-pill${profile?.connected ? " is-synced" : ""}`}
+              >
+                <span className="mfs-profile-status-dot" aria-hidden="true" />
+                {profile?.connected ? "Synced" : "Local"}
+              </span>
+            </div>
+            <p className="mfs-profile-hero-sub">
+              {photoBusy
+                ? "Optimizing profile photo…"
+                : profile?.email ||
+                  "Tap avatar to add a photo · Sign in to sync across devices"}
+            </p>
+            {profile?.avatar && (
+              <div className="mfs-profile-hero-photo-actions">
+                <button
+                  type="button"
+                  className="mfs-profile-remove-photo-btn"
+                  disabled={photoBusy}
+                  onClick={handleRemovePhoto}
+                >
+                  Remove photo
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* Personal Details Section */}
+      <section className="card app-settings-card mfs-card-list">
+        <h2>Personal details</h2>
+        <div className="mfs-card-rows">
           <button
-            className="ri settings-profile-row settings-profile-guest"
+            className="ri settings-action mfs-list-row"
             type="button"
-            aria-label="Sign in to edit your profile"
-            onClick={onSignIn}
+            onClick={() => {
+              triggerHaptic("selection");
+              onEditProfile?.();
+            }}
           >
-            <i className="ic" style={{ "--c": "var(--g)" }}>
-              {profile?.initial || "S"}
+            <i className="ic mfs-row-icon" style={{ "--c": "#6366f1" }}>
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.1"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
             </i>
             <span className="nm">
-              <b>{profile?.name || "Local profile"}</b>
-              <small>Sign in to edit your profile</small>
+              <b>Display name</b>
+              <small>
+                {profile?.hasName
+                  ? profile.name
+                  : "Set your name for greetings & cards"}
+              </small>
             </span>
-            <span className="settings-profile-signin-label" aria-hidden="true">
-              Sign in
+            <span className="mfs-status-pill">Edit</span>
+          </button>
+
+          <button
+            className="ri settings-action mfs-list-row"
+            type="button"
+            onClick={() => {
+              triggerHaptic("selection");
+              onManageCards?.();
+            }}
+          >
+            <i className="ic mfs-row-icon" style={{ "--c": "#10b981" }}>
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.1"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <rect x="2" y="5" width="20" height="14" rx="3" />
+                <line x1="2" y1="10" x2="22" y2="10" />
+              </svg>
+            </i>
+            <span className="nm">
+              <b>Primary payment</b>
+              <small>
+                {primaryCard
+                  ? `${primaryCard.name}${primaryCard.last4 ? ` •••• ${primaryCard.last4}` : ""}`
+                  : "Cash wallet (default)"}
+              </small>
+            </span>
+            <span className="settings-chevron" aria-hidden="true">
               <Icon n="r" />
             </span>
           </button>
-        )}
-        {profileStatus && (
-          <p className="settings-status" role="status" aria-live="polite">
-            {profileStatus}
+        </div>
+        {(photoError || profileStatus) && (
+          <p
+            className="settings-status mfs-card-footnote"
+            role="status"
+            aria-live="polite"
+          >
+            {photoError || profileStatus}
           </p>
         )}
       </section>
 
-      <section className="card app-settings-card">
-        <h2>Sync</h2>
-        <div
-          className={`profile-sync-status${isLive ? " is-live" : ""}${
-            isSyncing ? " is-syncing" : ""
-          }${hasSyncError ? " has-error" : ""}${isOffline ? " is-offline" : ""}${
-            needsSyncSetup ? " is-setup-needed" : ""
-          }`}
-          data-sync-state={
-            isLive ? "live" : isSyncing ? "syncing" : cloudRealtimeStatus
-          }
-          role="status"
-          aria-live="polite"
-        >
-          <span className="profile-sync-indicator" aria-hidden="true" />
-          <span className="profile-sync-copy">{syncLabel}</span>
+      {/* Cloud & Account Sync Section */}
+      <section className="card app-settings-card mfs-card-list">
+        <h2>Cloud &amp; account sync</h2>
+        <div className="mfs-card-rows">
+          <div className="ri mfs-list-row">
+            <i
+              className="ic mfs-row-icon"
+              style={{ "--c": profile?.connected ? "#10b981" : "#64748b" }}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.1"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
+              </svg>
+            </i>
+            <span className="nm">
+              <b>Cloud backup &amp; sync</b>
+              <small>
+                {profile?.connected
+                  ? "Expenses, cards, budgets & profile photo"
+                  : "Sign in to back up & sync across devices"}
+              </small>
+            </span>
+            <div
+              className={`profile-sync-status mfs-sync-badge${isLive ? " is-live" : ""}${
+                isSyncing ? " is-syncing" : ""
+              }${hasSyncError ? " has-error" : ""}${isOffline ? " is-offline" : ""}${
+                needsSyncSetup ? " is-setup-needed" : ""
+              }`}
+              data-sync-state={
+                isLive ? "live" : isSyncing ? "syncing" : cloudRealtimeStatus
+              }
+              role="status"
+              aria-live="polite"
+            >
+              <span className="profile-sync-indicator" aria-hidden="true" />
+              <span className="profile-sync-copy">{syncLabel}</span>
+            </div>
+          </div>
         </div>
+
         {accountStatus && (
-          <p className="settings-status" role="status" aria-live="polite">
+          <p
+            className="settings-status mfs-card-footnote"
+            role="status"
+            aria-live="polite"
+          >
             {accountStatus}
           </p>
         )}
-        {profile?.connected && (!cloudSyncEnabled || hasSyncError) && (
+
+        <div className="mfs-profile-sync-actions">
+          {profile?.connected && (!cloudSyncEnabled || hasSyncError) && (
+            <button
+              className="btn settings-account-action"
+              type="button"
+              disabled={authBusy}
+              onClick={onResumeSync}
+            >
+              {hasSyncError ? "Retry sync" : "Resume sync"}
+            </button>
+          )}
           <button
-            className="btn settings-account-action"
+            className={`btn settings-account-action${profile?.connected ? " is-signout-btn" : ""}`}
             type="button"
             disabled={authBusy}
-            onClick={onResumeSync}
-            style={{ marginBottom: "10px" }}
+            onClick={profile?.connected ? onSignOut : onSignIn}
           >
-            {hasSyncError ? "Retry sync" : "Resume sync"}
+            {profile?.connected
+              ? authBusy
+                ? "Signing out…"
+                : "Sign out of account"
+              : "Sign in to sync"}
           </button>
-        )}
-        <button
-          className="btn settings-account-action"
-          type="button"
-          disabled={authBusy}
-          onClick={profile?.connected ? onSignOut : onSignIn}
-        >
-          {profile?.connected
-            ? authBusy
-              ? "Signing out…"
-              : "Sign out"
-            : "Sign in to sync"}
-        </button>
+        </div>
       </section>
-    </>
+    </div>
   );
 }
 
@@ -7292,77 +7734,132 @@ function AppSettingsPage({
 }) {
   const notificationUnavailable = notificationPermission === "unsupported";
   const notificationBlocked = notificationPermission === "denied";
-  const notificationLabel = pushBackendConfigured
-    ? profile?.connected
-      ? backgroundPushEnabled
-        ? "On"
-        : "Off"
-      : "Sign in required"
-    : notificationUnavailable
-      ? "Unavailable"
-      : notificationBlocked
-        ? "Blocked in browser settings"
-        : notificationPermission === "granted"
-          ? "Allowed"
-          : "Off";
-  return (
-    <>
-      <p className="settings-page-intro">Manage accounts and reminders.</p>
+  const needsSignInForPush = Boolean(
+    pushBackendConfigured && !profile?.connected,
+  );
+  const isNotificationsActive = pushBackendConfigured
+    ? Boolean(profile?.connected && backgroundPushEnabled)
+    : notificationPermission === "granted";
 
-      <section className="card app-settings-card">
+  const notificationLabel = notificationUnavailable
+    ? "Unavailable on this device"
+    : notificationBlocked
+      ? "Blocked in browser settings"
+      : needsSignInForPush
+        ? "Sign in required for background alerts"
+        : isNotificationsActive
+          ? "Enabled for scheduled expenses"
+          : "Tap to enable device alerts";
+
+  const notificationActionBadge = notificationUnavailable
+    ? "Unavailable"
+    : notificationBlocked
+      ? "Blocked"
+      : needsSignInForPush
+        ? "Sign in"
+        : isNotificationsActive
+          ? "Active"
+          : "Enable";
+
+  return (
+    <div className="mfs-app-settings-page">
+      <p className="settings-page-intro">
+        Configure payment reminders and manage your backups.
+      </p>
+
+      <section className="card app-settings-card mfs-card-list">
         <h2>Reminders</h2>
-        <div className="ri settings-time-row">
-          <i className="ic" style={{ "--c": "#d6a31f" }}>
-            <Icon n="bell" />
-          </i>
-          <span className="nm">
-            <b>Daily reminder</b>
-            <small>Time for recurring payments</small>
-          </span>
-          <input
-            className="in settings-time-input"
-            type="time"
-            aria-label="Daily reminder time"
-            value={S.rt}
-            onChange={(event) => onReminder(event.target.value)}
-          />
-        </div>
-        <button
-          className="ri settings-action"
-          type="button"
-          disabled={notificationBlocked || notificationUnavailable}
-          onClick={onToggleNotifications}
-        >
-          <i className="ic" style={{ "--c": "#2f9a6b" }}>
-            <Icon n="bell" />
-          </i>
-          <span className="nm">
-            <b>Built-in notifications</b>
-            <small>{notificationLabel}</small>
-          </span>
-          <span className="settings-inline-action">
-            {notificationPermission === "granted" ? "Active" : "Enable"}
-          </span>
-        </button>
-        {onTestNotification && (
+        <div className="mfs-card-rows">
+          <div className="ri mfs-list-row settings-time-row">
+            <i className="ic mfs-row-icon" style={{ "--c": "#f59e0b" }}>
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.1"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="9" />
+                <polyline points="12 7.5 12 12 15 13.8" />
+              </svg>
+            </i>
+            <span className="nm">
+              <b>Daily reminder</b>
+              <small>Time for recurring payments</small>
+            </span>
+            <div className="mfs-time-pill-wrap">
+              <input
+                className="in settings-time-input mfs-time-pill"
+                type="time"
+                aria-label="Daily reminder time"
+                value={S.rt}
+                onChange={(event) => onReminder(event.target.value)}
+              />
+            </div>
+          </div>
+
           <button
-            className="ri settings-action"
+            className="ri settings-action mfs-list-row"
             type="button"
-            onClick={onTestNotification}
+            disabled={notificationBlocked || notificationUnavailable}
+            onClick={() => {
+              triggerHaptic("selection");
+              onToggleNotifications?.();
+            }}
           >
-            <i className="ic" style={{ "--c": "#3b82c4" }}>
+            <i className="ic mfs-row-icon" style={{ "--c": "#10b981" }}>
               <Icon n="bell" />
             </i>
             <span className="nm">
-              <b>Send test notification</b>
-              <small>Tests built-in notification banner &amp; tone</small>
+              <b>Built-in notifications</b>
+              <small>{notificationLabel}</small>
             </span>
-            <span className="settings-chevron" aria-hidden="true">
-              <Icon n="r" />
+            <span
+              className={`settings-inline-action mfs-status-pill${isNotificationsActive ? " is-active" : ""}`}
+            >
+              {isNotificationsActive && (
+                <span className="mfs-status-pill-dot" aria-hidden="true" />
+              )}
+              {notificationActionBadge}
             </span>
           </button>
-        )}
-        <p className="settings-note" role="status" aria-live="polite">
+
+          {onTestNotification && (
+            <button
+              className="ri settings-action mfs-list-row"
+              type="button"
+              onClick={() => {
+                triggerHaptic("light");
+                onTestNotification();
+              }}
+            >
+              <i className="ic mfs-row-icon" style={{ "--c": "#3b82f6" }}>
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.1"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M22 2 11 13" />
+                  <path d="m22 2-7 20-4-9-9-4 20-7z" />
+                </svg>
+              </i>
+              <span className="nm">
+                <b>Send test notification</b>
+                <small>Tests built-in notification banner &amp; tone</small>
+              </span>
+              <span className="settings-chevron" aria-hidden="true">
+                <Icon n="r" />
+              </span>
+            </button>
+          )}
+        </div>
+        <p className="settings-note mfs-card-footnote" role="status" aria-live="polite">
           {notificationStatus ||
             (pushBackendConfigured && !profile?.connected
               ? "Sign in to enable background reminders."
@@ -7370,100 +7867,109 @@ function AppSettingsPage({
         </p>
       </section>
 
-      <section className="card app-settings-card app-settings-data-card">
+      <section className="card app-settings-card app-settings-data-card mfs-card-list">
         <h2>Data &amp; backups</h2>
-        <button
-          className="ri settings-action app-settings-minimal-item"
-          type="button"
-          onClick={() => {
-            triggerHaptic("light");
-            onBackupDownload?.();
-          }}
-        >
-          <i className="ic is-minimal" style={{ "--c": "#5b73d9" }}>
-            <Icon n="backup" />
-          </i>
-          <span className="nm">
-            <b>Export JSON backup</b>
-          </span>
-          <span className="settings-chevron" aria-hidden="true">
-            <Icon n="r" />
-          </span>
-        </button>
-        <button
-          className="ri settings-action app-settings-minimal-item"
-          type="button"
-          onClick={() => {
-            triggerHaptic("light");
-            onEncryptedBackupDownload?.();
-          }}
-        >
-          <i className="ic is-minimal" style={{ "--c": "#10b981" }}>
-            <svg
-              viewBox="0 0 24 24"
-              width="17"
-              height="17"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-            </svg>
-          </i>
-          <span className="nm">
-            <b>Export encrypted backup</b>
-          </span>
-          <span className="settings-chevron" aria-hidden="true">
-            <Icon n="r" />
-          </span>
-        </button>
-        <button
-          className="ri settings-action app-settings-minimal-item"
-          type="button"
-          onClick={() => {
-            triggerHaptic("light");
-            onExpensesCsv?.();
-          }}
-        >
-          <i className="ic is-minimal" style={{ "--c": "#2f9a6b" }}>
-            <Icon n="csv" />
-          </i>
-          <span className="nm">
-            <b>Export expenses CSV</b>
-          </span>
-          <span className="settings-chevron" aria-hidden="true">
-            <Icon n="r" />
-          </span>
-        </button>
-        <button
-          className="ri settings-action app-settings-minimal-item"
-          type="button"
-          onClick={() => {
-            triggerHaptic("light");
-            onBackupRestore?.();
-          }}
-        >
-          <i className="ic is-minimal" style={{ "--c": "#8a6fd1" }}>
-            <Icon n="restore" />
-          </i>
-          <span className="nm">
-            <b>Restore from backup</b>
-          </span>
-          <span className="settings-chevron" aria-hidden="true">
-            <Icon n="r" />
-          </span>
-        </button>
+        <div className="mfs-card-rows">
+          <button
+            className="ri settings-action app-settings-minimal-item mfs-list-row"
+            type="button"
+            onClick={() => {
+              triggerHaptic("light");
+              onBackupDownload?.();
+            }}
+          >
+            <i className="ic is-minimal mfs-row-icon" style={{ "--c": "#5b73d9" }}>
+              <Icon n="backup" />
+            </i>
+            <span className="nm">
+              <b>Export JSON backup</b>
+              <small>Unencrypted full data file</small>
+            </span>
+            <span className="settings-chevron" aria-hidden="true">
+              <Icon n="r" />
+            </span>
+          </button>
+
+          <button
+            className="ri settings-action app-settings-minimal-item mfs-list-row"
+            type="button"
+            onClick={() => {
+              triggerHaptic("light");
+              onEncryptedBackupDownload?.();
+            }}
+          >
+            <i className="ic is-minimal mfs-row-icon" style={{ "--c": "#10b981" }}>
+              <svg
+                viewBox="0 0 24 24"
+                width="17"
+                height="17"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+            </i>
+            <span className="nm">
+              <b>Export encrypted backup</b>
+              <small>Password-protected AES-256 file</small>
+            </span>
+            <span className="settings-chevron" aria-hidden="true">
+              <Icon n="r" />
+            </span>
+          </button>
+
+          <button
+            className="ri settings-action app-settings-minimal-item mfs-list-row"
+            type="button"
+            onClick={() => {
+              triggerHaptic("light");
+              onExpensesCsv?.();
+            }}
+          >
+            <i className="ic is-minimal mfs-row-icon" style={{ "--c": "#2f9a6b" }}>
+              <Icon n="csv" />
+            </i>
+            <span className="nm">
+              <b>Export expenses CSV</b>
+              <small>Spreadsheet for Excel or Sheets</small>
+            </span>
+            <span className="settings-chevron" aria-hidden="true">
+              <Icon n="r" />
+            </span>
+          </button>
+
+          <button
+            className="ri settings-action app-settings-minimal-item mfs-list-row"
+            type="button"
+            onClick={() => {
+              triggerHaptic("light");
+              onBackupRestore?.();
+            }}
+          >
+            <i className="ic is-minimal mfs-row-icon" style={{ "--c": "#8a6fd1" }}>
+              <Icon n="restore" />
+            </i>
+            <span className="nm">
+              <b>Restore from backup</b>
+              <small>Import a saved .json or encrypted file</small>
+            </span>
+            <span className="settings-chevron" aria-hidden="true">
+              <Icon n="r" />
+            </span>
+          </button>
+        </div>
         {backupStatus && (
-          <p className="settings-status" role="status" aria-live="polite">
+          <p className="settings-status mfs-card-footnote" role="status" aria-live="polite">
             {backupStatus}
           </p>
         )}
       </section>
-    </>
+    </div>
   );
 }
 
@@ -7943,6 +8449,7 @@ export default function MobilePrototype({
   onSignIn,
   onSignOut,
   onEditProfile,
+  onAvatarChange,
   profile,
   profileStatus,
   cloudSyncEnabled,
@@ -8005,9 +8512,20 @@ export default function MobilePrototype({
     useState(null);
   const [appSettingsOpen, setAppSettingsOpen] = useState(false);
   const [profileSettingsOpen, setProfileSettingsOpen] = useState(false);
+  const [hapticsEnabled, setHapticsState] = useState(isHapticsEnabled);
   const [toastMsg, setToastMsg] = useState(null);
   const [isAppLocked, setIsAppLocked] = useState(() => shouldLockApp());
   const [resetPinConfirmOpen, setResetPinConfirmOpen] = useState(false);
+
+  const handleToggleHaptics = useCallback(() => {
+    setHapticsState((current) => {
+      const next = setHapticsEnabled(!current);
+      if (next) {
+        triggerHaptic("selection");
+      }
+      return next;
+    });
+  }, []);
 
   const handleVerifyPin = useCallback(async (enteredPin) => {
     const lockoutSec = getPinLockoutRemainingSeconds();
@@ -8202,16 +8720,51 @@ export default function MobilePrototype({
     );
   }, [S.exp]);
 
+  const [systemDark, setSystemDark] = useState(() => {
+    try {
+      return (
+        typeof window !== "undefined" &&
+        Boolean(window.matchMedia?.("(prefers-color-scheme: dark)").matches)
+      );
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return undefined;
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const handleChange = (e) => setSystemDark(Boolean(e.matches));
+    setSystemDark(Boolean(mq.matches));
+    if (typeof mq.addEventListener === "function") {
+      mq.addEventListener("change", handleChange);
+      return () => mq.removeEventListener("change", handleChange);
+    }
+    if (typeof mq.addListener === "function") {
+      mq.addListener(handleChange);
+      return () => mq.removeListener(handleChange);
+    }
+    return undefined;
+  }, []);
+
+  const resolvedTheme = useMemo(() => {
+    const raw = S?.theme;
+    if (raw === "dark" || raw === "light") return raw;
+    const mode = S?.themeMode || raw || "auto";
+    if (mode === "dark") return "dark";
+    if (mode === "light") return "light";
+    return systemDark ? "dark" : "light";
+  }, [S?.theme, S?.themeMode, systemDark]);
+
   useLayoutEffect(() => {
-    const activeTheme = S.theme === "dark" ? "dark" : "light";
-    document.documentElement.dataset.theme = activeTheme;
+    document.documentElement.dataset.theme = resolvedTheme;
     if (!document.querySelector(".sp-root:not([hidden])")) {
-      const themeColor = activeTheme === "dark" ? "#0e1411" : "#f4f3ee";
+      const themeColor = resolvedTheme === "dark" ? "#0e1411" : "#f4f3ee";
       document
         .querySelectorAll('meta[name="theme-color"]')
         .forEach((meta) => meta.setAttribute("content", themeColor));
     }
-  }, [S.theme]);
+  }, [resolvedTheme]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -8769,7 +9322,7 @@ export default function MobilePrototype({
       <div
         ref={mobileRootRef}
         className="mobile-prototype is-locked-screen"
-        data-theme={S.theme}
+        data-theme={resolvedTheme}
       >
         <Suspense fallback={null}>
           <SpendLogin
@@ -8798,7 +9351,7 @@ export default function MobilePrototype({
       ref={mobileRootRef}
       className="mobile-prototype"
       onClickCapture={captureSheetTrigger}
-      data-theme={S.theme}
+      data-theme={resolvedTheme}
       data-sheet-open={sheet ? "true" : undefined}
       data-sheet-closing={sheetClosing ? "true" : undefined}
       style={{
@@ -8832,12 +9385,21 @@ export default function MobilePrototype({
           >
             {tab === "home" ? (
               <button
-                className="prototype-header-avatar"
+                className={`prototype-header-avatar${profile?.avatar ? " has-photo" : ""}`}
                 type="button"
                 aria-label="Profile and settings"
                 onClick={() => openSheet({ type: "set" })}
               >
-                {profile?.initial || "A"}
+                {profile?.avatar ? (
+                  <img
+                    src={profile.avatar}
+                    alt=""
+                    className="mfs-avatar-img"
+                    draggable="false"
+                  />
+                ) : (
+                  profile?.initial || "A"
+                )}
               </button>
             ) : tab === "activity" ? (
               <MonthSwitch m={S.m} onShift={onShift} />
@@ -8895,6 +9457,7 @@ export default function MobilePrototype({
           <div className="prototype-screen-content">
             {profileSettingsOpen ? (
               <ProfileSettingsPage
+                S={S}
                 profile={profile}
                 cloudSyncEnabled={cloudSyncEnabled}
                 cloudSyncReady={cloudSyncReady}
@@ -8905,6 +9468,8 @@ export default function MobilePrototype({
                 profileStatus={profileStatus}
                 authBusy={authBusy}
                 onEditProfile={onEditProfile}
+                onAvatarChange={onAvatarChange}
+                onManageCards={() => nav("accounts")}
                 onSignIn={signIn}
                 onSignOut={onSignOut}
                 onResumeSync={onResumeSync}
@@ -9193,6 +9758,8 @@ export default function MobilePrototype({
         <SettingsSheet
           S={S}
           profile={profile}
+          hapticsEnabled={hapticsEnabled}
+          onToggleHaptics={handleToggleHaptics}
           onClose={close}
           onTheme={onTheme}
           onAdvanced={advanced}

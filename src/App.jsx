@@ -82,13 +82,21 @@ const LAST_BACKUP_AT_KEY = "spend-last-backup-at-v1";
 function loadTheme() {
   try {
     const saved = localStorage.getItem(STORAGE_KEYS.theme);
-    if (saved === "dark" || saved === "light") return saved;
-    return typeof window !== "undefined" &&
-      window.matchMedia?.("(prefers-color-scheme: dark)").matches
-      ? "dark"
-      : "light";
+    if (saved === "dark" || saved === "light" || saved === "auto") return saved;
+    return "auto";
   } catch {
-    return "light";
+    return "auto";
+  }
+}
+
+function getSystemDarkPreference() {
+  try {
+    return (
+      typeof window !== "undefined" &&
+      Boolean(window.matchMedia?.("(prefers-color-scheme: dark)").matches)
+    );
+  } catch {
+    return false;
   }
 }
 
@@ -121,6 +129,40 @@ function loadLocalProfileName() {
   } catch {
     return "";
   }
+}
+
+function isValidAvatarValue(value) {
+  if (typeof value !== "string") return false;
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  return (
+    (trimmed.startsWith("data:image/") || trimmed.startsWith("https://")) &&
+    trimmed.length < 350000
+  );
+}
+
+function loadProfileAvatar() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEYS.profileAvatar);
+    return isValidAvatarValue(saved) ? saved.trim() : "";
+  } catch {
+    return "";
+  }
+}
+
+function loadProfileUpdatedAt() {
+  try {
+    const saved = Number(localStorage.getItem(STORAGE_KEYS.profileUpdatedAt));
+    return Number.isFinite(saved) && saved > 0 ? saved : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function userAvatarUrl(user) {
+  const metadata = user?.user_metadata ?? {};
+  const raw = metadata.avatar_url || metadata.picture || "";
+  return isValidAvatarValue(raw) ? raw.trim() : "";
 }
 
 function capitalizeFirst(value) {
@@ -422,7 +464,9 @@ function hasMeaningfulLocalData(data) {
     Object.values(normalizeDeletedRecords(data.deletedRecords)).some(
       (changes) => Object.keys(changes).length > 0,
     ) ||
-    (isValidReminderTime(data.reminderTime) && data.reminderTime !== "09:00")
+    (isValidReminderTime(data.reminderTime) && data.reminderTime !== "09:00") ||
+    Boolean(typeof data.profileName === "string" && data.profileName.trim()) ||
+    isValidAvatarValue(data.profileAvatar)
   );
 }
 
@@ -605,6 +649,79 @@ function mergeAccountSettings(
   };
 }
 
+function mergeProfileFields(local = {}, cloud = {}, preferLocal = true) {
+  const localTime = Number(local?.profileUpdatedAt) || 0;
+  const cloudTime = Number(cloud?.profileUpdatedAt) || 0;
+  const localHasAvatar = isValidAvatarValue(local?.profileAvatar);
+  const cloudHasAvatar = isValidAvatarValue(cloud?.profileAvatar);
+  const localHasName =
+    typeof local?.profileName === "string" && Boolean(local.profileName.trim());
+  const cloudHasName =
+    typeof cloud?.profileName === "string" && Boolean(cloud.profileName.trim());
+
+  const chooseLocal =
+    localTime !== cloudTime ? localTime > cloudTime : Boolean(preferLocal);
+
+  const profileName = chooseLocal
+    ? localHasName
+      ? capitalizeFirst(local.profileName)
+      : cloudHasName
+        ? capitalizeFirst(cloud.profileName)
+        : ""
+    : cloudHasName
+      ? capitalizeFirst(cloud.profileName)
+      : localHasName
+        ? capitalizeFirst(local.profileName)
+        : "";
+
+  let profileAvatar = "";
+  if (localTime !== cloudTime) {
+    if (chooseLocal) {
+      profileAvatar = localHasAvatar
+        ? local.profileAvatar.trim()
+        : local?.profileAvatar === ""
+          ? ""
+          : cloudHasAvatar
+            ? cloud.profileAvatar.trim()
+            : "";
+    } else {
+      profileAvatar = cloudHasAvatar
+        ? cloud.profileAvatar.trim()
+        : cloud?.profileAvatar === ""
+          ? ""
+          : localHasAvatar
+            ? local.profileAvatar.trim()
+            : "";
+    }
+  } else if (localTime > 0) {
+    profileAvatar = chooseLocal
+      ? localHasAvatar
+        ? local.profileAvatar.trim()
+        : ""
+      : cloudHasAvatar
+        ? cloud.profileAvatar.trim()
+        : "";
+  } else {
+    profileAvatar = chooseLocal
+      ? localHasAvatar
+        ? local.profileAvatar.trim()
+        : cloudHasAvatar
+          ? cloud.profileAvatar.trim()
+          : ""
+      : cloudHasAvatar
+        ? cloud.profileAvatar.trim()
+        : localHasAvatar
+          ? local.profileAvatar.trim()
+          : "";
+  }
+
+  return {
+    profileName,
+    profileAvatar,
+    profileUpdatedAt: Math.max(localTime, cloudTime),
+  };
+}
+
 function mergeCloudSnapshots(
   local,
   cloud,
@@ -635,6 +752,7 @@ function mergeCloudSnapshots(
     deletedRecords.budgets,
     Boolean(preferLocal),
   );
+  const mergedProfile = mergeProfileFields(local, cloud, preferLocal);
   if (!preferLocal) {
     return {
       expenses: mergeExpenseRecords(
@@ -667,11 +785,11 @@ function mergeCloudSnapshots(
       },
       deletedRecords,
       theme:
-        cloud.theme === "dark"
-          ? "dark"
-          : cloud.theme === "light"
-            ? "light"
-            : local.theme,
+        cloud.theme === "dark" ||
+        cloud.theme === "light" ||
+        cloud.theme === "auto"
+          ? cloud.theme
+          : local.theme,
       targetCurrency:
         typeof cloud.targetCurrency === "string" &&
         /^[A-Z]{3}$/.test(cloud.targetCurrency)
@@ -682,6 +800,7 @@ function mergeCloudSnapshots(
         : isValidReminderTime(local.reminderTime)
           ? local.reminderTime
           : "09:00",
+      ...mergedProfile,
     };
   }
 
@@ -725,6 +844,7 @@ function mergeCloudSnapshots(
           : isValidReminderTime(local.reminderTime)
             ? local.reminderTime
             : "09:00",
+    ...mergedProfile,
   };
 }
 
@@ -770,6 +890,9 @@ function clearSharedFinancialData({ clearUserSnapshots = false } = {}) {
     STORAGE_KEYS.recurring,
     STORAGE_KEYS.accounts,
     STORAGE_KEYS.deletedRecords,
+    STORAGE_KEYS.profileName,
+    STORAGE_KEYS.profileAvatar,
+    STORAGE_KEYS.profileUpdatedAt,
   ];
   if (clearUserSnapshots) {
     keys.push(LOCAL_USER_SNAPSHOTS_KEY);
@@ -819,7 +942,12 @@ function loadLocalUserSnapshot(userId) {
     ),
     accountData: loadedAccounts,
     deletedRecords,
-    theme: snapshot.theme === "dark" ? "dark" : "light",
+    theme:
+      snapshot.theme === "dark" ||
+      snapshot.theme === "light" ||
+      snapshot.theme === "auto"
+        ? snapshot.theme
+        : "auto",
     targetCurrency:
       typeof snapshot.targetCurrency === "string" &&
       /^[A-Z]{3}$/.test(snapshot.targetCurrency)
@@ -828,6 +956,14 @@ function loadLocalUserSnapshot(userId) {
     reminderTime: isValidReminderTime(snapshot.reminderTime)
       ? snapshot.reminderTime
       : "09:00",
+    profileName:
+      typeof snapshot.profileName === "string"
+        ? capitalizeFirst(snapshot.profileName)
+        : "",
+    profileAvatar: isValidAvatarValue(snapshot.profileAvatar)
+      ? snapshot.profileAvatar.trim()
+      : "",
+    profileUpdatedAt: Number(snapshot.profileUpdatedAt) || 0,
   };
 }
 
@@ -914,9 +1050,14 @@ export default function App() {
     return loadAccountData(undefined, effectiveDeleted);
   });
   const [theme, setTheme] = useState(loadTheme);
+  const [systemDark, setSystemDark] = useState(getSystemDarkPreference);
+  const resolvedTheme =
+    theme === "auto" ? (systemDark ? "dark" : "light") : theme === "dark" ? "dark" : "light";
   const [targetCurrency, setTargetCurrency] = useState(loadCurrency);
   const [reminderTime, setReminderTime] = useState(loadReminderTime);
-  const [localProfileName] = useState(loadLocalProfileName);
+  const [localProfileName, setLocalProfileName] = useState(loadLocalProfileName);
+  const [profileAvatar, setProfileAvatar] = useState(loadProfileAvatar);
+  const [profileUpdatedAt, setProfileUpdatedAt] = useState(loadProfileUpdatedAt);
   const {
     isOpen: profileEditorOpen,
     isClosing: profileEditorClosing,
@@ -983,6 +1124,9 @@ export default function App() {
       theme,
       targetCurrency,
       reminderTime,
+      profileName: localProfileName,
+      profileAvatar,
+      profileUpdatedAt,
     }),
     [
       expenses,
@@ -994,6 +1138,9 @@ export default function App() {
       theme,
       targetCurrency,
       reminderTime,
+      localProfileName,
+      profileAvatar,
+      profileUpdatedAt,
     ],
   );
 
@@ -1005,9 +1152,12 @@ export default function App() {
     setRecurringSchedules([]);
     setAccountData(empty);
     setDeletedRecords(emptyDeletedRecords());
-    setTheme("light");
+    setTheme("auto");
     setTargetCurrency("USD");
     setReminderTime("09:00");
+    setLocalProfileName("");
+    setProfileAvatar("");
+    setProfileUpdatedAt(0);
     setCloudSyncStatus("");
   }
 
@@ -1227,9 +1377,27 @@ export default function App() {
   }
 
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
+    if (typeof window === "undefined" || !window.matchMedia) return undefined;
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const handleChange = (e) => setSystemDark(Boolean(e.matches));
+    setSystemDark(Boolean(mq.matches));
+    if (typeof mq.addEventListener === "function") {
+      mq.addEventListener("change", handleChange);
+      return () => mq.removeEventListener("change", handleChange);
+    }
+    if (typeof mq.addListener === "function") {
+      mq.addListener(handleChange);
+      return () => mq.removeListener(handleChange);
+    }
+    return undefined;
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = resolvedTheme;
+    document.documentElement.dataset.themeMode = theme;
     if (ready) {
-      const browserChromeColor = theme === "dark" ? "#0e1411" : "#f4f3ee";
+      const browserChromeColor =
+        resolvedTheme === "dark" ? "#0e1411" : "#f4f3ee";
       document
         .querySelectorAll('meta[name="theme-color"]')
         .forEach((meta) => meta.setAttribute("content", browserChromeColor));
@@ -1239,7 +1407,7 @@ export default function App() {
     } catch {
       // Keep the selected theme for this visit when storage is unavailable.
     }
-  }, [theme, ready]);
+  }, [theme, resolvedTheme, ready]);
 
   useEffect(() => {
     if (!isHydratedRef.current) return;
@@ -1280,6 +1448,9 @@ export default function App() {
     theme,
     targetCurrency,
     reminderTime,
+    localProfileName,
+    profileAvatar,
+    profileUpdatedAt,
     pushUser?.id,
   ]);
 
@@ -1812,6 +1983,9 @@ export default function App() {
     targetCurrency,
     theme,
     reminderTime,
+    localProfileName,
+    profileAvatar,
+    profileUpdatedAt,
     cloudSyncRetry,
   ]);
 
@@ -1937,7 +2111,8 @@ export default function App() {
 
   const mobilePrototypeData = {
     m: selectedMonth,
-    theme,
+    theme: resolvedTheme,
+    themeMode: theme,
     rt: reminderTime,
     bud: budgets,
     exp: expenses.map((expense) => ({
@@ -2955,6 +3130,8 @@ export default function App() {
         theme,
         targetCurrency,
         reminderTime,
+        profileName: localProfileName,
+        profileAvatar,
       },
     };
     const url = URL.createObjectURL(
@@ -2997,6 +3174,8 @@ export default function App() {
         theme,
         targetCurrency,
         reminderTime,
+        profileName: localProfileName,
+        profileAvatar,
       };
       const encryptedPayload = await encryptBackup(backupData, password);
       const url = URL.createObjectURL(
@@ -3106,7 +3285,7 @@ export default function App() {
         !data.accountData.settings ||
         !data.accountData.settings.balances ||
         !Array.isArray(data.accountData.transactions) ||
-        !["light", "dark"].includes(data.theme) ||
+        !["light", "dark", "auto"].includes(data.theme) ||
         typeof data.targetCurrency !== "string" ||
         !/^[A-Z]{3}$/.test(data.targetCurrency) ||
         (data.reminderTime !== undefined &&
@@ -3180,6 +3359,20 @@ export default function App() {
           // Keep the restored reminder time for this visit.
         }
       }
+      if (typeof data.profileName === "string" && data.profileName.trim()) {
+        const restoredName = capitalizeFirst(data.profileName);
+        setLocalProfileName(restoredName);
+        try {
+          localStorage.setItem(STORAGE_KEYS.profileName, restoredName);
+        } catch {}
+      }
+      if (isValidAvatarValue(data.profileAvatar)) {
+        const restoredAvatar = data.profileAvatar.trim();
+        setProfileAvatar(restoredAvatar);
+        try {
+          localStorage.setItem(STORAGE_KEYS.profileAvatar, restoredAvatar);
+        } catch {}
+      }
 
       if (pushUser && cloudSyncEnabled) {
         const restoredSnapshot = {
@@ -3194,6 +3387,13 @@ export default function App() {
           reminderTime: isValidReminderTime(data.reminderTime)
             ? data.reminderTime
             : "09:00",
+          profileName:
+            typeof data.profileName === "string" && data.profileName.trim()
+              ? capitalizeFirst(data.profileName)
+              : localProfileName,
+          profileAvatar: isValidAvatarValue(data.profileAvatar)
+            ? data.profileAvatar.trim()
+            : profileAvatar,
         };
         cloudSnapshotRef.current = restoredSnapshot;
         void queueCloudSnapshotSave(pushUser.id, { forceOverwrite: true });
@@ -3221,6 +3421,47 @@ export default function App() {
         ? snapshot.reminderTime
         : "09:00",
     );
+    if (typeof snapshot.profileName === "string") {
+      const nextName = snapshot.profileName.trim()
+        ? capitalizeFirst(snapshot.profileName)
+        : "";
+      setLocalProfileName(nextName);
+      try {
+        if (nextName) {
+          localStorage.setItem(STORAGE_KEYS.profileName, nextName);
+        } else {
+          localStorage.removeItem(STORAGE_KEYS.profileName);
+        }
+      } catch {}
+    }
+    if (isValidAvatarValue(snapshot.profileAvatar)) {
+      const nextAvatar = snapshot.profileAvatar.trim();
+      setProfileAvatar(nextAvatar);
+      try {
+        localStorage.setItem(STORAGE_KEYS.profileAvatar, nextAvatar);
+      } catch {}
+    } else if (snapshot.profileAvatar === "") {
+      setProfileAvatar("");
+      try {
+        localStorage.removeItem(STORAGE_KEYS.profileAvatar);
+      } catch {}
+    }
+    if (typeof snapshot.profileUpdatedAt === "number") {
+      const nextUpdatedAt = Number.isFinite(snapshot.profileUpdatedAt)
+        ? snapshot.profileUpdatedAt
+        : 0;
+      setProfileUpdatedAt(nextUpdatedAt);
+      try {
+        if (nextUpdatedAt > 0) {
+          localStorage.setItem(
+            STORAGE_KEYS.profileUpdatedAt,
+            String(nextUpdatedAt),
+          );
+        } else {
+          localStorage.removeItem(STORAGE_KEYS.profileUpdatedAt);
+        }
+      } catch {}
+    }
   }
 
   async function handleAuthSubmit(event) {
@@ -3313,15 +3554,15 @@ export default function App() {
   }
 
   function openProfileEditor() {
-    if (!pushUser || !supabaseConfigured) {
-      openSignInModal();
-      return;
-    }
     profileEditorTriggerRef.current =
       document.activeElement instanceof HTMLElement
         ? document.activeElement
         : null;
-    setProfileDraft(userDisplayName(pushUser));
+    setProfileDraft(
+      pushUser
+        ? localProfileName || userDisplayName(pushUser) || ""
+        : localProfileName || "",
+    );
     setProfileStatus("");
     showProfileEditor();
   }
@@ -3358,10 +3599,18 @@ export default function App() {
       setProfileStatus("Enter a name with 1 to 48 characters.");
       return false;
     }
-    const client = supabase || (await getSupabase());
+    const now = Date.now();
+    setLocalProfileName(name);
+    setProfileUpdatedAt(now);
+    try {
+      localStorage.setItem(STORAGE_KEYS.profileName, name);
+      localStorage.setItem(STORAGE_KEYS.profileUpdatedAt, String(now));
+    } catch {}
+
+    const client = supabase || (supabaseConfigured ? await getSupabase() : null);
     if (!pushUser || !client) {
-      setProfileStatus("Sign in to edit your profile.");
-      return false;
+      setProfileStatus("Display name saved.");
+      return true;
     }
 
     setProfileSaving(true);
@@ -3377,14 +3626,66 @@ export default function App() {
           user_metadata: { ...pushUser.user_metadata, full_name: name, name },
         },
       );
-      setProfileStatus("Profile updated.");
+      setProfileStatus("Profile synced.");
       return true;
     } catch (error) {
-      setProfileStatus(`Could not update your profile: ${error.message}`);
-      return false;
+      setProfileStatus(`Saved locally (sync pending): ${error.message}`);
+      return true;
     } finally {
       setProfileSaving(false);
     }
+  }
+
+  async function saveProfileAvatar(dataUrl) {
+    const nextAvatar = isValidAvatarValue(dataUrl) ? dataUrl.trim() : "";
+    const now = Date.now();
+    setProfileAvatar(nextAvatar);
+    setProfileUpdatedAt(now);
+    try {
+      localStorage.setItem(STORAGE_KEYS.profileUpdatedAt, String(now));
+      if (nextAvatar) {
+        localStorage.setItem(STORAGE_KEYS.profileAvatar, nextAvatar);
+      } else {
+        localStorage.removeItem(STORAGE_KEYS.profileAvatar);
+      }
+    } catch {}
+
+    const client = supabase || (supabaseConfigured ? await getSupabase() : null);
+    if (!pushUser || !client) {
+      setProfileStatus(
+        nextAvatar ? "Profile photo saved on this device." : "Profile photo removed.",
+      );
+      return true;
+    }
+
+    // Base64 data URLs sync via spend_user_data (cloudSnapshotRef) to avoid bloating Supabase Auth JWT headers.
+    // Only write avatar_url to user_metadata if it is a compact https:// URL or if clearing an existing metadata URL.
+    const shouldUpdateAuthMetadata =
+      nextAvatar.startsWith("https://") ||
+      (!nextAvatar && Boolean(pushUser?.user_metadata?.avatar_url));
+
+    if (shouldUpdateAuthMetadata) {
+      setProfileSaving(true);
+      try {
+        const { data, error } = await client.auth.updateUser({
+          data: { avatar_url: nextAvatar || null },
+        });
+        if (!error && data?.user) {
+          setPushUser(data.user);
+        }
+      } catch {
+        // Ignore metadata error; spend_user_data snapshot syncs the photo.
+      } finally {
+        setProfileSaving(false);
+      }
+    }
+
+    setProfileStatus(
+      nextAvatar
+        ? "Profile photo updated and synced."
+        : "Profile photo removed.",
+    );
+    return true;
   }
 
   function handleResumeSync() {
@@ -3679,22 +3980,31 @@ export default function App() {
           onMoveCardToFront={handleMoveCardToFront}
           onToggleRec={toggleMobileRecurring}
           onRemoveRec={removeMobileRecurring}
-          onTheme={() =>
-            setTheme((current) => (current === "dark" ? "light" : "dark"))
+          onTheme={(nextMode) =>
+            setTheme((current) =>
+              typeof nextMode === "string" &&
+              ["auto", "light", "dark"].includes(nextMode)
+                ? nextMode
+                : current === "dark"
+                  ? "light"
+                  : "dark",
+            )
           }
           onReminder={updateReminderTime}
           profile={{
             name: pushUser
-              ? userDisplayName(pushUser)
+              ? localProfileName || userDisplayName(pushUser)
               : localProfileName || "Local profile",
             email: pushUser?.email || "",
             initial: pushUser
-              ? userInitial(pushUser)
+              ? profileInitial(localProfileName || userDisplayName(pushUser))
               : profileInitial(localProfileName || "Local profile"),
+            avatar: profileAvatar || userAvatarUrl(pushUser) || "",
             connected: Boolean(pushUser),
             hasName: Boolean(pushUser || localProfileName),
           }}
           onEditProfile={openProfileEditor}
+          onAvatarChange={saveProfileAvatar}
           profileStatus={profileStatus}
           cloudSyncEnabled={cloudSyncEnabled}
           cloudSyncReady={cloudSyncReady}

@@ -23,10 +23,13 @@ import {
   renderProviderLogo,
 } from "./cardAssets.jsx";
 
+import { isHapticsEnabled } from "./data.js";
+
 export { renderProviderLogo };
 
 /* ───────────── Native & Web Haptics Engine ───────────── */
 function triggerSafariWebHaptic() {
+  if (!isHapticsEnabled()) return;
   if (typeof document === "undefined") return;
   try {
     let trigger = document.getElementById("safari-haptic-trigger");
@@ -48,6 +51,7 @@ function triggerSafariWebHaptic() {
 }
 
 export function triggerHaptic(type = "light") {
+  if (!isHapticsEnabled()) return false;
   try {
     // Web / PWA fallback tuned for mobile vibration
     if (
