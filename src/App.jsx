@@ -4184,10 +4184,10 @@ export default function App() {
               {supabaseConfigured ? (
                 <>
                   <form
-                    className="push-auth-form auth-modal-form"
+                    className="auth-modal-form"
                     onSubmit={handleAuthSubmit}
                   >
-                    <div className="push-auth-fields auth-modal-fields">
+                    <div className="auth-modal-fields">
                       <div className="auth-input-group">
                         <label htmlFor="push-email">Email</label>
                         <input
@@ -4266,7 +4266,7 @@ export default function App() {
                       </div>
                     )}
 
-                    <div className="push-auth-actions">
+                    <div className="auth-modal-submit-wrap">
                       <button
                         type="submit"
                         className="auth-modal-submit-btn"
