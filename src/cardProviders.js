@@ -74,12 +74,13 @@ export const CARD_PROVIDERS = [
     id: "gold_mc",
     name: "Gold Master Card",
     category: "bank",
-    subtitle: "Gold Mastercard · USD",
+    subtitle: "Gold Credit · USD",
     defaultType: "credit",
     defaultNetwork: "mastercard",
     currency: "USD",
-    color: "#b45309",
-    gradient: "linear-gradient(135deg, #d97706 0%, #b45309 50%, #78350f 100%)",
+    color: "#9a6f28",
+    gradient:
+      "linear-gradient(135deg, #c59b47 0%, #8f6722 36%, #4a310c 74%, #1e1304 100%)",
     numberPrefix: "5134",
     numberPlaceholder: "5134 4455 6677 1234",
     isPhone: false,
@@ -102,12 +103,13 @@ export const CARD_PROVIDERS = [
     id: "virtual_mc",
     name: "Virtual MasterCard",
     category: "bank",
-    subtitle: "Virtual Mastercard · USD",
+    subtitle: "Virtual Credit · USD",
     defaultType: "credit",
     defaultNetwork: "mastercard",
     currency: "USD",
-    color: "#475569",
-    gradient: "linear-gradient(135deg, #64748b 0%, #475569 60%, #334155 100%)",
+    color: "#312e81",
+    gradient:
+      "linear-gradient(135deg, #312e81 0%, #1e1b4b 44%, #111024 78%, #07060e 100%)",
     numberPrefix: "5500",
     numberPlaceholder: "5500 0011 2233 4455",
     isPhone: false,
@@ -116,12 +118,13 @@ export const CARD_PROVIDERS = [
     id: "virtual_visa",
     name: "Virtual Visa Card",
     category: "bank",
-    subtitle: "Virtual Visa · USD",
+    subtitle: "Virtual Debit · USD",
     defaultType: "debit",
     defaultNetwork: "visa",
     currency: "USD",
     color: "#0d9488",
-    gradient: "linear-gradient(135deg, #14b8a6 0%, #0d9488 60%, #0f766e 100%)",
+    gradient:
+      "linear-gradient(135deg, #0ea5e9 0%, #0d9488 40%, #0b3c49 78%, #04161e 100%)",
     numberPrefix: "4111",
     numberPlaceholder: "4111 2233 4455 6677",
     isPhone: false,
@@ -258,27 +261,28 @@ export const CARD_PROVIDERS = [
     id: "savings",
     name: "Savings",
     category: "savings",
-    subtitle: "High-Yield Vault · BDT",
+    subtitle: "Personal Savings",
     defaultType: "savings",
     defaultNetwork: "none",
     currency: "BDT",
-    color: "#047857",
+    color: "#157358",
     gradient:
-      "linear-gradient(135deg, #065f46 0%, #047857 35%, #064e3b 70%, #022c22 100%)",
+      "linear-gradient(135deg, #227e60 0%, #10684c 40%, #074c38 75%, #032b20 100%)",
     numberPrefix: "SAV",
-    numberPlaceholder: "SAV-8829-01",
+    numberPlaceholder: "SAV-4710",
     isPhone: false,
   },
   {
     id: "custom",
     name: "Custom Card",
     category: "bank",
-    subtitle: "Custom Visa / Mastercard",
+    subtitle: "Signature Edition",
     defaultType: "debit",
     defaultNetwork: "visa",
     currency: "USD",
-    color: "#1e293b",
-    gradient: "linear-gradient(135deg, #334155 0%, #1e293b 60%, #0f172a 100%)",
+    color: "#1f2430",
+    gradient:
+      "linear-gradient(135deg, #383c47 0%, #20232b 46%, #12141a 80%, #08090c 100%)",
     numberPrefix: "4000",
     numberPlaceholder: "4000 1234 5678 9010",
     isPhone: false,
@@ -289,5 +293,51 @@ export function getProviderMeta(providerId) {
   return (
     CARD_PROVIDERS.find((p) => p.id === providerId) ||
     CARD_PROVIDERS.find((p) => p.id === "custom")
+  );
+}
+
+const LEGACY_PROVIDER_GRADIENTS = {
+  savings: [
+    "linear-gradient(135deg, #065f46 0%, #047857 35%, #064e3b 70%, #022c22 100%)",
+  ],
+  gold_mc: [
+    "linear-gradient(135deg, #b45309 0%, #92400e 50%, #78350f 100%)",
+    "linear-gradient(135deg, #a67c37 0%, #785421 38%, #452e11 74%, #1f1407 100%)",
+  ],
+  virtual_mc: [
+    "linear-gradient(135deg, #4f46e5 0%, #3730a3 60%, #1e1b4b 100%)",
+    "linear-gradient(135deg, #3b4262 0%, #232942 45%, #131728 78%, #090b14 100%)",
+  ],
+  virtual_visa: [
+    "linear-gradient(135deg, #0d9488 0%, #0f766e 60%, #115e59 100%)",
+    "linear-gradient(135deg, #0d9488 0%, #0f5c59 42%, #0b3740 76%, #04171d 100%)",
+  ],
+  custom: [
+    "linear-gradient(135deg, #27272a 0%, #18181b 60%, #09090b 100%)",
+    "linear-gradient(135deg, #353a47 0%, #1d2028 48%, #101218 80%, #07080c 100%)",
+  ],
+};
+
+export function resolveCardGradient(card, provider) {
+  const provId =
+    card?.provider ||
+    (card?.type === "savings" || card?.category === "savings"
+      ? "savings"
+      : card?.id);
+  const p = provider || (provId ? getProviderMeta(provId) : null);
+  const rawGrad = card?.gradient;
+  if (rawGrad) {
+    if (p?.id && LEGACY_PROVIDER_GRADIENTS[p.id]?.includes(rawGrad)) {
+      return p.gradient;
+    }
+    if (LEGACY_PROVIDER_GRADIENTS.savings.includes(rawGrad)) {
+      return "linear-gradient(135deg, #227e60 0%, #10684c 40%, #074c38 75%, #032b20 100%)";
+    }
+    return rawGrad;
+  }
+  return (
+    p?.gradient ||
+    card?.color ||
+    "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)"
   );
 }

@@ -5625,22 +5625,112 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
     );
   z-index: 1;
 }
-/* Minimalist architectural concentric hairline rings for Savings Vault */
-.mobile-prototype .wallet-card-vault-rings {
+.mobile-prototype .wallet-card-artwork {
   position: absolute;
-  right: -46px;
-  top: -46px;
-  width: 196px;
-  height: 196px;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.075);
-  box-shadow:
-    inset 0 0 0 28px transparent,
-    inset 0 0 0 29px rgba(255, 255, 255, 0.055),
-    inset 0 0 0 56px transparent,
-    inset 0 0 0 57px rgba(255, 255, 255, 0.04);
+  inset: 0;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
   z-index: 1;
+  display: block;
+}
+.mobile-prototype .wallet-card.is-savings {
+  border-color: rgba(167, 243, 208, 0.22);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.22);
+}
+.mobile-prototype .wallet-card.is-savings .wallet-card-sheen {
+  background: linear-gradient(
+    130deg,
+    rgba(255, 255, 255, 0.18) 0%,
+    rgba(167, 243, 208, 0.06) 38%,
+    rgba(2, 44, 34, 0) 68%
+  );
+}
+.mobile-prototype .wallet-card.is-savings .wallet-card-pattern {
+  background-image:
+    radial-gradient(
+      circle at 14% 18%,
+      rgba(110, 231, 183, 0.16) 0%,
+      transparent 52%
+    ),
+    radial-gradient(
+      circle at 82% 28%,
+      rgba(2, 44, 34, 0.24) 0%,
+      transparent 48%
+    );
+}
+.mobile-prototype .wallet-card.is-gold {
+  border-color: rgba(253, 224, 71, 0.34);
+  box-shadow:
+    inset 0 1px 0 rgba(254, 240, 138, 0.42),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.28);
+}
+.mobile-prototype .wallet-card.is-gold .wallet-card-sheen {
+  background: linear-gradient(
+    130deg,
+    rgba(254, 240, 138, 0.26) 0%,
+    rgba(251, 191, 36, 0.08) 38%,
+    rgba(0, 0, 0, 0) 68%
+  );
+}
+.mobile-prototype .wallet-card.is-gold .wallet-card-pattern {
+  background-image:
+    radial-gradient(
+      circle at 84% 22%,
+      rgba(253, 224, 71, 0.18) 0%,
+      transparent 48%
+    ),
+    radial-gradient(
+      circle at 16% 84%,
+      rgba(217, 119, 6, 0.14) 0%,
+      transparent 45%
+    );
+}
+.mobile-prototype .wallet-card.is-virtual-visa {
+  border-color: rgba(94, 234, 212, 0.3);
+  box-shadow:
+    inset 0 1px 0 rgba(204, 251, 241, 0.35),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.24);
+}
+.mobile-prototype .wallet-card.is-virtual-visa .wallet-card-pattern {
+  background-image:
+    radial-gradient(
+      circle at 84% 24%,
+      rgba(45, 212, 191, 0.2) 0%,
+      transparent 50%
+    ),
+    radial-gradient(
+      circle at 18% 85%,
+      rgba(6, 182, 212, 0.14) 0%,
+      transparent 45%
+    );
+}
+.mobile-prototype .wallet-card.is-virtual-mc {
+  border-color: rgba(165, 180, 252, 0.28);
+  box-shadow:
+    inset 0 1px 0 rgba(224, 231, 255, 0.32),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.26);
+}
+.mobile-prototype .wallet-card.is-virtual-mc .wallet-card-pattern {
+  background-image:
+    radial-gradient(
+      circle at 84% 24%,
+      rgba(129, 140, 248, 0.18) 0%,
+      transparent 50%
+    ),
+    radial-gradient(
+      circle at 18% 85%,
+      rgba(245, 158, 11, 0.1) 0%,
+      transparent 45%
+    );
+}
+.mobile-prototype .wallet-card.is-custom {
+  border-color: rgba(255, 255, 255, 0.26);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.36),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.26);
 }
 .mobile-prototype .wallet-card-header {
   position: relative;
@@ -5654,33 +5744,46 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
 .mobile-prototype .wallet-card-holder-info {
   display: flex;
   flex-direction: column;
-  gap: 2.5px;
+  gap: 3px;
   min-width: 0;
   flex: 1 1 auto;
 }
 .mobile-prototype .wallet-card-holder-name {
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 800;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.035em;
   color: #ffffff;
   text-transform: uppercase;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 185px;
+  max-width: 190px;
   line-height: 1.18;
+}
+.mobile-prototype .wallet-card.is-savings .wallet-card-holder-name {
+  font-size: 15px;
+  font-weight: 850;
+  letter-spacing: 0.04em;
 }
 .mobile-prototype .wallet-card-type-tag {
   display: inline-flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 5px;
+  gap: 6px;
   font-size: 8.5px;
-  font-weight: 700;
-  letter-spacing: 0.07em;
+  font-weight: 750;
+  letter-spacing: 0.075em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.72);
+  color: rgba(255, 255, 255, 0.76);
   line-height: 1.1;
+}
+.mobile-prototype .wallet-card.is-savings .wallet-card-type-tag {
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.8);
+}
+.mobile-prototype .wallet-card.is-gold .wallet-card-type-tag {
+  color: rgba(254, 240, 138, 0.82);
 }
 .mobile-prototype .wallet-card-subtitle-text {
   display: inline-block;
@@ -5695,7 +5798,7 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  opacity: 0.88;
+  opacity: 0.9;
 }
 .mobile-prototype .wallet-card-brand-logo {
   flex: 0 0 auto;
@@ -5734,10 +5837,53 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
   min-height: 8px;
   margin: 0;
 }
+.mobile-prototype .wallet-card.is-virtual .wallet-card-mid {
+  min-height: 22px;
+  margin: 2px 0 0;
+}
 .mobile-prototype .wallet-card-chip-cluster {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+.mobile-prototype .wallet-card-virtual-cluster {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.mobile-prototype .wallet-card-digital-chip {
+  width: 26px;
+  height: 19px;
+  border-radius: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px dashed rgba(255, 255, 255, 0.28);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+.mobile-prototype .wallet-card-digital-chip.is-aero {
+  background: rgba(45, 212, 191, 0.12);
+  border: 1px solid rgba(94, 234, 212, 0.34);
+}
+.mobile-prototype .wallet-card-digital-chip.is-stealth {
+  background: rgba(129, 140, 248, 0.14);
+  border: 1px solid rgba(165, 180, 252, 0.32);
+}
+.mobile-prototype .wallet-card-virtual-meta {
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.78);
+  line-height: 1;
+}
+.mobile-prototype .wallet-card.is-virtual-visa .wallet-card-virtual-meta {
+  color: rgba(204, 251, 241, 0.86);
+}
+.mobile-prototype .wallet-card.is-virtual-mc .wallet-card-virtual-meta {
+  color: rgba(224, 231, 255, 0.84);
 }
 .mobile-prototype .wallet-card-contactless {
   display: block;
@@ -5748,24 +5894,15 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.25));
   opacity: 0.84;
 }
-/* Minimalist Savings Vault Middle Architecture */
+/* Minimalist Savings Vault Middle Architecture (Borderless — No White HR) */
 .mobile-prototype .wallet-card-savings-mid {
   position: relative;
   z-index: 2;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin: auto 0 6px;
-}
-.mobile-prototype .wallet-card-savings-rule {
-  width: 100%;
-  height: 1px;
-  background: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0.24) 0%,
-    rgba(255, 255, 255, 0.08) 75%,
-    transparent 100%
-  );
+  margin: auto 0 7px;
+  border: 0;
+  padding: 0;
 }
 .mobile-prototype .wallet-card-savings-meta-row {
   display: flex;
@@ -5776,31 +5913,41 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
 .mobile-prototype .wallet-card-savings-status {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 8.5px;
-  font-weight: 750;
+  gap: 6.5px;
+  font-size: 9px;
+  font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.72);
+  color: rgba(255, 255, 255, 0.78);
   line-height: 1;
 }
 .mobile-prototype .wallet-card-savings-dot {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: #6ee7b7;
   box-shadow: 0 0 6px rgba(110, 231, 183, 0.65);
+  flex-shrink: 0;
 }
 .mobile-prototype .wallet-card.is-frozen .wallet-card-savings-dot {
-  background: #fca5a5;
+  background: #f4a29e;
   box-shadow: none;
 }
 .mobile-prototype .wallet-card-savings-ref {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   font-family: ui-monospace, "SF Mono", "Menlo", monospace;
-  font-size: 10.5px;
-  font-weight: 650;
-  letter-spacing: 0.08em;
-  color: rgba(255, 255, 255, 0.68);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.8);
+  line-height: 1;
+}
+.mobile-prototype .wallet-card-savings-dots {
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  color: rgba(255, 255, 255, 0.76);
   line-height: 1;
 }
 .mobile-prototype .wallet-card-number {
@@ -5856,8 +6003,9 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
   font-variant-numeric: tabular-nums;
 }
 .mobile-prototype .wallet-card.is-savings .wallet-card-balance-val {
-  font-size: 18px;
-  letter-spacing: -0.02em;
+  font-size: 20px;
+  font-weight: 850;
+  letter-spacing: -0.025em;
 }
 .mobile-prototype .wallet-card-meta-val {
   font-size: 12px;
@@ -7100,6 +7248,16 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
 }
 .mobile-prototype .mini-card-tier-tag.is-gold {
   color: #fde68a;
+}
+.mobile-prototype .mini-card-tier-tag.is-virtual {
+  color: #99f6e4;
+}
+.mobile-prototype .mini-card-tier-tag.is-custom {
+  color: rgba(255, 255, 255, 0.85);
+}
+.mobile-prototype .mini-card-virtual-brand {
+  display: flex;
+  align-items: center;
 }
 .mobile-prototype .mini-card-cash-symbol {
   font-size: 10px;

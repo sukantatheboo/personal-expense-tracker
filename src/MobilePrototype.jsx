@@ -499,12 +499,15 @@ const monthExp = (S) =>
     })
     .map(({ e }) => e);
 function bal(S, id) {
-  let b = Number(S?.start?.[id]) || 0;
+  const cardObj = Array.isArray(S?.cards)
+    ? S.cards.find((c) => c.id === id)
+    : null;
+  let b = Number(S?.start?.[id] ?? cardObj?.initialBalance) || 0;
   const savingsId = getSavingsAccountId(S?.cards);
   for (const e of S.exp) {
     if (e.amt == null) continue;
     if (e.cat === "Savings" && savingsId) {
-      if (id === savingsId && e.acct && e.acct !== savingsId) b += e.amt;
+      if (id === savingsId && e.acct !== savingsId) b += e.amt;
       else if (e.acct === id && id !== savingsId) b -= e.amt;
     } else if (e.acct === id) b -= e.amt;
   }
@@ -3220,7 +3223,11 @@ function Activity({
           sortedDates.map((d) => {
             const dayExpenses = g[d] || [];
             const dayExpenseSum = dayExpenses
-              .filter((e) => e.sourceType === "expense" || e.type === "expense")
+              .filter(
+                (e) =>
+                  (e.sourceType === "expense" || e.type === "expense") &&
+                  e.cat !== "Savings",
+              )
               .reduce((acc, e) => acc + (e.amt || 0), 0);
             const dayIncomeSum = dayExpenses
               .filter((e) => e.type === "income")
@@ -3230,7 +3237,8 @@ function Activity({
                 (e) =>
                   e.type === "transfer" ||
                   e.type === "adjust" ||
-                  e.type === "adjustment",
+                  e.type === "adjustment" ||
+                  e.cat === "Savings",
               )
               .reduce((acc, e) => acc + (e.amt || 0), 0);
             const hasAmount = dayExpenses.some((e) => e.amt != null);
@@ -3374,6 +3382,7 @@ function Accounts({
   };
 
   const getAccountName = (id) => {
+    if (!id || id === "cash") return "Cash";
     const card = cards.find((c) => c.id === id);
     if (card?.name) return card.name;
     const tombstone = S?.deletedCards?.[id];
@@ -3383,10 +3392,17 @@ function Accounts({
 
   const events = [
     ...S.exp
-      .filter((expense) => expense.acct && expense.amt != null)
+      .filter(
+        (expense) =>
+          (expense.acct ||
+            (expense.cat === "Savings" && Boolean(savingsAccountId))) &&
+          expense.amt != null,
+      )
       .map((expense) => {
         const isSavingsTransfer =
-          expense.cat === "Savings" && Boolean(savingsAccountId);
+          expense.cat === "Savings" &&
+          Boolean(savingsAccountId) &&
+          expense.acct !== savingsAccountId;
         return {
           id: expense.id,
           sourceType: "expense",
@@ -3400,7 +3416,7 @@ function Accounts({
           cat: expense.cat,
           amount: expense.amt,
           account: expense.acct,
-          from: isSavingsTransfer ? expense.acct : "",
+          from: isSavingsTransfer ? expense.acct || "cash" : "",
           to: isSavingsTransfer ? savingsAccountId : "",
         };
       }),
@@ -3452,7 +3468,15 @@ function Accounts({
       itemCreationTime(left) - itemCreationTime(right) ||
       left.id.localeCompare(right.id),
   );
-  const runningBalances = { ...S.start };
+  const runningBalances = {
+    ...Object.fromEntries(
+      cards.map((c) => [
+        c.id,
+        Number(S?.start?.[c.id] ?? c.initialBalance) || 0,
+      ]),
+    ),
+    ...S.start,
+  };
   const adjustmentBalances = new Map();
   for (const event of ascendingEvents) {
     const changes = {};
@@ -4559,7 +4583,7 @@ function getCardMaskedSubtitle(card) {
     card.category === "savings" ||
     card.provider === "savings"
   ) {
-    return { dots: "••••", tail: digits || "8829" };
+    return { dots: "••••", tail: digits || "4710" };
   }
   return { dots: "••••", tail: (digits || "4821").padStart(4, "0") };
 }
@@ -4787,15 +4811,37 @@ function TxSheet({
       <Seg
         value={g.type}
         onPick={(v) => {
-          if (v === "transfer") {
-            const defaultCard = cards.find((c) => c.id === defaultAccount);
-            if (defaultCard?.frozen) {
-              triggerHaptic("warning");
-              onLockedCardNotice?.(defaultCard.name);
-              return;
-            }
+          if (v === "transfer" && !hasUnfrozenCard) {
+            const lockedCard =
+              cards.find((c) => c.id === defaultAccount) || cards[0];
+            triggerHaptic("warning");
+            onLockedCardNotice?.(lockedCard?.name);
+            return;
           }
-          setG((current) => ({ ...current, type: v, note: "" }));
+          setG((current) => {
+            if (v !== "transfer") {
+              return { ...current, type: v, note: "" };
+            }
+            const candidateFrom = current.fromAccount || current.acct;
+            const isCandidateFrozen = Boolean(
+              cards.find((c) => c.id === candidateFrom)?.frozen,
+            );
+            const resolvedFrom =
+              !isCandidateFrozen && candidateFrom
+                ? candidateFrom
+                : unfrozenFromOptions[0]?.[0] || candidateFrom;
+            const resolvedTo =
+              current.toAccount && current.toAccount !== resolvedFrom
+                ? current.toAccount
+                : cards.find((c) => c.id !== resolvedFrom)?.id || "";
+            return {
+              ...current,
+              type: v,
+              note: "",
+              fromAccount: resolvedFrom,
+              toAccount: resolvedTo,
+            };
+          });
           setTimeout(() => {
             amtInputRef.current?.focus({ preventScroll: true });
           }, 0);
@@ -5008,29 +5054,22 @@ function AccountTxDetailSheet({ tx, cards = [], onSave, onDelete, onClose }) {
   const ensureAccountOption = (...ids) => {
     const list = [...cardOptions];
     for (const rawId of ids) {
-      if (!rawId) continue;
-      const normalizedId = rawId === "" ? "cash" : rawId;
-      if (!list.some(([optId]) => optId === normalizedId)) {
-        list.push([normalizedId, getAccountDisplay(normalizedId, cards)[0]]);
+      if (!rawId || rawId === "cash") continue;
+      if (!list.some(([optId]) => optId === rawId)) {
+        list.push([rawId, getAccountDisplay(rawId, cards)[0]]);
       }
-    }
-    if (list.length === 0) {
-      list.push(["cash", "Cash"]);
     }
     return list;
   };
   const [g, setG] = useState({
     type: tx.type === "adjustment" ? "adjust" : tx.type || "income",
     amt: tx.amt ?? "",
-    acct: tx.acct || cards[0]?.id || "cash",
+    acct: tx.acct || cards[0]?.id || "",
     dir: tx.dir || (tx.direction === "decrease" ? "down" : "up"),
     note: tx.note || "",
     date: tx.date || ld(),
-    fromAccount: tx.acct || cards[0]?.id || "cash",
-    toAccount:
-      tx.to ||
-      cards.find((c) => c.id !== tx.acct)?.id ||
-      (cards[0]?.id ? "cash" : ""),
+    fromAccount: tx.acct || cards[0]?.id || "",
+    toAccount: tx.to || cards.find((c) => c.id !== tx.acct)?.id || "",
   });
   const amtInputRef = useRef(null);
   const noteInputRef = useRef(null);
@@ -6055,9 +6094,9 @@ const CARD_THEMES = [
   {
     id: "emerald",
     name: "Emerald Vault",
-    color: "#047857",
+    color: "#157358",
     gradient:
-      "linear-gradient(135deg, #065f46 0%, #047857 35%, #064e3b 70%, #022c22 100%)",
+      "linear-gradient(135deg, #227e60 0%, #10684c 40%, #074c38 75%, #032b20 100%)",
   },
   {
     id: "obsidian",
@@ -6192,7 +6231,7 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
       const digits = raw.replace(/\D/g, "").slice(0, 4);
       setFormData((prev) => ({ ...prev, last4: digits, number: digits }));
     } else {
-      const digits = raw.replace(/[^\d+]/g, "").slice(0, 14);
+      const digits = raw.replace(/\D/g, "").slice(0, 11);
       setFormData((prev) => ({
         ...prev,
         last4: digits.slice(-4),
@@ -6221,15 +6260,18 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
     const isSavings = selectedProvider.category === "savings";
 
     const defaultNum = selectedProvider.numberPlaceholder.replace(/\s+/g, "");
-    const defaultLast4 = defaultNum.slice(-4);
+    const defaultDigits = defaultNum.replace(/\D/g, "");
+    const defaultLast4 = defaultDigits.slice(-4) || "4710";
     const last4 =
       (
         formData.last4 ||
         (formData.number ? formData.number.replace(/\D/g, "").slice(-4) : "")
       ).trim() || defaultLast4;
     const number = selectedProvider.isPhone
-      ? formData.number.trim() || defaultNum
-      : `•••• •••• •••• ${last4}`;
+      ? formData.number.replace(/\D/g, "").slice(0, 11) || defaultDigits.slice(0, 11)
+      : isSavings
+        ? `SAV-${last4}`
+        : `•••• •••• •••• ${last4}`;
     const holderName =
       formData.holderName.trim() || userProfileName || "Cardholder";
     const network = isMfs
@@ -6253,11 +6295,13 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
       network,
       holderName,
       subtitle: isMfs
-        ? "Personal Wallet"
+        ? "Personal"
         : isSavings
-          ? "High-Yield Vault"
+          ? "Personal Savings"
           : isCustom
-            ? `${name} ${network === "visa" ? "Visa" : network === "mastercard" ? "Mastercard" : "Card"}`
+            ? formData.name.trim()
+              ? `${name} ${network === "visa" ? "Visa" : network === "mastercard" ? "Mastercard" : "Amex"}`
+              : "Signature Edition"
             : selectedProvider.subtitle,
       last4,
       number,
@@ -6272,12 +6316,14 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
     triggerHaptic("success");
   };
 
+  const previewIsSavings = selectedProvider.category === "savings";
   const previewCard = {
     id: "preview",
     name:
       formData.name.trim() ||
       (isCustom ? "Custom Card" : selectedProvider.name),
     provider: selectedProvider.id,
+    category: selectedProvider.category,
     type: formData.type || selectedProvider.defaultType || "credit",
     network: formData.network || selectedProvider.defaultNetwork || "visa",
     holderName:
@@ -6290,20 +6336,18 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
     subtitle: isCustom
       ? formData.name.trim()
         ? `${formData.name.trim()} ${formData.network === "visa" ? "Visa" : formData.network === "mastercard" ? "Mastercard" : "Amex"}`
-        : formData.network === "visa"
-          ? formData.type === "credit"
-            ? "Custom Visa Credit"
-            : "Custom Visa Debit"
-          : formData.network === "mastercard"
-            ? formData.type === "credit"
-              ? "Custom Mastercard Credit"
-              : "Custom Mastercard Debit"
-            : "Custom Amex"
+        : "Signature Edition"
       : selectedProvider.subtitle,
     last4: formData.last4 || (formData.number ? formData.number.slice(-4) : ""),
-    number: formData.last4
-      ? `•••• •••• •••• ${formData.last4}`
-      : formData.number,
+    number: previewIsSavings
+      ? formData.last4
+        ? `SAV-${formData.last4}`
+        : ""
+      : selectedProvider.isPhone
+        ? formData.number
+        : formData.last4
+          ? `•••• •••• •••• ${formData.last4}`
+          : formData.number,
     expiry: formData.expiry,
     color: formData.color || selectedProvider.color,
     gradient: formData.gradient || selectedProvider.gradient,
@@ -6447,7 +6491,7 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
               balance={parseAmount(formData.initialBalance) || 0}
               isActive={true}
               interactive={false}
-              showBalance={false}
+              showBalance={true}
               showFullDetails={true}
             />
           </div>
@@ -6607,10 +6651,10 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
                 className="add-card-native-input"
                 type="text"
                 inputMode="numeric"
-                maxLength={selectedProvider.isPhone ? 14 : 4}
+                maxLength={selectedProvider.isPhone ? 11 : 4}
                 placeholder={
                   selectedProvider.isPhone
-                    ? selectedProvider.numberPlaceholder || "01712 345678"
+                    ? (selectedProvider.numberPlaceholder || "01712345678").replace(/\s+/g, "")
                     : "e.g. 9018"
                 }
                 value={
@@ -7011,7 +7055,7 @@ function CardOptionsSheet({
 
   const handleCardNumberChange = (raw) => {
     if (isMfs) {
-      const digits = raw.replace(/[^\d+]/g, "").slice(0, 14);
+      const digits = raw.replace(/\D/g, "").slice(0, 11);
       setFormData((prev) => ({
         ...prev,
         number: digits,
@@ -7557,7 +7601,8 @@ function CardOptionsSheet({
                   <input
                     type="text"
                     inputMode="numeric"
-                    placeholder="01712 345678"
+                    maxLength={11}
+                    placeholder="01712345678"
                     value={formData.number}
                     onChange={(e) => handleCardNumberChange(e.target.value)}
                     autoComplete="off"
@@ -7627,7 +7672,7 @@ function CardOptionsSheet({
                   <input
                     type="text"
                     value={formData.number}
-                    placeholder="SAV-8829-01"
+                    placeholder="SAV-4710"
                     onChange={(e) => {
                       const val = e.target.value;
                       const rawNum = val.replace(/\D/g, "");
@@ -7645,7 +7690,7 @@ function CardOptionsSheet({
                   <input
                     type="text"
                     value={formData.subtitle}
-                    placeholder="e.g. High-Yield Vault"
+                    placeholder="e.g. Personal Savings"
                     onChange={(e) =>
                       setFormData((prev) => ({
                         ...prev,
@@ -10627,7 +10672,7 @@ export default function MobilePrototype({
         title="Delete Expense?"
         message={
           confirmDeleteExpense
-            ? `Are you sure you want to delete "${confirmDeleteExpense.desc || "this expense"}" (${M(confirmDeleteExpense.amt || 0)})?`
+            ? `Are you sure you want to delete "${confirmDeleteExpense.desc || "this expense"}"${confirmDeleteExpense.amt != null ? ` (${M(confirmDeleteExpense.amt)})` : ""}?`
             : ""
         }
         confirmLabel="Yes, Delete"

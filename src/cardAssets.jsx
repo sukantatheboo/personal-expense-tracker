@@ -973,8 +973,12 @@ export function ContactlessWaves({
   );
 }
 
-import { CARD_PROVIDERS, getProviderMeta } from "./cardProviders.js";
-export { CARD_PROVIDERS, getProviderMeta };
+import {
+  CARD_PROVIDERS,
+  getProviderMeta,
+  resolveCardGradient,
+} from "./cardProviders.js";
+export { CARD_PROVIDERS, getProviderMeta, resolveCardGradient };
 
 export function renderProviderLogo(
   providerId,
@@ -994,51 +998,233 @@ export function renderProviderLogo(
     case "sc_visa":
     case "sc":
       return <StandardCharteredLogo height={height} className={className} />;
-    case "gold_mc":
+    case "gold_mc": {
       return (
         <span
-          className={`card-generic-logo is-gold ${className}`}
+          className={`card-bespoke-mark is-gold-mark ${className}`}
           style={{
             display: "inline-flex",
             alignItems: "center",
-            gap: 4,
-            padding: "3px 8px",
-            borderRadius: 999,
-            background: "rgba(253, 230, 138, 0.14)",
-            border: "1px solid rgba(253, 230, 138, 0.34)",
-            color: "#FDE68A",
-            fontWeight: 800,
-            letterSpacing: "0.08em",
-            fontSize: 10,
-            lineHeight: 1,
+            gap: 6,
+            height: 22,
+            color: "#FEF08A",
           }}
         >
-          ★ GOLD
+          <svg
+            width="15"
+            height="15"
+            style={{
+              width: 15,
+              height: 15,
+              display: "block",
+              stroke: "none",
+            }}
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path
+              d="M12 2L21 12L12 22L3 12L12 2Z"
+              stroke="#FDE047"
+              strokeWidth="1.6"
+              fill="rgba(253, 224, 71, 0.14)"
+            />
+            <path
+              d="M12 2L16.5 12L12 22L7.5 12L12 2Z"
+              stroke="rgba(254, 240, 138, 0.55)"
+              strokeWidth="1.1"
+            />
+            <path
+              d="M3 12H21"
+              stroke="rgba(254, 240, 138, 0.45)"
+              strokeWidth="1.1"
+            />
+          </svg>
+          <span
+            style={{
+              display: "inline-flex",
+              flexDirection: "column",
+              alignItems: "flex-end",
+              lineHeight: 1,
+              gap: 2,
+            }}
+          >
+            <span
+              style={{
+                fontSize: 10,
+                fontWeight: 850,
+                letterSpacing: "0.18em",
+                color: "#FEF9C3",
+              }}
+            >
+              GOLD
+            </span>
+            <span
+              style={{
+                fontSize: 6.5,
+                fontWeight: 700,
+                letterSpacing: "0.22em",
+                color: "rgba(253, 224, 71, 0.72)",
+              }}
+            >
+              BULLION
+            </span>
+          </span>
         </span>
       );
-    case "virtual_mc":
-    case "virtual_visa":
+    }
+    case "virtual_visa": {
       return (
         <span
-          className={`card-generic-logo is-virtual ${className}`}
+          className={`card-bespoke-mark is-virtual-visa-mark ${className}`}
           style={{
             display: "inline-flex",
             alignItems: "center",
-            gap: 4,
-            padding: "3px 8px",
-            borderRadius: 999,
-            background: "rgba(255, 255, 255, 0.12)",
-            border: "1px solid rgba(255, 255, 255, 0.22)",
-            color: "#ffffff",
-            fontWeight: 800,
-            letterSpacing: "0.08em",
-            fontSize: 9.5,
-            lineHeight: 1,
+            gap: 6,
+            height: 22,
+            color: "#CCFBF1",
           }}
         >
-          VIRTUAL
+          <svg
+            width="16"
+            height="16"
+            style={{
+              width: 16,
+              height: 16,
+              display: "block",
+              stroke: "none",
+            }}
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path
+              d="M2 15C5.5 11 8.5 11 12 15C15.5 19 18.5 19 22 15"
+              stroke="#5EEAD4"
+              strokeWidth="1.9"
+              strokeLinecap="round"
+            />
+            <path
+              d="M2 9.5C5.5 5.5 8.5 5.5 12 9.5C15.5 13.5 18.5 13.5 22 9.5"
+              stroke="rgba(153, 246, 228, 0.55)"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
+          </svg>
+          <span
+            style={{
+              display: "inline-flex",
+              flexDirection: "column",
+              alignItems: "flex-end",
+              lineHeight: 1,
+              gap: 2,
+            }}
+          >
+            <span
+              style={{
+                fontSize: 9.5,
+                fontWeight: 850,
+                letterSpacing: "0.15em",
+                color: "#F0FDFA",
+              }}
+            >
+              AERO
+            </span>
+            <span
+              style={{
+                fontSize: 6.5,
+                fontWeight: 700,
+                letterSpacing: "0.18em",
+                color: "rgba(94, 234, 212, 0.78)",
+              }}
+            >
+              VIRTUAL
+            </span>
+          </span>
         </span>
       );
+    }
+    case "virtual_mc": {
+      return (
+        <span
+          className={`card-bespoke-mark is-virtual-mc-mark ${className}`}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            height: 22,
+            color: "#E0E7FF",
+          }}
+        >
+          <svg
+            width="16"
+            height="16"
+            style={{
+              width: 16,
+              height: 16,
+              display: "block",
+              stroke: "none",
+            }}
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+          >
+            <rect
+              x="3"
+              y="6"
+              width="12"
+              height="9"
+              rx="2"
+              transform="rotate(-10 9 10.5)"
+              stroke="#A5B4FC"
+              strokeWidth="1.6"
+              fill="rgba(129, 140, 248, 0.16)"
+            />
+            <rect
+              x="9"
+              y="9"
+              width="12"
+              height="9"
+              rx="2"
+              transform="rotate(-10 15 13.5)"
+              stroke="#FDA4AF"
+              strokeWidth="1.6"
+              fill="rgba(244, 63, 94, 0.16)"
+            />
+          </svg>
+          <span
+            style={{
+              display: "inline-flex",
+              flexDirection: "column",
+              alignItems: "flex-end",
+              lineHeight: 1,
+              gap: 2,
+            }}
+          >
+            <span
+              style={{
+                fontSize: 9.5,
+                fontWeight: 850,
+                letterSpacing: "0.15em",
+                color: "#EEF2FF",
+              }}
+            >
+              STEALTH
+            </span>
+            <span
+              style={{
+                fontSize: 6.5,
+                fontWeight: 700,
+                letterSpacing: "0.18em",
+                color: "rgba(165, 180, 252, 0.76)",
+              }}
+            >
+              VIRTUAL
+            </span>
+          </span>
+        </span>
+      );
+    }
     case "bkash":
       return <BkashLogo height={height} className={className} />;
     case "nagad":
@@ -1061,27 +1247,52 @@ export function renderProviderLogo(
       return (
         <AmexBadge height={Math.round(height * 0.72)} className={className} />
       );
-    default:
+    default: {
       return (
         <span
-          className={`card-generic-logo ${className}`}
+          className={`card-bespoke-mark is-custom-mark ${className}`}
+          aria-hidden="true"
           style={{
             display: "inline-flex",
             alignItems: "center",
-            padding: "3px 8px",
-            borderRadius: 999,
-            background: "rgba(255, 255, 255, 0.12)",
-            border: "1px solid rgba(255, 255, 255, 0.22)",
-            color: "#ffffff",
-            fontWeight: 800,
-            fontSize: 9.5,
-            letterSpacing: "0.08em",
-            lineHeight: 1,
+            gap: 5.5,
+            height: 22,
+            color: "rgba(255, 255, 255, 0.9)",
           }}
         >
-          CARD
+          <svg
+            width="14"
+            height="14"
+            style={{
+              width: 14,
+              height: 14,
+              display: "block",
+              stroke: "none",
+            }}
+            viewBox="0 0 24 24"
+            fill="none"
+          >
+            <path
+              d="M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              fill="rgba(255, 255, 255, 0.14)"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <span
+            style={{
+              fontSize: 8.5,
+              fontWeight: 800,
+              letterSpacing: "0.18em",
+              color: "rgba(255, 255, 255, 0.84)",
+            }}
+          >
+            SIGNATURE
+          </span>
         </span>
       );
+    }
   }
 }
 
@@ -1096,6 +1307,8 @@ export function MiniCardPreview({ provider, card, className = "" }) {
     provider || (provId ? getProviderMeta(provId) : null) || CARD_PROVIDERS[0];
   const network = card?.network || p?.defaultNetwork || "visa";
   const category = card?.category || p?.category || "bank";
+  const brandKey = provId || p?.id || "";
+  const isVirtual = brandKey === "virtual_mc" || brandKey === "virtual_visa";
   const isMfs =
     !isCash &&
     (category === "mfs" ||
@@ -1110,10 +1323,7 @@ export function MiniCardPreview({ provider, card, className = "" }) {
       provId === "savings");
   const gradient = isCash
     ? "linear-gradient(135deg, #10b981 0%, #059669 60%, #047857 100%)"
-    : card?.gradient ||
-      p?.gradient ||
-      card?.color ||
-      "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)";
+    : resolveCardGradient(card, p);
 
   // Extract last 4 digits or masked identifier
   const rawNum = card?.last4 || card?.number || p?.numberPlaceholder || "4328";
@@ -1121,8 +1331,6 @@ export function MiniCardPreview({ provider, card, className = "" }) {
   const last4 =
     cleanDigits.slice(-4) ||
     (p?.numberPrefix ? p.numberPrefix.slice(-4) : "4328");
-
-  const brandKey = provId || p?.id || "";
 
   return (
     <div
@@ -1133,7 +1341,7 @@ export function MiniCardPreview({ provider, card, className = "" }) {
       <div className="mini-card-sheen" />
       <div className="mini-card-pattern" />
 
-      {/* Top Row: Micro EMV Chip + Waves (Left) & Brand Mark (Right) */}
+      {/* Top Row: Micro EMV Chip / Digital Mark (Left) & Brand Mark (Right) */}
       <div className="mini-card-top-row">
         {isCash ? (
           <span className="mini-card-cash-symbol">৳</span>
@@ -1246,6 +1454,62 @@ export function MiniCardPreview({ provider, card, className = "" }) {
                 strokeWidth="1.8"
               />
               <circle cx="12" cy="12" r="1.3" fill="rgba(255,255,255,0.9)" />
+            </svg>
+          </div>
+        ) : brandKey === "virtual_visa" ? (
+          <div className="mini-card-virtual-brand">
+            <svg
+              width="10"
+              height="10"
+              style={{
+                width: 10,
+                height: 10,
+                display: "block",
+                stroke: "none",
+              }}
+              viewBox="0 0 24 24"
+              fill="none"
+            >
+              <path
+                d="M2 15C5.5 11 8.5 11 12 15C15.5 19 18.5 19 22 15M2 9.5C5.5 5.5 8.5 5.5 12 9.5C15.5 13.5 18.5 13.5 22 9.5"
+                stroke="#5EEAD4"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+              />
+            </svg>
+          </div>
+        ) : brandKey === "virtual_mc" ? (
+          <div className="mini-card-virtual-brand">
+            <svg
+              width="10"
+              height="10"
+              style={{
+                width: 10,
+                height: 10,
+                display: "block",
+                stroke: "none",
+              }}
+              viewBox="0 0 24 24"
+              fill="none"
+            >
+              <rect
+                x="2.5"
+                y="5.5"
+                width="12"
+                height="9"
+                rx="2"
+                stroke="#A5B4FC"
+                strokeWidth="2"
+              />
+              <rect
+                x="9.5"
+                y="9.5"
+                width="12"
+                height="9"
+                rx="2"
+                stroke="#FDA4AF"
+                strokeWidth="2"
+              />
             </svg>
           </div>
         ) : (
@@ -1411,8 +1675,14 @@ export function MiniCardPreview({ provider, card, className = "" }) {
             {brandKey === "gold_mc" && (
               <span className="mini-card-tier-tag is-gold">GOLD</span>
             )}
-            {(brandKey === "virtual_mc" || brandKey === "virtual_visa") && (
-              <span className="mini-card-tier-tag">VIRT</span>
+            {brandKey === "virtual_visa" && (
+              <span className="mini-card-tier-tag is-virtual">AERO</span>
+            )}
+            {brandKey === "virtual_mc" && (
+              <span className="mini-card-tier-tag is-virtual">STLH</span>
+            )}
+            {brandKey === "custom" && (
+              <span className="mini-card-tier-tag is-custom">SIGN</span>
             )}
           </div>
         )}

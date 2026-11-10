@@ -20,6 +20,7 @@ import {
   ContactlessWaves,
   CARD_PROVIDERS,
   getProviderMeta,
+  resolveCardGradient,
   renderProviderLogo,
 } from "./cardAssets.jsx";
 
@@ -54,36 +55,20 @@ export function formatCardNumber(
   if (!digits) return str;
 
   if (isPhone) {
-    const hasPlus = str.startsWith("+");
-    if (digits.length >= 13 && digits.startsWith("880")) {
-      const prefix = hasPlus ? "+880" : "880";
-      const rest = digits.slice(3);
-      if (showFull) {
-        return `${prefix} ${rest.slice(0, 4)} ${rest.slice(4, 7)} ${rest.slice(7)}`;
+    const d = digits.slice(0, 11);
+    if (showFull) {
+      if (d.length > 5) {
+        return `${d.slice(0, 5)} ${d.slice(5)}`;
       }
-      return `${prefix} ${rest.slice(0, 4)} •••• ${rest.slice(-2)}`;
+      return d;
     }
-    if (digits.length > 11) {
-      const countryCodeLen = digits.length - 10;
-      const prefix = hasPlus
-        ? `+${digits.slice(0, countryCodeLen)}`
-        : digits.slice(0, countryCodeLen);
-      const rest = digits.slice(countryCodeLen);
-      if (showFull) {
-        return `${prefix} ${rest.slice(0, 4)} ${rest.slice(4, 7)} ${rest.slice(7)}`;
-      }
-      return `${prefix} ${rest.slice(0, 4)} •••• ${rest.slice(-2)}`;
+    if (d.length >= 8) {
+      return `${d.slice(0, 5)} •••• ${d.slice(-2)}`;
     }
-    if (showFull && digits.length >= 11) {
-      return `${digits.slice(0, 5)} ${digits.slice(5, 8)} ${digits.slice(8)}`;
+    if (d.length > 5) {
+      return `${d.slice(0, 5)} ${d.slice(5)}`;
     }
-    if (digits.length >= 11) {
-      return `${digits.slice(0, 5)} •••• ${digits.slice(-2)}`;
-    }
-    if (digits.length > 5) {
-      return `${digits.slice(0, 5)} ${digits.slice(5)}`;
-    }
-    return digits;
+    return d;
   }
 
   // Bank card:
@@ -108,6 +93,16 @@ export function formatExpiry(raw = "") {
 }
 
 /* ───────────── Clean, Authentic Mobile Wallet Card ───────────── */
+const LEGACY_CARD_SUBTITLES = new Set([
+  "High-Yield Vault · BDT",
+  "High-Yield Vault",
+  "Personal Vault · BDT",
+  "Personal Card",
+  "Custom Card Visa",
+  "Custom Card Mastercard",
+  "Custom Card Card",
+]);
+
 export function WalletCard({
   card,
   balance,
@@ -122,16 +117,19 @@ export function WalletCard({
 }) {
   if (!card) return null;
   const provider = getProviderMeta(card.provider);
-  const gradient =
-    card.gradient ||
-    provider?.gradient ||
-    "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)";
+  const gradient = resolveCardGradient(card, provider);
   const isMfs = card.type === "mfs" || provider?.category === "mfs";
   const isSavings =
     card.type === "savings" ||
     card.category === "savings" ||
     card.provider === "savings" ||
     provider?.category === "savings";
+  const isVirtualVisa = card.provider === "virtual_visa";
+  const isVirtualMc = card.provider === "virtual_mc";
+  const isVirtual = isVirtualVisa || isVirtualMc;
+  const isGold = card.provider === "gold_mc";
+  const isCustom =
+    card.provider === "custom" || (!provider && !isSavings && !isMfs);
   const isFrozen = Boolean(card.frozen);
 
   const formattedNumber = formatCardNumber(
@@ -141,33 +139,44 @@ export function WalletCard({
     isSavings,
   );
 
+  const isLegacyProviderSubtitle =
+    LEGACY_CARD_SUBTITLES.has(card.subtitle) ||
+    ((isGold || isVirtualMc) && card.subtitle === "Mastercard Credit · USD") ||
+    (isVirtualVisa && card.subtitle === "Visa Debit · USD");
+
   const rawSubtitle =
-    card.subtitle && card.subtitle !== "High-Yield Vault · BDT"
-      ? card.subtitle
-      : "";
+    card.subtitle && !isLegacyProviderSubtitle ? card.subtitle : "";
   const cardSubtitle =
     rawSubtitle ||
     (isMfs
       ? "Personal"
       : isSavings
-        ? "Personal Vault · BDT"
-        : card.type === "credit"
-          ? "Platinum Credit"
-          : "Debit Card");
+        ? "Personal Savings"
+        : isGold
+          ? "Gold Credit · USD"
+          : isVirtualVisa
+            ? "Virtual Debit · USD"
+            : isVirtualMc
+              ? "Virtual Credit · USD"
+              : isCustom
+                ? "Signature Edition"
+                : card.type === "credit"
+                  ? "Platinum Credit"
+                  : "Debit Card");
 
-  const savingsRawDigits = String(card.number || card.last4 || "").replace(
-    /\D/g,
-    "",
-  );
-  const savingsRef = isSavings
-    ? card.number &&
-      (String(card.number).startsWith("SAV-") ||
-        String(card.number).startsWith("VAULT-") ||
-        String(card.number).startsWith("DPS-"))
-      ? String(card.number)
+  const rawSavingsStr = String(card.number || card.last4 || "").trim();
+  const savingsRawDigits = rawSavingsStr.replace(/\D/g, "");
+  const hasExplicitVaultPrefix =
+    rawSavingsStr.startsWith("SAV-") ||
+    rawSavingsStr.startsWith("VAULT-") ||
+    rawSavingsStr.startsWith("DPS-");
+  const savingsLast4 = savingsRawDigits ? savingsRawDigits.slice(-4) : "";
+  const savingsRefFull = isSavings
+    ? hasExplicitVaultPrefix
+      ? rawSavingsStr
       : savingsRawDigits
-        ? `•• ${savingsRawDigits.slice(-4)}`
-        : ""
+        ? `SAV-${savingsRawDigits}`
+        : "SAV-4710"
     : "";
 
   return (
@@ -175,7 +184,7 @@ export function WalletCard({
       role={interactive ? "button" : undefined}
       tabIndex={interactive ? 0 : undefined}
       aria-label={`${card.name}, ${cardSubtitle}, balance ${formatMoney(balance || 0)}${isFrozen ? ", locked" : ""}`}
-      className={`wallet-card ${isActive ? "is-active" : ""} ${isMfs ? "is-mfs" : ""} ${isSavings ? "is-savings" : ""} ${isFrozen ? "is-frozen" : ""} ${className}`}
+      className={`wallet-card ${isActive ? "is-active" : ""} ${isMfs ? "is-mfs" : ""} ${isSavings ? "is-savings" : ""} ${isGold ? "is-gold" : ""} ${isVirtual ? "is-virtual" : ""} ${isVirtualVisa ? "is-virtual-visa" : ""} ${isVirtualMc ? "is-virtual-mc" : ""} ${isCustom ? "is-custom" : ""} ${isFrozen ? "is-frozen" : ""} ${className}`}
       onClick={interactive ? onClick : undefined}
       onKeyDown={
         interactive
@@ -193,11 +202,180 @@ export function WalletCard({
       }}
     >
       <div className="wallet-card-surface">
-        {/* Holographic light sheen reflection */}
+        {/* Holographic light sheen & ambient pattern */}
         <div className="wallet-card-sheen" aria-hidden="true" />
         <div className="wallet-card-pattern" aria-hidden="true" />
+
+        {/* Bespoke Vector Surface Geometry — Each Card Type Has Its Own Unique Visual Language */}
         {isSavings && (
-          <div className="wallet-card-vault-rings" aria-hidden="true" />
+          <svg
+            className="wallet-card-artwork is-savings-art"
+            viewBox="0 0 326 206"
+            fill="none"
+            aria-hidden="true"
+          >
+            <circle
+              cx="268"
+              cy="56"
+              r="116"
+              fill="rgba(167, 243, 208, 0.045)"
+              stroke="rgba(167, 243, 208, 0.08)"
+              strokeWidth="1"
+            />
+            <circle
+              cx="268"
+              cy="56"
+              r="82"
+              fill="rgba(16, 185, 129, 0.06)"
+              stroke="rgba(167, 243, 208, 0.1)"
+              strokeWidth="1"
+            />
+            <circle cx="268" cy="56" r="48" fill="rgba(2, 44, 34, 0.34)" />
+          </svg>
+        )}
+        {isGold && (
+          <svg
+            className="wallet-card-artwork is-gold-art"
+            viewBox="0 0 326 206"
+            fill="none"
+            aria-hidden="true"
+          >
+            {/* Luxury Faceted Bullion Prism & Geometric Diamond Bevel (Zero Circles) */}
+            <path
+              d="M196 0L326 0L326 206L118 206L196 0Z"
+              fill="rgba(254, 240, 138, 0.05)"
+            />
+            <path
+              d="M254 0L326 0L326 206L176 206L254 0Z"
+              fill="rgba(251, 191, 36, 0.06)"
+            />
+            <path
+              d="M196 0L118 206M254 0L176 206"
+              stroke="rgba(254, 240, 138, 0.16)"
+              strokeWidth="1"
+            />
+            <path
+              d="M142 0L326 154"
+              stroke="rgba(254, 240, 138, 0.1)"
+              strokeWidth="1"
+            />
+            <path
+              d="M266 56L294 94L266 132L238 94L266 56Z"
+              fill="rgba(253, 224, 71, 0.05)"
+              stroke="rgba(254, 240, 138, 0.22)"
+              strokeWidth="1"
+            />
+            <path
+              d="M266 72L282 94L266 116L250 94L266 72Z"
+              stroke="rgba(254, 240, 138, 0.14)"
+              strokeWidth="1"
+            />
+          </svg>
+        )}
+        {isVirtualVisa && (
+          <svg
+            className="wallet-card-artwork is-virtual-visa-art"
+            viewBox="0 0 326 206"
+            fill="none"
+            aria-hidden="true"
+          >
+            {/* Aero-Glass Fluid Topographic Horizon Waves (Zero Circles) */}
+            <path
+              d="M-10 162C68 118 156 184 336 86L336 216L-10 216Z"
+              fill="rgba(45, 212, 191, 0.07)"
+            />
+            <path
+              d="M-10 182C84 138 176 196 336 114L336 216L-10 216Z"
+              fill="rgba(56, 189, 248, 0.06)"
+            />
+            <path
+              d="M-10 162C68 118 156 184 336 86"
+              stroke="rgba(94, 234, 212, 0.22)"
+              strokeWidth="1.15"
+            />
+            <path
+              d="M-10 138C76 94 168 162 336 58"
+              stroke="rgba(56, 189, 248, 0.14)"
+              strokeWidth="1"
+              strokeDasharray="3 4"
+            />
+            <path
+              d="M-10 182C84 138 176 196 336 114"
+              stroke="rgba(153, 246, 228, 0.14)"
+              strokeWidth="1"
+            />
+            <rect
+              x="224"
+              y="48"
+              width="78"
+              height="50"
+              rx="8"
+              fill="rgba(255, 255, 255, 0.03)"
+              stroke="rgba(94, 234, 212, 0.18)"
+              strokeWidth="1"
+            />
+          </svg>
+        )}
+        {isVirtualMc && (
+          <svg
+            className="wallet-card-artwork is-virtual-mc-art"
+            viewBox="0 0 326 206"
+            fill="none"
+            aria-hidden="true"
+          >
+            {/* Stealth Isometric Dual-Glass Planes & Architectural Grid (Zero Circles) */}
+            <path
+              d="M210 0V206M248 0V206M286 0V206M180 48H326M180 96H326M180 144H326"
+              stroke="rgba(165, 180, 252, 0.055)"
+              strokeWidth="1"
+            />
+            <rect
+              x="198"
+              y="44"
+              width="86"
+              height="56"
+              rx="10"
+              transform="rotate(-14 241 72)"
+              fill="rgba(129, 140, 248, 0.07)"
+              stroke="rgba(165, 180, 252, 0.22)"
+              strokeWidth="1"
+            />
+            <rect
+              x="222"
+              y="68"
+              width="86"
+              height="56"
+              rx="10"
+              transform="rotate(-14 265 96)"
+              fill="rgba(244, 63, 94, 0.07)"
+              stroke="rgba(253, 164, 175, 0.2)"
+              strokeWidth="1"
+            />
+          </svg>
+        )}
+        {isCustom && (
+          <svg
+            className="wallet-card-artwork is-custom-art"
+            viewBox="0 0 326 206"
+            fill="none"
+            aria-hidden="true"
+          >
+            {/* Minimalist Titanium Anodized Split-Plane & Architectural Chamfer (Zero Circles) */}
+            <path
+              d="M222 0L326 0L326 206L146 206L222 0Z"
+              fill="rgba(255, 255, 255, 0.035)"
+            />
+            <path
+              d="M222 0L146 206"
+              stroke="rgba(255, 255, 255, 0.13)"
+              strokeWidth="1"
+            />
+            <path
+              d="M282 0L206 206"
+              stroke="rgba(255, 255, 255, 0.06)"
+              strokeWidth="1"
+            />
+          </svg>
         )}
 
         {/* Top Row: Card Title/Holder (Left) + Refined Brand Mark (Right) */}
@@ -219,15 +397,14 @@ export function WalletCard({
 
           <div className="wallet-card-brand-logo">
             {renderProviderLogo(card.provider, {
-              height: isSavings ? 20 : 22,
+              height: isSavings ? 21 : 22,
             })}
           </div>
         </div>
 
-        {/* Middle Section: Minimalist per-card-type geometry */}
+        {/* Middle Section: Bespoke per-card-type geometry (No white HR on Savings) */}
         {isSavings ? (
           <div className="wallet-card-savings-mid">
-            <div className="wallet-card-savings-rule" aria-hidden="true" />
             <div className="wallet-card-savings-meta-row">
               <span className="wallet-card-savings-status">
                 <span
@@ -236,20 +413,104 @@ export function WalletCard({
                 />
                 {isFrozen ? "VAULT LOCKED" : "RESERVE VAULT"}
               </span>
-              {savingsRef && (
-                <span className="wallet-card-savings-ref">{savingsRef}</span>
+              {(savingsLast4 || savingsRefFull) && (
+                <span className="wallet-card-savings-ref">
+                  {showFullDetails ? (
+                    savingsRefFull
+                  ) : savingsLast4 ? (
+                    <>
+                      <span
+                        className="wallet-card-savings-dots"
+                        aria-hidden="true"
+                      >
+                        ••
+                      </span>
+                      <span>{savingsLast4}</span>
+                    </>
+                  ) : (
+                    savingsRefFull
+                  )}
+                </span>
               )}
             </div>
           </div>
         ) : (
           <>
             <div className="wallet-card-mid">
-              {!isMfs && (
+              {!isMfs && !isVirtual && (
                 <div className="wallet-card-chip-cluster">
                   <EmvChip size={32} />
                   <ContactlessWaves
                     size={15}
                     className="wallet-card-contactless"
+                  />
+                </div>
+              )}
+              {isVirtualVisa && (
+                <div className="wallet-card-virtual-cluster is-visa-digital">
+                  <span
+                    className="wallet-card-digital-chip is-aero"
+                    aria-hidden="true"
+                  >
+                    <svg
+                      width="13"
+                      height="13"
+                      style={{
+                        width: 13,
+                        height: 13,
+                        display: "block",
+                        stroke: "none",
+                      }}
+                      viewBox="0 0 24 24"
+                      fill="none"
+                    >
+                      <path
+                        d="M13 2L4.5 13.5H11.5L10.5 22L19.5 10.5H12.5L13 2Z"
+                        fill="#5EEAD4"
+                      />
+                    </svg>
+                  </span>
+                  <span className="wallet-card-virtual-meta">
+                    CLOUD PASS · INSTANT DEBIT
+                  </span>
+                  <ContactlessWaves
+                    size={14}
+                    className="wallet-card-contactless is-virtual-nfc"
+                  />
+                </div>
+              )}
+              {isVirtualMc && (
+                <div className="wallet-card-virtual-cluster is-mc-digital">
+                  <span
+                    className="wallet-card-digital-chip is-stealth"
+                    aria-hidden="true"
+                  >
+                    <svg
+                      width="12"
+                      height="12"
+                      style={{
+                        width: 12,
+                        height: 12,
+                        display: "block",
+                        stroke: "none",
+                      }}
+                      viewBox="0 0 24 24"
+                      fill="none"
+                    >
+                      <path
+                        d="M12 2.5L19 5.8V11.5C19 16.4 15.9 20.6 12 22C8.1 20.6 5 16.4 5 11.5V5.8L12 2.5Z"
+                        stroke="#A5B4FC"
+                        strokeWidth="2"
+                        fill="rgba(165, 180, 252, 0.2)"
+                      />
+                    </svg>
+                  </span>
+                  <span className="wallet-card-virtual-meta">
+                    ENCRYPTED · DISPOSABLE KEY
+                  </span>
+                  <ContactlessWaves
+                    size={14}
+                    className="wallet-card-contactless is-virtual-nfc"
                   />
                 </div>
               )}
@@ -259,7 +520,7 @@ export function WalletCard({
             <div className="wallet-card-number">
               {formattedNumber || (
                 <span className="wallet-card-num-placeholder">
-                  {isMfs ? "01••• •••• ••" : "•••• •••• •••• ••••"}
+                  {isMfs ? "01712 345678" : "•••• •••• •••• ••••"}
                 </span>
               )}
             </div>

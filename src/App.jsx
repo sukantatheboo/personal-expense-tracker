@@ -2555,6 +2555,9 @@ export default function App() {
       ...current,
       transactions: [...current.transactions, transaction],
     }));
+    if (txDate && isValidDateString(txDate)) {
+      setSelectedMonth(txDate.slice(0, 7));
+    }
     return { success: true, transactionId: transaction.id };
   }
 
