@@ -6820,6 +6820,7 @@ function CardOptionsSheet({
   onAdjustBalance,
   onSetPrimaryCard,
   onMoveCardToFront,
+  onToast,
 }) {
   const [selectedId, setSelectedId] = useState(
     () => initialCardId || cards[0]?.id || "",
@@ -6886,7 +6887,10 @@ function CardOptionsSheet({
   const [showSecrets, setShowSecrets] = useState(false);
   const [isFrozen, setIsFrozen] = useState(() => Boolean(selectedCard?.frozen));
   const [copied, setCopied] = useState(false);
+  const copyTimerRef = useRef(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+
+  useEffect(() => () => clearTimeout(copyTimerRef.current), []);
 
   useEffect(() => {
     if (selectedCard) {
@@ -6987,7 +6991,9 @@ function CardOptionsSheet({
       navigator.clipboard.writeText(toCopy).catch(() => {});
     }
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    clearTimeout(copyTimerRef.current);
+    copyTimerRef.current = setTimeout(() => setCopied(false), 1600);
+    onToast?.("Copied to your clipboard");
   };
 
   const handleToggleFreeze = () => {
@@ -7140,21 +7146,36 @@ function CardOptionsSheet({
                 type="button"
                 className={`card-options-bar-btn ${copied ? "is-copied" : ""}`}
                 onClick={handleCopyNumber}
-                aria-label="Copy card number to clipboard"
+                aria-label={copied ? "Copied card number" : "Copy card number to clipboard"}
               >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                </svg>
-                <span>{copied ? "Copied! ✓" : "Copy"}</span>
+                {copied ? (
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                    className="card-options-icon-check"
+                  >
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                ) : (
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                  </svg>
+                )}
+                <span>{copied ? "Copied" : "Copy"}</span>
               </button>
 
               <button
@@ -10384,6 +10405,7 @@ export default function MobilePrototype({
             onMoveCardToFront?.(cardId);
             toast("Card moved to top");
           }}
+          onToast={toast}
         />
       )}
       {sheet?.type === "addCard" && (
