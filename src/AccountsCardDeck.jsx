@@ -141,15 +141,34 @@ export function WalletCard({
     isSavings,
   );
 
+  const rawSubtitle =
+    card.subtitle && card.subtitle !== "High-Yield Vault · BDT"
+      ? card.subtitle
+      : "";
   const cardSubtitle =
-    card.subtitle ||
+    rawSubtitle ||
     (isMfs
-      ? "Personal Wallet"
+      ? "Personal"
       : isSavings
-        ? "Savings Vault"
+        ? "Personal Vault · BDT"
         : card.type === "credit"
           ? "Platinum Credit"
           : "Debit Card");
+
+  const savingsRawDigits = String(card.number || card.last4 || "").replace(
+    /\D/g,
+    "",
+  );
+  const savingsRef = isSavings
+    ? card.number &&
+      (String(card.number).startsWith("SAV-") ||
+        String(card.number).startsWith("VAULT-") ||
+        String(card.number).startsWith("DPS-"))
+      ? String(card.number)
+      : savingsRawDigits
+        ? `•• ${savingsRawDigits.slice(-4)}`
+        : ""
+    : "";
 
   return (
     <div
@@ -177,8 +196,11 @@ export function WalletCard({
         {/* Holographic light sheen reflection */}
         <div className="wallet-card-sheen" aria-hidden="true" />
         <div className="wallet-card-pattern" aria-hidden="true" />
+        {isSavings && (
+          <div className="wallet-card-vault-rings" aria-hidden="true" />
+        )}
 
-        {/* Top Row: Card Title/Holder (Left) + Official Brand Logo (Right) */}
+        {/* Top Row: Card Title/Holder (Left) + Refined Brand Mark (Right) */}
         <div className="wallet-card-header">
           <div className="wallet-card-holder-info">
             <span className="wallet-card-holder-name">
@@ -196,42 +218,62 @@ export function WalletCard({
           </div>
 
           <div className="wallet-card-brand-logo">
-            {renderProviderLogo(card.provider, { height: 30 })}
+            {renderProviderLogo(card.provider, {
+              height: isSavings ? 20 : 22,
+            })}
           </div>
         </div>
 
-        {/* Middle Row: EMV Chip + Contactless waves */}
-        <div className="wallet-card-mid">
-          {!isMfs && !isSavings ? (
-            <div className="wallet-card-chip-cluster">
-              <EmvChip size={38} />
-              <ContactlessWaves size={19} className="wallet-card-contactless" />
-            </div>
-          ) : (
-            <div className="wallet-card-mfs-icon">
-              <ContactlessWaves size={15} className="wallet-card-contactless" />
-              <span className="wallet-card-mfs-chip-lbl">
-                {isSavings ? "PROTECTED VAULT" : "INSTANT PAY"}
+        {/* Middle Section: Minimalist per-card-type geometry */}
+        {isSavings ? (
+          <div className="wallet-card-savings-mid">
+            <div className="wallet-card-savings-rule" aria-hidden="true" />
+            <div className="wallet-card-savings-meta-row">
+              <span className="wallet-card-savings-status">
+                <span
+                  className="wallet-card-savings-dot"
+                  aria-hidden="true"
+                />
+                {isFrozen ? "VAULT LOCKED" : "RESERVE VAULT"}
               </span>
+              {savingsRef && (
+                <span className="wallet-card-savings-ref">{savingsRef}</span>
+              )}
             </div>
-          )}
-        </div>
+          </div>
+        ) : (
+          <>
+            <div className="wallet-card-mid">
+              {!isMfs && (
+                <div className="wallet-card-chip-cluster">
+                  <EmvChip size={32} />
+                  <ContactlessWaves
+                    size={15}
+                    className="wallet-card-contactless"
+                  />
+                </div>
+              )}
+            </div>
 
-        {/* Card Number in Monospace */}
-        <div className="wallet-card-number">
-          {formattedNumber || (
-            <span className="wallet-card-num-placeholder">
-              {isMfs ? "01••• ••••••" : "•••• •••• •••• ••••"}
-            </span>
-          )}
-        </div>
+            {/* Card / Account Number in Refined Monospace */}
+            <div className="wallet-card-number">
+              {formattedNumber || (
+                <span className="wallet-card-num-placeholder">
+                  {isMfs ? "01••• •••• ••" : "•••• •••• •••• ••••"}
+                </span>
+              )}
+            </div>
+          </>
+        )}
 
-        {/* Bottom Row: Balance & Expiry (Left) + Network / Vault Badge (Right) */}
+        {/* Bottom Row: Balance & Expiry (Left) + Bank Network Emblem Only (Right) */}
         <div className="wallet-card-footer">
           <div className="wallet-card-footer-left">
             {showBalance && (
               <div className="wallet-card-balance-block">
-                <span className="wallet-card-meta-lbl">BALANCE</span>
+                <span className="wallet-card-meta-lbl">
+                  {isSavings ? "TOTAL SAVED" : "BALANCE"}
+                </span>
                 <b
                   className={`wallet-card-balance-val${balance < 0 && card.type !== "credit" ? " is-overdrawn" : ""}`}
                 >
@@ -254,23 +296,15 @@ export function WalletCard({
             )}
           </div>
 
-          <div className="wallet-card-network">
-            {card.network === "visa" && <VisaBadge width={52} height={18} />}
-            {card.network === "mastercard" && (
-              <MastercardBadge width={41} height={26} />
-            )}
-            {card.network === "amex" && <AmexBadge width={46} height={20} />}
-            {isMfs && (
-              <span className="wallet-card-mfs-network-pill">
-                {(card.name || "WALLET").toUpperCase()}
-              </span>
-            )}
-            {isSavings && (
-              <span className="wallet-card-mfs-network-pill is-savings">
-                VAULT
-              </span>
-            )}
-          </div>
+          {!isMfs && !isSavings && (
+            <div className="wallet-card-network">
+              {card.network === "visa" && <VisaBadge width={44} height={15} />}
+              {card.network === "mastercard" && (
+                <MastercardBadge width={34} height={22} />
+              )}
+              {card.network === "amex" && <AmexBadge width={38} height={17} />}
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -240,7 +240,18 @@ const CAT = {
 };
 function getAccountDisplay(id, cards = []) {
   const match = cards.find((c) => c.id === id);
-  if (match) return [match.name, match.color || "#2563a8"];
+  if (match) {
+    const prov = CARD_PROVIDERS.find(
+      (p) => p.id === (match.provider || match.id),
+    );
+    const resolvedName =
+      String(match.name || "").trim() ||
+      prov?.name ||
+      (match.type === "savings" || match.category === "savings"
+        ? "Savings"
+        : "Card");
+    return [resolvedName, match.color || "#2563a8"];
+  }
   if (!id || id === "cash") return ["Cash", "#10b981"];
   return [id || "Account", "#2563a8"];
 }
@@ -530,83 +541,23 @@ const Seg = ({ value, options, onPick }) => (
   </div>
 );
 
-function AccountPicker({ value, options, onPick, cards = [] }) {
-  const containerRef = useRef(null);
-  const selectedRef = useRef(null);
-
-  useEffect(() => {
-    if (selectedRef.current && containerRef.current) {
-      const container = containerRef.current;
-      const el = selectedRef.current;
-      const targetLeft =
-        el.offsetLeft -
-        container.offsetLeft -
-        (container.clientWidth - el.clientWidth) / 2;
-      container.scrollTo({ left: Math.max(0, targetLeft), behavior: "smooth" });
-    }
-  }, [value]);
-
-  const isFewOptions = options.length <= 4;
-
+function AccountPicker({
+  value,
+  options,
+  onPick,
+  cards = [],
+  lockFrozen = true,
+  ariaLabel = "Select account",
+}) {
   return (
-    <div
-      className={`account-picker-container ${isFewOptions ? "is-few-options" : ""}`}
-      ref={containerRef}
-      role="radiogroup"
-      aria-label="Select account"
-    >
-      <div className="account-picker-track">
-        {options.map(([id, label]) => {
-          const isCash = id === "" || id === "cash";
-          const normalizedValue = value ?? "";
-          const isSelected =
-            normalizedValue === id ||
-            (isCash && (normalizedValue === "" || normalizedValue === "cash"));
-          const card = cards.find((c) => c.id === id);
-          const isPrimary = card?.isPrimary;
-          const isFrozen = card?.frozen;
-
-          const dotBackground = isCash
-            ? "#10b981"
-            : card?.gradient || card?.color || "#2563eb";
-
-          return (
-            <button
-              key={id}
-              type="button"
-              disabled={isFrozen}
-              aria-disabled={isFrozen}
-              ref={isSelected ? selectedRef : null}
-              className={`account-picker-chip ${isSelected ? "is-selected" : ""} ${isCash ? "is-cash" : ""} ${isFrozen ? "is-frozen-disabled" : ""}`}
-              onClick={() => {
-                if (isFrozen) return;
-                triggerHaptic("selection");
-                onPick(id);
-              }}
-              role="radio"
-              aria-checked={isSelected}
-            >
-              <span
-                className="account-picker-dot"
-                style={{ background: dotBackground }}
-                aria-hidden="true"
-              />
-              <span className="account-picker-name">{label}</span>
-              {isPrimary && (
-                <span className="account-picker-badge" title="Primary account">
-                  ★
-                </span>
-              )}
-              {isFrozen && (
-                <span className="account-picker-lock" title="Frozen account">
-                  🔒
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-    </div>
+    <TxAccountCardGrid
+      value={value}
+      options={options}
+      cards={cards}
+      onPick={onPick}
+      lockFrozen={lockFrozen}
+      ariaLabel={ariaLabel}
+    />
   );
 }
 
@@ -4340,7 +4291,13 @@ function AddSheet({
   onSave,
   onClose,
 }) {
-  const spendableCards = cards.filter((c) => c.type !== "savings" && !c.frozen);
+  const nonSavingsCards = cards.filter(
+    (c) =>
+      c.type !== "savings" &&
+      c.category !== "savings" &&
+      c.provider !== "savings",
+  );
+  const spendableCards = nonSavingsCards.filter((c) => !c.frozen);
   const primaryCard =
     spendableCards.find((c) => c.isPrimary) || spendableCards[0];
   const hasSavingsAccount = Boolean(getSavingsAccountId(cards));
@@ -4547,8 +4504,14 @@ function AddSheet({
           ? "Transfer from"
           : "Paid from"}
       </span>
-      <AccountPicker
+      <TxAccountCardGrid
         value={f.acct}
+        lockFrozen={true}
+        ariaLabel={
+          f.cat === "Savings" && hasSavingsAccount
+            ? "Transfer from account"
+            : "Paid from account"
+        }
         onPick={(v) => {
           set("acct", v);
           if (f.cat !== "Savings") {
@@ -4557,9 +4520,9 @@ function AddSheet({
         }}
         cards={cards}
         options={
-          f.cat === "Savings" && hasSavingsAccount && spendableCards.length > 0
-            ? spendableCards.map((c) => [c.id, c.name])
-            : [["", "Cash"], ...spendableCards.map((c) => [c.id, c.name])]
+          f.cat === "Savings" && hasSavingsAccount && nonSavingsCards.length > 0
+            ? nonSavingsCards.map((c) => [c.id, c.name])
+            : [["", "Cash"], ...nonSavingsCards.map((c) => [c.id, c.name])]
         }
       />
 
@@ -4622,6 +4585,25 @@ function TxAccountCardGrid({
           (normId === "cash"
             ? { id: "cash", name: label || "Cash", type: "cash" }
             : { id: normId, name: label || "Account" });
+        const prov = CARD_PROVIDERS.find(
+          (p) => p.id === (card?.provider || card?.id),
+        );
+        const displayName =
+          String(card?.name || label || "").trim() ||
+          prov?.name ||
+          (normId === "cash"
+            ? "Cash"
+            : card?.type === "savings" ||
+                card?.category === "savings" ||
+                card?.provider === "savings"
+              ? "Savings"
+              : card?.network === "visa"
+                ? "Visa Card"
+                : card?.network === "mastercard"
+                  ? "Mastercard"
+                  : card?.network === "amex"
+                    ? "Amex Card"
+                    : "Card");
         const isSendingFromHere =
           Boolean(disabledAccountId) && normId === disabledAccountId;
         const isFrozenBlocked =
@@ -4692,7 +4674,7 @@ function TxAccountCardGrid({
             </div>
 
             <div className="tx-account-card-body">
-              <b className="tx-account-card-name">{card?.name || label}</b>
+              <b className="tx-account-card-name">{displayName}</b>
               <span className="tx-account-card-sub">
                 {isSendingFromHere ? (
                   disabledReason
@@ -5357,7 +5339,13 @@ function DetailSheet({
   const amtNum = parseAmount(f.amt);
   const isSavings = f.cat === "Savings";
   const hasSavingsAccount = Boolean(getSavingsAccountId(cards));
-  const spendableCards = cards.filter((c) => c.type !== "savings" && !c.frozen);
+  const nonSavingsCards = cards.filter(
+    (c) =>
+      c.type !== "savings" &&
+      c.category !== "savings" &&
+      c.provider !== "savings",
+  );
+  const spendableCards = nonSavingsCards.filter((c) => !c.frozen);
   const canSave =
     Boolean(f.desc?.trim()) &&
     Boolean(f.date) &&
@@ -5496,19 +5484,25 @@ function DetailSheet({
       <span className="lbl">
         {isSavings && hasSavingsAccount ? "Transfer from" : "Paid from"}
       </span>
-      <AccountPicker
+      <TxAccountCardGrid
         value={f.acct}
+        lockFrozen={true}
+        ariaLabel={
+          isSavings && hasSavingsAccount
+            ? "Transfer from account"
+            : "Paid from account"
+        }
         onPick={(value) => set("acct", value)}
         cards={cards}
         options={
-          isSavings && hasSavingsAccount && spendableCards.length > 0
-            ? spendableCards.map((c) => [c.id, c.name])
+          isSavings && hasSavingsAccount && nonSavingsCards.length > 0
+            ? nonSavingsCards.map((c) => [c.id, c.name])
             : [
                 ["", "Cash"],
-                ...spendableCards.map((c) => [c.id, c.name]),
+                ...nonSavingsCards.map((c) => [c.id, c.name]),
                 ...(f.acct &&
                 f.acct !== "cash" &&
-                !spendableCards.some((c) => c.id === f.acct)
+                !nonSavingsCards.some((c) => c.id === f.acct)
                   ? [[f.acct, getAccountDisplay(f.acct, cards)[0]]]
                   : []),
               ]
@@ -5542,7 +5536,13 @@ function RecurringDetailSheet({
   const amtNum = parseAmount(f.amt);
   const isSavings = f.cat === "Savings";
   const hasSavingsAccount = Boolean(getSavingsAccountId(cards));
-  const spendableCards = cards.filter((c) => c.type !== "savings" && !c.frozen);
+  const nonSavingsCards = cards.filter(
+    (c) =>
+      c.type !== "savings" &&
+      c.category !== "savings" &&
+      c.provider !== "savings",
+  );
+  const spendableCards = nonSavingsCards.filter((c) => !c.frozen);
   const canSave =
     Boolean(f.desc?.trim()) &&
     Boolean(f.next) &&
@@ -5678,19 +5678,25 @@ function RecurringDetailSheet({
       <span className="lbl">
         {isSavings && hasSavingsAccount ? "Transfer from" : "Paid from"}
       </span>
-      <AccountPicker
+      <TxAccountCardGrid
         value={f.acct}
+        lockFrozen={true}
+        ariaLabel={
+          isSavings && hasSavingsAccount
+            ? "Transfer from account"
+            : "Paid from account"
+        }
         onPick={(value) => set("acct", value)}
         cards={cards}
         options={
-          isSavings && hasSavingsAccount && spendableCards.length > 0
-            ? spendableCards.map((c) => [c.id, c.name])
+          isSavings && hasSavingsAccount && nonSavingsCards.length > 0
+            ? nonSavingsCards.map((c) => [c.id, c.name])
             : [
                 ["", "Cash"],
-                ...spendableCards.map((c) => [c.id, c.name]),
+                ...nonSavingsCards.map((c) => [c.id, c.name]),
                 ...(f.acct &&
                 f.acct !== "cash" &&
-                !spendableCards.some((c) => c.id === f.acct)
+                !nonSavingsCards.some((c) => c.id === f.acct)
                   ? [[f.acct, getAccountDisplay(f.acct, cards)[0]]]
                   : []),
               ]
