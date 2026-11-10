@@ -549,8 +549,13 @@ const Seg = ({ value, options, onPick }) => (
     {options.map(([x, l]) => (
       <button
         key={x}
+        type="button"
+        aria-pressed={value === x}
         className={value === x ? "on" : ""}
-        onClick={() => onPick(x)}
+        onClick={() => {
+          triggerHaptic("selection");
+          onPick(x);
+        }}
       >
         {l}
       </button>
@@ -765,7 +770,7 @@ function HeroAmountField({
   const raw = String(value ?? "");
   const displayStr = raw.length > 0 ? raw : String(placeholder || "0");
   const charLen = Math.max(displayStr.length, 1);
-  const inputWidthCh = Math.min(11.5, Math.max(1.12, charLen * 0.88 + 0.22));
+  const inputWidthCh = Math.min(12.5, Math.max(1.25, charLen * 0.96 + 0.35));
   const scaleClass =
     displayStr.length >= 9
       ? "is-compact"
@@ -798,11 +803,15 @@ function HeroAmountField({
             let next = e.target.value
               .replace(/,/g, ".")
               .replace(/[^0-9.]/g, "");
+            if (next.startsWith(".")) {
+              next = "0" + next;
+            }
+            next = next.replace(/^0+(?=\d)/, "");
             const firstDot = next.indexOf(".");
             if (firstDot !== -1) {
               next =
                 next.slice(0, firstDot + 1) +
-                next.slice(firstDot + 1).replace(/\./g, "");
+                next.slice(firstDot + 1).replace(/\./g, "").slice(0, 2);
             }
             onChange(next);
           }}
@@ -1546,6 +1555,14 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
     if (autoFocusTarget && typeof autoFocusTarget.focus === "function") {
       const focusTarget = () => {
         if (!sheetNode.contains(autoFocusTarget)) return;
+        if (dragRef.current?.active) return;
+        if (
+          document.activeElement &&
+          sheetNode.contains(document.activeElement) &&
+          document.activeElement !== sheetNode
+        ) {
+          return;
+        }
         try {
           autoFocusTarget.focus({ preventScroll: true });
           if (
@@ -4409,6 +4426,7 @@ function AddSheet({
   cards = [],
   defaultAccount,
   preferredAccount,
+  initialCategory = "",
   onAccountChange,
   onSave,
   onClose,
@@ -4450,11 +4468,15 @@ function AddSheet({
   const [f, setF] = useState({
     amt: "",
     desc: "",
-    cat: "",
+    cat: initialCategory || "",
     date: ld(),
-    acct: resolvedInitialAcct,
+    acct:
+      initialCategory === "Savings" && hasSavingsAccount
+        ? primaryCard?.id || spendableCards[0]?.id || ""
+        : resolvedInitialAcct,
     iv: iv || "none",
   });
+  const prevNonSavingsAcctRef = useRef(resolvedInitialAcct);
   const amtInputRef = useRef(null);
   const descInputRef = useRef(null);
   const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
@@ -4470,10 +4492,16 @@ function AddSheet({
     <Sheet
       onClose={onClose}
       actions={
-        <button className="btn" onClick={handleSave}>
-          {(f.cat === "Savings" ||
-            (!f.cat && categorySuggestion === "Savings")) &&
-          hasSavingsAccount
+        <button
+          type="button"
+          aria-pressed={false}
+          className="btn"
+          onClick={() => {
+            triggerHaptic("selection");
+            handleSave();
+          }}
+        >
+          {f.cat === "Savings" && hasSavingsAccount
             ? f.iv === "none"
               ? "Save to Savings"
               : "Schedule savings transfer"
@@ -4514,15 +4542,31 @@ function AddSheet({
         {categoryOrder.map((c) => (
           <button
             key={c}
+            type="button"
+            aria-pressed={f.cat === c}
             className={f.cat === c ? "on" : ""}
             onClick={() => {
-              setF((current) => ({
-                ...current,
-                cat: c,
-                ...(c === "Savings" && hasSavingsAccount && !current.acct
-                  ? { acct: spendableCards[0]?.id || "" }
-                  : {}),
-              }));
+              triggerHaptic("selection");
+              setF((current) => {
+                let nextAcct = current.acct;
+                if (c === "Savings" && hasSavingsAccount) {
+                  if (
+                    !current.acct ||
+                    (spendableCards.length > 0 &&
+                      !spendableCards.some((sc) => sc.id === current.acct))
+                  ) {
+                    nextAcct =
+                      primaryCard?.id || spendableCards[0]?.id || "";
+                  }
+                } else if (current.cat === "Savings" && c !== "Savings") {
+                  nextAcct = prevNonSavingsAcctRef.current;
+                }
+                return {
+                  ...current,
+                  cat: c,
+                  acct: nextAcct,
+                };
+              });
             }}
           >
             <CategorySymbol
@@ -4538,31 +4582,6 @@ function AddSheet({
           Moves money from the selected account into Savings. It is not counted
           as spending or against your budget.
         </p>
-      )}
-
-      {categorySuggestion && categorySuggestion !== f.cat && (
-        <button
-          type="button"
-          className="category-suggestion-action is-inline-hint"
-          style={{
-            "--c":
-              getCategoryColor(categorySuggestion, f.desc) ||
-              CAT[categorySuggestion]?.[1] ||
-              "#64748b",
-          }}
-          aria-label={`Use suggestion: ${categorySuggestion}`}
-          onClick={() => {
-            triggerHaptic("selection");
-            set("cat", categorySuggestion);
-          }}
-        >
-          <UtilitySymbol name="suggestion" />
-          <span className="category-suggestion-label">Suggested:</span>
-          <CategorySuggestionValue
-            category={categorySuggestion}
-            description={f.desc}
-          />
-        </button>
       )}
 
       <span className="lbl">What was it for?</span>
@@ -4591,17 +4610,52 @@ function AddSheet({
         }}
       />
 
+      {categorySuggestion && categorySuggestion !== f.cat && (
+        <button
+          type="button"
+          className="category-suggestion-action is-inline-hint"
+          style={{
+            "--c":
+              getCategoryColor(categorySuggestion, f.desc) ||
+              CAT[categorySuggestion]?.[1] ||
+              "#64748b",
+          }}
+          aria-label={`Use suggestion: ${categorySuggestion}`}
+          onClick={() => {
+            triggerHaptic("selection");
+            set("cat", categorySuggestion);
+          }}
+        >
+          <UtilitySymbol name="suggestion" />
+          <span className="category-suggestion-label">Suggested:</span>
+          <CategorySuggestionValue
+            category={categorySuggestion}
+            description={f.desc}
+          />
+        </button>
+      )}
+
       <span className="lbl">Date</span>
       <div className="seg">
         <button
+          type="button"
+          aria-pressed={f.date === ld()}
           className={f.date === ld() ? "on" : ""}
-          onClick={() => set("date", ld())}
+          onClick={() => {
+            triggerHaptic("selection");
+            set("date", ld());
+          }}
         >
           Today
         </button>
         <button
+          type="button"
+          aria-pressed={f.date === ago(1)}
           className={f.date === ago(1) ? "on" : ""}
-          onClick={() => set("date", ago(1))}
+          onClick={() => {
+            triggerHaptic("selection");
+            set("date", ago(1));
+          }}
         >
           Yesterday
         </button>
@@ -4632,12 +4686,13 @@ function AddSheet({
         onPick={(v) => {
           set("acct", v);
           if (f.cat !== "Savings") {
+            prevNonSavingsAcctRef.current = v;
             onAccountChange?.(v);
           }
         }}
         cards={cards}
         options={
-          f.cat === "Savings" && hasSavingsAccount && nonSavingsCards.length > 0
+          f.cat === "Savings" && hasSavingsAccount && spendableCards.length > 0
             ? nonSavingsCards.map((c) => [c.id, c.name])
             : [["", "Cash"], ...nonSavingsCards.map((c) => [c.id, c.name])]
         }
@@ -9832,11 +9887,40 @@ export default function MobilePrototype({
     const resolvedCat = f.cat || "Other";
     const isSavingsTransfer =
       resolvedCat === "Savings" && Boolean(getSavingsAccountId(cards));
+    const isSavings = resolvedCat === "Savings";
     const isRecurring = f.iv !== "none";
-    if (isSavingsTransfer && !String(f.amt ?? "").trim())
-      return toast("Enter an amount for this savings transfer.");
-    if (isSavingsTransfer && !f.acct)
+    const parsedAmt = parseAmount(f.amt);
+
+    if (String(f.amt ?? "").trim() !== "") {
+      if (parsedAmt === null || !Number.isFinite(parsedAmt) || parsedAmt <= 0) {
+        return toast("Enter an amount greater than 0.");
+      }
+    }
+
+    if (isSavings || isRecurring) {
+      if (parsedAmt === null || !Number.isFinite(parsedAmt) || parsedAmt <= 0) {
+        if (String(f.amt ?? "").trim() !== "") {
+          return toast("Enter an amount greater than 0.");
+        }
+        return toast(
+          isSavings
+            ? "Enter an amount for this savings transfer."
+            : "Recurring expenses need an amount.",
+        );
+      }
+    }
+
+    const nonSavingsCards = cards.filter(
+      (c) =>
+        c.id !== getSavingsAccountId(cards) &&
+        c.type !== "savings" &&
+        c.provider !== "savings",
+    );
+    const spendableCards = nonSavingsCards.filter((c) => !c.frozen);
+
+    if (isSavingsTransfer && spendableCards.length > 0 && !f.acct)
       return toast("Select an account to transfer from.");
+
     const saved = onExpenseSave({
       description:
         f.desc.trim() || (isSavingsTransfer ? "Savings transfer" : resolvedCat),
@@ -9847,9 +9931,9 @@ export default function MobilePrototype({
       interval: f.iv,
     });
     if (!saved) {
-      if (!f.amt && (isRecurring || isSavingsTransfer))
+      if (!f.amt && (isRecurring || isSavings))
         return toast(
-          isSavingsTransfer
+          isSavings
             ? "Enter an amount for this savings transfer."
             : "Recurring expenses need an amount.",
         );
@@ -9865,14 +9949,16 @@ export default function MobilePrototype({
       }, 1500);
     }
     if (!isSavingsTransfer) {
-      const nextAccount = f.acct ?? "";
-      setPreferredAccount(nextAccount);
-      try {
-        localStorage.setItem(
-          STORAGE_KEYS.preferredAccount || "spend-preferred-account-v1",
-          nextAccount,
-        );
-      } catch {}
+      if (cards.length > 0) {
+        const nextAccount = f.acct ?? "";
+        setPreferredAccount(nextAccount);
+        try {
+          localStorage.setItem(
+            STORAGE_KEYS.preferredAccount || "spend-preferred-account-v1",
+            nextAccount,
+          );
+        } catch {}
+      }
     }
     close();
     triggerHaptic("success");
@@ -10598,9 +10684,21 @@ export default function MobilePrototype({
               tab === "accounts" && activeAccountRef.current !== undefined
                 ? activeAccountRef.current
                 : undefined;
+            const savingsId = getSavingsAccountId(cards);
+            const activeCard = cards.find((c) => c.id === activeAcct);
+            const isSavingsVault =
+              activeAcct &&
+              (activeAcct === savingsId ||
+                activeCard?.type === "savings" ||
+                activeCard?.category === "savings" ||
+                activeCard?.provider === "savings");
             openSheet({
               type: "add",
-              ...(activeAcct !== undefined ? { acct: activeAcct } : {}),
+              ...(isSavingsVault
+                ? { cat: "Savings" }
+                : activeAcct !== undefined
+                  ? { acct: activeAcct }
+                  : {}),
             });
           }}
         >
@@ -10631,6 +10729,11 @@ export default function MobilePrototype({
           }
           onSetPrimaryCard={(cardId) => {
             const res = onSetPrimaryCard?.(cardId);
+            const isPrimary =
+              res && typeof res === "object" ? res.isPrimary : true;
+            if (isPrimary && cardId) {
+              handlePreferredAccountChange(cardId);
+            }
             if (res && typeof res === "object") {
               const msg = res.isPrimary
                 ? "Set as primary card ★"
@@ -10650,7 +10753,25 @@ export default function MobilePrototype({
       {sheet?.type === "addCard" && (
         <AddCardSheet
           onClose={close}
-          onAddCard={(newCard) => onAddCard?.(newCard)}
+          onAddCard={(newCard) => {
+            const added = onAddCard?.(newCard);
+            const cardId = added?.id || newCard?.id;
+            const nonSavings = cards.filter(
+              (c) =>
+                c.id !== getSavingsAccountId(cards) &&
+                c.type !== "savings" &&
+                c.category !== "savings" &&
+                c.provider !== "savings",
+            );
+            const isFirstNonSavings = nonSavings.length === 0;
+            const isSavings =
+              newCard?.category === "savings" ||
+              newCard?.type === "savings" ||
+              newCard?.provider === "savings";
+            if (!isSavings && (newCard?.isPrimary || isFirstNonSavings) && cardId) {
+              handlePreferredAccountChange(cardId);
+            }
+          }}
           userProfileName={profile?.hasName ? profile.name : ""}
         />
       )}
@@ -10662,6 +10783,7 @@ export default function MobilePrototype({
           cards={cards}
           defaultAccount={sheet.acct}
           preferredAccount={preferredAccount}
+          initialCategory={sheet.cat || ""}
           onAccountChange={handlePreferredAccountChange}
           onSave={saveExpense}
           onClose={close}

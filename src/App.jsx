@@ -2400,15 +2400,18 @@ export default function App() {
   function saveMobileExpense(form) {
     const description = form.description.trim();
     const amount = parseAmount(form.amount);
+    const requiresAmount =
+      form.interval !== "none" || form.category === "Savings";
     if (
       !description ||
       !isValidDateString(form.date) ||
       (amount !== null && (!Number.isFinite(amount) || amount <= 0)) ||
-      (form.interval !== "none" && amount === null)
+      (requiresAmount && (amount === null || !Number.isFinite(amount) || amount <= 0))
     ) {
       return false;
     }
     let createdExpenseId = null;
+    let didGenerateExpenses = false;
     if (form.interval === "none") {
       const createdAt = Date.now();
       const newExpense = {
@@ -2467,6 +2470,7 @@ export default function App() {
         },
       ]);
       if (generatedExpenses.length) {
+        didGenerateExpenses = true;
         createdExpenseId = generatedExpenses[generatedExpenses.length - 1].id;
         setExpenses((current) => [...current, ...generatedExpenses]);
         notifyDueExpenses(
@@ -2477,7 +2481,11 @@ export default function App() {
         );
       }
     }
-    setSelectedMonth(form.date.slice(0, 7));
+    if (form.interval === "none" || didGenerateExpenses) {
+      const targetMonth = form.date.slice(0, 7);
+      const currMonth = currentMonth();
+      setSelectedMonth(targetMonth > currMonth ? currMonth : targetMonth);
+    }
     return { success: true, expenseId: createdExpenseId };
   }
 
@@ -2510,7 +2518,9 @@ export default function App() {
           : expense,
       ),
     );
-    setSelectedMonth(date.slice(0, 7));
+    const targetMonth = date.slice(0, 7);
+    const currMonth = currentMonth();
+    setSelectedMonth(targetMonth > currMonth ? currMonth : targetMonth);
     return true;
   }
 
