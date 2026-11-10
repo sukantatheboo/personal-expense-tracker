@@ -26,41 +26,41 @@
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-/* Dark Theme matching app UI background #0E1411 */
+/* Dark Theme matching app UI background #08080C */
 :root[data-theme="dark"] .sl,
 html[data-theme="dark"] .sl,
 [data-theme="dark"] .sl,
 .mobile-prototype[data-theme="dark"] .sl {
-  --bg: #0E1411;
-  --ink: #F0F3F1;
-  --muted: #AAB4AE;
-  --green: #3DA87B;
-  --green-ink: #6EE7B7;
-  --line: #30363A;
-  --ring: #4D5652;
-  --error: #ED887A;
-  --sheet-bg: #1A1E21;
-  --sheet-shadow: 0 -12px 40px rgba(0, 0, 0, .45);
-  --key-bg: #15191C;
-  --key-active: #2D3539;
+  --bg: #08080C;
+  --ink: #F4F5F8;
+  --muted: #8A8F9E;
+  --green: #CFF558;
+  --green-ink: #CFF558;
+  --line: #222430;
+  --ring: #475569;
+  --error: #F87171;
+  --sheet-bg: #12131A;
+  --sheet-shadow: 0 -16px 48px rgba(0, 0, 0, .62);
+  --key-bg: #181A24;
+  --key-active: #222533;
 }
 
 @media (prefers-color-scheme: dark) {
   html:not([data-theme="light"]) .sl,
   :root:not([data-theme="light"]) .sl,
   .mobile-prototype:not([data-theme="light"]) .sl {
-    --bg: #0E1411;
-    --ink: #F0F3F1;
-    --muted: #AAB4AE;
-    --green: #3DA87B;
-    --green-ink: #6EE7B7;
-    --line: #30363A;
-    --ring: #4D5652;
-    --error: #ED887A;
-    --sheet-bg: #1A1E21;
-    --sheet-shadow: 0 -12px 40px rgba(0, 0, 0, .45);
-    --key-bg: #15191C;
-    --key-active: #2D3539;
+    --bg: #08080C;
+    --ink: #F4F5F8;
+    --muted: #8A8F9E;
+    --green: #CFF558;
+    --green-ink: #CFF558;
+    --line: #222430;
+    --ring: #475569;
+    --error: #F87171;
+    --sheet-bg: #151B23;
+    --sheet-shadow: 0 -16px 48px rgba(0, 0, 0, .55);
+    --key-bg: #1D2530;
+    --key-active: #283342;
   }
 }
 

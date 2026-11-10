@@ -1405,7 +1405,7 @@ export default function App() {
     document.documentElement.dataset.themeMode = theme;
     if (ready) {
       const browserChromeColor =
-        resolvedTheme === "dark" ? "#0e1411" : "#f4f3ee";
+        resolvedTheme === "dark" ? "#08080c" : "#f4f3ee";
       document
         .querySelectorAll('meta[name="theme-color"]')
         .forEach((meta) => meta.setAttribute("content", browserChromeColor));

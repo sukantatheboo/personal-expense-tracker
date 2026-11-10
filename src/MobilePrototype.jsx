@@ -22,6 +22,7 @@ import { CARD_PROVIDERS } from "./cardProviders.js";
 import {
   CategorySymbol,
   TransactionSymbol,
+  UtilitySymbol,
   getCategoryColor,
   getDynamicEntertainmentService,
   foodSvg,
@@ -2104,11 +2105,12 @@ function Home({
       0,
       Math.round((b - t) / daysRemaining),
     );
+    const roundedPaceDiff = Math.round(paceDiff);
     homeVelocity = {
       daysRemaining,
       paceDiff,
       dailyRemainingBudget,
-      isOverPace: t > b || paceDiff > 50,
+      isOverPace: t > b || roundedPaceDiff > 0,
     };
   }
   const list = monthExp(S);
@@ -2201,18 +2203,18 @@ function Home({
         className={`hero spend-card${overBudget ? " is-over-budget" : ""}${shown ? " is-shown" : ""}`}
         aria-label="Spending this month"
       >
-        <div className="row">
-          <span>Spent this month</span>
+        <div className="row spend-card-top-row">
+          <span className="spend-card-label">Spent this month</span>
           {p ? (
-            <span className="chip">
-              <span className="mx-tri">{d > 0 ? "▲" : d < 0 ? "▼" : "•"}</span>
+            <span className="chip spend-card-vs-pill">
+              <span className="mx-tri">{d > 0 ? "↑" : d < 0 ? "↓" : "•"}</span>{" "}
               ৳
               <Amount
                 value={amountFormatter.format(Math.abs(d))}
                 mask={3}
                 shown={shown}
               />{" "}
-              vs last
+              vs last month
             </span>
           ) : null}
         </div>
@@ -2245,42 +2247,58 @@ function Home({
 
         {b ? (
           <>
-            <div className="bar">
-              <i
-                style={{
-                  width: Math.min(100, (t / b) * 100) + "%",
-                  "--overflow-share": `${overflowShare}%`,
-                }}
-              />
+            <div
+              className="spend-tick-bar"
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={b}
+              aria-valuenow={Math.min(b, Math.round(t))}
+            >
+              {Array.from({ length: 38 }, (_, idx) => {
+                const ratio = b > 0 ? Math.min(1, Math.max(0, t / b)) : 0;
+                const activeCount =
+                  t > 0 ? Math.max(1, Math.round(ratio * 38)) : 0;
+                const isActive = idx < activeCount;
+                return (
+                  <i
+                    key={idx}
+                    className={`spend-tick${isActive ? " is-active" : ""}${overBudget && isActive ? " is-over" : ""}`}
+                  />
+                );
+              })}
             </div>
-            <div className="row">
+            <div className="row spend-budget-row">
               <span
-                className={`budget-pill${overBudget ? " is-over" : ""}`}
+                className={`spend-budget-left${overBudget ? " is-over" : ""}`}
                 role="status"
               >
                 {overBudget ? (
                   <>
-                    ৳
-                    <Amount
-                      value={amountFormatter.format(t - b)}
-                      mask={3}
-                      shown={shown}
-                    />{" "}
+                    <b>
+                      ৳
+                      <Amount
+                        value={amountFormatter.format(t - b)}
+                        mask={3}
+                        shown={shown}
+                      />
+                    </b>{" "}
                     over budget
                   </>
                 ) : (
                   <>
-                    ৳
-                    <Amount
-                      value={amountFormatter.format(b - t)}
-                      mask={3}
-                      shown={shown}
-                    />{" "}
+                    <b>
+                      ৳
+                      <Amount
+                        value={amountFormatter.format(b - t)}
+                        mask={3}
+                        shown={shown}
+                      />
+                    </b>{" "}
                     left
                   </>
                 )}
               </span>
-              <span>
+              <span className="spend-budget-total">
                 of ৳
                 <Amount
                   value={amountFormatter.format(b)}
@@ -2294,12 +2312,18 @@ function Home({
                 <span
                   className={`hero-velocity-badge ${homeVelocity.isOverPace ? "is-over" : "is-good"}`}
                 >
+                  <span className="hero-velocity-dot" aria-hidden="true" />
                   {homeVelocity.isOverPace ? (
                     <>
-                      ⚡ ৳
+                      ৳
                       <Amount
                         value={amountFormatter.format(
-                          Math.round(homeVelocity.paceDiff),
+                          Math.max(
+                            1,
+                            Math.round(
+                              Math.max(homeVelocity.paceDiff, t - b),
+                            ),
+                          ),
                         )}
                         mask={3}
                         shown={shown}
@@ -2308,7 +2332,7 @@ function Home({
                     </>
                   ) : (
                     <>
-                      ✓ ৳
+                      ৳
                       <Amount
                         value={amountFormatter.format(
                           homeVelocity.dailyRemainingBudget,
@@ -3025,14 +3049,7 @@ function Activity({
                   setCf("");
                 }}
               >
-                <span className="category-symbol" aria-hidden="true">
-                  <img
-                    src={alertSvg}
-                    alt=""
-                    className="category-symbol-img"
-                    draggable="false"
-                  />
-                </span>
+                <UtilitySymbol name="alert" />
                 <span>Needs amt</span>
                 {needsAmountCount > 0 && (
                   <span className="chip-badge">{needsAmountCount}</span>
@@ -3051,14 +3068,7 @@ function Activity({
                   setCf("");
                 }}
               >
-                <span className="category-symbol" aria-hidden="true">
-                  <img
-                    src={refreshSvg}
-                    alt=""
-                    className="category-symbol-img"
-                    draggable="false"
-                  />
-                </span>
+                <UtilitySymbol name="refresh" />
                 <span>Repeat</span>
                 {recurringCount > 0 && (
                   <span className="chip-badge">{recurringCount}</span>
@@ -3077,14 +3087,7 @@ function Activity({
               setCf("");
             }}
           >
-            <span className="category-symbol" aria-hidden="true">
-              <img
-                src={cashSvg}
-                alt=""
-                className="category-symbol-img"
-                draggable="false"
-              />
-            </span>
+            <UtilitySymbol name="cash" />
             <span>Cash</span>
             {cashCount > 0 && <span className="chip-badge">{cashCount}</span>}
           </button>
@@ -3099,14 +3102,7 @@ function Activity({
               setCf("");
             }}
           >
-            <span className="category-symbol" aria-hidden="true">
-              <img
-                src={starSvg}
-                alt=""
-                className="category-symbol-img"
-                draggable="false"
-              />
-            </span>
+            <UtilitySymbol name="star" />
             <span>≥ ৳1k</span>
             {highValueCount > 0 && (
               <span className="chip-badge">{highValueCount}</span>
@@ -4526,12 +4522,7 @@ function AddSheet({
             set("cat", categorySuggestion);
           }}
         >
-          <img
-            src={suggestionSvg}
-            alt=""
-            className="category-suggestion-bulb-img"
-            aria-hidden="true"
-          />
+          <UtilitySymbol name="suggestion" />
           <span className="category-suggestion-label">Suggested:</span>
           <CategorySuggestionValue
             category={categorySuggestion}
@@ -5537,12 +5528,7 @@ function DetailSheet({
             }));
           }}
         >
-          <img
-            src={suggestionSvg}
-            alt=""
-            className="category-suggestion-bulb-img"
-            aria-hidden="true"
-          />
+          <UtilitySymbol name="suggestion" />
           <span className="category-suggestion-label">Suggested:</span>
           <CategorySuggestionValue
             category={activeSuggestion}
@@ -5735,12 +5721,7 @@ function RecurringDetailSheet({
             }));
           }}
         >
-          <img
-            src={suggestionSvg}
-            alt=""
-            className="category-suggestion-bulb-img"
-            aria-hidden="true"
-          />
+          <UtilitySymbol name="suggestion" />
           <span className="category-suggestion-label">Suggested:</span>
           <CategorySuggestionValue
             category={activeSuggestion}
@@ -9508,7 +9489,7 @@ export default function MobilePrototype({
   useLayoutEffect(() => {
     document.documentElement.dataset.theme = resolvedTheme;
     if (!document.querySelector(".sp-root:not([hidden])")) {
-      const themeColor = resolvedTheme === "dark" ? "#0e1411" : "#f4f3ee";
+      const themeColor = resolvedTheme === "dark" ? "#08080c" : "#f4f3ee";
       document
         .querySelectorAll('meta[name="theme-color"]')
         .forEach((meta) => meta.setAttribute("content", themeColor));
@@ -10532,7 +10513,7 @@ export default function MobilePrototype({
               {/* fillet r30, then a circular scoop r40 centred on the + button */}
               <path
                 vectorEffect="non-scaling-stroke"
-                d="M-1 0H0.97A30 30 0 0 1 26.7 14.57A40 40 0 0 0 95.3 14.57A30 30 0 0 1 121.03 0H123V36H-1Z"
+                d="M-1 0H0.97A30 30 0 0 1 26.7 14.57A40 40 0 0 0 95.3 14.57A30 30 0 0 1 121.03 0H123V38H-1Z"
               />
             </svg>
             <div className="dock__notch-fill" />

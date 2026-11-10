@@ -356,7 +356,7 @@ export default function MonthRecap({
       document.body.style.overflow = prevOverflow;
       document.body.style.backgroundColor = prevBg;
       const isDark = document.documentElement.dataset.theme === "dark";
-      const restoreColor = isDark ? "#0e1411" : "#f4f3ee";
+      const restoreColor = isDark ? "#08080c" : "#f4f3ee";
       document
         .querySelectorAll('meta[name="theme-color"]')
         .forEach((meta) => meta.setAttribute("content", restoreColor));

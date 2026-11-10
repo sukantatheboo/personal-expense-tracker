@@ -56,7 +56,7 @@ function alreadySeen(once, key) {
 function syncThemeColorMeta() {
   if (typeof document === "undefined") return;
   const isDark = document.documentElement.dataset.theme === "dark";
-  const color = isDark ? "#0e1411" : "#f4f3ee";
+  const color = isDark ? "#08080c" : "#f4f3ee";
   document
     .querySelectorAll('meta[name="theme-color"]')
     .forEach((meta) => meta.setAttribute("content", color));
