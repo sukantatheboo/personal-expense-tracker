@@ -255,11 +255,6 @@ export function WalletCard({
               strokeWidth="1"
             />
             <path
-              d="M142 0L326 154"
-              stroke="rgba(254, 240, 138, 0.1)"
-              strokeWidth="1"
-            />
-            <path
               d="M266 56L294 94L266 132L238 94L266 56Z"
               fill="rgba(253, 224, 71, 0.05)"
               stroke="rgba(254, 240, 138, 0.22)"
