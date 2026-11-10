@@ -239,8 +239,17 @@ const CAT = {
   Savings: [savingsSvg, "#be185d"],
   Other: [otherSvg, "#64748b"],
 };
-function getAccountDisplay(id, cards = []) {
-  const match = cards.find((c) => c.id === id);
+function isAdjustmentIncrease(item) {
+  return (
+    item?.dir === "up" ||
+    item?.dir === "increase" ||
+    item?.direction === "increase" ||
+    item?.direction === "up"
+  );
+}
+
+function getAccountDisplay(id, cards = [], deletedCards = null) {
+  const match = Array.isArray(cards) ? cards.find((c) => c.id === id) : null;
   if (match) {
     const prov = CARD_PROVIDERS.find(
       (p) => p.id === (match.provider || match.id),
@@ -254,6 +263,10 @@ function getAccountDisplay(id, cards = []) {
     return [resolvedName, match.color || "#2563a8"];
   }
   if (!id || id === "cash") return ["Cash", "#10b981"];
+  const tombstone = deletedCards?.[id];
+  if (tombstone?.name) {
+    return [`${tombstone.name} (Archived)`, tombstone.color || "#64748b"];
+  }
   return [id || "Account", "#2563a8"];
 }
 const TABS = [
@@ -825,6 +838,7 @@ function HeroAmountField({
 function ExpenseRow({
   e,
   cards = [],
+  deletedCards = null,
   onOpen,
   onDelete,
   onSkip,
@@ -1169,6 +1183,13 @@ function ExpenseRow({
         gesture.initialOffset === -80 || gesture.initialOffset === 80
           ? gesture.initialOffset
           : 0;
+      if (resetOffset < 0) {
+        shellRef.current?.setAttribute("data-swipe-dir", "left");
+      } else if (resetOffset > 0) {
+        shellRef.current?.setAttribute("data-swipe-dir", "right");
+      } else {
+        shellRef.current?.removeAttribute("data-swipe-dir");
+      }
       updateSwipe({
         offset: resetOffset,
         phase: resetOffset === 0 ? "idle" : "revealed",
@@ -1233,7 +1254,7 @@ function ExpenseRow({
     : isTx
       ? e.type === "income" ||
         ((e.type === "adjust" || e.type === "adjustment") &&
-          (e.dir === "up" || e.direction === "increase"))
+          isAdjustmentIncrease(e))
       : e.type === "income" || e.type === "refund" || Boolean(e.refund);
 
   const isSavings = !hasExplicitSign && !isTx && e?.cat === "Savings";
@@ -1263,7 +1284,9 @@ function ExpenseRow({
       ? e.rec
         ? "Tap to edit, swipe left to skip this occurrence, or swipe right to duplicate."
         : isTx
-          ? "Tap to edit or swipe left to delete."
+          ? canQuickEdit
+            ? "Tap to edit, swipe left to delete, or swipe right to edit."
+            : "Tap to edit or swipe left to delete."
           : "Tap to edit, swipe left to delete, or swipe right to duplicate."
       : "Tap to edit.";
 
@@ -1351,20 +1374,18 @@ function ExpenseRow({
           ) : isTx ? (
             <span className="expense-meta-line">
               {e.type === "transfer"
-                ? `Transfer · ${getAccountDisplay(e.from || e.acct, cards)[0]} → ${getAccountDisplay(e.to, cards)[0]}`
+                ? `Transfer · ${getAccountDisplay(e.from || e.acct, cards, deletedCards)[0]} → ${getAccountDisplay(e.to, cards, deletedCards)[0]}`
                 : e.type === "income"
-                  ? `Income · ${getAccountDisplay(e.acct, cards)[0]}`
-                  : `${e.dir === "up" || e.direction === "increase" ? "Balance increased" : "Balance decreased"} · ${getAccountDisplay(e.acct, cards)[0]}`}
+                  ? `Income · ${getAccountDisplay(e.acct, cards, deletedCards)[0]}`
+                  : `${isAdjustmentIncrease(e) ? "Balance increased" : "Balance decreased"} · ${getAccountDisplay(e.acct, cards, deletedCards)[0]}`}
             </span>
           ) : (
             <>
               <span className="expense-meta-line">
                 {e.cat}
-                {cards.length > 0
-                  ? " · " + getAccountDisplay(e.acct, cards)[0]
-                  : e.acct && e.acct !== "cash"
-                    ? " · " + getAccountDisplay(e.acct, cards)[0]
-                    : ""}
+                {cards.length > 0 || (e.acct && e.acct !== "cash")
+                  ? " · " + getAccountDisplay(e.acct, cards, deletedCards)[0]
+                  : ""}
                 {e.rec ? " · Recurring" : ""}
               </span>
               {suggestion && suggestion !== e.cat ? (
@@ -2075,20 +2096,24 @@ function Home({
   const previousMonthKey = shift(currentMonthKey, -1);
   const shouldShowBanner = isPastMonth || (isCurrentMonth && isNewMonthWindow);
   const bannerMonth = isPastMonth ? monthKey : previousMonthKey;
-  const total = tot(S, monthKey);
-  const saved = monthExp(S)
-    .filter((expense) => expense.cat === "Savings" && expense.amt != null)
-    .reduce((sum, expense) => sum + expense.amt, 0);
-  const t = total - saved;
+  const round2 = (val) => Math.round((Number(val) || 0) * 100) / 100;
+  const total = round2(tot(S, monthKey));
+  const saved = round2(
+    monthExp(S)
+      .filter((expense) => expense.cat === "Savings" && expense.amt != null)
+      .reduce((sum, expense) => sum + expense.amt, 0),
+  );
+  const t = round2(total - saved);
   const previousMonth = shift(monthKey, -1);
-  const previousSaved = monthExp({ ...S, m: previousMonth })
-    .filter((expense) => expense.cat === "Savings" && expense.amt != null)
-    .reduce((sum, expense) => sum + expense.amt, 0);
-  const p = tot(S, previousMonth) - previousSaved;
+  const previousSaved = round2(
+    monthExp({ ...S, m: previousMonth })
+      .filter((expense) => expense.cat === "Savings" && expense.amt != null)
+      .reduce((sum, expense) => sum + expense.amt, 0),
+  );
+  const p = round2(tot(S, previousMonth) - previousSaved);
   const b = S?.bud?.[monthKey] || 0;
-  const d = t - p;
+  const d = round2(t - p);
   const overBudget = b > 0 && t > b;
-  const overflowShare = overBudget ? ((t - b) / t) * 100 : 0;
   let homeVelocity = null;
   if (b > 0 && isCurrentMonth) {
     const [y, mNum] = monthKey.split("-").map(Number);
@@ -2103,7 +2128,7 @@ function Home({
     const paceDiff = t - expectedSpent;
     const dailyRemainingBudget = Math.max(
       0,
-      Math.round((b - t) / daysRemaining),
+      Math.round(round2(b - t) / daysRemaining),
     );
     const roundedPaceDiff = Math.round(paceDiff);
     homeVelocity = {
@@ -2117,16 +2142,12 @@ function Home({
   const by = {};
   list.forEach((e) => {
     if (e.amt == null || e.cat === "Other" || !CAT[e.cat]) return;
-    by[e.cat] = (by[e.cat] || 0) + e.amt;
+    by[e.cat] = round2((by[e.cat] || 0) + e.amt);
   });
-  const namedCategoryTotal = Object.values(by).reduce(
-    (sum, value) => sum + value,
-    0,
+  const namedCategoryTotal = round2(
+    Object.values(by).reduce((sum, value) => sum + value, 0),
   );
-  const otherTotal = Math.max(
-    0,
-    Number((total - namedCategoryTotal).toFixed(2)),
-  );
+  const otherTotal = Math.max(0, round2(total - namedCategoryTotal));
   if (otherTotal > 0) by.Other = otherTotal;
   const cs = Object.entries(by).sort((x, y) => y[1] - x[1]);
   const topCategory = cs.find(([category]) => category !== "Savings");
@@ -2141,6 +2162,11 @@ function Home({
   )[0];
   const h = currentTime.getHours();
   useEffect(() => setHighlightedCategory(""), [S.m]);
+  useEffect(() => {
+    if (highlightedCategory && by[highlightedCategory] == null) {
+      setHighlightedCategory("");
+    }
+  }, [by, highlightedCategory]);
   useEffect(() => {
     const timer = window.setInterval(() => setCurrentTime(new Date()), 60_000);
     return () => window.clearInterval(timer);
@@ -2277,7 +2303,7 @@ function Home({
                     <b>
                       ৳
                       <Amount
-                        value={amountFormatter.format(t - b)}
+                        value={amountFormatter.format(round2(t - b))}
                         mask={3}
                         shown={shown}
                       />
@@ -2289,7 +2315,7 @@ function Home({
                     <b>
                       ৳
                       <Amount
-                        value={amountFormatter.format(b - t)}
+                        value={amountFormatter.format(round2(b - t))}
                         mask={3}
                         shown={shown}
                       />
@@ -2414,7 +2440,8 @@ function Home({
             role="group"
             aria-label="Spending by category (drag across bar to inspect)"
             onPointerDown={(e) => {
-              const el = document.elementFromPoint(e.clientX, e.clientY);
+              const el =
+                document.elementFromPoint(e.clientX, e.clientY) || e.target;
               const seg = el?.closest?.("[data-stack-cat]");
               const cat = seg?.getAttribute("data-stack-cat") || "";
               stackScrubRef.current = {
@@ -2422,11 +2449,21 @@ function Home({
                 lastCat: cat,
                 moved: false,
               };
+              try {
+                e.currentTarget.setPointerCapture?.(e.pointerId);
+              } catch {}
             }}
             onPointerMove={(e) => {
               if (!stackScrubRef.current.active) return;
               const el = document.elementFromPoint(e.clientX, e.clientY);
-              const seg = el?.closest?.("[data-stack-cat]");
+              let seg = el?.closest?.("[data-stack-cat]");
+              if (!seg) {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const midY = rect.top + rect.height / 2;
+                seg = document
+                  .elementFromPoint(e.clientX, midY)
+                  ?.closest?.("[data-stack-cat]");
+              }
               const cat = seg?.getAttribute("data-stack-cat") || "";
               if (cat && cat !== stackScrubRef.current.lastCat) {
                 stackScrubRef.current.lastCat = cat;
@@ -2435,11 +2472,37 @@ function Home({
                 setHighlightedCategory(cat);
               }
             }}
-            onPointerUp={() => {
+            onPointerUp={(e) => {
+              try {
+                if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
+                  e.currentTarget.releasePointerCapture(e.pointerId);
+                }
+              } catch {}
               stackScrubRef.current.active = false;
             }}
-            onPointerCancel={() => {
+            onPointerCancel={(e) => {
+              try {
+                if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
+                  e.currentTarget.releasePointerCapture(e.pointerId);
+                }
+              } catch {}
               stackScrubRef.current.active = false;
+            }}
+            onLostPointerCapture={() => {
+              stackScrubRef.current.active = false;
+            }}
+            onClick={(e) => {
+              if (e.target !== e.currentTarget) return;
+              if (stackScrubRef.current.moved) {
+                stackScrubRef.current.moved = false;
+                return;
+              }
+              const cat = stackScrubRef.current.lastCat;
+              if (!cat) return;
+              triggerHaptic("selection");
+              setHighlightedCategory((current) =>
+                current === cat ? "" : cat,
+              );
             }}
           >
             {cs.map(([c, v]) => (
@@ -2501,6 +2564,7 @@ function Home({
                 key={e.id}
                 e={e}
                 cards={S?.cards || []}
+                deletedCards={S?.deletedCards}
                 onOpen={onOpen}
                 onDelete={onDelete}
                 onSkip={onSkip}
@@ -2566,12 +2630,13 @@ function Activity({
     if (item.sourceType === "expense")
       return !item.acct || item.acct === "cash";
     if (item.type === "transfer") {
+      const fromAcct = item.from ?? item.acct ?? item.fromAccount;
+      const toAcct = item.to ?? item.toAccount;
       return (
-        item.from === "cash" ||
-        item.to === "cash" ||
-        item.acct === "cash" ||
-        item.fromAccount === "cash" ||
-        item.toAccount === "cash"
+        !fromAcct ||
+        fromAcct === "cash" ||
+        toAcct === "cash" ||
+        item.acct === "cash"
       );
     }
     return !item.acct || item.acct === "cash";
@@ -2672,68 +2737,102 @@ function Activity({
     (item) => Number(item.amt || 0) >= 1000,
   ).length;
 
-  // Filtered List
-  const filteredItems = useMemo(() => {
-    return allMonthItems.filter((item) => {
+  const round2 = (val) => Math.round((Number(val) || 0) * 100) / 100;
+
+  const matchesActivityCriteria = useCallback(
+    (item) => {
+      if (!item) return false;
+      const srcType =
+        item.sourceType ||
+        (item.type === "income" ||
+        item.type === "transfer" ||
+        item.type === "adjust" ||
+        item.type === "adjustment"
+          ? "tx"
+          : "expense");
+      const normalizedItem =
+        item.sourceType === srcType ? item : { ...item, sourceType: srcType };
+
       // 1. Feed Type Filter
-      if (feedType === "expenses" && item.sourceType !== "expense")
-        return false;
+      if (feedType === "expenses" && srcType !== "expense") return false;
       if (
         feedType === "income" &&
-        (item.sourceType !== "tx" || item.type !== "income")
+        (srcType !== "tx" || normalizedItem.type !== "income")
       )
         return false;
       if (
         feedType === "transfers" &&
-        (item.sourceType !== "tx" ||
-          (item.type !== "transfer" &&
-            item.type !== "adjust" &&
-            item.type !== "adjustment"))
+        (srcType !== "tx" ||
+          (normalizedItem.type !== "transfer" &&
+            normalizedItem.type !== "adjust" &&
+            normalizedItem.type !== "adjustment"))
       )
         return false;
 
       // 2. Category Filter (applicable to expenses)
-      if (cf && (item.sourceType !== "expense" || item.cat !== cf))
+      if (cf && (srcType !== "expense" || normalizedItem.cat !== cf))
         return false;
 
       // 3. Quick Filter Pills
       if (
         quickFilter === "needs-amount" &&
-        (item.sourceType !== "expense" || item.amt != null)
+        (srcType !== "expense" || normalizedItem.amt != null)
       )
         return false;
       if (
         quickFilter === "recurring" &&
-        (item.sourceType !== "expense" || !item.rec)
+        (srcType !== "expense" || !normalizedItem.rec)
       )
         return false;
-      if (quickFilter === "cash" && !isItemCash(item)) return false;
-      if (quickFilter === "high-value" && Number(item.amt || 0) < 1000)
+      if (quickFilter === "cash" && !isItemCash(normalizedItem)) return false;
+      if (
+        quickFilter === "high-value" &&
+        Number(normalizedItem.amt || 0) < 1000
+      )
         return false;
 
       // 4. Search Query
       if (!query) return true;
+      const fallbackTxTitle =
+        srcType === "tx"
+          ? normalizedItem.type === "income"
+            ? "Income"
+            : normalizedItem.type === "transfer"
+              ? "Transfer"
+              : "Balance adjustment"
+          : "";
       const desc = String(
-        item.desc || item.title || item.note || "",
+        normalizedItem.desc ||
+          normalizedItem.title ||
+          normalizedItem.note ||
+          normalizedItem.description ||
+          fallbackTxTitle ||
+          "",
       ).toLowerCase();
-      const cat = String(item.cat || "").toLowerCase();
-      const amtStr = item.amt != null ? String(item.amt) : "";
-      const formattedAmt = item.amt != null ? M(item.amt).toLowerCase() : "";
+      const cat = String(normalizedItem.cat || "").toLowerCase();
+      const amtStr =
+        normalizedItem.amt != null ? String(normalizedItem.amt) : "";
+      const formattedAmt =
+        normalizedItem.amt != null ? M(normalizedItem.amt).toLowerCase() : "";
       const cleanMoneyQuery = query.replace(/[৳,\s]/g, "");
-      const [accountName] = getAccountDisplay(item.acct || item.from, S?.cards);
+      const [accountName] = getAccountDisplay(
+        normalizedItem.acct || normalizedItem.from,
+        S?.cards,
+        S?.deletedCards,
+      );
       const acctStr = String(accountName || "").toLowerCase();
-      const [toAccountName] = item.to
-        ? getAccountDisplay(item.to, S?.cards)
+      const [toAccountName] = normalizedItem.to
+        ? getAccountDisplay(normalizedItem.to, S?.cards, S?.deletedCards)
         : [""];
       const toAcctStr = String(toAccountName || "").toLowerCase();
-      const isCash = isItemCash(item);
+      const isCash = isItemCash(normalizedItem);
       const matchesCash =
         isCash &&
         (query === "cash" ||
           query === "cas" ||
           query.includes("cash") ||
           ("cash".startsWith(query) && query.length >= 2));
-      const dateStr = String(item.date || "");
+      const dateStr = String(normalizedItem.date || "");
       const formattedDate = fD(dateStr).toLowerCase();
       const isToday = dateStr === ld();
       const isYesterday = dateStr === ago(1);
@@ -2742,24 +2841,27 @@ function Activity({
         (isYesterday && "yesterday".includes(query));
 
       let matchesType = false;
-      if (item.sourceType === "tx") {
-        if (item.type === "income") {
+      if (srcType === "tx") {
+        if (normalizedItem.type === "income") {
           matchesType = query.length >= 2 && "income".includes(query);
-        } else if (item.type === "transfer") {
+        } else if (normalizedItem.type === "transfer") {
           matchesType = query.length >= 2 && "transfer".includes(query);
-        } else if (item.type === "adjust" || item.type === "adjustment") {
+        } else if (
+          normalizedItem.type === "adjust" ||
+          normalizedItem.type === "adjustment"
+        ) {
           matchesType =
             "adjustment".includes(query) ||
             "adjust".includes(query) ||
             "balance".includes(query) ||
-            (item.dir === "up"
+            (isAdjustmentIncrease(normalizedItem)
               ? "increase".includes(query)
               : "decrease".includes(query));
         }
-      } else if (item.sourceType === "expense") {
+      } else if (srcType === "expense") {
         matchesType =
           query === "expense" ||
-          (Boolean(item.rec) &&
+          (Boolean(normalizedItem.rec) &&
             ("recurring".includes(query) || "repeat".includes(query)));
       }
 
@@ -2777,8 +2879,14 @@ function Activity({
         dateStr.includes(query) ||
         formattedDate.includes(query)
       );
-    });
-  }, [allMonthItems, feedType, cf, quickFilter, query, isItemCash, S?.cards]);
+    },
+    [feedType, cf, quickFilter, query, isItemCash, S?.cards, S?.deletedCards],
+  );
+
+  // Filtered List
+  const filteredItems = useMemo(() => {
+    return allMonthItems.filter(matchesActivityCriteria);
+  }, [allMonthItems, matchesActivityCriteria]);
 
   // Day grouping
   const g = {};
@@ -2789,20 +2897,31 @@ function Activity({
   const sortedDates = Object.keys(g).sort((a, b) => b.localeCompare(a));
 
   // Totals for filter summary
-  const totalExpenses = filteredItems
-    .filter((item) => item.sourceType === "expense" || item.type === "expense")
-    .reduce((sum, item) => sum + (item.amt || 0), 0);
-  const totalIncome = filteredItems
-    .filter((item) => item.type === "income")
-    .reduce((sum, item) => sum + (item.amt || 0), 0);
-  const totalTransfers = filteredItems
-    .filter(
-      (item) =>
-        item.type === "transfer" ||
-        item.type === "adjust" ||
-        item.type === "adjustment",
-    )
-    .reduce((sum, item) => sum + (item.amt || 0), 0);
+  const totalExpenses = round2(
+    filteredItems
+      .filter(
+        (item) =>
+          (item.sourceType === "expense" || item.type === "expense") &&
+          (cf === "Savings" || item.cat !== "Savings"),
+      )
+      .reduce((sum, item) => sum + (item.amt || 0), 0),
+  );
+  const totalIncome = round2(
+    filteredItems
+      .filter((item) => item.type === "income")
+      .reduce((sum, item) => sum + (item.amt || 0), 0),
+  );
+  const totalTransfers = round2(
+    filteredItems
+      .filter(
+        (item) =>
+          item.type === "transfer" ||
+          item.type === "adjust" ||
+          item.type === "adjustment" ||
+          (cf !== "Savings" && item.cat === "Savings"),
+      )
+      .reduce((sum, item) => sum + (item.amt || 0), 0),
+  );
 
   const hasFilter =
     feedType !== "all" || Boolean(quickFilter) || Boolean(cf) || Boolean(query);
@@ -2818,7 +2937,10 @@ function Activity({
 
   const matchesInOtherMonths =
     query && !filteredItems.length
-      ? [...(S?.exp || []), ...(S?.tx || [])].some((item) => {
+      ? [
+          ...(S?.exp || []).map((e) => ({ ...e, sourceType: "expense" })),
+          ...(S?.tx || []).map((t) => ({ ...t, sourceType: "tx" })),
+        ].some((item) => {
           const itemDate = item.date || "";
           if (
             typeof itemDate === "string" &&
@@ -2826,28 +2948,7 @@ function Activity({
           ) {
             return false;
           }
-          const desc = String(
-            item.desc || item.title || item.note || item.description || "",
-          ).toLowerCase();
-          const cat = String(item.cat || "").toLowerCase();
-          const amtStr = item.amt != null ? String(item.amt) : "";
-          const cleanMoneyQuery = query.replace(/[৳,\s]/g, "");
-          const [acct] = getAccountDisplay(item.acct || item.from, S?.cards);
-          const [toAcct] = item.to
-            ? getAccountDisplay(item.to, S?.cards)
-            : [""];
-          return (
-            desc.includes(query) ||
-            cat.includes(query) ||
-            amtStr.includes(query) ||
-            (cleanMoneyQuery && amtStr.includes(cleanMoneyQuery)) ||
-            String(acct || "")
-              .toLowerCase()
-              .includes(query) ||
-            String(toAcct || "")
-              .toLowerCase()
-              .includes(query)
-          );
+          return matchesActivityCriteria(item);
         })
       : false;
 
@@ -3218,25 +3319,31 @@ function Activity({
         ) : (
           sortedDates.map((d) => {
             const dayExpenses = g[d] || [];
-            const dayExpenseSum = dayExpenses
-              .filter(
-                (e) =>
-                  (e.sourceType === "expense" || e.type === "expense") &&
-                  e.cat !== "Savings",
-              )
-              .reduce((acc, e) => acc + (e.amt || 0), 0);
-            const dayIncomeSum = dayExpenses
-              .filter((e) => e.type === "income")
-              .reduce((acc, e) => acc + (e.amt || 0), 0);
-            const dayTransfersSum = dayExpenses
-              .filter(
-                (e) =>
-                  e.type === "transfer" ||
-                  e.type === "adjust" ||
-                  e.type === "adjustment" ||
-                  e.cat === "Savings",
-              )
-              .reduce((acc, e) => acc + (e.amt || 0), 0);
+            const dayExpenseSum = round2(
+              dayExpenses
+                .filter(
+                  (e) =>
+                    (e.sourceType === "expense" || e.type === "expense") &&
+                    e.cat !== "Savings",
+                )
+                .reduce((acc, e) => acc + (e.amt || 0), 0),
+            );
+            const dayIncomeSum = round2(
+              dayExpenses
+                .filter((e) => e.type === "income")
+                .reduce((acc, e) => acc + (e.amt || 0), 0),
+            );
+            const dayTransfersSum = round2(
+              dayExpenses
+                .filter(
+                  (e) =>
+                    e.type === "transfer" ||
+                    e.type === "adjust" ||
+                    e.type === "adjustment" ||
+                    e.cat === "Savings",
+                )
+                .reduce((acc, e) => acc + (e.amt || 0), 0),
+            );
             const hasAmount = dayExpenses.some((e) => e.amt != null);
             const dayLabel = !d
               ? "Undated"
@@ -3279,6 +3386,7 @@ function Activity({
                       key={`${e.sourceType || "exp"}-${e.id}`}
                       e={e}
                       cards={S.cards}
+                      deletedCards={S?.deletedCards}
                       onOpen={onOpen}
                       onDelete={onDelete}
                       onSkip={onSkip}
@@ -3801,8 +3909,6 @@ function Plans({
   onOpenRec,
   onToggleRec,
 }) {
-  const [scrubDay, setScrubDay] = useState(null);
-  const scrubRef = useRef({ active: false, lastDay: null, moved: false });
   const savingsThisMonth = monthExp(S)
     .filter((expense) => expense.cat === "Savings" && expense.amt != null)
     .reduce((sum, expense) => sum + expense.amt, 0);
@@ -3851,39 +3957,6 @@ function Plans({
     .filter((schedule) => schedule.cat === "Savings")
     .reduce((a, r) => a + r.amt * (r.iv === "weekly" ? 4 : 1), 0);
 
-  const dailySeries = useMemo(() => {
-    const [y, mNum] = (S.m || ld().slice(0, 7)).split("-").map(Number);
-    const daysInMonth = new Date(y, mNum, 0).getDate() || 30;
-    const shortMonth = new Date(y, mNum - 1, 1).toLocaleDateString("en-US", {
-      month: "short",
-    });
-    const sums = Array.from({ length: daysInMonth }, (_, idx) => ({
-      day: idx + 1,
-      date: `${S.m}-${String(idx + 1).padStart(2, "0")}`,
-      amt: 0,
-    }));
-    for (const e of S.exp || []) {
-      if (
-        e &&
-        typeof e.date === "string" &&
-        e.date.startsWith(S.m) &&
-        e.cat !== "Savings" &&
-        e.amt != null
-      ) {
-        const dNum = Number(e.date.slice(8, 10));
-        if (dNum >= 1 && dNum <= daysInMonth) {
-          sums[dNum - 1].amt += Number(e.amt) || 0;
-        }
-      }
-    }
-    const maxAmt = Math.max(1, ...sums.map((d) => d.amt));
-    return { sums, maxAmt, daysInMonth, shortMonth };
-  }, [S.exp, S.m]);
-
-  useEffect(() => {
-    setScrubDay(null);
-  }, [S.m]);
-
   const todayStr = ld();
   const isCurrentMonth = S.m === todayStr.slice(0, 7);
   let velocity = null;
@@ -3903,6 +3976,12 @@ function Plans({
     const dailyRemainingBudget =
       daysRemaining > 0 ? Math.max(0, Math.round((b - t) / daysRemaining)) : 0;
     const currentDailyBurn = Math.round(t / daysPassed);
+    const dailyTarget = Math.round(b / daysInMonth);
+    const budgetUsedPct = Math.min(100, Math.max(0, (t / b) * 100));
+    const timeElapsedPct = Math.min(
+      100,
+      Math.max(0, (daysPassed / daysInMonth) * 100),
+    );
     velocity = {
       daysInMonth,
       currentDay,
@@ -3913,6 +3992,9 @@ function Plans({
       roundedPaceDiff,
       dailyRemainingBudget,
       currentDailyBurn,
+      dailyTarget,
+      budgetUsedPct,
+      timeElapsedPct,
       isOverPace: t > b || roundedPaceDiff > 0,
       isUnderPace: t <= b && roundedPaceDiff < 0,
     };
@@ -4011,180 +4093,132 @@ function Plans({
       </div>
 
       {b > 0 && velocity && (
-        <div className="card budget-velocity-card">
+        <div
+          className={`card budget-velocity-card ${velocity.isOverPace ? "is-over" : "is-good"}`}
+        >
           <div className="budget-velocity-header">
             <span className="budget-pace-title">Budget pace</span>
-            <span className="budget-velocity-days">
-              {isCurrentMonth
-                ? `${velocity.daysRemaining} ${velocity.daysRemaining === 1 ? "day" : "days"} left`
-                : "Month ended"}
-            </span>
-          </div>
-
-          <div className="budget-pace-hero">
-            <div className="budget-pace-amount">
-              {M(Math.abs(velocity.roundedPaceDiff))}
-            </div>
-            <div
+            <span
               className={`budget-pace-status ${velocity.isOverPace ? "is-over" : "is-good"}`}
             >
               {velocity.isOverPace ? (
                 <>
                   <svg
                     viewBox="0 0 16 16"
-                    width="14"
-                    height="14"
+                    width="13"
+                    height="13"
                     fill="none"
                     stroke="currentColor"
-                    strokeWidth="2.2"
+                    strokeWidth="2.3"
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     aria-hidden="true"
                   >
                     <path d="M8 12.5V3.5M4.5 7 8 3.5 11.5 7" />
                   </svg>
-                  <span>over pace</span>
+                  <span>Over pace</span>
                 </>
               ) : (
                 <>
                   <svg
                     viewBox="0 0 16 16"
-                    width="15"
-                    height="15"
+                    width="13"
+                    height="13"
                     fill="none"
                     stroke="currentColor"
-                    strokeWidth="2.2"
+                    strokeWidth="2.3"
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     aria-hidden="true"
                   >
                     <path d="M3 8.5 6.5 12 13 4.5" />
                   </svg>
-                  <span>{velocity.isUnderPace ? "under pace" : "on pace"}</span>
+                  <span>{velocity.isUnderPace ? "Under pace" : "On pace"}</span>
                 </>
               )}
+            </span>
+          </div>
+
+          <div className="budget-pace-hero">
+            <div className="budget-pace-amount">
+              {M(
+                isCurrentMonth
+                  ? velocity.dailyRemainingBudget
+                  : velocity.currentDailyBurn,
+              )}
+              <small>/day</small>
+            </div>
+            <p className="budget-pace-sub">
+              {!isCurrentMonth
+                ? t > b
+                  ? `Average daily burn · Ended ${M(t - b)} over budget`
+                  : t < b
+                    ? `Average daily burn · Ended ${M(b - t)} under budget`
+                    : "Average daily burn · Ended right on budget"
+                : t > b
+                  ? `Over monthly budget by ${M(t - b)} · ${velocity.daysRemaining} ${velocity.daysRemaining === 1 ? "day" : "days"} left`
+                  : velocity.isOverPace
+                    ? `Safe daily spend · ${M(Math.abs(velocity.roundedPaceDiff))} over expected pace`
+                    : velocity.isUnderPace
+                      ? `Safe daily spend · ${M(Math.abs(velocity.roundedPaceDiff))} under expected pace`
+                      : `Safe daily spend · Right on track for ${velocity.daysRemaining} ${velocity.daysRemaining === 1 ? "day" : "days"} left`}
+            </p>
+          </div>
+
+          <div className="budget-pace-meter">
+            <div
+              className="budget-pace-track"
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(velocity.budgetUsedPct)}
+              aria-label="Budget pace progress"
+            >
+              <span
+                className="budget-pace-fill"
+                style={{
+                  width: `${t > 0 ? Math.max(3, velocity.budgetUsedPct) : 0}%`,
+                }}
+              />
+              {isCurrentMonth &&
+                velocity.timeElapsedPct > 0 &&
+                velocity.timeElapsedPct < 100 && (
+                  <span
+                    className="budget-pace-marker"
+                    style={{ left: `${velocity.timeElapsedPct}%` }}
+                    title={`Expected by today: ${M(Math.round(velocity.expectedSpent))}`}
+                    aria-hidden="true"
+                  />
+                )}
+            </div>
+            <div className="budget-pace-meta">
+              <span>
+                {Math.round(velocity.budgetUsedPct)}% spent · Expected{" "}
+                {M(Math.round(velocity.expectedSpent))}
+              </span>
+              <span>
+                {isCurrentMonth
+                  ? `${velocity.daysRemaining} ${velocity.daysRemaining === 1 ? "day" : "days"} left`
+                  : "Month ended"}
+              </span>
             </div>
           </div>
 
           <div className="budget-velocity-stats">
             <div className="velocity-stat">
-              <span className="velocity-stat-label">
-                <svg
-                  className="velocity-legend-dash"
-                  viewBox="0 0 16 2"
-                  width="15"
-                  height="2"
-                  fill="currentColor"
-                  stroke="none"
-                  aria-hidden="true"
-                >
-                  <rect width="4" height="2" rx="1" />
-                  <rect x="6" width="4" height="2" rx="1" />
-                  <rect x="12" width="4" height="2" rx="1" />
-                </svg>
-                <span>Safe daily spend</span>
-              </span>
-              <b className="velocity-stat-value">
-                {M(velocity.dailyRemainingBudget)}
-                <small>/day</small>
-              </b>
-            </div>
-            <div className="velocity-stat">
-              <span className="velocity-stat-label">
-                <span className="velocity-legend-dot" aria-hidden="true" />
-                <span>Actual daily burn</span>
-              </span>
+              <span className="velocity-stat-label">Actual daily burn</span>
               <b className="velocity-stat-value">
                 {M(velocity.currentDailyBurn)}
                 <small>/day</small>
               </b>
             </div>
-          </div>
-
-          <div className="budget-pace-divider" aria-hidden="true" />
-
-          <div
-            className="budget-scrub-bars"
-            role="group"
-            aria-label="Daily spending chart"
-            onPointerDown={(e) => {
-              const el = document.elementFromPoint(e.clientX, e.clientY);
-              const bar = el?.closest?.("[data-day-idx]");
-              const idx = bar ? Number(bar.getAttribute("data-day-idx")) : -1;
-              const entry = idx >= 0 ? dailySeries.sums[idx] : null;
-              scrubRef.current = {
-                active: true,
-                lastDay: entry ? entry.day : null,
-                moved: false,
-              };
-            }}
-            onPointerMove={(e) => {
-              if (!scrubRef.current.active) return;
-              const el = document.elementFromPoint(e.clientX, e.clientY);
-              const bar = el?.closest?.("[data-day-idx]");
-              if (!bar) return;
-              const idx = Number(bar.getAttribute("data-day-idx"));
-              const entry = dailySeries.sums[idx];
-              if (entry && entry.day !== scrubRef.current.lastDay) {
-                scrubRef.current.lastDay = entry.day;
-                scrubRef.current.moved = true;
-                triggerHaptic("selection");
-                setScrubDay(entry);
-              }
-            }}
-            onPointerUp={() => {
-              scrubRef.current.active = false;
-            }}
-            onPointerCancel={() => {
-              scrubRef.current.active = false;
-            }}
-          >
-            {dailySeries.sums.map((item, idx) => {
-              const hasSpend = item.amt > 0;
-              const hPct = hasSpend
-                ? Math.max(
-                    20,
-                    Math.round((item.amt / dailySeries.maxAmt) * 100),
-                  )
-                : 0;
-              const isSelected = scrubDay?.day === item.day;
-              const isToday =
-                isCurrentMonth && item.day === velocity.currentDay;
-              return (
-                <div
-                  key={item.day}
-                  data-day-idx={idx}
-                  className={`budget-scrub-bar-wrap${isSelected ? " is-active" : ""}${hasSpend ? " has-spend" : ""}${isToday ? " is-today" : ""}`}
-                  onClick={() => {
-                    if (scrubRef.current.moved) {
-                      scrubRef.current.moved = false;
-                      return;
-                    }
-                    triggerHaptic("selection");
-                    setScrubDay((curr) =>
-                      curr?.day === item.day ? null : item,
-                    );
-                  }}
-                >
-                  <span
-                    className="budget-scrub-bar"
-                    style={hasSpend ? { height: `${hPct}%` } : undefined}
-                  />
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="budget-pace-axis">
-            <span>{dailySeries.shortMonth} 1</span>
-            {scrubDay && (
-              <span className="budget-scrub-tooltip">
-                <b>{fD(scrubDay.date)}</b> · {M(scrubDay.amt)}
-              </span>
-            )}
-            <span>
-              {dailySeries.shortMonth} {dailySeries.daysInMonth}
-            </span>
+            <div className="velocity-stat">
+              <span className="velocity-stat-label">Target daily pace</span>
+              <b className="velocity-stat-value">
+                {M(velocity.dailyTarget)}
+                <small>/day</small>
+              </b>
+            </div>
           </div>
         </div>
       )}

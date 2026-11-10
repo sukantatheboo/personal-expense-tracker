@@ -1645,7 +1645,6 @@ a:active,
   font-weight: 700;
   width: 100%;
   text-align: center;
-  color: #fff;
 }
 .mobile-prototype .card {
   background: var(--card);
@@ -1895,7 +1894,18 @@ a:active,
 .mobile-prototype .expense-swipe-shell.is-skip-shell.is-dragging,
 .mobile-prototype .expense-swipe-shell.is-skip-shell.is-revealed,
 .mobile-prototype .expense-swipe-shell.is-skip-shell.is-deleting {
-  background: var(--g, #327a58);
+  background: #0d9488;
+}
+:root[data-theme="dark"]
+  .mobile-prototype
+  .expense-swipe-shell.is-skip-shell.is-dragging,
+:root[data-theme="dark"]
+  .mobile-prototype
+  .expense-swipe-shell.is-skip-shell.is-revealed,
+:root[data-theme="dark"]
+  .mobile-prototype
+  .expense-swipe-shell.is-skip-shell.is-deleting {
+  background: #0f766e;
 }
 
 .mobile-prototype .expense-swipe-delete {
@@ -1968,19 +1978,25 @@ a:active,
 }
 .mobile-prototype
   .expense-swipe-shell[data-threshold="true"]
-  .expense-swipe-delete {
+  .expense-swipe-delete.is-right:not(.is-skip) {
   background: #b91c1c;
 }
 :root[data-theme="dark"]
   .mobile-prototype
   .expense-swipe-shell[data-threshold="true"]
-  .expense-swipe-delete {
+  .expense-swipe-delete.is-right:not(.is-skip) {
   background: #c62828;
 }
 .mobile-prototype
   .expense-swipe-shell[data-threshold="true"]
   .expense-swipe-delete.is-skip {
-  background: color-mix(in srgb, var(--g, #327a58) 85%, #000);
+  background: #0f766e;
+}
+:root[data-theme="dark"]
+  .mobile-prototype
+  .expense-swipe-shell[data-threshold="true"]
+  .expense-swipe-delete.is-skip {
+  background: #115e59;
 }
 
 .mobile-prototype .expense-day-card .expense-row {
@@ -2934,6 +2950,17 @@ a:active,
 .mobile-prototype .chips button.on .chip-badge {
   background: rgba(255, 255, 255, 0.32);
   color: inherit;
+}
+:root[data-theme="dark"] .mobile-prototype .chips button.on .chip-badge,
+.mobile-prototype[data-theme="dark"] .chips button.on .chip-badge {
+  background: rgba(11, 14, 9, 0.14);
+  color: #0b0e09;
+}
+@media (prefers-color-scheme: dark) {
+  .mobile-prototype:not([data-theme="light"]) .chips button.on .chip-badge {
+    background: rgba(11, 14, 9, 0.14);
+    color: #0b0e09;
+  }
 }
 /* ───────────── Activity Tabs Bar (Prototype Underline Navigation) ───────────── */
 .mobile-prototype .activity-tabs-bar {
@@ -9182,12 +9209,37 @@ html[data-theme="dark"]
 
 /* ───────────── Budget Velocity & Daily Burn Rate (Minimal Prototype Redesign) ───────────── */
 .mobile-prototype .budget-velocity-card {
+  --pace-accent: #10b981;
+  --pace-accent-ink: #059669;
+  --pace-accent-bg: rgba(16, 185, 129, 0.12);
+  --pace-accent-border: rgba(16, 185, 129, 0.24);
   margin-top: 14px;
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: 22px;
-  padding: 20px 18px 18px;
+  padding: 18px;
   text-align: left;
+}
+:root[data-theme="dark"] .mobile-prototype .budget-velocity-card,
+.mobile-prototype[data-theme="dark"] .budget-velocity-card {
+  --pace-accent: var(--accent, #cff558);
+  --pace-accent-ink: var(--accent, #cff558);
+  --pace-accent-bg: rgba(207, 245, 88, 0.12);
+  --pace-accent-border: rgba(207, 245, 88, 0.24);
+}
+@media (prefers-color-scheme: dark) {
+  .mobile-prototype:not([data-theme="light"]) .budget-velocity-card {
+    --pace-accent: var(--accent, #cff558);
+    --pace-accent-ink: var(--accent, #cff558);
+    --pace-accent-bg: rgba(207, 245, 88, 0.12);
+    --pace-accent-border: rgba(207, 245, 88, 0.24);
+  }
+}
+.mobile-prototype .budget-velocity-card.is-over {
+  --pace-accent: var(--bad, #c0483a);
+  --pace-accent-ink: var(--bad, #c0483a);
+  --pace-accent-bg: color-mix(in srgb, var(--bad, #c0483a) 13%, transparent);
+  --pace-accent-border: color-mix(in srgb, var(--bad, #c0483a) 26%, transparent);
 }
 .mobile-prototype .budget-velocity-header {
   display: flex;
@@ -9195,22 +9247,44 @@ html[data-theme="dark"]
   align-items: center;
   gap: 8px;
 }
-.mobile-prototype .budget-pace-title,
-.mobile-prototype .budget-velocity-days {
-  font-size: 13.5px;
-  font-weight: 650;
+.mobile-prototype .budget-pace-title {
+  font-size: 14px;
+  font-weight: 700;
   color: var(--mut);
   letter-spacing: -0.01em;
 }
+.mobile-prototype .budget-pace-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: var(--pace-accent-bg);
+  border: 1px solid var(--pace-accent-border);
+  color: var(--pace-accent-ink);
+  font-size: 12.5px;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+}
+.mobile-prototype .budget-pace-status svg {
+  width: 13px;
+  height: 13px;
+  stroke-width: 2.4;
+  flex-shrink: 0;
+}
 .mobile-prototype .budget-pace-hero {
-  margin-top: 10px;
+  margin-top: 12px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 4px;
 }
 .mobile-prototype .budget-pace-amount {
-  font-size: clamp(32px, 9vw, 38px);
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  font-size: clamp(30px, 8.8vw, 36px);
   font-weight: 800;
   color: var(--ink);
   letter-spacing: -0.035em;
@@ -9219,75 +9293,108 @@ html[data-theme="dark"]
   -webkit-user-select: text;
   user-select: text;
 }
-.mobile-prototype .budget-pace-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 14.5px;
-  font-weight: 700;
+.mobile-prototype .budget-pace-amount small {
+  font-size: 16px;
+  font-weight: 650;
+  color: var(--mut);
   letter-spacing: -0.01em;
-  line-height: 1.2;
 }
-.mobile-prototype .budget-pace-status svg {
-  width: 15px;
-  height: 15px;
-  stroke-width: 2.3;
-  flex-shrink: 0;
+.mobile-prototype .budget-pace-sub {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mut);
+  line-height: 1.35;
+  letter-spacing: -0.01em;
 }
-.mobile-prototype .budget-pace-status.is-good {
-  color: #0e6f48;
+.mobile-prototype .budget-pace-meter {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
-:root[data-theme="dark"] .mobile-prototype .budget-pace-status.is-good,
-.mobile-prototype[data-theme="dark"] .budget-pace-status.is-good {
-  color: #34d399;
+.mobile-prototype .budget-pace-track {
+  position: relative;
+  height: 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 8%, var(--bg));
+  overflow: visible;
+}
+:root[data-theme="dark"] .mobile-prototype .budget-pace-track,
+.mobile-prototype[data-theme="dark"] .budget-pace-track {
+  background: rgba(255, 255, 255, 0.08);
 }
 @media (prefers-color-scheme: dark) {
-  .mobile-prototype:not([data-theme="light"]) .budget-pace-status.is-good {
-    color: #34d399;
+  .mobile-prototype:not([data-theme="light"]) .budget-pace-track {
+    background: rgba(255, 255, 255, 0.08);
   }
 }
-.mobile-prototype .budget-pace-status.is-over {
-  color: var(--bad, #c0483a);
+.mobile-prototype .budget-pace-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--pace-accent);
+  transition: width 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.mobile-prototype .budget-pace-marker {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2.5px;
+  border-radius: 99px;
+  background: var(--ink);
+  box-shadow: 0 0 0 2px var(--card);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.mobile-prototype .budget-pace-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--mut);
+  letter-spacing: -0.01em;
 }
 .mobile-prototype .budget-velocity-stats {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 14px;
-  margin-top: 18px;
+  gap: 10px;
+  margin-top: 14px;
 }
 .mobile-prototype .velocity-stat {
   display: flex;
   flex-direction: column;
   gap: 4px;
   min-width: 0;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--ink) 3%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--line) 85%, transparent);
+}
+:root[data-theme="dark"] .mobile-prototype .velocity-stat,
+.mobile-prototype[data-theme="dark"] .velocity-stat {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.07);
+}
+@media (prefers-color-scheme: dark) {
+  .mobile-prototype:not([data-theme="light"]) .velocity-stat {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(255, 255, 255, 0.07);
+  }
 }
 .mobile-prototype .velocity-stat-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 650;
   color: var(--mut);
   letter-spacing: -0.01em;
   white-space: nowrap;
-}
-.mobile-prototype .velocity-legend-dash {
-  width: 15px;
-  height: 2px;
-  color: color-mix(in srgb, var(--mut) 72%, transparent);
-  fill: currentColor;
-  stroke: none;
-  flex-shrink: 0;
-}
-.mobile-prototype .velocity-legend-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 2.5px;
-  background: #6eb698;
-  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .mobile-prototype .velocity-stat-value {
-  font-size: 21px;
+  font-size: 19px;
   font-weight: 800;
   color: var(--ink);
   letter-spacing: -0.025em;
@@ -9295,15 +9402,11 @@ html[data-theme="dark"]
   font-variant-numeric: tabular-nums;
 }
 .mobile-prototype .velocity-stat-value small {
-  font-size: 13.5px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--mut);
   letter-spacing: -0.01em;
   margin-left: 1px;
-}
-.mobile-prototype .budget-pace-divider {
-  margin: 16px 0 18px;
-  border-top: 1.5px dashed color-mix(in srgb, var(--mut) 48%, transparent);
 }
 .mobile-prototype .hero-velocity-row {
   display: flex;
@@ -9978,93 +10081,6 @@ html[data-theme="dark"]
   background: var(--c, #64748b);
 }
 
-.mobile-prototype .budget-scrub-tooltip {
-  font-size: 11.5px;
-  font-weight: 750;
-  color: var(--ink);
-  padding: 2px 9px;
-  border-radius: 999px;
-  background: var(--bg);
-  border: 1px solid var(--line);
-}
-
-.mobile-prototype .budget-scrub-bars {
-  display: flex;
-  align-items: flex-end;
-  gap: 3.5px;
-  height: 60px;
-  padding-top: 2px;
-  touch-action: pan-y;
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-.mobile-prototype .budget-scrub-bar-wrap {
-  flex: 1 1 0;
-  height: 100%;
-  display: flex;
-  align-items: flex-end;
-  cursor: pointer;
-}
-
-.mobile-prototype .budget-scrub-bar {
-  display: block;
-  width: 100%;
-  height: 4.5px;
-  min-height: 4.5px;
-  border-radius: 99px;
-  background: color-mix(in srgb, var(--ink) 16%, transparent);
-  transition:
-    height 180ms ease,
-    background-color 140ms ease,
-    transform 120ms ease;
-}
-
-.mobile-prototype .budget-scrub-bar-wrap.has-spend .budget-scrub-bar {
-  background: #6eb698;
-}
-
-.mobile-prototype .budget-scrub-bar-wrap.is-today:not(.has-spend) .budget-scrub-bar {
-  background: #0e6f48;
-}
-
-:root[data-theme="dark"] .mobile-prototype .budget-scrub-bar-wrap.is-today:not(.has-spend) .budget-scrub-bar,
-.mobile-prototype[data-theme="dark"] .budget-scrub-bar-wrap.is-today:not(.has-spend) .budget-scrub-bar {
-  background: #34d399;
-}
-@media (prefers-color-scheme: dark) {
-  .mobile-prototype:not([data-theme="light"]) .budget-scrub-bar-wrap.is-today:not(.has-spend) .budget-scrub-bar {
-    background: #34d399;
-  }
-}
-
-.mobile-prototype .budget-scrub-bar-wrap.is-active .budget-scrub-bar {
-  background: #0e6f48;
-  transform: scaleY(1.05);
-}
-
-:root[data-theme="dark"] .mobile-prototype .budget-scrub-bar-wrap.is-active .budget-scrub-bar,
-.mobile-prototype[data-theme="dark"] .budget-scrub-bar-wrap.is-active .budget-scrub-bar {
-  background: #34d399;
-}
-@media (prefers-color-scheme: dark) {
-  .mobile-prototype:not([data-theme="light"]) .budget-scrub-bar-wrap.is-active .budget-scrub-bar {
-    background: #34d399;
-  }
-}
-
-.mobile-prototype .budget-pace-axis {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 10px;
-  min-height: 20px;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--mut);
-  letter-spacing: -0.01em;
-}
 
 .mobile-prototype .app-privacy-shield {
   position: fixed;
@@ -10155,9 +10171,31 @@ html[data-theme="dark"]
   background: #cff558;
   border-color: #cff558;
   color: #0b0e09;
+  --icon-ink: #0b0e09;
+  --icon-inner-ink: #cff558;
   box-shadow:
     0 4px 14px rgba(207, 245, 88, 0.22),
     inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+@media (prefers-color-scheme: dark) {
+  .mobile-prototype:not([data-theme="light"]) .chips button,
+  .mobile-prototype:not([data-theme="light"]) .cg button {
+    background: #14161f;
+    border-color: #242736;
+    color: #e2e8f0;
+  }
+  .mobile-prototype:not([data-theme="light"]) .chips button.on,
+  .mobile-prototype:not([data-theme="light"]) .cg button.on {
+    background: #cff558;
+    border-color: #cff558;
+    color: #0b0e09;
+    --icon-ink: #0b0e09;
+    --icon-inner-ink: #cff558;
+    box-shadow:
+      0 4px 14px rgba(207, 245, 88, 0.22),
+      inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  }
 }
 
 :root[data-theme="dark"] .mobile-prototype .sec button,

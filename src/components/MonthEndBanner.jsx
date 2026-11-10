@@ -209,14 +209,15 @@ export default function MonthRecap({
 }) {
   const resolvedData = useMemo(() => {
     if (data) return data;
-    if (Array.isArray(transactions) && transactions.length > 0) {
+    if (Array.isArray(transactions)) {
+      if (transactions.length === 0) return null;
       const built = buildRecap(transactions, {
         month,
         amountOf,
         dateOf,
         categoryOf,
       });
-      if (built && built.total > 0) return built;
+      return built && built.total > 0 ? built : null;
     }
     if (month) {
       return getSampleRecap(month);
