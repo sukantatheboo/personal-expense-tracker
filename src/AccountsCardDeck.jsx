@@ -185,7 +185,7 @@ export function WalletCard({
               {card.holderName || card.name || "Cardholder"}
             </span>
             <span className="wallet-card-type-tag">
-              {cardSubtitle}
+              <span className="wallet-card-subtitle-text">{cardSubtitle}</span>
               {card.isPrimary && (
                 <span className="wallet-card-primary-badge">PRIMARY</span>
               )}
@@ -196,7 +196,7 @@ export function WalletCard({
           </div>
 
           <div className="wallet-card-brand-logo">
-            {renderProviderLogo(card.provider, { height: 28 })}
+            {renderProviderLogo(card.provider, { height: 30 })}
           </div>
         </div>
 
@@ -204,12 +204,15 @@ export function WalletCard({
         <div className="wallet-card-mid">
           {!isMfs && !isSavings ? (
             <div className="wallet-card-chip-cluster">
-              <EmvChip size={32} />
-              <ContactlessWaves size={18} className="wallet-card-contactless" />
+              <EmvChip size={38} />
+              <ContactlessWaves size={19} className="wallet-card-contactless" />
             </div>
           ) : (
             <div className="wallet-card-mfs-icon">
-              <ContactlessWaves size={19} className="wallet-card-contactless" />
+              <ContactlessWaves size={15} className="wallet-card-contactless" />
+              <span className="wallet-card-mfs-chip-lbl">
+                {isSavings ? "PROTECTED VAULT" : "INSTANT PAY"}
+              </span>
             </div>
           )}
         </div>
@@ -252,11 +255,11 @@ export function WalletCard({
           </div>
 
           <div className="wallet-card-network">
-            {card.network === "visa" && <VisaBadge width={48} height={18} />}
+            {card.network === "visa" && <VisaBadge width={52} height={18} />}
             {card.network === "mastercard" && (
-              <MastercardBadge width={38} height={24} />
+              <MastercardBadge width={41} height={26} />
             )}
-            {card.network === "amex" && <AmexBadge width={42} height={20} />}
+            {card.network === "amex" && <AmexBadge width={46} height={20} />}
             {isMfs && (
               <span className="wallet-card-mfs-network-pill">
                 {(card.name || "WALLET").toUpperCase()}

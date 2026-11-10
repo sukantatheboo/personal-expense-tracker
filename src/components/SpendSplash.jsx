@@ -115,7 +115,8 @@ export default function SpendSplash({
   once = false,
   storageKey = "spend-splash",
   fontFamily = '"Outfit", "Nunito Sans", ui-rounded, system-ui, sans-serif',
-  fontUrl = fUrlBase + "Manrope:wght@500;600;700;800&family=Outfit:wght@600&display=swap",
+  fontUrl = fUrlBase +
+    "Manrope:wght@500;600;700;800&family=Outfit:wght@600&display=swap",
 }) {
   const rootRef = useRef(null);
   const firedSkip = useRef(false);

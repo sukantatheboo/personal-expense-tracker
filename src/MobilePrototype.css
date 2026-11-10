@@ -205,7 +205,10 @@ a:active,
   background: transparent !important;
   color: var(--muted) !important;
   cursor: pointer !important;
-  transition: background-color 140ms ease, color 140ms ease, transform 120ms ease;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease,
+    transform 120ms ease;
   touch-action: manipulation;
 }
 .auth-modal-close:hover {
@@ -279,7 +282,10 @@ a:active,
   color: var(--ink) !important;
   font-size: 15px !important;
   font-weight: 500 !important;
-  transition: border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease !important;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease,
+    box-shadow 150ms ease !important;
 }
 :root[data-theme="dark"] .auth-input-group input,
 .mobile-prototype[data-theme="dark"] .auth-input-group input {
@@ -304,7 +310,10 @@ a:active,
   border: 1.5px solid transparent !important;
   border-radius: 14px !important;
   background: #f5f5f0 !important;
-  transition: border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease !important;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease,
+    box-shadow 150ms ease !important;
 }
 :root[data-theme="dark"] .auth-password-control,
 .mobile-prototype[data-theme="dark"] .auth-password-control {
@@ -396,7 +405,10 @@ a:active,
   letter-spacing: -0.01em !important;
   cursor: pointer !important;
   touch-action: manipulation !important;
-  transition: transform 120ms ease, opacity 140ms ease, background-color 140ms ease !important;
+  transition:
+    transform 120ms ease,
+    opacity 140ms ease,
+    background-color 140ms ease !important;
 }
 :root[data-theme="dark"] .auth-modal-submit-btn,
 .mobile-prototype[data-theme="dark"] .auth-modal-submit-btn {
@@ -4266,9 +4278,17 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
   background: color-mix(in srgb, var(--line) 82%, transparent);
   pointer-events: none;
 }
-:root[data-theme="dark"] .mobile-prototype .mfs-settings-row + .mfs-settings-row::before,
-:root[data-theme="dark"] .mobile-prototype .mfs-list-row + .mfs-list-row::before,
-.mobile-prototype[data-theme="dark"] .mfs-settings-row + .mfs-settings-row::before,
+:root[data-theme="dark"]
+  .mobile-prototype
+  .mfs-settings-row
+  + .mfs-settings-row::before,
+:root[data-theme="dark"]
+  .mobile-prototype
+  .mfs-list-row
+  + .mfs-list-row::before,
+.mobile-prototype[data-theme="dark"]
+  .mfs-settings-row
+  + .mfs-settings-row::before,
 .mobile-prototype[data-theme="dark"] .mfs-list-row + .mfs-list-row::before {
   background: rgba(255, 255, 255, 0.065);
 }
@@ -4789,7 +4809,8 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
 .mobile-prototype .category-suggestion-action.is-inline-hint {
   display: inline-flex;
   margin: 10px 0 0;
-  animation: prototype-suggestion-pop 180ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+  animation: prototype-suggestion-pop 180ms cubic-bezier(0.2, 0.9, 0.3, 1.2)
+    both;
 }
 @keyframes prototype-suggestion-pop {
   0% {
@@ -5546,10 +5567,19 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
     --card-gradient,
     linear-gradient(135deg, #0f172a 0%, #1e293b 100%)
   );
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.32);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.18);
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+}
+/* Protect all card SVGs (logos, EMV chip, network marks) from global 22x22 stroke override */
+.mobile-prototype .wallet-card svg,
+.mobile-prototype .mini-card-preview svg {
+  width: auto;
+  height: auto;
+  stroke: none;
 }
 .mobile-prototype .wallet-card:focus-visible {
   outline: 3px solid var(--g);
@@ -5562,7 +5592,7 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 13px 18px 11px;
+  padding: 14px 18px 13px;
   overflow: hidden;
   box-sizing: border-box;
 }
@@ -5599,36 +5629,44 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
   position: relative;
   z-index: 2;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  min-height: 28px;
+  gap: 10px;
+  min-height: 32px;
 }
 .mobile-prototype .wallet-card-holder-info {
   display: flex;
   flex-direction: column;
-  gap: 1.5px;
+  gap: 2px;
   min-width: 0;
+  flex: 1 1 auto;
 }
 .mobile-prototype .wallet-card-holder-name {
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 800;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.025em;
   color: #ffffff;
   text-transform: uppercase;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 190px;
-  line-height: 1.2;
+  max-width: 175px;
+  line-height: 1.18;
 }
 .mobile-prototype .wallet-card-type-tag {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.78);
+  color: rgba(255, 255, 255, 0.82);
   line-height: 1.1;
+}
+.mobile-prototype .wallet-card-subtitle-text {
+  display: inline-block;
 }
 .mobile-prototype .wallet-card-brand-group {
   display: flex;
@@ -5640,12 +5678,12 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  background: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.15);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 18px;
-  padding: 3.5px 10px 3.5px 7px;
+  padding: 4px 10px 4px 7px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
 }
 .mobile-prototype .card-vault-piggy-img {
@@ -5668,20 +5706,21 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  height: 28px;
-  max-height: 28px;
+  height: 32px;
+  max-height: 32px;
 }
 .mobile-prototype .card-brand-cluster {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 24px;
+  height: auto;
+  max-height: 32px;
 }
 .mobile-prototype .card-brand-img {
-  height: 22px;
-  max-height: 22px;
+  height: 28px;
+  max-height: 28px;
   width: auto;
-  max-width: 96px;
+  max-width: 142px;
   object-fit: contain;
   display: block;
 }
@@ -5692,37 +5731,56 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
   align-items: center;
   justify-content: flex-start;
   gap: 10px;
-  margin: 1px 0 0;
+  margin: 2px 0 0;
 }
 .mobile-prototype .wallet-card-chip-cluster {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
 }
 .mobile-prototype .wallet-card-contactless {
   display: block;
-  height: 18px;
+  height: 19px;
   width: auto;
-  max-height: 18px;
+  max-height: 19px;
   object-fit: contain;
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
-  opacity: 0.9;
+  opacity: 0.92;
 }
 .mobile-prototype .wallet-card-mfs-icon {
-  display: flex;
+  display: inline-flex;
   align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.mobile-prototype .wallet-card-mfs-icon .wallet-card-contactless {
+  height: 15px;
+  max-height: 15px;
+}
+.mobile-prototype .wallet-card-mfs-chip-lbl {
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.92);
+  line-height: 1;
 }
 .mobile-prototype .wallet-card-number {
   position: relative;
   z-index: 2;
   font-family: "SF Mono", "Menlo", monospace;
-  font-size: clamp(13px, 4vw, 15px);
+  font-size: clamp(14px, 4.2vw, 16px);
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.11em;
+  font-variant-numeric: tabular-nums;
   color: #ffffff;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.36);
   line-height: 1.2;
-  margin: 1px 0;
+  margin: 2px 0 1px;
 }
 .mobile-prototype .wallet-card-footer {
   position: relative;
@@ -5734,46 +5792,46 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
 }
 .mobile-prototype .wallet-card-footer-left {
   display: flex;
-  align-items: flex-end;
-  gap: 14px;
+  align-items: flex-start;
+  gap: 18px;
 }
 .mobile-prototype .wallet-card-balance-block,
 .mobile-prototype .wallet-card-expiry-block {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 2px;
 }
 .mobile-prototype .wallet-card-meta-lbl {
-  font-size: 7px;
+  font-size: 7.5px;
   font-weight: 800;
   letter-spacing: 0.08em;
-  color: rgba(255, 255, 255, 0.68);
+  color: rgba(255, 255, 255, 0.72);
   line-height: 1;
 }
 .mobile-prototype .wallet-card-balance-val {
-  font-size: 13.5px;
+  font-size: 14.5px;
   font-weight: 850;
   letter-spacing: -0.01em;
   color: #ffffff;
   line-height: 1.15;
 }
 .mobile-prototype .wallet-card-meta-val {
-  font-size: 10.5px;
+  font-size: 12.5px;
   font-weight: 800;
   color: #ffffff;
   letter-spacing: 0.04em;
-  line-height: 1.15;
+  line-height: 1.22;
 }
 .mobile-prototype .wallet-card-network {
   flex: 0 0 auto;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: flex-end;
-  height: 24px;
+  height: 26px;
 }
 .mobile-prototype .card-network-badge {
-  height: 22px;
-  max-height: 22px;
+  height: 24px;
+  max-height: 26px;
   width: auto;
   object-fit: contain;
   display: block;
@@ -8345,30 +8403,32 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
   filter: saturate(0.65);
 }
 .mobile-prototype .wallet-card-locked-badge {
-  display: inline-block;
-  margin-left: 6px;
-  padding: 1.5px 6px;
-  border-radius: 6px;
-  background: rgba(239, 68, 68, 0.32);
-  border: 1px solid rgba(254, 202, 202, 0.5);
+  display: inline-flex;
+  align-items: center;
+  height: 15px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(239, 68, 68, 0.34);
+  border: 1px solid rgba(254, 202, 202, 0.55);
   color: #fecaca;
-  font-size: 8px;
+  font-size: 7.5px;
   font-weight: 850;
   letter-spacing: 0.06em;
-  vertical-align: middle;
+  line-height: 1;
 }
 .mobile-prototype .wallet-card-primary-badge {
-  display: inline-block;
-  margin-left: 6px;
-  padding: 1.5px 6px;
-  border-radius: 6px;
-  background: rgba(16, 185, 129, 0.32);
-  border: 1px solid rgba(167, 243, 208, 0.5);
+  display: inline-flex;
+  align-items: center;
+  height: 15px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.34);
+  border: 1px solid rgba(167, 243, 208, 0.55);
   color: #a7f3d0;
-  font-size: 8px;
+  font-size: 7.5px;
   font-weight: 850;
   letter-spacing: 0.06em;
-  vertical-align: middle;
+  line-height: 1;
 }
 .mobile-prototype .wallet-card-overdrawn-badge {
   display: inline-block;
@@ -8450,7 +8510,10 @@ html[data-theme="dark"]
   color: var(--ink);
   cursor: pointer;
   touch-action: manipulation;
-  transition: transform 120ms ease, background-color 120ms ease, border-color 120ms ease;
+  transition:
+    transform 120ms ease,
+    background-color 120ms ease,
+    border-color 120ms ease;
 }
 .mobile-prototype .security-sheet-back-btn:active {
   transform: scale(0.94);
@@ -8487,7 +8550,9 @@ html[data-theme="dark"]
   font-weight: 700;
   cursor: pointer;
   touch-action: manipulation;
-  transition: transform 120ms ease, background-color 120ms ease;
+  transition:
+    transform 120ms ease,
+    background-color 120ms ease;
 }
 .mobile-prototype .security-sub-btn:active {
   transform: scale(0.94);
@@ -8542,7 +8607,9 @@ html[data-theme="dark"]
   font-weight: 750;
   cursor: pointer;
   touch-action: manipulation;
-  transition: transform 120ms ease, background-color 120ms ease;
+  transition:
+    transform 120ms ease,
+    background-color 120ms ease;
 }
 .mobile-prototype .security-lock-now-btn:active {
   transform: scale(0.98);
@@ -8615,9 +8682,18 @@ html[data-theme="dark"]
 }
 
 @keyframes sec-pin-shake {
-  15%, 85% { transform: translate3d(-6px, 0, 0); }
-  30%, 70% { transform: translate3d(6px, 0, 0); }
-  45%, 55% { transform: translate3d(-3px, 0, 0); }
+  15%,
+  85% {
+    transform: translate3d(-6px, 0, 0);
+  }
+  30%,
+  70% {
+    transform: translate3d(6px, 0, 0);
+  }
+  45%,
+  55% {
+    transform: translate3d(-3px, 0, 0);
+  }
 }
 
 .mobile-prototype .sec-pin-hidden-input {
@@ -8958,7 +9034,11 @@ html[data-theme="dark"]
   flex-direction: column;
   align-items: center;
   text-align: center;
-  font-family: Manrope, system-ui, -apple-system, sans-serif;
+  font-family:
+    Manrope,
+    system-ui,
+    -apple-system,
+    sans-serif;
   animation: resetPinCardPop 220ms cubic-bezier(0.2, 0.9, 0.28, 1) forwards;
   box-sizing: border-box;
 }
@@ -9093,7 +9173,7 @@ html[data-theme="dark"]
 
 [data-theme="dark"] .reset-pin-btn.is-cancel:active,
 .mobile-prototype[data-theme="dark"] .reset-pin-btn.is-cancel:active {
-  background: rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.1);
 }
 
 @keyframes resetPinBackdropIn {
@@ -9162,7 +9242,9 @@ html[data-theme="dark"]
   line-height: 1;
   user-select: none;
   -webkit-user-select: none;
-  transition: color 160ms ease, font-size 160ms ease;
+  transition:
+    color 160ms ease,
+    font-size 160ms ease;
 }
 
 .mobile-prototype .amt.amt-hero-redesigned.has-value .amt-hero-currency {

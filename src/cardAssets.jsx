@@ -13,307 +13,653 @@ import amexSvg from "./assets/payment-logos/amex.svg";
 import savingsPiggySvg from "./assets/payment-logos/savings-piggy.svg";
 import contactlessImg from "./assets/payment-logos/contactless.png";
 
-/* ───────────── Pixel-Perfect Payment & Bank Logos ───────────── */
+/* ───────────── Authentic, High-Contrast Bank & MFS Brand Logos ───────────── */
 
 /**
  * Official bKash Logo
- * Pure white origami bird + official bKash wordmark
+ * Crisp white bKash wordmark + authentic multi-faceted origami hummingbird from bkash.svg
  */
-export function BkashLogo({ className = "", height = 24 }) {
+export function BkashLogo({ className = "", height = 30 }) {
+  const birdH = Math.round(height * 0.96);
   return (
     <div
-      className={`card-brand-cluster ${className}`}
-      style={{ display: "inline-flex", alignItems: "center", gap: 7, height }}
+      className={`card-brand-cluster is-bkash ${className}`}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: Math.max(5, Math.round(height * 0.22)),
+        height,
+      }}
     >
-      <img
-        src={bkashSvg}
-        alt="bKash"
-        style={{
-          height: Math.round(height * 0.95),
-          width: "auto",
-          objectFit: "contain",
-          filter: "brightness(0) invert(1)",
-        }}
-      />
       <span
         style={{
           color: "#ffffff",
           fontWeight: 850,
           fontSize: Math.round(height * 0.68),
-          letterSpacing: "-0.03em",
-          fontFamily: "system-ui, -apple-system, sans-serif",
+          letterSpacing: "-0.035em",
+          lineHeight: 1,
+          fontFamily: "Manrope, system-ui, -apple-system, sans-serif",
+          textShadow: "0 1px 3px rgba(0,0,0,0.28)",
         }}
       >
         bKash
       </span>
+      <img
+        src={bkashSvg}
+        alt="bKash"
+        style={{
+          height: birdH,
+          width: "auto",
+          maxHeight: birdH,
+          maxWidth: "none",
+          objectFit: "contain",
+          display: "block",
+          filter:
+            "drop-shadow(0 0 1.2px rgba(255,255,255,0.92)) drop-shadow(0 1.5px 3px rgba(0,0,0,0.32))",
+        }}
+      />
     </div>
   );
 }
 
 /**
- * Official Nagad Logo
+ * Official Nagad Logo (from nagad.png)
+ * Full-color Nagad flame & runner emblem + pure white Nagad Bangla wordmark
  */
-export function NagadLogo({ className = "", height = 24 }) {
-  return (
-    <img
-      src={nagadImg}
-      alt="Nagad"
-      className={`card-brand-img ${className}`}
-      style={{
-        height,
-        width: "auto",
-        maxHeight: height,
-        objectFit: "contain",
-        display: "block",
-        filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.35))",
-      }}
-    />
-  );
-}
+export function NagadLogo({ className = "", height = 30 }) {
+  // nagad.png is 410x144 (ratio 2.847:1)
+  // Left emblem: x = 0..145 (35.4% width, 1:1 square)
+  // Right main wordmark: x = 158..410 (61.5% width), y = 20..110 (62.5% height)
+  const emblemSize = height;
+  const fullWAtEmblem = Math.round(emblemSize * (410 / 144));
 
-/**
- * Official DBBL Rocket Logo
- */
-export function RocketLogo({ className = "", height = 24 }) {
-  return (
-    <img
-      src={rocketImg}
-      alt="Rocket"
-      className={`card-brand-img ${className}`}
-      style={{
-        height,
-        width: "auto",
-        maxHeight: height,
-        objectFit: "contain",
-        display: "block",
-        filter:
-          "brightness(0) invert(1) drop-shadow(0 1px 3px rgba(0,0,0,0.35))",
-      }}
-    />
-  );
-}
+  const wordH = Math.round(height * 0.68);
+  const fullHForWord = Math.round(wordH / 0.64);
+  const fullWForWord = Math.round(fullHForWord * (410 / 144));
+  const wordBoxW = Math.round(fullWForWord * 0.62);
 
-/**
- * Official Upay Logo
- */
-export function UpayLogo({ className = "", height = 24 }) {
-  return (
-    <img
-      src={upayImg}
-      alt="Upay"
-      className={`card-brand-img ${className}`}
-      style={{
-        height,
-        width: "auto",
-        maxHeight: height,
-        objectFit: "contain",
-        display: "block",
-        filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.35))",
-      }}
-    />
-  );
-}
-
-/**
- * Official BRAC Bank Logo (from vector brac-bank.svg)
- */
-export function BracBankLogo({ className = "", height = 24 }) {
-  return (
-    <img
-      src={bracBankSvg}
-      alt="BRAC Bank"
-      className={`card-brand-img ${className}`}
-      style={{
-        height,
-        width: "auto",
-        maxHeight: height,
-        objectFit: "contain",
-        display: "block",
-        filter:
-          "brightness(0) invert(1) drop-shadow(0 1px 3px rgba(0,0,0,0.35))",
-      }}
-    />
-  );
-}
-
-/**
- * Official City Bank Logo
- */
-export function CityBankLogo({ className = "", height = 24 }) {
-  return (
-    <img
-      src={cityBankImg}
-      alt="City Bank"
-      className={`card-brand-img ${className}`}
-      style={{
-        height,
-        width: "auto",
-        maxHeight: height,
-        objectFit: "contain",
-        display: "block",
-        filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.35))",
-      }}
-    />
-  );
-}
-
-/**
- * Official Eastern Bank PLC Logo (from vector ebl.svg)
- */
-export function EblLogo({ className = "", height = 24 }) {
-  return (
-    <img
-      src={eblSvg}
-      alt="Eastern Bank"
-      className={`card-brand-img ${className}`}
-      style={{
-        height,
-        width: "auto",
-        maxHeight: height,
-        objectFit: "contain",
-        display: "block",
-        filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.35))",
-      }}
-    />
-  );
-}
-
-/**
- * Official Dutch-Bangla Bank Logo (from png dbbl.png)
- */
-export function DbblLogo({ className = "", height = 24 }) {
-  return (
-    <img
-      src={dbblImg}
-      alt="DBBL"
-      className={`card-brand-img ${className}`}
-      style={{
-        height,
-        width: "auto",
-        maxHeight: height,
-        objectFit: "contain",
-        display: "block",
-        filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.35))",
-      }}
-    />
-  );
-}
-
-/**
- * Official Standard Chartered Bank Logo
- */
-export function StandardCharteredLogo({ className = "", height = 24 }) {
   return (
     <div
-      className={`card-brand-cluster ${className}`}
-      style={{ display: "inline-flex", alignItems: "center", gap: 6, height }}
+      className={`card-brand-cluster is-nagad ${className}`}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: Math.max(5, Math.round(height * 0.2)),
+        height,
+      }}
+      aria-label="Nagad"
     >
-      <img
-        src={scbImg}
-        alt="Standard Chartered"
+      <div
         style={{
-          height,
-          width: "auto",
-          maxHeight: height,
-          objectFit: "contain",
+          width: emblemSize,
+          height: emblemSize,
+          overflow: "hidden",
+          flexShrink: 0,
+          display: "flex",
+          alignItems: "center",
         }}
-      />
-      <div style={{ display: "flex", flexDirection: "column", lineHeight: 1 }}>
-        <span
+      >
+        <img
+          src={nagadImg}
+          alt=""
           style={{
-            color: "#ffffff",
-            fontWeight: 800,
-            fontSize: Math.round(height * 0.42),
-            letterSpacing: "-0.01em",
+            height: emblemSize,
+            width: fullWAtEmblem,
+            maxWidth: "none",
+            maxHeight: "none",
+            display: "block",
+            filter:
+              "drop-shadow(0 0 1px rgba(255,255,255,0.85)) drop-shadow(0 1.5px 3px rgba(0,0,0,0.3))",
           }}
-        >
-          standard
-        </span>
-        <span
+        />
+      </div>
+      <div
+        style={{
+          width: wordBoxW,
+          height: wordH,
+          overflow: "hidden",
+          flexShrink: 0,
+          position: "relative",
+        }}
+      >
+        <img
+          src={nagadImg}
+          alt="Nagad"
           style={{
-            color: "#ffffff",
-            fontWeight: 800,
-            fontSize: Math.round(height * 0.42),
-            letterSpacing: "-0.01em",
+            height: fullHForWord,
+            width: fullWForWord,
+            maxWidth: "none",
+            maxHeight: "none",
+            marginLeft: -Math.round(fullWForWord * 0.382),
+            marginTop: -Math.round(fullHForWord * 0.14),
+            display: "block",
+            filter:
+              "brightness(0) invert(1) drop-shadow(0 1px 2px rgba(0,0,0,0.3))",
           }}
-        >
-          chartered
-        </span>
+        />
       </div>
     </div>
   );
 }
 
 /**
- * Official Amazon Logo (Video Front Card)
+ * Official DBBL Rocket Logo (from rocket.png)
+ * Trims the microscopic bottom tagline so ROCKET + paper plane renders large and crisp
  */
-export function AmazonLogo({ className = "", height = 24 }) {
-  const width = Math.round(height * 3.3);
+export function RocketLogo({ className = "", height = 30 }) {
+  // rocket.png is 445x144; main ROCKET + plane is top 85% (y: 0..122)
+  const fullH = Math.round(height / 0.85);
+  const fullW = Math.round(fullH * (445 / 144));
+  return (
+    <div
+      className={`card-brand-cluster is-rocket ${className}`}
+      style={{
+        width: fullW,
+        height,
+        overflow: "hidden",
+        display: "inline-flex",
+        alignItems: "flex-start",
+        flexShrink: 0,
+      }}
+      aria-label="Rocket"
+    >
+      <img
+        src={rocketImg}
+        alt="Rocket"
+        style={{
+          height: fullH,
+          width: fullW,
+          maxWidth: "none",
+          maxHeight: "none",
+          display: "block",
+          filter:
+            "brightness(0) invert(1) drop-shadow(0 1px 3px rgba(0,0,0,0.35))",
+        }}
+      />
+    </div>
+  );
+}
+
+/**
+ * Official Upay Logo (from upay.png)
+ * Horizontal lockup: authentic yellow & blue 'u' emblem + crisp white Bangla wordmark
+ */
+export function UpayLogo({ className = "", height = 30 }) {
+  // upay.png is 95x95:
+  // Top icon: x=18..75 (60% w), y=7..61 (57% h)
+  // Bottom Bangla wordmark: x=18..75 (60% w), y=62..87 (26.5% h)
+  const iconH = Math.round(height * 0.92);
+  const iconFullSize = Math.round(iconH / 0.58);
+  const iconBoxW = Math.round(iconFullSize * 0.62);
+
+  const wordH = Math.round(height * 0.58);
+  const wordFullSize = Math.round(wordH / 0.28);
+  const wordBoxW = Math.round(wordFullSize * 0.62);
+
+  return (
+    <div
+      className={`card-brand-cluster is-upay ${className}`}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: Math.max(5, Math.round(height * 0.2)),
+        height,
+      }}
+      aria-label="Upay"
+    >
+      <div
+        style={{
+          width: iconBoxW,
+          height: iconH,
+          overflow: "hidden",
+          flexShrink: 0,
+          position: "relative",
+        }}
+      >
+        <img
+          src={upayImg}
+          alt=""
+          style={{
+            width: iconFullSize,
+            height: iconFullSize,
+            maxWidth: "none",
+            maxHeight: "none",
+            marginLeft: -Math.round(iconFullSize * 0.19),
+            marginTop: -Math.round(iconFullSize * 0.07),
+            display: "block",
+            filter:
+              "drop-shadow(0 0 1.2px rgba(255,255,255,0.92)) drop-shadow(0 1.5px 3px rgba(0,0,0,0.35))",
+          }}
+        />
+      </div>
+      <div
+        style={{
+          width: wordBoxW,
+          height: wordH,
+          overflow: "hidden",
+          flexShrink: 0,
+          position: "relative",
+        }}
+      >
+        <img
+          src={upayImg}
+          alt="Upay"
+          style={{
+            width: wordFullSize,
+            height: wordFullSize,
+            maxWidth: "none",
+            maxHeight: "none",
+            marginLeft: -Math.round(wordFullSize * 0.19),
+            marginTop: -Math.round(wordFullSize * 0.645),
+            display: "block",
+            filter:
+              "brightness(0) invert(1) drop-shadow(0 1px 2px rgba(0,0,0,0.32))",
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Official BRAC Bank Logo (from vector brac-bank.svg)
+ * Preserves the full-color blue, gold & sun square emblem + official vector 'BRAC' short wordmark
+ */
+export function BracBankLogo({ className = "", height = 28 }) {
+  // brac-bank.svg viewBox is 230.4 x 25 (ratio 9.216:1)
+  // Left square emblem is 25 x 25 (1:1); vector 'BRAC' spans x = 31.4..125.3 (13.6%..54.5% of width)
+  const emblemSize = Math.round(height * 0.92);
+  const fullWAtEmblem = Math.round(emblemSize * 9.216);
+
+  const wordH = Math.round(height * 0.56);
+  const fullWAtWord = Math.round(wordH * 9.216);
+  const wordOffsetLeft = Math.round(fullWAtWord * 0.134);
+  const wordBoxW = Math.round(fullWAtWord * 0.415);
+
+  return (
+    <div
+      className={`card-brand-cluster is-brac ${className}`}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: Math.max(6, Math.round(height * 0.22)),
+        height,
+      }}
+      aria-label="BRAC"
+    >
+      <div
+        style={{
+          width: emblemSize,
+          height: emblemSize,
+          overflow: "hidden",
+          borderRadius: 4,
+          flexShrink: 0,
+          boxShadow: "0 1.5px 4px rgba(0,0,0,0.28)",
+        }}
+      >
+        <img
+          src={bracBankSvg}
+          alt=""
+          style={{
+            height: emblemSize,
+            width: fullWAtEmblem,
+            maxWidth: "none",
+            maxHeight: "none",
+            display: "block",
+          }}
+        />
+      </div>
+      <div
+        style={{
+          width: wordBoxW,
+          height: wordH,
+          overflow: "hidden",
+          flexShrink: 0,
+        }}
+      >
+        <img
+          src={bracBankSvg}
+          alt="BRAC"
+          style={{
+            height: wordH,
+            width: fullWAtWord,
+            maxWidth: "none",
+            maxHeight: "none",
+            marginLeft: -wordOffsetLeft,
+            display: "block",
+            filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.32))",
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Official City Bank Logo (from city-bank.png)
+ * Preserves the 3D red & silver checkered kite + short bold 'CITY' wordmark
+ */
+export function CityBankLogo({ className = "", height = 30 }) {
+  // city-bank.png is 237x160 (ratio 1.481:1)
+  const kiteH = Math.round(height * 0.96);
+  const kiteFullW = Math.round(kiteH * (237 / 160));
+  const kiteBoxW = Math.round(kiteFullW * 0.56);
+  const fontSize = Math.round(height * 0.54);
+
+  return (
+    <div
+      className={`card-brand-cluster is-city ${className}`}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: Math.max(4, Math.round(height * 0.14)),
+        height,
+      }}
+      aria-label="City Bank"
+    >
+      <div
+        style={{
+          width: kiteBoxW,
+          height: kiteH,
+          overflow: "hidden",
+          flexShrink: 0,
+          position: "relative",
+        }}
+      >
+        <img
+          src={cityBankImg}
+          alt=""
+          style={{
+            height: kiteH,
+            width: kiteFullW,
+            maxWidth: "none",
+            maxHeight: "none",
+            display: "block",
+            clipPath:
+              "polygon(0 0, 100% 0, 100% 63.5%, 18.2% 63.5%, 18.2% 100%, 0 100%)",
+            filter: "drop-shadow(0 1.5px 3px rgba(0,0,0,0.34))",
+          }}
+        />
+      </div>
+      <span
+        style={{
+          color: "#ffffff",
+          fontWeight: 900,
+          fontSize,
+          letterSpacing: "0.04em",
+          lineHeight: 1,
+          fontFamily: "Manrope, system-ui, -apple-system, sans-serif",
+          textShadow: "0 1px 2px rgba(0,0,0,0.3)",
+        }}
+      >
+        CITY
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Official Eastern Bank PLC Logo (from vector ebl.svg)
+ * Preserves the 3-color EBL emblem on a crisp white badge + short bold 'EBL' wordmark
+ */
+export function EblLogo({ className = "", height = 28 }) {
+  // ebl.svg viewBox is 11.00 4.40 175.50 28.40 (ratio 6.18:1)
+  // Left emblem badge is 38 / 175.5 = 21.65% of width
+  const emblemH = Math.round(height * 0.94);
+  const fullWAtEmblem = Math.round(emblemH * 6.18);
+  const emblemBoxW = Math.round(fullWAtEmblem * 0.218);
+  const fontSize = Math.round(height * 0.58);
+
+  return (
+    <div
+      className={`card-brand-cluster is-ebl ${className}`}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: Math.max(6, Math.round(height * 0.22)),
+        height,
+      }}
+      aria-label="EBL"
+    >
+      <div
+        style={{
+          width: emblemBoxW,
+          height: emblemH,
+          overflow: "hidden",
+          flexShrink: 0,
+        }}
+      >
+        <img
+          src={eblSvg}
+          alt=""
+          style={{
+            height: emblemH,
+            width: fullWAtEmblem,
+            maxWidth: "none",
+            maxHeight: "none",
+            display: "block",
+            filter: "drop-shadow(0 1.5px 3px rgba(0,0,0,0.28))",
+          }}
+        />
+      </div>
+      <span
+        style={{
+          color: "#ffffff",
+          fontWeight: 900,
+          fontSize,
+          letterSpacing: "0.04em",
+          lineHeight: 1,
+          fontFamily: "Manrope, system-ui, -apple-system, sans-serif",
+          textShadow: "0 1px 2px rgba(0,0,0,0.3)",
+        }}
+      >
+        EBL
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Official Dutch-Bangla Bank Logo (from dbbl.png)
+ * Preserves the 3D silver/blue/red/green oval globe + short bold 'DBBL' wordmark
+ */
+export function DbblLogo({ className = "", height = 28 }) {
+  // dbbl.png is 625x120 (ratio 5.208:1)
+  // Left 3D oval globe is 0..187 (30% of width)
+  const globeH = Math.round(height * 0.92);
+  const fullWAtGlobe = Math.round(globeH * (625 / 120));
+  const globeBoxW = Math.round(fullWAtGlobe * 0.302);
+  const fontSize = Math.round(height * 0.56);
+
+  return (
+    <div
+      className={`card-brand-cluster is-dbbl ${className}`}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: Math.max(6, Math.round(height * 0.2)),
+        height,
+      }}
+      aria-label="DBBL"
+    >
+      <div
+        style={{
+          width: globeBoxW,
+          height: globeH,
+          overflow: "hidden",
+          flexShrink: 0,
+        }}
+      >
+        <img
+          src={dbblImg}
+          alt=""
+          style={{
+            height: globeH,
+            width: fullWAtGlobe,
+            maxWidth: "none",
+            maxHeight: "none",
+            display: "block",
+            filter: "drop-shadow(0 1.5px 3px rgba(0,0,0,0.32))",
+          }}
+        />
+      </div>
+      <span
+        style={{
+          color: "#ffffff",
+          fontWeight: 900,
+          fontSize,
+          letterSpacing: "0.04em",
+          lineHeight: 1,
+          fontFamily: "Manrope, system-ui, -apple-system, sans-serif",
+          textShadow: "0 1px 2px rgba(0,0,0,0.3)",
+        }}
+      >
+        DBBL
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Official Standard Chartered Bank Logo (from scb.png)
+ * Preserves the green/blue SC trustmark + short bold 'SC' wordmark
+ */
+export function StandardCharteredLogo({ className = "", height = 30 }) {
+  const markH = Math.round(height * 0.94);
+  const fontSize = Math.round(height * 0.56);
+  return (
+    <div
+      className={`card-brand-cluster is-scb ${className}`}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: Math.max(6, Math.round(height * 0.2)),
+        height,
+      }}
+      aria-label="SC"
+    >
+      <img
+        src={scbImg}
+        alt="Standard Chartered"
+        style={{
+          height: markH,
+          width: "auto",
+          maxHeight: markH,
+          maxWidth: "none",
+          objectFit: "contain",
+          display: "block",
+          filter:
+            "drop-shadow(0 0 1px rgba(255,255,255,0.8)) drop-shadow(0 1.5px 3px rgba(0,0,0,0.3))",
+        }}
+      />
+      <span
+        style={{
+          color: "#ffffff",
+          fontWeight: 900,
+          fontSize,
+          letterSpacing: "0.04em",
+          lineHeight: 1,
+          fontFamily: "Manrope, system-ui, -apple-system, sans-serif",
+          textShadow: "0 1px 2px rgba(0,0,0,0.28)",
+        }}
+      >
+        SC
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Official Amazon Logo (Precision Vector Lockup, Immune to Global SVG Stroke Overrides)
+ */
+export function AmazonLogo({ className = "", height = 28 }) {
+  const width = Math.round(height * 3.15);
   return (
     <svg
       className={`card-logo-svg ${className}`}
       width={width}
       height={height}
-      viewBox="0 0 100 30"
+      style={{
+        width,
+        height,
+        display: "block",
+        fill: "none",
+        stroke: "none",
+        overflow: "visible",
+      }}
+      viewBox="0 0 104 33"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       aria-label="Amazon"
     >
       <text
-        x="2"
-        y="18"
+        x="3"
+        y="20"
         fill="#FFFFFF"
-        fontFamily="system-ui, -apple-system, sans-serif"
-        fontSize="18"
-        fontWeight="800"
-        letterSpacing="-0.03em"
+        stroke="none"
+        fontFamily="Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
+        fontSize="21.5"
+        fontWeight="850"
+        letterSpacing="-0.04em"
       >
         amazon
       </text>
       <path
-        d="M8 22C24 28 54 28 68 20"
+        d="M11 25.2C26.5 31.8 56.5 31.8 73.5 23.8"
         stroke="#FF9900"
-        strokeWidth="2.5"
+        strokeWidth="2.8"
         strokeLinecap="round"
+        fill="none"
       />
       <path
-        d="M64 18L70 20L66 24"
+        d="M68.5 21.6L75.2 23.3L71.2 28.5"
         stroke="#FF9900"
-        strokeWidth="2.5"
+        strokeWidth="2.6"
         strokeLinecap="round"
         strokeLinejoin="round"
+        fill="none"
       />
     </svg>
   );
 }
 
 /**
- * Official Citi Logo (Video Citi Card)
+ * Official Citi Logo (Precision Vector Lockup with Red Umbrella Arc)
  */
-export function CitiLogo({ className = "", height = 24 }) {
-  const width = Math.round(height * 2.2);
+export function CitiLogo({ className = "", height = 28 }) {
+  const width = Math.round(height * 2.1);
   return (
     <svg
       className={`card-logo-svg ${className}`}
       width={width}
       height={height}
-      viewBox="0 0 66 30"
+      style={{
+        width,
+        height,
+        display: "block",
+        fill: "none",
+        stroke: "none",
+        overflow: "visible",
+      }}
+      viewBox="0 0 64 31"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       aria-label="Citi"
     >
       <path
-        d="M19 12C28 4 44 4 53 12"
-        stroke="#ED1C24"
-        strokeWidth="3.2"
+        d="M21 10.8C28.8 3.2 43.2 3.2 51 10.8"
+        stroke="#FF2A32"
+        strokeWidth="3.5"
         strokeLinecap="round"
+        fill="none"
       />
       <text
         x="6"
-        y="25"
+        y="26.5"
         fill="#FFFFFF"
-        fontFamily="system-ui, -apple-system, sans-serif"
-        fontSize="22"
+        stroke="none"
+        fontFamily="Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
+        fontSize="24.5"
         fontWeight="850"
         letterSpacing="-0.03em"
       >
@@ -324,52 +670,107 @@ export function CitiLogo({ className = "", height = 24 }) {
 }
 
 /**
- * Official HDFC Bank Logo
+ * Official HDFC Logo (Authentic Bracketed Red/Blue Mark + Short Bold 'HDFC' Wordmark)
  */
-export function HdfcLogo({ className = "", height = 24 }) {
-  const width = Math.round(height * 3.8);
+export function HdfcLogo({ className = "", height = 28 }) {
+  const width = Math.round(height * 2.75);
   return (
     <svg
       className={`card-logo-svg ${className}`}
       width={width}
       height={height}
-      viewBox="0 0 114 30"
+      style={{
+        width,
+        height,
+        display: "block",
+        fill: "none",
+        stroke: "none",
+        overflow: "visible",
+      }}
+      viewBox="0 0 82 30"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      aria-label="HDFC Bank"
+      aria-label="HDFC"
     >
-      <g transform="translate(2, 4) scale(0.72)">
-        <rect x="0" y="0" width="30" height="30" rx="3" fill="#004C8F" />
-        <rect x="10" y="0" width="10" height="30" fill="#ED232A" />
-        <rect x="0" y="10" width="30" height="10" fill="#ED232A" />
-        <rect x="10" y="10" width="10" height="10" fill="#FFFFFF" />
+      <g transform="translate(2, 3)">
+        <rect
+          x="0"
+          y="0"
+          width="24"
+          height="24"
+          rx="3"
+          fill="#FFFFFF"
+          stroke="none"
+        />
+        <rect
+          x="1.5"
+          y="1.5"
+          width="21"
+          height="21"
+          rx="1.5"
+          fill="#ED232A"
+          stroke="none"
+        />
+        <rect
+          x="10.2"
+          y="1.5"
+          width="3.6"
+          height="21"
+          fill="#FFFFFF"
+          stroke="none"
+        />
+        <rect
+          x="1.5"
+          y="10.2"
+          width="21"
+          height="3.6"
+          fill="#FFFFFF"
+          stroke="none"
+        />
+        <rect
+          x="5.5"
+          y="5.5"
+          width="13"
+          height="13"
+          fill="#FFFFFF"
+          stroke="none"
+        />
+        <rect
+          x="7.8"
+          y="7.8"
+          width="8.4"
+          height="8.4"
+          fill="#004C8F"
+          stroke="none"
+        />
       </g>
       <text
-        x="30"
-        y="18"
+        x="32"
+        y="20.5"
         fill="#FFFFFF"
-        fontFamily="system-ui, -apple-system, sans-serif"
-        fontSize="11.5"
+        stroke="none"
+        fontFamily="Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
+        fontSize="16.5"
         fontWeight="900"
         letterSpacing="0.04em"
       >
-        HDFC BANK
+        HDFC
       </text>
     </svg>
   );
 }
 
 /**
- * Official Savings Vault Piggy Bank Logo (Matching images.png)
+ * Official Savings Vault Piggy Bank Logo
  */
-export function SavingsLogo({ className = "", height = 24 }) {
+export function SavingsLogo({ className = "", height = 26 }) {
   return (
     <div className={`card-vault-badge ${className}`}>
       <img
         src={savingsPiggySvg}
         alt="Savings Vault"
         className="card-vault-piggy-img"
-        style={{ height }}
+        style={{ height: Math.round(height * 0.88) }}
       />
       <span className="card-vault-badge-text">VAULT</span>
     </div>
@@ -383,7 +784,7 @@ export function SavingsLogo({ className = "", height = 24 }) {
  */
 export function VisaBadge({
   className = "",
-  height = 18,
+  height = 19,
   width,
   variant = "auto",
 }) {
@@ -408,9 +809,9 @@ export function VisaBadge({
 }
 
 /**
- * High-Res Official Mastercard Logo from payment-logos/mastercard.svg
+ * High-Res Official Mastercard Logo from tight-cropped payment-logos/mastercard.svg
  */
-export function MastercardBadge({ className = "", height = 24, width }) {
+export function MastercardBadge({ className = "", height = 26, width }) {
   return (
     <img
       src={mastercardSvg}
@@ -422,7 +823,7 @@ export function MastercardBadge({ className = "", height = 24, width }) {
         maxHeight: height,
         objectFit: "contain",
         display: "block",
-        filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.25))",
+        filter: "drop-shadow(0 1px 2.5px rgba(0,0,0,0.28))",
       }}
     />
   );
@@ -443,21 +844,29 @@ export function AmexBadge({ className = "", height = 20, width }) {
         maxHeight: height,
         objectFit: "contain",
         display: "block",
-        filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.25))",
+        filter:
+          "brightness(0) invert(1) drop-shadow(0 1px 2px rgba(0,0,0,0.28))",
       }}
     />
   );
 }
 
 /**
- * Realistic Gold EMV Smart Chip
+ * Realistic Metallic Gold EMV Smart Chip (Immune to Global SVG Overrides)
  */
-export function EmvChip({ className = "", size = 30 }) {
+export function EmvChip({ className = "", size = 38 }) {
+  const h = Math.round(size * 0.75);
   return (
     <svg
       className={`card-emv-chip ${className}`}
       width={size}
-      height={Math.round(size * 0.74)}
+      height={h}
+      style={{
+        width: size,
+        height: h,
+        display: "block",
+        flexShrink: 0,
+      }}
       viewBox="0 0 52 40"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
@@ -468,15 +877,15 @@ export function EmvChip({ className = "", size = 30 }) {
         y="1"
         width="50"
         height="38"
-        rx="7"
+        rx="7.5"
         fill="url(#emv-gold-grad)"
         stroke="#8C651A"
         strokeWidth="1.2"
       />
       <path
-        d="M1 14H18M1 26H18M34 14H51M34 26H51M26 1V14M26 26V39"
+        d="M1 14H18M1 26H18M34 14H51M34 26H51M26 1V12M26 28V39"
         stroke="#7A5612"
-        strokeWidth="1.2"
+        strokeWidth="1.25"
         strokeLinecap="round"
       />
       <rect
@@ -484,10 +893,10 @@ export function EmvChip({ className = "", size = 30 }) {
         y="12"
         width="16"
         height="16"
-        rx="3"
+        rx="3.5"
         fill="url(#emv-center-grad)"
         stroke="#7A5612"
-        strokeWidth="1"
+        strokeWidth="1.1"
       />
       <defs>
         <linearGradient
@@ -498,10 +907,10 @@ export function EmvChip({ className = "", size = 30 }) {
           y2="40"
           gradientUnits="userSpaceOnUse"
         >
-          <stop stopColor="#F9E29D" />
-          <stop offset="0.3" stopColor="#E4BA62" />
+          <stop stopColor="#FFF0B8" />
+          <stop offset="0.32" stopColor="#EAC46E" />
           <stop offset="0.7" stopColor="#D5A23C" />
-          <stop offset="1" stopColor="#B38025" />
+          <stop offset="1" stopColor="#AF7B20" />
         </linearGradient>
         <linearGradient
           id="emv-center-grad"
@@ -511,8 +920,8 @@ export function EmvChip({ className = "", size = 30 }) {
           y2="28"
           gradientUnits="userSpaceOnUse"
         >
-          <stop stopColor="#FFECA8" />
-          <stop offset="1" stopColor="#C99432" />
+          <stop stopColor="#FFF3C4" />
+          <stop offset="1" stopColor="#CA9533" />
         </linearGradient>
       </defs>
     </svg>
@@ -520,11 +929,11 @@ export function EmvChip({ className = "", size = 30 }) {
 }
 
 /**
- * Official Real Contactless Payment Waves Indicator (from contactless.png)
+ * Official Contactless Payment Waves Indicator (from contactless.png)
  */
 export function ContactlessWaves({
   className = "",
-  size = 18,
+  size = 19,
   height,
   width,
   style = {},
@@ -542,7 +951,7 @@ export function ContactlessWaves({
         objectFit: "contain",
         display: "block",
         filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.3))",
-        opacity: 0.9,
+        opacity: 0.92,
         ...style,
       }}
     />
@@ -554,7 +963,7 @@ export { CARD_PROVIDERS, getProviderMeta };
 
 export function renderProviderLogo(
   providerId,
-  { height = 24, className = "" } = {},
+  { height = 30, className = "" } = {},
 ) {
   switch (providerId) {
     case "amazon":
@@ -573,27 +982,43 @@ export function renderProviderLogo(
     case "gold_mc":
       return (
         <span
-          className={`card-generic-logo ${className}`}
+          className={`card-generic-logo is-gold ${className}`}
           style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 5,
+            padding: "4px 10px",
+            borderRadius: 999,
+            background: "rgba(253, 230, 138, 0.18)",
+            border: "1px solid rgba(253, 230, 138, 0.42)",
             color: "#FDE68A",
-            fontWeight: 900,
+            fontWeight: 850,
             letterSpacing: "0.08em",
-            fontSize: 13,
+            fontSize: 11.5,
+            lineHeight: 1,
           }}
         >
-          GOLD
+          ★ GOLD
         </span>
       );
     case "virtual_mc":
     case "virtual_visa":
       return (
         <span
-          className={`card-generic-logo ${className}`}
+          className={`card-generic-logo is-virtual ${className}`}
           style={{
-            color: "rgba(255,255,255,0.9)",
-            fontWeight: 900,
-            letterSpacing: "0.1em",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 5,
+            padding: "4px 10px",
+            borderRadius: 999,
+            background: "rgba(255, 255, 255, 0.16)",
+            border: "1px solid rgba(255, 255, 255, 0.28)",
+            color: "#ffffff",
+            fontWeight: 850,
+            letterSpacing: "0.08em",
             fontSize: 11,
+            lineHeight: 1,
           }}
         >
           VIRTUAL
@@ -618,14 +1043,26 @@ export function renderProviderLogo(
     case "savings":
       return <SavingsLogo height={height} className={className} />;
     case "amex":
-      return <AmexBadge height={height} className={className} />;
+      return <AmexBadge height={Math.round(height * 0.72)} className={className} />;
     default:
       return (
         <span
           className={`card-generic-logo ${className}`}
-          style={{ color: "#ffffff", fontWeight: 800 }}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            padding: "4px 10px",
+            borderRadius: 999,
+            background: "rgba(255, 255, 255, 0.16)",
+            border: "1px solid rgba(255, 255, 255, 0.26)",
+            color: "#ffffff",
+            fontWeight: 850,
+            fontSize: 11,
+            letterSpacing: "0.08em",
+            lineHeight: 1,
+          }}
         >
-          BANK
+          CARD
         </span>
       );
   }
@@ -635,7 +1072,7 @@ export function renderProviderLogo(
  * Senior Native App Dev Grade Mini Card Preview (56px × 35px)
  * Designed with authentic physical credit card ratio (1.586:1), hairline metallic border,
  * specular gloss sheen, micro EMV chip / contactless indicator, SF Mono masked digits,
- * and vector network emblems (Mastercard dual interlocking circles, Visa italic wordmark, etc.)
+ * and iconic institution emblems that remain crisp at thumbnail scale.
  */
 export function MiniCardPreview({ provider, card, className = "" }) {
   const isCash = card?.id === "cash" || card?.type === "cash";
@@ -692,36 +1129,66 @@ export function MiniCardPreview({ provider, card, className = "" }) {
                 src={bkashSvg}
                 alt="bKash"
                 style={{
-                  height: 10,
+                  height: 12,
                   width: "auto",
-                  filter: "brightness(0) invert(1)",
+                  filter: "drop-shadow(0 0 0.8px rgba(255,255,255,0.9))",
                 }}
               />
             )}
             {brandKey === "nagad" && (
-              <img
-                src={nagadImg}
-                alt="Nagad"
-                style={{ height: 10, width: "auto" }}
-              />
+              <div
+                style={{
+                  width: 12,
+                  height: 12,
+                  overflow: "hidden",
+                  flexShrink: 0,
+                }}
+              >
+                <img
+                  src={nagadImg}
+                  alt="Nagad"
+                  style={{
+                    height: 12,
+                    width: 34,
+                    maxWidth: "none",
+                    filter: "drop-shadow(0 0 0.8px rgba(255,255,255,0.85))",
+                  }}
+                />
+              </div>
             )}
             {brandKey === "rocket" && (
               <img
                 src={rocketImg}
                 alt="Rocket"
                 style={{
-                  height: 10,
+                  height: 11,
                   width: "auto",
                   filter: "brightness(0) invert(1)",
                 }}
               />
             )}
             {brandKey === "upay" && (
-              <img
-                src={upayImg}
-                alt="Upay"
-                style={{ height: 10, width: "auto" }}
-              />
+              <div
+                style={{
+                  width: 11,
+                  height: 11,
+                  overflow: "hidden",
+                  flexShrink: 0,
+                }}
+              >
+                <img
+                  src={upayImg}
+                  alt="Upay"
+                  style={{
+                    width: 18,
+                    height: 18,
+                    maxWidth: "none",
+                    marginLeft: -3.5,
+                    marginTop: -1,
+                    filter: "drop-shadow(0 0 0.8px rgba(255,255,255,0.9))",
+                  }}
+                />
+              </div>
             )}
             {!["bkash", "nagad", "rocket", "upay"].includes(brandKey) && (
               <ContactlessWaves size={8} className="mini-card-contactless" />
@@ -732,15 +1199,16 @@ export function MiniCardPreview({ provider, card, className = "" }) {
             <img
               src={savingsPiggySvg}
               alt="Savings"
-              style={{ height: 11, width: "auto" }}
+              style={{ height: 12, width: "auto" }}
             />
           </div>
         ) : (
           <div className="mini-card-chip-waves">
             <svg
               className="mini-card-emv"
-              width="10"
-              height="7.5"
+              width="11"
+              height="8"
+              style={{ width: 11, height: 8, stroke: "none" }}
               viewBox="0 0 20 15"
               fill="none"
             >
@@ -778,22 +1246,81 @@ export function MiniCardPreview({ provider, card, className = "" }) {
           <div className="mini-card-brand-mark">
             {(brandKey === "citi" ||
               brandKey === "citi_mc" ||
-              brandKey === "citi_credit") && <CitiLogo height={8.5} />}
-            {brandKey === "amazon" && <AmazonLogo height={8} />}
+              brandKey === "citi_credit") && <CitiLogo height={9.5} />}
+            {brandKey === "amazon" && <AmazonLogo height={8.5} />}
             {(brandKey === "hdfc" ||
               brandKey === "hdfc_visa" ||
-              brandKey === "hdfc_credit") && <HdfcLogo height={7} />}
+              brandKey === "hdfc_credit") && (
+              <svg
+                width="10"
+                height="10"
+                style={{ width: 10, height: 10, stroke: "none" }}
+                viewBox="0 0 24 24"
+                fill="none"
+              >
+                <rect width="24" height="24" rx="3" fill="#FFFFFF" />
+                <rect x="2" y="2" width="20" height="20" fill="#ED232A" />
+                <rect x="10" y="2" width="4" height="20" fill="#FFFFFF" />
+                <rect x="2" y="10" width="20" height="4" fill="#FFFFFF" />
+                <rect x="7" y="7" width="10" height="10" fill="#004C8F" />
+              </svg>
+            )}
             {(brandKey === "sc" || brandKey === "sc_visa") && (
               <img
                 src={scbImg}
                 alt=""
-                style={{ height: 9, width: "auto", objectFit: "contain" }}
+                style={{ height: 11, width: "auto", objectFit: "contain" }}
               />
             )}
-            {brandKey === "brac" && <BracBankLogo height={7.5} />}
-            {brandKey === "city" && <CityBankLogo height={8} />}
-            {brandKey === "ebl" && <EblLogo height={8} />}
-            {brandKey === "dbbl" && <DbblLogo height={8} />}
+            {brandKey === "brac" && (
+              <div
+                style={{
+                  width: 10,
+                  height: 10,
+                  overflow: "hidden",
+                  borderRadius: 2,
+                }}
+              >
+                <img
+                  src={bracBankSvg}
+                  alt=""
+                  style={{ height: 10, width: 92, maxWidth: "none" }}
+                />
+              </div>
+            )}
+            {brandKey === "city" && (
+              <div style={{ width: 11, height: 11, overflow: "hidden" }}>
+                <img
+                  src={cityBankImg}
+                  alt=""
+                  style={{
+                    height: 12,
+                    width: 18,
+                    maxWidth: "none",
+                    clipPath:
+                      "polygon(0 0, 100% 0, 100% 63.5%, 18.2% 63.5%, 18.2% 100%, 0 100%)",
+                  }}
+                />
+              </div>
+            )}
+            {brandKey === "ebl" && (
+              <div style={{ width: 14, height: 10, overflow: "hidden" }}>
+                <img
+                  src={eblSvg}
+                  alt=""
+                  style={{ height: 10, width: 62, maxWidth: "none" }}
+                />
+              </div>
+            )}
+            {brandKey === "dbbl" && (
+              <div style={{ width: 15, height: 10, overflow: "hidden" }}>
+                <img
+                  src={dbblImg}
+                  alt=""
+                  style={{ height: 10, width: 52, maxWidth: "none" }}
+                />
+              </div>
+            )}
             {brandKey === "gold_mc" && (
               <span className="mini-card-tier-tag is-gold">GOLD</span>
             )}
@@ -818,7 +1345,13 @@ export function MiniCardPreview({ provider, card, className = "" }) {
 
         <div className="mini-card-network-emblem">
           {!isCash && !isMfs && !isSavings && network === "mastercard" && (
-            <svg width="14" height="9" viewBox="0 0 30 20" fill="none">
+            <svg
+              width="14"
+              height="9"
+              style={{ width: 14, height: 9, stroke: "none" }}
+              viewBox="0 0 30 20"
+              fill="none"
+            >
               <circle cx="10" cy="10" r="9.5" fill="#EB001B" />
               <circle
                 cx="20"

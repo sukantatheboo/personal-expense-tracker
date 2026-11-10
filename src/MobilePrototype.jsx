@@ -254,7 +254,6 @@ const TABS = [
 const SHEET_EXIT_MS = 280;
 const SHEET_REDUCED_EXIT_MS = 160;
 
-
 /* ───────────── icons ───────────── */
 const DOCK_ICONS = {
   home: {
@@ -800,7 +799,11 @@ function HeroAmountField({
   const charLen = Math.max(displayStr.length, 1);
   const inputWidthCh = Math.min(11.5, Math.max(1.12, charLen * 0.88 + 0.22));
   const scaleClass =
-    displayStr.length >= 9 ? "is-compact" : displayStr.length >= 6 ? "is-medium" : "";
+    displayStr.length >= 9
+      ? "is-compact"
+      : displayStr.length >= 6
+        ? "is-medium"
+        : "";
 
   return (
     <div
@@ -824,7 +827,9 @@ function HeroAmountField({
           value={raw}
           style={{ width: `${inputWidthCh}ch` }}
           onChange={(e) => {
-            let next = e.target.value.replace(/,/g, ".").replace(/[^0-9.]/g, "");
+            let next = e.target.value
+              .replace(/,/g, ".")
+              .replace(/[^0-9.]/g, "");
             const firstDot = next.indexOf(".");
             if (firstDot !== -1) {
               next =
@@ -951,7 +956,16 @@ function ExpenseRow({
       if (isTx && onOpenTransaction) onOpenTransaction(e.id);
       else onOpen?.(e.id);
     }
-  }, [canDuplicate, canQuickEdit, e, isTx, onDuplicate, onOpen, onOpenTransaction, springRowClosed]);
+  }, [
+    canDuplicate,
+    canQuickEdit,
+    e,
+    isTx,
+    onDuplicate,
+    onOpen,
+    onOpenTransaction,
+    springRowClosed,
+  ]);
 
   // Senior Native Dev Swipe-to-Delete Pipeline
   const executeDeleteAnimation = useCallback(
@@ -1269,9 +1283,7 @@ function ExpenseRow({
 
   const isSavings = !hasExplicitSign && !isTx && e?.cat === "Savings";
 
-  const isNeutral = hasExplicitSign
-    ? e.signedDirection === "neutral"
-    : false;
+  const isNeutral = hasExplicitSign ? e.signedDirection === "neutral" : false;
   const amountClass = isPositive
     ? "am is-positive"
     : isSavings
@@ -1448,7 +1460,9 @@ function ExpenseRow({
           className={`expense-swipe-delete is-left ${canDuplicate ? "is-duplicate" : "is-edit"}`}
           type="button"
           tabIndex={swipe.phase === "revealed" && swipe.offset > 0 ? 0 : -1}
-          inert={!(swipe.phase === "revealed" && swipe.offset > 0) ? true : undefined}
+          inert={
+            !(swipe.phase === "revealed" && swipe.offset > 0) ? true : undefined
+          }
           aria-label={canDuplicate ? `Duplicate ${title}` : `Edit ${title}`}
           onClick={(event) => {
             event.stopPropagation();
@@ -1476,7 +1490,9 @@ function ExpenseRow({
           className={`expense-swipe-delete is-right${e.rec ? " is-skip" : ""}`}
           type="button"
           tabIndex={swipe.phase === "revealed" && swipe.offset < 0 ? 0 : -1}
-          inert={!(swipe.phase === "revealed" && swipe.offset < 0) ? true : undefined}
+          inert={
+            !(swipe.phase === "revealed" && swipe.offset < 0) ? true : undefined
+          }
           aria-label={
             e.rec ? `Skip ${title} for this occurrence` : `Delete ${title}`
           }
@@ -1594,7 +1610,9 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
         sheetNode.querySelectorAll(
           'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
         ),
-      ).filter((node) => !node.closest('[aria-hidden="true"], [inert], [hidden]'));
+      ).filter(
+        (node) => !node.closest('[aria-hidden="true"], [inert], [hidden]'),
+      );
       if (!focusable.length) {
         event.preventDefault();
         sheetNode.focus({ preventScroll: true });
@@ -1670,7 +1688,8 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
 
       let offset = clientY - drag.startY;
       if (offset < 0) {
-        offset = detentRef.current === "expanded" ? offset * 0.16 : offset * 0.35;
+        offset =
+          detentRef.current === "expanded" ? offset * 0.16 : offset * 0.35;
       }
       drag.currentOffset = offset;
       pendingDyRef.current = offset;
@@ -1719,7 +1738,10 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
     const sheetHeight = drag.sheetHeight;
 
     // Upward pull snaps to 92% expanded detent
-    if (detentRef.current === "default" && (distance <= -28 || velocity < -0.35)) {
+    if (
+      detentRef.current === "default" &&
+      (distance <= -28 || velocity < -0.35)
+    ) {
       triggerHaptic("selection");
       updateDetent("expanded");
       setRootDragProgress(0);
@@ -2417,7 +2439,11 @@ function Home({
               const el = document.elementFromPoint(e.clientX, e.clientY);
               const seg = el?.closest?.("[data-stack-cat]");
               const cat = seg?.getAttribute("data-stack-cat") || "";
-              stackScrubRef.current = { active: true, lastCat: cat, moved: false };
+              stackScrubRef.current = {
+                active: true,
+                lastCat: cat,
+                moved: false,
+              };
             }}
             onPointerMove={(e) => {
               if (!stackScrubRef.current.active) return;
@@ -2485,7 +2511,10 @@ function Home({
         <h2>Recent</h2>
         <button onClick={() => onTab("activity")}>See all</button>
       </div>
-      <div className="card expense-day-card" style={{ margin: 0, padding: "3px 14px" }}>
+      <div
+        className="card expense-day-card"
+        style={{ margin: 0, padding: "3px 14px" }}
+      >
         {list.length ? (
           list
             .slice(0, 5)
@@ -3714,10 +3743,14 @@ function Accounts({
                   onOpenTransaction={onOpenTransaction}
                   onDelete={onDeleteExpense}
                   onDeleteTransaction={onDeleteTransaction}
-                  onDuplicate={event.sourceType === "expense" ? () => {
-                    const orig = S.exp.find((x) => x.id === event.id);
-                    return orig ? onDuplicateExpense?.(orig) : false;
-                  } : undefined}
+                  onDuplicate={
+                    event.sourceType === "expense"
+                      ? () => {
+                          const orig = S.exp.find((x) => x.id === event.id);
+                          return orig ? onDuplicateExpense?.(orig) : false;
+                        }
+                      : undefined
+                  }
                   isNew={
                     highlightedExpenseId === event.id ||
                     highlightedTransactionId === event.id
@@ -3818,7 +3851,11 @@ function Plans({
     return [...(S.rec || [])]
       .map((r, index) => ({ r, index, createdTime: parseTime(r?.createdAt) }))
       .sort((a, bItem) => {
-        if (a.createdTime > 0 && bItem.createdTime > 0 && a.createdTime !== bItem.createdTime) {
+        if (
+          a.createdTime > 0 &&
+          bItem.createdTime > 0 &&
+          a.createdTime !== bItem.createdTime
+        ) {
           return bItem.createdTime - a.createdTime;
         }
         if (a.createdTime > 0 && bItem.createdTime === 0) return -1;
@@ -4023,7 +4060,9 @@ function Plans({
                       <b>{fD(scrubDay.date)}</b> · {M(scrubDay.amt)}
                     </span>
                   ) : (
-                    <span className="budget-scrub-hint">Drag across bars to inspect</span>
+                    <span className="budget-scrub-hint">
+                      Drag across bars to inspect
+                    </span>
                   )}
                 </div>
                 <div
@@ -4063,7 +4102,13 @@ function Plans({
                   }}
                 >
                   {dailySeries.sums.map((item, idx) => {
-                    const hPct = item.amt > 0 ? Math.max(16, Math.round((item.amt / dailySeries.maxAmt) * 100)) : 8;
+                    const hPct =
+                      item.amt > 0
+                        ? Math.max(
+                            16,
+                            Math.round((item.amt / dailySeries.maxAmt) * 100),
+                          )
+                        : 8;
                     const isSelected = scrubDay?.day === item.day;
                     return (
                       <div
@@ -4072,7 +4117,9 @@ function Plans({
                         className={`budget-scrub-bar-wrap${isSelected ? " is-active" : ""}${item.amt > 0 ? " has-spend" : ""}`}
                         onClick={() => {
                           triggerHaptic("selection");
-                          setScrubDay((curr) => (curr?.day === item.day ? null : item));
+                          setScrubDay((curr) =>
+                            curr?.day === item.day ? null : item,
+                          );
                         }}
                       >
                         <span
@@ -4137,9 +4184,7 @@ function Plans({
           className="ic"
           style={{
             "--c":
-              getCategoryColor(r.cat, r.desc) ||
-              CAT[r.cat]?.[1] ||
-              "#64748b",
+              getCategoryColor(r.cat, r.desc) || CAT[r.cat]?.[1] || "#64748b",
           }}
         >
           <CategorySymbol category={r.cat} description={r.desc} />
@@ -4197,7 +4242,10 @@ function Plans({
                   : "None"}
               </span>
             </div>
-            <div className="card recurring-section-card" style={{ padding: "6px 14px", margin: 0 }}>
+            <div
+              className="card recurring-section-card"
+              style={{ padding: "6px 14px", margin: 0 }}
+            >
               {billsAndOthersRec.length ? (
                 billsAndOthersRec.map(renderRecurringRow)
               ) : (
@@ -4217,7 +4265,10 @@ function Plans({
                   : "None"}
               </span>
             </div>
-            <div className="card recurring-section-card" style={{ padding: "6px 14px", margin: 0 }}>
+            <div
+              className="card recurring-section-card"
+              style={{ padding: "6px 14px", margin: 0 }}
+            >
               {savingsRec.length ? (
                 savingsRec.map(renderRecurringRow)
               ) : (
@@ -5840,7 +5891,11 @@ function SettingsSheet({
                   >
                     <circle cx="12" cy="12" r="9" />
                     <path d="M12 3v18" />
-                    <path d="M12 7a5 5 0 0 1 0 10" fill="currentColor" stroke="none" />
+                    <path
+                      d="M12 7a5 5 0 0 1 0 10"
+                      fill="currentColor"
+                      stroke="none"
+                    />
                   </svg>
                   <span>Auto</span>
                 </button>
@@ -5976,9 +6031,7 @@ function SettingsSheet({
                     : "Set PIN passcode & biometrics"}
                 </small>
               </span>
-              <span
-                className={`mfs-row-badge${pinActive ? " is-active" : ""}`}
-              >
+              <span className={`mfs-row-badge${pinActive ? " is-active" : ""}`}>
                 {pinActive ? "Active" : "Off"}
               </span>
               <span className="settings-chevron" aria-hidden="true">
@@ -6786,7 +6839,8 @@ function ResetPinModal({ isOpen, onConfirm, onCancel }) {
           Reset App PIN?
         </h3>
         <p className="reset-pin-modal-message">
-          This will remove your passcode and clear local data. Synced cloud data remains safe.
+          This will remove your passcode and clear local data. Synced cloud data
+          remains safe.
         </p>
 
         <div className="reset-pin-modal-actions">
@@ -7148,7 +7202,11 @@ function CardOptionsSheet({
                 type="button"
                 className={`card-options-bar-btn ${copied ? "is-copied" : ""}`}
                 onClick={handleCopyNumber}
-                aria-label={copied ? "Copied card number" : "Copy card number to clipboard"}
+                aria-label={
+                  copied
+                    ? "Copied card number"
+                    : "Copy card number to clipboard"
+                }
               >
                 {copied ? (
                   <svg
@@ -8237,7 +8295,11 @@ function AppSettingsPage({
             </button>
           )}
         </div>
-        <p className="settings-note mfs-card-footnote" role="status" aria-live="polite">
+        <p
+          className="settings-note mfs-card-footnote"
+          role="status"
+          aria-live="polite"
+        >
           {notificationStatus ||
             (pushBackendConfigured && !profile?.connected
               ? "Sign in to enable background reminders."
@@ -8256,7 +8318,10 @@ function AppSettingsPage({
               onBackupDownload?.();
             }}
           >
-            <i className="ic is-minimal mfs-row-icon" style={{ "--c": "#5b73d9" }}>
+            <i
+              className="ic is-minimal mfs-row-icon"
+              style={{ "--c": "#5b73d9" }}
+            >
               <Icon n="backup" />
             </i>
             <span className="nm">
@@ -8276,7 +8341,10 @@ function AppSettingsPage({
               onEncryptedBackupDownload?.();
             }}
           >
-            <i className="ic is-minimal mfs-row-icon" style={{ "--c": "#10b981" }}>
+            <i
+              className="ic is-minimal mfs-row-icon"
+              style={{ "--c": "#10b981" }}
+            >
               <svg
                 viewBox="0 0 24 24"
                 width="17"
@@ -8309,7 +8377,10 @@ function AppSettingsPage({
               onExpensesCsv?.();
             }}
           >
-            <i className="ic is-minimal mfs-row-icon" style={{ "--c": "#2f9a6b" }}>
+            <i
+              className="ic is-minimal mfs-row-icon"
+              style={{ "--c": "#2f9a6b" }}
+            >
               <Icon n="csv" />
             </i>
             <span className="nm">
@@ -8329,7 +8400,10 @@ function AppSettingsPage({
               onBackupRestore?.();
             }}
           >
-            <i className="ic is-minimal mfs-row-icon" style={{ "--c": "#8a6fd1" }}>
+            <i
+              className="ic is-minimal mfs-row-icon"
+              style={{ "--c": "#8a6fd1" }}
+            >
               <Icon n="restore" />
             </i>
             <span className="nm">
@@ -8342,7 +8416,11 @@ function AppSettingsPage({
           </button>
         </div>
         {backupStatus && (
-          <p className="settings-status mfs-card-footnote" role="status" aria-live="polite">
+          <p
+            className="settings-status mfs-card-footnote"
+            role="status"
+            aria-live="polite"
+          >
             {backupStatus}
           </p>
         )}
@@ -8440,7 +8518,7 @@ function SecuritySheet({ onClose, onBack, onLockNow }) {
   useLayoutEffect(() => {
     if (step === "setup_pin" || step === "confirm_pin") {
       const pinEl = document.querySelector(
-        '.sec-pin-hidden-input, [data-sheet-autofocus]',
+        ".sec-pin-hidden-input, [data-sheet-autofocus]",
       );
       pinEl?.focus({ preventScroll: true });
     }
@@ -8590,7 +8668,14 @@ function SecuritySheet({ onClose, onBack, onLockNow }) {
                         strokeLinejoin="round"
                         aria-hidden="true"
                       >
-                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                        <rect
+                          x="3"
+                          y="11"
+                          width="18"
+                          height="11"
+                          rx="2"
+                          ry="2"
+                        />
                         <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                       </svg>
                     </i>
@@ -8880,9 +8965,7 @@ function SecuritySheet({ onClose, onBack, onLockNow }) {
             </svg>
           </div>
           <h4 className="security-flow-title">Confirm your passcode</h4>
-          <p className="security-flow-sub">
-            Re-enter the 4 digits to verify
-          </p>
+          <p className="security-flow-sub">Re-enter the 4 digits to verify</p>
 
           <PasscodeInputField
             value={pinConfirm}
@@ -9052,7 +9135,12 @@ export default function MobilePrototype({
   const [resetPinConfirmOpen, setResetPinConfirmOpen] = useState(false);
   const [isPrivacyShielded, setIsPrivacyShielded] = useState(false);
   const [ptrState, setPtrState] = useState({ pullY: 0, phase: "idle" });
-  const ptrGestureRef = useRef({ active: false, startY: 0, startX: 0, passedThreshold: false });
+  const ptrGestureRef = useRef({
+    active: false,
+    startY: 0,
+    startX: 0,
+    passedThreshold: false,
+  });
 
   const handleToggleHaptics = useCallback(() => {
     setHapticsState((current) => {
@@ -10039,10 +10127,20 @@ export default function MobilePrototype({
         className={`prototype-screen-scroll${tab === "activity" ? " is-activity" : ""}${tab === "accounts" ? " is-accounts" : ""}`}
         onScroll={onScreenScroll}
         onTouchStart={(e) => {
-          if (sheet || ptrState.phase === "refreshing" || e.touches.length !== 1) return;
+          if (
+            sheet ||
+            ptrState.phase === "refreshing" ||
+            e.touches.length !== 1
+          )
+            return;
           const scroller = screenScrollRef.current;
           if (!scroller || scroller.scrollTop > 2) return;
-          if (e.target.closest?.(".cards-deck-stage, .stack, .chips, .account-picker-container")) return;
+          if (
+            e.target.closest?.(
+              ".cards-deck-stage, .stack, .chips, .account-picker-container",
+            )
+          )
+            return;
           ptrGestureRef.current = {
             active: true,
             pulling: false,
@@ -10072,7 +10170,10 @@ export default function MobilePrototype({
               return;
             }
           }
-          const damped = Math.min(96, Math.round(Math.pow(Math.max(0, dy - 10), 0.78) * 2.1));
+          const damped = Math.min(
+            96,
+            Math.round(Math.pow(Math.max(0, dy - 10), 0.78) * 2.1),
+          );
           const ready = damped >= 56;
           if (ready && !g.passedThreshold) {
             g.passedThreshold = true;
@@ -10125,7 +10226,9 @@ export default function MobilePrototype({
                 viewBox="0 0 24 24"
                 style={
                   ptrState.phase !== "refreshing"
-                    ? { transform: `rotate(${Math.round(ptrState.pullY * 3.8)}deg)` }
+                    ? {
+                        transform: `rotate(${Math.round(ptrState.pullY * 3.8)}deg)`,
+                      }
                     : undefined
                 }
                 aria-hidden="true"

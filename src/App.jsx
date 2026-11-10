@@ -1052,12 +1052,20 @@ export default function App() {
   const [theme, setTheme] = useState(loadTheme);
   const [systemDark, setSystemDark] = useState(getSystemDarkPreference);
   const resolvedTheme =
-    theme === "auto" ? (systemDark ? "dark" : "light") : theme === "dark" ? "dark" : "light";
+    theme === "auto"
+      ? systemDark
+        ? "dark"
+        : "light"
+      : theme === "dark"
+        ? "dark"
+        : "light";
   const [targetCurrency, setTargetCurrency] = useState(loadCurrency);
   const [reminderTime, setReminderTime] = useState(loadReminderTime);
-  const [localProfileName, setLocalProfileName] = useState(loadLocalProfileName);
+  const [localProfileName, setLocalProfileName] =
+    useState(loadLocalProfileName);
   const [profileAvatar, setProfileAvatar] = useState(loadProfileAvatar);
-  const [profileUpdatedAt, setProfileUpdatedAt] = useState(loadProfileUpdatedAt);
+  const [profileUpdatedAt, setProfileUpdatedAt] =
+    useState(loadProfileUpdatedAt);
   const {
     isOpen: profileEditorOpen,
     isClosing: profileEditorClosing,
@@ -1742,7 +1750,11 @@ export default function App() {
       timerId = window.setTimeout(startAuth, 350);
     }
     return () => {
-      if (idleId && typeof window !== "undefined" && "cancelIdleCallback" in window) {
+      if (
+        idleId &&
+        typeof window !== "undefined" &&
+        "cancelIdleCallback" in window
+      ) {
         window.cancelIdleCallback(idleId);
       }
       if (timerId) window.clearTimeout(timerId);
@@ -3677,7 +3689,8 @@ export default function App() {
       localStorage.setItem(STORAGE_KEYS.profileUpdatedAt, String(now));
     } catch {}
 
-    const client = supabase || (supabaseConfigured ? await getSupabase() : null);
+    const client =
+      supabase || (supabaseConfigured ? await getSupabase() : null);
     if (!pushUser || !client) {
       setProfileStatus("Display name saved.");
       return true;
@@ -3720,10 +3733,13 @@ export default function App() {
       }
     } catch {}
 
-    const client = supabase || (supabaseConfigured ? await getSupabase() : null);
+    const client =
+      supabase || (supabaseConfigured ? await getSupabase() : null);
     if (!pushUser || !client) {
       setProfileStatus(
-        nextAvatar ? "Profile photo saved on this device." : "Profile photo removed.",
+        nextAvatar
+          ? "Profile photo saved on this device."
+          : "Profile photo removed.",
       );
       return true;
     }
@@ -4183,10 +4199,7 @@ export default function App() {
 
               {supabaseConfigured ? (
                 <>
-                  <form
-                    className="auth-modal-form"
-                    onSubmit={handleAuthSubmit}
-                  >
+                  <form className="auth-modal-form" onSubmit={handleAuthSubmit}>
                     <div className="auth-modal-fields">
                       <div className="auth-input-group">
                         <label htmlFor="push-email">Email</label>
