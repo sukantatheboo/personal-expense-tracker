@@ -684,6 +684,9 @@ a:active,
   --h2: #1f2937;
   --hero-border: transparent;
   --bad: #c0483a;
+  --amt-neg: #c0483a;
+  --amt-pos: #059669;
+  --amt-savings: #be185d;
   --over: #f0a067;
   --on: #ffffff;
   --shadow: 0 8px 24px rgb(0 0 0 / 6%);
@@ -711,6 +714,9 @@ a:active,
     --h2: #1f2937;
     --hero-border: rgba(255, 255, 255, 0.08);
     --bad: #ee8b7d;
+    --amt-neg: #ee8b7d;
+    --amt-pos: #34d399;
+    --amt-savings: #f472b6;
     --on: #0f172a;
     --shadow: 0 8px 24px rgb(0 0 0 / 22%);
     --dock-surface: #1a1e21;
@@ -735,6 +741,9 @@ a:active,
   --h2: #1f2937;
   --hero-border: rgba(255, 255, 255, 0.08);
   --bad: #ee8b7d;
+  --amt-neg: #ee8b7d;
+  --amt-pos: #34d399;
+  --amt-savings: #f472b6;
   --over: #f2a16f;
   --on: #0f172a;
   --shadow: 0 8px 24px rgb(0 0 0 / 22%);
@@ -1885,7 +1894,8 @@ a:active,
   font-weight: 600;
   line-height: 1.3;
 }
-.mobile-prototype .expense-day-card .expense-row .am {
+.mobile-prototype .expense-day-card .expense-row .am,
+.mobile-prototype .accounts-transactions-card .expense-row .am {
   flex: 0 0 auto;
   margin-left: auto;
   align-self: center;
@@ -1893,8 +1903,10 @@ a:active,
   font-weight: 800;
   letter-spacing: -0.02em;
   white-space: nowrap;
+  color: var(--amt-neg, var(--bad));
 }
-.mobile-prototype .expense-day-card .expense-row .na {
+.mobile-prototype .expense-day-card .expense-row .na,
+.mobile-prototype .accounts-transactions-card .expense-row .na {
   flex: 0 0 auto;
   margin-left: auto;
   align-self: center;
@@ -1912,10 +1924,16 @@ a:active,
   border: 1px solid color-mix(in srgb, var(--bad) 22%, transparent);
   color: var(--bad);
 }
-.mobile-prototype .expense-day-card .expense-row .am.is-positive {
-  color: var(--g);
+.mobile-prototype .expense-day-card .expense-row .am.is-positive,
+.mobile-prototype .accounts-transactions-card .expense-row .am.is-positive {
+  color: var(--amt-pos, #059669);
 }
-.mobile-prototype .expense-day-card .expense-row .am.is-neutral {
+.mobile-prototype .expense-day-card .expense-row .am.is-savings,
+.mobile-prototype .accounts-transactions-card .expense-row .am.is-savings {
+  color: var(--amt-savings, #be185d);
+}
+.mobile-prototype .expense-day-card .expense-row .am.is-neutral,
+.mobile-prototype .accounts-transactions-card .expense-row .am.is-neutral {
   color: var(--mut);
 }
 .mobile-prototype .category-suggestion-inline {
@@ -2279,7 +2297,10 @@ a:active,
 }
 .mobile-prototype .activity-filter-summary strong.is-positive,
 .mobile-prototype .day .is-positive {
-  color: var(--g, #10b981);
+  color: var(--amt-pos, #059669);
+}
+.mobile-prototype .day .is-negative {
+  color: var(--amt-neg, var(--bad));
 }
 .mobile-prototype .activity-filter-clear-link {
   margin-left: auto;

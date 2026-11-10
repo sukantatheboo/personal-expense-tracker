@@ -1267,17 +1267,19 @@ function ExpenseRow({
           (e.dir === "up" || e.direction === "increase"))
       : e.type === "income" || e.type === "refund" || Boolean(e.refund);
 
+  const isSavings = !hasExplicitSign && !isTx && e?.cat === "Savings";
+
   const isNeutral = hasExplicitSign
     ? e.signedDirection === "neutral"
-    : isTx
-      ? e.type === "transfer"
-      : e.cat === "Savings";
+    : false;
   const amountClass = isPositive
     ? "am is-positive"
-    : isNeutral
-      ? "am is-neutral"
-      : "am";
-  const amountPrefix = isPositive ? "+" : isNeutral ? "" : "−";
+    : isSavings
+      ? "am is-savings"
+      : isNeutral
+        ? "am is-neutral"
+        : "am is-negative";
+  const amountPrefix = isPositive ? "+" : isSavings || isNeutral ? "" : "−";
 
   const title = isTx
     ? e.note ||
