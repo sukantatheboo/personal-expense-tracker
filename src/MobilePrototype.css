@@ -9029,63 +9029,130 @@ html[data-theme="dark"]
   transform: none;
 }
 
-/* ───────────── Budget Velocity & Daily Burn Rate ───────────── */
+/* ───────────── Budget Velocity & Daily Burn Rate (Minimal Prototype Redesign) ───────────── */
 .mobile-prototype .budget-velocity-card {
   margin-top: 14px;
-  background: var(--bg);
+  background: var(--card);
   border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 12px 14px;
+  border-radius: 22px;
+  padding: 20px 18px 18px;
   text-align: left;
 }
 .mobile-prototype .budget-velocity-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 10px;
+  gap: 8px;
 }
-.mobile-prototype .velocity-tag {
-  font-size: 12px;
-  font-weight: 750;
-  padding: 3px 8px;
-  border-radius: 99px;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-.mobile-prototype .velocity-tag.is-good {
-  background: color-mix(in srgb, var(--g, #10b981) 15%, transparent);
-  color: var(--g, #10b981);
-}
-.mobile-prototype .velocity-tag.is-over {
-  background: color-mix(in srgb, #f43f5e 15%, transparent);
-  color: #f43f5e;
-}
+.mobile-prototype .budget-pace-title,
 .mobile-prototype .budget-velocity-days {
-  font-size: 12px;
+  font-size: 13.5px;
   font-weight: 650;
   color: var(--mut);
+  letter-spacing: -0.01em;
+}
+.mobile-prototype .budget-pace-hero {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+.mobile-prototype .budget-pace-amount {
+  font-size: clamp(32px, 9vw, 38px);
+  font-weight: 800;
+  color: var(--ink);
+  letter-spacing: -0.035em;
+  line-height: 1.08;
+  font-variant-numeric: tabular-nums;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.mobile-prototype .budget-pace-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+.mobile-prototype .budget-pace-status svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 2.3;
+  flex-shrink: 0;
+}
+.mobile-prototype .budget-pace-status.is-good {
+  color: #0e6f48;
+}
+:root[data-theme="dark"] .mobile-prototype .budget-pace-status.is-good,
+.mobile-prototype[data-theme="dark"] .budget-pace-status.is-good {
+  color: #34d399;
+}
+@media (prefers-color-scheme: dark) {
+  .mobile-prototype:not([data-theme="light"]) .budget-pace-status.is-good {
+    color: #34d399;
+  }
+}
+.mobile-prototype .budget-pace-status.is-over {
+  color: var(--bad, #c0483a);
 }
 .mobile-prototype .budget-velocity-stats {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 14px;
+  margin-top: 18px;
 }
 .mobile-prototype .velocity-stat {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
+  min-width: 0;
 }
-.mobile-prototype .velocity-stat .lbl {
-  font-size: 11px;
+.mobile-prototype .velocity-stat-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--mut);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
 }
-.mobile-prototype .velocity-stat b {
-  font-size: 15px;
+.mobile-prototype .velocity-legend-dash {
+  width: 15px;
+  height: 2px;
+  color: color-mix(in srgb, var(--mut) 72%, transparent);
+  fill: currentColor;
+  stroke: none;
+  flex-shrink: 0;
+}
+.mobile-prototype .velocity-legend-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 2.5px;
+  background: #6eb698;
+  flex-shrink: 0;
+}
+.mobile-prototype .velocity-stat-value {
+  font-size: 21px;
   font-weight: 800;
   color: var(--ink);
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+.mobile-prototype .velocity-stat-value small {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--mut);
   letter-spacing: -0.01em;
+  margin-left: 1px;
+}
+.mobile-prototype .budget-pace-divider {
+  margin: 16px 0 18px;
+  border-top: 1.5px dashed color-mix(in srgb, var(--mut) 48%, transparent);
 }
 .mobile-prototype .hero-velocity-row {
   display: flex;
@@ -9738,46 +9805,22 @@ html[data-theme="dark"]
   background: var(--c, #64748b);
 }
 
-.mobile-prototype .budget-scrub-card {
-  margin-top: 12px;
-  padding: 12px 14px;
-  border-radius: 14px;
-  background: var(--bg);
-  border: 1px solid var(--line);
-  text-align: left;
-}
-
-.mobile-prototype .budget-scrub-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 10px;
-  min-height: 22px;
-}
-
 .mobile-prototype .budget-scrub-tooltip {
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 750;
   color: var(--ink);
-  padding: 2px 8px;
+  padding: 2px 9px;
   border-radius: 999px;
-  background: var(--card);
+  background: var(--bg);
   border: 1px solid var(--line);
-}
-
-.mobile-prototype .budget-scrub-hint {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--mut);
 }
 
 .mobile-prototype .budget-scrub-bars {
   display: flex;
   align-items: flex-end;
-  gap: 3px;
-  height: 54px;
-  padding-top: 4px;
+  gap: 3.5px;
+  height: 60px;
+  padding-top: 2px;
   touch-action: pan-y;
   user-select: none;
   -webkit-user-select: none;
@@ -9794,9 +9837,10 @@ html[data-theme="dark"]
 .mobile-prototype .budget-scrub-bar {
   display: block;
   width: 100%;
-  min-height: 4px;
+  height: 4.5px;
+  min-height: 4.5px;
   border-radius: 99px;
-  background: color-mix(in srgb, var(--ink) 14%, transparent);
+  background: color-mix(in srgb, var(--ink) 16%, transparent);
   transition:
     height 180ms ease,
     background-color 140ms ease,
@@ -9804,12 +9848,44 @@ html[data-theme="dark"]
 }
 
 .mobile-prototype .budget-scrub-bar-wrap.has-spend .budget-scrub-bar {
-  background: color-mix(in srgb, #10b981 62%, var(--ink) 12%);
+  background: #6eb698;
+}
+
+.mobile-prototype .budget-scrub-bar-wrap.is-today:not(.has-spend) .budget-scrub-bar {
+  background: #0e6f48;
+}
+
+:root[data-theme="dark"] .mobile-prototype .budget-scrub-bar-wrap.is-today:not(.has-spend) .budget-scrub-bar,
+.mobile-prototype[data-theme="dark"] .budget-scrub-bar-wrap.is-today:not(.has-spend) .budget-scrub-bar {
+  background: #34d399;
+}
+@media (prefers-color-scheme: dark) {
+  .mobile-prototype:not([data-theme="light"]) .budget-scrub-bar-wrap.is-today:not(.has-spend) .budget-scrub-bar {
+    background: #34d399;
+  }
 }
 
 .mobile-prototype .budget-scrub-bar-wrap.is-active .budget-scrub-bar {
-  background: var(--g);
-  transform: scaleY(1.06);
+  background: #0e6f48;
+  transform: scaleY(1.05);
+}
+
+:root[data-theme="dark"] .mobile-prototype .budget-scrub-bar-wrap.is-active .budget-scrub-bar,
+.mobile-prototype[data-theme="dark"] .mobile-prototype .budget-scrub-bar-wrap.is-active .budget-scrub-bar {
+  background: #34d399;
+}
+
+.mobile-prototype .budget-pace-axis {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 10px;
+  min-height: 20px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--mut);
+  letter-spacing: -0.01em;
 }
 
 .mobile-prototype .app-privacy-shield {

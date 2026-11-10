@@ -3806,7 +3806,7 @@ function Plans({
   onToggleRec,
 }) {
   const [scrubDay, setScrubDay] = useState(null);
-  const scrubRef = useRef({ active: false, lastDay: null });
+  const scrubRef = useRef({ active: false, lastDay: null, moved: false });
   const savingsThisMonth = monthExp(S)
     .filter((expense) => expense.cat === "Savings" && expense.amt != null)
     .reduce((sum, expense) => sum + expense.amt, 0);
@@ -3858,6 +3858,9 @@ function Plans({
   const dailySeries = useMemo(() => {
     const [y, mNum] = (S.m || ld().slice(0, 7)).split("-").map(Number);
     const daysInMonth = new Date(y, mNum, 0).getDate() || 30;
+    const shortMonth = new Date(y, mNum - 1, 1).toLocaleDateString("en-US", {
+      month: "short",
+    });
     const sums = Array.from({ length: daysInMonth }, (_, idx) => ({
       day: idx + 1,
       date: `${S.m}-${String(idx + 1).padStart(2, "0")}`,
@@ -3878,7 +3881,7 @@ function Plans({
       }
     }
     const maxAmt = Math.max(1, ...sums.map((d) => d.amt));
-    return { sums, maxAmt, daysInMonth };
+    return { sums, maxAmt, daysInMonth, shortMonth };
   }, [S.exp, S.m]);
 
   useEffect(() => {
@@ -3888,21 +3891,21 @@ function Plans({
   const todayStr = ld();
   const isCurrentMonth = S.m === todayStr.slice(0, 7);
   let velocity = null;
-  if (b > 0 && isCurrentMonth) {
+  if (b > 0) {
     const [y, mNum] = S.m.split("-").map(Number);
     const daysInMonth = new Date(y, mNum, 0).getDate();
-    const currentDay = Math.min(
-      daysInMonth,
-      Number(todayStr.split("-")[2]) || 1,
-    );
+    const currentDay = isCurrentMonth
+      ? Math.min(daysInMonth, Number(todayStr.split("-")[2]) || 1)
+      : daysInMonth;
     const daysPassed = Math.max(1, currentDay);
-    const daysRemaining = Math.max(1, daysInMonth - currentDay + 1);
+    const daysRemaining = isCurrentMonth
+      ? Math.max(1, daysInMonth - currentDay + 1)
+      : 0;
     const expectedSpent = (b / daysInMonth) * daysPassed;
     const paceDiff = t - expectedSpent;
-    const dailyRemainingBudget = Math.max(
-      0,
-      Math.round((b - t) / daysRemaining),
-    );
+    const roundedPaceDiff = Math.round(paceDiff);
+    const dailyRemainingBudget =
+      daysRemaining > 0 ? Math.max(0, Math.round((b - t) / daysRemaining)) : 0;
     const currentDailyBurn = Math.round(t / daysPassed);
     velocity = {
       daysInMonth,
@@ -3911,10 +3914,11 @@ function Plans({
       daysPassed,
       expectedSpent,
       paceDiff,
+      roundedPaceDiff,
       dailyRemainingBudget,
       currentDailyBurn,
-      isOverPace: t > b || paceDiff > 50,
-      isUnderPace: t <= b && paceDiff < -50,
+      isOverPace: t > b || roundedPaceDiff > 0,
+      isUnderPace: t <= b && roundedPaceDiff < 0,
     };
   }
 
@@ -3992,121 +3996,6 @@ function Plans({
                 ? M(b - t) + " left — you’re within your limit."
                 : M(t - b) + " over — spending is above your limit."}
             </p>
-            {velocity && (
-              <div className="budget-velocity-card">
-                <div className="budget-velocity-header">
-                  <span
-                    className={`velocity-tag ${velocity.isOverPace ? "is-over" : "is-good"}`}
-                  >
-                    {velocity.isOverPace ? (
-                      <>⚡ {M(Math.round(velocity.paceDiff))} ahead of pace</>
-                    ) : velocity.isUnderPace ? (
-                      <>
-                        ✓ {M(Math.round(Math.abs(velocity.paceDiff)))} under
-                        pace
-                      </>
-                    ) : (
-                      <>🎯 Exactly on pace</>
-                    )}
-                  </span>
-                  <span className="budget-velocity-days">
-                    {velocity.daysRemaining}{" "}
-                    {velocity.daysRemaining === 1 ? "day" : "days"} left
-                  </span>
-                </div>
-                <div className="budget-velocity-stats">
-                  <div className="velocity-stat">
-                    <span className="lbl">Safe Daily Spend</span>
-                    <b>{M(velocity.dailyRemainingBudget)}/day</b>
-                  </div>
-                  <div className="velocity-stat">
-                    <span className="lbl">Actual Daily Burn</span>
-                    <b>{M(velocity.currentDailyBurn)}/day</b>
-                  </div>
-                </div>
-              </div>
-            )}
-            {t > 0 && (
-              <div className="budget-scrub-card">
-                <div className="budget-scrub-header">
-                  <span className="lbl">Daily Spending Pulse</span>
-                  {scrubDay ? (
-                    <span className="budget-scrub-tooltip">
-                      <b>{fD(scrubDay.date)}</b> · {M(scrubDay.amt)}
-                    </span>
-                  ) : (
-                    <span className="budget-scrub-hint">
-                      Drag across bars to inspect
-                    </span>
-                  )}
-                </div>
-                <div
-                  className="budget-scrub-bars"
-                  role="group"
-                  aria-label="Daily spending chart"
-                  onPointerDown={(e) => {
-                    const el = document.elementFromPoint(e.clientX, e.clientY);
-                    const bar = el?.closest?.("[data-day-idx]");
-                    if (!bar) return;
-                    const idx = Number(bar.getAttribute("data-day-idx"));
-                    const entry = dailySeries.sums[idx];
-                    if (entry) {
-                      scrubRef.current = { active: true, lastDay: entry.day };
-                      triggerHaptic("selection");
-                      setScrubDay(entry);
-                    }
-                  }}
-                  onPointerMove={(e) => {
-                    if (!scrubRef.current.active) return;
-                    const el = document.elementFromPoint(e.clientX, e.clientY);
-                    const bar = el?.closest?.("[data-day-idx]");
-                    if (!bar) return;
-                    const idx = Number(bar.getAttribute("data-day-idx"));
-                    const entry = dailySeries.sums[idx];
-                    if (entry && entry.day !== scrubRef.current.lastDay) {
-                      scrubRef.current.lastDay = entry.day;
-                      triggerHaptic("selection");
-                      setScrubDay(entry);
-                    }
-                  }}
-                  onPointerUp={() => {
-                    scrubRef.current.active = false;
-                  }}
-                  onPointerCancel={() => {
-                    scrubRef.current.active = false;
-                  }}
-                >
-                  {dailySeries.sums.map((item, idx) => {
-                    const hPct =
-                      item.amt > 0
-                        ? Math.max(
-                            16,
-                            Math.round((item.amt / dailySeries.maxAmt) * 100),
-                          )
-                        : 8;
-                    const isSelected = scrubDay?.day === item.day;
-                    return (
-                      <div
-                        key={item.day}
-                        data-day-idx={idx}
-                        className={`budget-scrub-bar-wrap${isSelected ? " is-active" : ""}${item.amt > 0 ? " has-spend" : ""}`}
-                        onClick={() => {
-                          triggerHaptic("selection");
-                          setScrubDay((curr) =>
-                            curr?.day === item.day ? null : item,
-                          );
-                        }}
-                      >
-                        <span
-                          className="budget-scrub-bar"
-                          style={{ height: `${hPct}%` }}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
           </>
         ) : (
           <div className="emp-illustrated">
@@ -4124,6 +4013,185 @@ function Plans({
           {b ? "Edit budget" : "Set monthly budget"}
         </button>
       </div>
+
+      {b > 0 && velocity && (
+        <div className="card budget-velocity-card">
+          <div className="budget-velocity-header">
+            <span className="budget-pace-title">Budget pace</span>
+            <span className="budget-velocity-days">
+              {isCurrentMonth
+                ? `${velocity.daysRemaining} ${velocity.daysRemaining === 1 ? "day" : "days"} left`
+                : "Month ended"}
+            </span>
+          </div>
+
+          <div className="budget-pace-hero">
+            <div className="budget-pace-amount">
+              {M(Math.abs(velocity.roundedPaceDiff))}
+            </div>
+            <div
+              className={`budget-pace-status ${velocity.isOverPace ? "is-over" : "is-good"}`}
+            >
+              {velocity.isOverPace ? (
+                <>
+                  <svg
+                    viewBox="0 0 16 16"
+                    width="14"
+                    height="14"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M8 12.5V3.5M4.5 7 8 3.5 11.5 7" />
+                  </svg>
+                  <span>over pace</span>
+                </>
+              ) : (
+                <>
+                  <svg
+                    viewBox="0 0 16 16"
+                    width="15"
+                    height="15"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M3 8.5 6.5 12 13 4.5" />
+                  </svg>
+                  <span>{velocity.isUnderPace ? "under pace" : "on pace"}</span>
+                </>
+              )}
+            </div>
+          </div>
+
+          <div className="budget-velocity-stats">
+            <div className="velocity-stat">
+              <span className="velocity-stat-label">
+                <svg
+                  className="velocity-legend-dash"
+                  viewBox="0 0 16 2"
+                  width="15"
+                  height="2"
+                  fill="currentColor"
+                  stroke="none"
+                  aria-hidden="true"
+                >
+                  <rect width="4" height="2" rx="1" />
+                  <rect x="6" width="4" height="2" rx="1" />
+                  <rect x="12" width="4" height="2" rx="1" />
+                </svg>
+                <span>Safe daily spend</span>
+              </span>
+              <b className="velocity-stat-value">
+                {M(velocity.dailyRemainingBudget)}
+                <small>/day</small>
+              </b>
+            </div>
+            <div className="velocity-stat">
+              <span className="velocity-stat-label">
+                <span className="velocity-legend-dot" aria-hidden="true" />
+                <span>Actual daily burn</span>
+              </span>
+              <b className="velocity-stat-value">
+                {M(velocity.currentDailyBurn)}
+                <small>/day</small>
+              </b>
+            </div>
+          </div>
+
+          <div className="budget-pace-divider" aria-hidden="true" />
+
+          <div
+            className="budget-scrub-bars"
+            role="group"
+            aria-label="Daily spending chart"
+            onPointerDown={(e) => {
+              const el = document.elementFromPoint(e.clientX, e.clientY);
+              const bar = el?.closest?.("[data-day-idx]");
+              const idx = bar ? Number(bar.getAttribute("data-day-idx")) : -1;
+              const entry = idx >= 0 ? dailySeries.sums[idx] : null;
+              scrubRef.current = {
+                active: true,
+                lastDay: entry ? entry.day : null,
+                moved: false,
+              };
+            }}
+            onPointerMove={(e) => {
+              if (!scrubRef.current.active) return;
+              const el = document.elementFromPoint(e.clientX, e.clientY);
+              const bar = el?.closest?.("[data-day-idx]");
+              if (!bar) return;
+              const idx = Number(bar.getAttribute("data-day-idx"));
+              const entry = dailySeries.sums[idx];
+              if (entry && entry.day !== scrubRef.current.lastDay) {
+                scrubRef.current.lastDay = entry.day;
+                scrubRef.current.moved = true;
+                triggerHaptic("selection");
+                setScrubDay(entry);
+              }
+            }}
+            onPointerUp={() => {
+              scrubRef.current.active = false;
+            }}
+            onPointerCancel={() => {
+              scrubRef.current.active = false;
+            }}
+          >
+            {dailySeries.sums.map((item, idx) => {
+              const hasSpend = item.amt > 0;
+              const hPct = hasSpend
+                ? Math.max(
+                    20,
+                    Math.round((item.amt / dailySeries.maxAmt) * 100),
+                  )
+                : 0;
+              const isSelected = scrubDay?.day === item.day;
+              const isToday =
+                isCurrentMonth && item.day === velocity.currentDay;
+              return (
+                <div
+                  key={item.day}
+                  data-day-idx={idx}
+                  className={`budget-scrub-bar-wrap${isSelected ? " is-active" : ""}${hasSpend ? " has-spend" : ""}${isToday ? " is-today" : ""}`}
+                  onClick={() => {
+                    if (scrubRef.current.moved) {
+                      scrubRef.current.moved = false;
+                      return;
+                    }
+                    triggerHaptic("selection");
+                    setScrubDay((curr) =>
+                      curr?.day === item.day ? null : item,
+                    );
+                  }}
+                >
+                  <span
+                    className="budget-scrub-bar"
+                    style={hasSpend ? { height: `${hPct}%` } : undefined}
+                  />
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="budget-pace-axis">
+            <span>{dailySeries.shortMonth} 1</span>
+            {scrubDay && (
+              <span className="budget-scrub-tooltip">
+                <b>{fD(scrubDay.date)}</b> · {M(scrubDay.amt)}
+              </span>
+            )}
+            <span>
+              {dailySeries.shortMonth} {dailySeries.daysInMonth}
+            </span>
+          </div>
+        </div>
+      )}
     </>
   );
 
