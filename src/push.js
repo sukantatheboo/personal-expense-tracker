@@ -1,4 +1,5 @@
-import { nextOccurrenceDate } from "./data.js";
+import { localDate, nextOccurrenceDate } from "./data.js";
+import { getWeeklySpendSummary } from "./notifications.js";
 
 const cleanEnv = (value) =>
   typeof value === "string" ? value.trim().replace(/^["']|["']$/g, "") : "";
@@ -49,6 +50,20 @@ function vapidKeyBytes(value) {
     (clean + padding).replaceAll("-", "+").replaceAll("_", "/"),
   );
   return Uint8Array.from(decoded, (character) => character.charCodeAt(0));
+}
+
+function addDaysToDateStr(dateStr, days) {
+  const [y, m, d] = String(dateStr || "")
+    .split("-")
+    .map(Number);
+  if (!y || !m || !d) return localDate();
+  return localDate(new Date(y, m - 1, d + days));
+}
+
+function clampDayOfMonth(day) {
+  const num = Number(day);
+  if (!Number.isFinite(num)) return 1;
+  return Math.max(1, Math.min(31, Math.round(num)));
 }
 
 export async function enableBackgroundPush(userId) {
@@ -142,7 +157,20 @@ export async function disableBackgroundPush(userId) {
   }
 }
 
-export async function syncBackgroundSchedules(userId, schedules, reminderTime) {
+/**
+ * Syncs all closed-app reminder schedules to Supabase `push_reminders`:
+ * 1. Recurring expenses due on the due date (`<schedule.id>`)
+ * 2. Upcoming bill heads-up 1 day before (`heads-up:<schedule.id>`)
+ * 3. Daily expense tracking reminders (`__daily_0__` .. `__daily_6__`)
+ * 4. Weekly spending summary on Sundays (`__weekly_summary__`)
+ * 5. 1st-of-the-month spend overview (`__monthly_overview__`)
+ */
+export async function syncBackgroundSchedules(
+  userId,
+  schedules = [],
+  reminderTime = "09:00",
+  { expenses = [] } = {},
+) {
   const client = await getSupabase();
   if (!client) throw new Error("Background push has not been configured.");
   if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(reminderTime)) {
@@ -152,37 +180,197 @@ export async function syncBackgroundSchedules(userId, schedules, reminderTime) {
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
   const deviceId = getDeviceId();
   const [hours, minutes] = reminderTime.split(":").map(Number);
-  const nowMs = Date.now();
+  const now = new Date();
+  const nowMs = now.getTime();
+  const todayStr = localDate(now);
+  const hasExpenseToday = expenses.some((e) => e?.date === todayStr);
 
-  const reminders = schedules.map((schedule) => {
+  const reminders = [];
+
+  // 1 & 2. Recurring expense due-day + 1-day-before heads-up reminders
+  for (const schedule of schedules) {
+    if (!schedule?.id || !schedule?.nextDate) continue;
+    const interval = schedule.interval === "weekly" ? "weekly" : "monthly";
+    const dayOfMonth = clampDayOfMonth(
+      schedule.dayOfMonth || Number(schedule.nextDate.slice(-2)),
+    );
+
+    // Due-day reminder
     let targetDate = schedule.nextDate;
     let [year, month, day] = targetDate.split("-").map(Number);
     let notifyDate = new Date(year, month - 1, day, hours, minutes);
     let guard = 0;
     while (notifyDate.getTime() <= nowMs && guard < 240) {
-      targetDate = nextOccurrenceDate(
-        targetDate,
-        schedule.interval,
-        schedule.dayOfMonth,
-      );
+      targetDate = nextOccurrenceDate(targetDate, interval, dayOfMonth);
       [year, month, day] = targetDate.split("-").map(Number);
       notifyDate = new Date(year, month - 1, day, hours, minutes);
       guard += 1;
     }
 
-    return {
+    reminders.push({
       user_id: userId,
       device_id: deviceId,
       schedule_id: schedule.id,
-      description: schedule.description,
-      interval: schedule.interval,
-      day_of_month: schedule.dayOfMonth,
+      description: String(schedule.description || "Recurring expense").slice(
+        0,
+        80,
+      ),
+      interval,
+      day_of_month: dayOfMonth,
       next_date: targetDate,
       next_notify_at: notifyDate.toISOString(),
       timezone,
       reminder_time: reminderTime,
-      active: schedule.active,
-    };
+      active: Boolean(schedule.active),
+    });
+
+    // 1-day-before heads-up reminder
+    let billOccDate = schedule.nextDate;
+    let headsUpDate = addDaysToDateStr(billOccDate, -1);
+    let [hy, hm, hd] = headsUpDate.split("-").map(Number);
+    let headsUpNotify = new Date(hy, hm - 1, hd, hours, minutes);
+    let headsUpGuard = 0;
+    while (headsUpNotify.getTime() <= nowMs && headsUpGuard < 240) {
+      billOccDate = nextOccurrenceDate(billOccDate, interval, dayOfMonth);
+      headsUpDate = addDaysToDateStr(billOccDate, -1);
+      [hy, hm, hd] = headsUpDate.split("-").map(Number);
+      headsUpNotify = new Date(hy, hm - 1, hd, hours, minutes);
+      headsUpGuard += 1;
+    }
+
+    reminders.push({
+      user_id: userId,
+      device_id: deviceId,
+      schedule_id: `heads-up:${schedule.id}`,
+      description: String(schedule.description || "Recurring expense").slice(
+        0,
+        80,
+      ),
+      interval,
+      day_of_month: dayOfMonth,
+      next_date: headsUpDate,
+      next_notify_at: headsUpNotify.toISOString(),
+      timezone,
+      reminder_time: reminderTime,
+      active: Boolean(schedule.active),
+    });
+  }
+
+  // 3. Daily expense tracking reminders (7 weekday slots using 'weekly' interval)
+  for (let dow = 0; dow < 7; dow += 1) {
+    let daysAhead = (dow - now.getDay() + 7) % 7;
+    let candidateDate = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate() + daysAhead,
+      hours,
+      minutes,
+      0,
+    );
+    if (
+      daysAhead === 0 &&
+      (candidateDate.getTime() <= nowMs || hasExpenseToday)
+    ) {
+      daysAhead = 7;
+      candidateDate = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate() + daysAhead,
+        hours,
+        minutes,
+        0,
+      );
+    }
+    const nextDateStr = localDate(candidateDate);
+    reminders.push({
+      user_id: userId,
+      device_id: deviceId,
+      schedule_id: `__daily_${dow}__`,
+      description: "Daily expense reminder",
+      interval: "weekly",
+      day_of_month: clampDayOfMonth(Number(nextDateStr.slice(-2))),
+      next_date: nextDateStr,
+      next_notify_at: candidateDate.toISOString(),
+      timezone,
+      reminder_time: reminderTime,
+      active: true,
+    });
+  }
+
+  // 4. Weekly spending summary (Sundays at reminderTime)
+  let daysUntilSunday = (7 - now.getDay()) % 7;
+  let sundayNotify = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() + daysUntilSunday,
+    hours,
+    minutes,
+    0,
+  );
+  if (sundayNotify.getTime() <= nowMs) {
+    daysUntilSunday += 7;
+    sundayNotify = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate() + daysUntilSunday,
+      hours,
+      minutes,
+      0,
+    );
+  }
+  const sundayDateStr = localDate(sundayNotify);
+  const weeklyStats = getWeeklySpendSummary(expenses, now);
+  const weeklyDesc =
+    weeklyStats.count > 0
+      ? `Weekly spend: ৳${weeklyStats.total.toLocaleString("en-IN")} (${weeklyStats.count} items)`
+      : "Weekly spending summary";
+
+  reminders.push({
+    user_id: userId,
+    device_id: deviceId,
+    schedule_id: "__weekly_summary__",
+    description: weeklyDesc.slice(0, 80),
+    interval: "weekly",
+    day_of_month: clampDayOfMonth(Number(sundayDateStr.slice(-2))),
+    next_date: sundayDateStr,
+    next_notify_at: sundayNotify.toISOString(),
+    timezone,
+    reminder_time: reminderTime,
+    active: true,
+  });
+
+  // 5. 1st-of-the-month spend overview
+  let firstOfMonthNotify = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    1,
+    hours,
+    minutes,
+    0,
+  );
+  if (firstOfMonthNotify.getTime() <= nowMs) {
+    firstOfMonthNotify = new Date(
+      now.getFullYear(),
+      now.getMonth() + 1,
+      1,
+      hours,
+      minutes,
+      0,
+    );
+  }
+  const firstOfMonthStr = localDate(firstOfMonthNotify);
+  reminders.push({
+    user_id: userId,
+    device_id: deviceId,
+    schedule_id: "__monthly_overview__",
+    description: "Previous month's spend overview",
+    interval: "monthly",
+    day_of_month: 1,
+    next_date: firstOfMonthStr,
+    next_notify_at: firstOfMonthNotify.toISOString(),
+    timezone,
+    reminder_time: reminderTime,
+    active: true,
   });
 
   if (reminders.length) {

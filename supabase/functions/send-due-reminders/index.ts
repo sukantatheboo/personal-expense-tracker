@@ -45,10 +45,80 @@ function addMonthsClamped(date: string, months: number, dayOfMonth: number | nul
   return first.toISOString().slice(0, 10);
 }
 
-function nextDate(date: string, interval: string, dayOfMonth: number | null) {
+function nextDate(
+  date: string,
+  interval: string,
+  dayOfMonth: number | null,
+  scheduleId = "",
+) {
+  if (interval === "daily") return addDays(date, 1);
   if (interval === "weekly") return addDays(date, 7);
+  if (scheduleId.startsWith("heads-up:")) {
+    // Advance the underlying bill due date (+1 day), then step back 1 day for the next heads-up
+    const currentBillDate = addDays(date, 1);
+    const nextBillDate =
+      interval === "yearly"
+        ? addMonthsClamped(currentBillDate, 12, dayOfMonth)
+        : addMonthsClamped(currentBillDate, 1, dayOfMonth);
+    return addDays(nextBillDate, -1);
+  }
   if (interval === "yearly") return addMonthsClamped(date, 12, dayOfMonth);
   return addMonthsClamped(date, 1, dayOfMonth); // "monthly"
+}
+
+function buildPushPayload(r: {
+  schedule_id: string;
+  description: string;
+  next_date: string;
+}) {
+  const id = String(r.schedule_id || "");
+  if (id === "__monthly_overview__") {
+    return {
+      title: "Previous month's spend overview is ready",
+      body: "A new month has begun! Open Spend to review your previous month's spend overview and recap.",
+      tag: `spend-new-month-${r.next_date.slice(0, 7)}`,
+      tab: "home",
+      url: "./?tab=home",
+    };
+  }
+  if (id === "__weekly_summary__") {
+    const hasCustomStats =
+      r.description && r.description !== "Weekly spending summary";
+    return {
+      title: "Weekly spending summary",
+      body: hasCustomStats
+        ? `${r.description}. Open Spend to review your weekly activity and budget pace.`
+        : "Your weekly spending recap is ready. Open Spend to review this week's activity and budget pace.",
+      tag: `spend-weekly-${r.next_date}`,
+      tab: "activity",
+      url: "./?tab=activity",
+    };
+  }
+  if (id.startsWith("__daily_")) {
+    return {
+      title: "Daily expense reminder",
+      body: "Don’t forget to track today's expenses to keep your budget on target.",
+      tag: `spend-daily-${r.next_date}`,
+      tab: "home",
+      url: "./?tab=home",
+    };
+  }
+  if (id.startsWith("heads-up:")) {
+    return {
+      title: "Upcoming bill tomorrow",
+      body: `${r.description} is due tomorrow.`,
+      tag: `${id}:${r.next_date}`,
+      tab: "plans",
+      url: "./?tab=plans",
+    };
+  }
+  return {
+    title: "Recurring expense due",
+    body: `${r.description} is due today.`,
+    tag: `${id}:${r.next_date}`,
+    tab: "activity",
+    url: "./?tab=activity",
+  };
 }
 
 // wall-clock time in an IANA time zone -> UTC instant
@@ -145,7 +215,7 @@ Deno.serve(async (req) => {
     let date: string = r.next_date;
     let notifyAt = new Date(r.next_notify_at);
     for (let i = 0; notifyAt.getTime() <= now.getTime() && i < 500; i += 1) {
-      date = nextDate(date, r.interval, r.day_of_month);
+      date = nextDate(date, r.interval, r.day_of_month, r.schedule_id);
       notifyAt = zonedTimeToUtc(date, r.reminder_time, r.timezone);
     }
 
@@ -165,17 +235,12 @@ Deno.serve(async (req) => {
       continue;
     }
 
+    const payload = buildPushPayload(r);
     let pushSucceeded = false;
     try {
       await webpush.sendNotification(
         device.subscription,
-        JSON.stringify({
-          title: "Recurring expense due",
-          body: `${r.description} is due today.`,
-          tag: `${r.schedule_id}:${r.next_date}`,
-          tab: "activity",
-          url: "./?tab=activity",
-        }),
+        JSON.stringify(payload),
         { TTL: 6 * 60 * 60 },
       );
       sent += 1;

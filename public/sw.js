@@ -1,4 +1,4 @@
-const CACHE_NAME = "spend-shell-v8";
+const CACHE_NAME = "spend-shell-v9";
 
 const STATIC_PATHS = [
   "",
@@ -109,9 +109,10 @@ self.addEventListener("fetch", (event) => {
 self.addEventListener("push", (event) => {
   const fallback = {
     title: "Spend reminder",
-    body: "Review today's recurring expenses in Spend.",
+    body: "Open Spend to review today's expenses and reminders.",
     url: self.registration.scope,
-    tag: "spend-recurring-reminder",
+    tab: "home",
+    tag: "spend-reminder",
   };
 
   let payload = fallback;
@@ -132,15 +133,22 @@ self.addEventListener("push", (event) => {
     self.registration.scope,
   ).toString();
 
+  const targetUrl = new URL(
+    payload.url || self.registration.scope,
+    self.registration.scope,
+  ).toString();
+
   event.waitUntil(
     self.registration.showNotification(payload.title, {
       body: payload.body,
       icon: iconUrl,
       badge: badgeUrl,
       tag: payload.tag || fallback.tag,
-      renotify: false,
+      renotify: Boolean(payload.renotify),
+      vibrate: [200, 100, 200],
       data: {
-        url: payload.url || self.registration.scope,
+        url: targetUrl,
+        tab: payload.tab || fallback.tab,
       },
     }),
   );
@@ -152,6 +160,10 @@ self.addEventListener("notificationclick", (event) => {
     event.notification.data?.url || self.registration.scope,
     self.location.origin,
   ).toString();
+  const targetTab =
+    event.notification.data?.tab ||
+    new URL(targetUrl).searchParams.get("tab") ||
+    "";
 
   event.waitUntil(
     self.clients
@@ -160,8 +172,16 @@ self.addEventListener("notificationclick", (event) => {
         const matchingClient = clients.find((client) =>
           client.url.startsWith(self.registration.scope),
         );
-        if (matchingClient && "focus" in matchingClient) {
-          return matchingClient.focus();
+        if (matchingClient) {
+          if (targetTab) {
+            matchingClient.postMessage({
+              type: "NAVIGATE_TAB",
+              tab: targetTab,
+            });
+          }
+          if ("focus" in matchingClient) {
+            return matchingClient.focus();
+          }
         }
         if (self.clients.openWindow) {
           return self.clients.openWindow(targetUrl);

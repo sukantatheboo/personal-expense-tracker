@@ -1,5 +1,9 @@
+import { formatDate, localDate, nextOccurrenceDate } from "./data.js";
+
 const LAST_NOTIFIED_MONTH_KEY = "spend-notified-month-v2";
 const WELCOME_NOTIFIED_PREFIX = "spend-welcome-notified-v2-";
+const HEADS_UP_NOTIFIED_KEY = "spend-notified-heads-up-v1";
+const LAST_WEEKLY_SUMMARY_KEY = "spend-last-weekly-summary-v1";
 
 let channelsConfigured = false;
 
@@ -19,6 +23,41 @@ async function getLocalNotifications() {
 async function getNativeHaptics() {
   if (!isNativePlatform()) return null;
   return import("@capacitor/haptics");
+}
+
+function addDaysToDateString(dateStr, days) {
+  const [y, m, d] = String(dateStr || "")
+    .split("-")
+    .map(Number);
+  if (!y || !m || !d) return localDate();
+  return localDate(new Date(y, m - 1, d + days));
+}
+
+function formatTaka(amount) {
+  const num = Number(amount) || 0;
+  return `৳${num.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+}
+
+export function getWeeklySpendSummary(expenses = [], now = new Date()) {
+  const todayStr = localDate(now);
+  const weekStartStr = addDaysToDateString(todayStr, -6);
+  let total = 0;
+  let count = 0;
+  for (const exp of expenses) {
+    if (!exp || exp.category === "Savings" || exp.cat === "Savings") continue;
+    const d = exp.date || "";
+    const amt = Number(exp.amount ?? exp.amt);
+    if (d >= weekStartStr && d <= todayStr && Number.isFinite(amt) && amt > 0) {
+      total += amt;
+      count += 1;
+    }
+  }
+  return {
+    total: Math.round(total * 100) / 100,
+    count,
+    weekStartStr,
+    todayStr,
+  };
 }
 
 /**
@@ -132,7 +171,8 @@ export async function setupNativeNotificationChannels() {
     await LocalNotifications.createChannel({
       id: "spend_reminders",
       name: "Spend Reminders",
-      description: "Daily expense reminders and recurring bill alerts",
+      description:
+        "Daily expense reminders, upcoming bill alerts, and weekly recaps",
       importance: 4,
       sound: "reminder.wav",
       vibration: true,
@@ -152,7 +192,7 @@ export async function setupNativeNotificationChannels() {
       id: "spend_monthly",
       name: "Monthly Expense Tracking",
       description:
-        "Reminders to start expense tracking when a new month begins",
+        "Reminders to review your monthly overview when a new month begins",
       importance: 4,
       sound: "reminder.wav",
       vibration: true,
@@ -210,17 +250,18 @@ export async function requestNotificationPermission() {
   return false;
 }
 
-function hashNotificationId(str) {
+function hashNotificationId(str, min = 100000, max = 1999999999) {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
     hash = (hash << 5) - hash + str.charCodeAt(i);
     hash |= 0;
   }
-  return Math.abs(hash) % 2147483647;
+  const span = max - min;
+  return min + (Math.abs(hash) % span);
 }
 
 /**
- * Send a native built-in notification for iOS and Android (with web fallback).
+ * Send an immediate native built-in notification for iOS and Android (with web fallback).
  */
 export async function sendNativeBuiltinNotification({
   title,
@@ -236,7 +277,9 @@ export async function sendNativeBuiltinNotification({
       ? id
       : hashNotificationId(tag || `${title}-${Date.now()}`);
 
-  playNotificationAudioTone(tone);
+  if (!scheduleAt) {
+    playNotificationAudioTone(tone);
+  }
 
   if (isNativePlatform()) {
     try {
@@ -281,12 +324,12 @@ export async function sendNativeBuiltinNotification({
     const options = {
       body,
       icon: new URL("./icons/icon-192.png", window.location.origin).href,
-      badge: new URL("./icons/icon-180.png", window.location.origin).href,
+      badge: new URL("./icons/icon-192.png", window.location.origin).href,
       tag: tag || `spend-${notifId}`,
       renotify: true,
       vibrate: tone === "welcome" ? [120, 60, 120, 60, 240] : [200, 100, 200],
       data: {
-        url: window.location.origin + window.location.pathname,
+        url: `${window.location.origin}${window.location.pathname}?tab=${encodeURIComponent(tab)}`,
         tab,
         tone,
       },
@@ -312,7 +355,228 @@ export async function sendNativeBuiltinNotification({
 }
 
 /**
- * When a new month comes, send a reminder notification and schedule OS background delivery:
+ * Synchronize all OS-level background scheduled notifications on iOS and Android
+ * so they fire reliably when the app is completely closed:
+ * 1. 1st-of-the-month spend overview
+ * 2. Weekly spending summary (upcoming Sundays)
+ * 3. Daily expense tracking reminders (next 14 days, skipping today if already logged)
+ * 4. Upcoming recurring bill heads-up (1 day before due date)
+ * 5. Recurring expense due-day reminders (on due date)
+ */
+export async function syncNativeScheduledNotifications({
+  recurringSchedules = [],
+  expenses = [],
+  reminderTime = "09:00",
+} = {}) {
+  if (!isNativePlatform()) return false;
+  try {
+    const LocalNotifications = await getLocalNotifications();
+    if (!LocalNotifications) return false;
+    const { display } = await LocalNotifications.checkPermissions();
+    if (display !== "granted") return false;
+
+    await setupNativeNotificationChannels();
+
+    // Cancel previously queued background reminders (IDs >= 20002) before rescheduling fresh ones
+    try {
+      const pending = await LocalNotifications.getPending();
+      const toCancel = (pending?.notifications || []).filter((n) => {
+        const numId = Number(n.id);
+        return Number.isFinite(numId) && numId >= 20002 && numId < 900000000;
+      });
+      if (toCancel.length > 0) {
+        await LocalNotifications.cancel({
+          notifications: toCancel.map((n) => ({ id: Number(n.id) })),
+        });
+      }
+    } catch {}
+
+    const safeTime = /^([01]\d|2[0-3]):[0-5]\d$/.test(reminderTime)
+      ? reminderTime
+      : "09:00";
+    const [hours, minutes] = safeTime.split(":").map(Number);
+    const now = new Date();
+    const nowMs = now.getTime();
+    const todayStr = localDate(now);
+    const hasExpenseToday = expenses.some((e) => e?.date === todayStr);
+
+    const notifications = [];
+
+    // 1. 1st-of-the-month spend overview (next 2 months)
+    for (let mOffset = 0; mOffset <= 2; mOffset += 1) {
+      const candidate = new Date(
+        now.getFullYear(),
+        now.getMonth() + mOffset,
+        1,
+        hours,
+        minutes,
+        0,
+      );
+      if (candidate.getTime() > nowMs + 5000) {
+        notifications.push({
+          id: 20002 + mOffset,
+          title: "Previous month's spend overview is ready",
+          body: "A new month has begun! Open Spend to review your previous month's spend overview and recap.",
+          channelId: "spend_monthly",
+          sound: "reminder.wav",
+          foreground: true,
+          schedule: { at: candidate },
+          extra: {
+            tab: "home",
+            tag: `spend-scheduled-new-month-${localDate(candidate).slice(0, 7)}`,
+            tone: "reminder",
+          },
+        });
+      }
+    }
+
+    // 2. Weekly spending summary (next 4 Sundays at reminderTime)
+    const weeklyStats = getWeeklySpendSummary(expenses, now);
+    const daysUntilSunday = (7 - now.getDay()) % 7;
+    for (let w = 0; w < 4; w += 1) {
+      const sundayOffset = daysUntilSunday + w * 7;
+      const sundayDate = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate() + sundayOffset,
+        hours,
+        minutes,
+        0,
+      );
+      if (sundayDate.getTime() <= nowMs + 5000) continue;
+      const isThisWeekSunday = w === 0 && sundayOffset <= 7;
+      const body =
+        isThisWeekSunday && weeklyStats.count > 0
+          ? `You've tracked ${formatTaka(weeklyStats.total)} across ${weeklyStats.count} ${weeklyStats.count === 1 ? "expense" : "expenses"} this week. Open Spend to review your weekly pace.`
+          : "Your weekly spending recap is ready. Open Spend to review this week's activity and budget pace.";
+
+      notifications.push({
+        id: 21001 + w,
+        title: "Weekly spending summary",
+        body,
+        channelId: "spend_reminders",
+        sound: "reminder.wav",
+        foreground: true,
+        schedule: { at: sundayDate },
+        extra: {
+          tab: "activity",
+          tag: `spend-weekly-summary-${localDate(sundayDate)}`,
+          tone: "reminder",
+        },
+      });
+    }
+
+    // 3. Daily expense tracking reminders (next 14 days at reminderTime)
+    for (let dOffset = 0; dOffset < 14; dOffset += 1) {
+      if (dOffset === 0 && hasExpenseToday) continue;
+      const targetDay = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate() + dOffset,
+        hours,
+        minutes,
+        0,
+      );
+      if (targetDay.getTime() <= nowMs + 5000) continue;
+      const dateStr = localDate(targetDay);
+      notifications.push({
+        id: 30001 + dOffset,
+        title: "Daily expense reminder",
+        body: "Don’t forget to track today's expenses to keep your budget on target.",
+        channelId: "spend_reminders",
+        sound: "reminder.wav",
+        foreground: true,
+        schedule: { at: targetDay },
+        extra: {
+          tab: "home",
+          tag: `spend-daily-${dateStr}`,
+          tone: "reminder",
+        },
+      });
+    }
+
+    // 4 & 5. Recurring expenses due-day + 1-day-before heads-up reminders
+    for (const schedule of recurringSchedules) {
+      if (!schedule || !schedule.active || !schedule.nextDate) continue;
+      let occDate = schedule.nextDate;
+      let guard = 0;
+      let scheduledOccurrences = 0;
+      const amtText =
+        Number.isFinite(Number(schedule.amount)) && Number(schedule.amount) > 0
+          ? ` (${formatTaka(schedule.amount)})`
+          : "";
+
+      while (scheduledOccurrences < 2 && guard < 240) {
+        const [y, m, d] = occDate.split("-").map(Number);
+        const dueAt = new Date(y, m - 1, d, hours, minutes, 0);
+        const headsUpDateStr = addDaysToDateString(occDate, -1);
+        const [hy, hm, hd] = headsUpDateStr.split("-").map(Number);
+        const headsUpAt = new Date(hy, hm - 1, hd, hours, minutes, 0);
+
+        if (headsUpAt.getTime() > nowMs + 5000) {
+          notifications.push({
+            id: hashNotificationId(
+              `heads-up:${schedule.id}:${occDate}`,
+              40000,
+              499999999,
+            ),
+            title: "Upcoming bill tomorrow",
+            body: `${schedule.description}${amtText} is due tomorrow (${formatDate(occDate)}).`,
+            channelId: "spend_reminders",
+            sound: "reminder.wav",
+            foreground: true,
+            schedule: { at: headsUpAt },
+            extra: {
+              tab: "plans",
+              tag: `spend-heads-up-${schedule.id}-${occDate}`,
+              tone: "reminder",
+            },
+          });
+        }
+
+        if (dueAt.getTime() > nowMs + 5000) {
+          notifications.push({
+            id: hashNotificationId(
+              `due:${schedule.id}:${occDate}`,
+              500000000,
+              899999999,
+            ),
+            title: "Recurring expense due",
+            body: `${schedule.description}${amtText} is due today.`,
+            channelId: "spend_reminders",
+            sound: "reminder.wav",
+            foreground: true,
+            schedule: { at: dueAt },
+            extra: {
+              tab: "activity",
+              tag: `spend-recurring-${schedule.id}-${occDate}`,
+              tone: "reminder",
+            },
+          });
+          scheduledOccurrences += 1;
+        }
+
+        occDate = nextOccurrenceDate(
+          occDate,
+          schedule.interval,
+          schedule.dayOfMonth,
+        );
+        guard += 1;
+      }
+    }
+
+    if (notifications.length > 0) {
+      await LocalNotifications.schedule({ notifications });
+    }
+    return true;
+  } catch (err) {
+    console.warn("Could not sync native scheduled notifications:", err);
+    return false;
+  }
+}
+
+/**
+ * When a new month comes, send a reminder notification:
  * "Previous month's spend overview is ready"
  */
 export async function checkAndNotifyNewMonth(currentMonthStr) {
@@ -348,39 +612,94 @@ export async function checkAndNotifyNewMonth(currentMonthStr) {
       localStorage.setItem(LAST_NOTIFIED_MONTH_KEY, thisMonth);
     } catch {}
   }
+}
 
-  if (isNativePlatform()) {
-    try {
-      const LocalNotifications = await getLocalNotifications();
-      if (!LocalNotifications) return;
-      const nextMonthDate = new Date(
-        now.getFullYear(),
-        now.getMonth() + 1,
-        1,
-        9,
-        0,
-        0,
-      );
-      await LocalNotifications.schedule({
-        notifications: [
-          {
-            id: 20002,
-            title: "Previous month's spend overview is ready",
-            body: "A new month has begun! Open Spend to review your previous month's spend overview and recap.",
-            channelId: "spend_monthly",
-            sound: "reminder.wav",
-            foreground: true,
-            schedule: { at: nextMonthDate },
-            extra: {
-              tab: "home",
-              tag: "spend-scheduled-new-month",
-              tone: "reminder",
-            },
-          },
-        ],
-      });
-    } catch {}
+/**
+ * Check and notify for recurring bills due tomorrow (1-day-before heads-up).
+ */
+export async function checkAndNotifyUpcomingBills(
+  recurringSchedules = [],
+  reminderTime = "09:00",
+) {
+  const now = new Date();
+  const currentTimeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  if (currentTimeStr < reminderTime) return;
+
+  const tomorrowStr = addDaysToDateString(localDate(now), 1);
+  let notifiedSet = new Set();
+  try {
+    const raw = JSON.parse(localStorage.getItem(HEADS_UP_NOTIFIED_KEY) || "[]");
+    if (Array.isArray(raw)) notifiedSet = new Set(raw);
+  } catch {}
+
+  const dueTomorrow = (recurringSchedules || []).filter(
+    (s) =>
+      s &&
+      s.active &&
+      s.nextDate === tomorrowStr &&
+      !notifiedSet.has(`${s.id}:${tomorrowStr}`),
+  );
+  if (!dueTomorrow.length) return;
+
+  for (const s of dueTomorrow) {
+    notifiedSet.add(`${s.id}:${tomorrowStr}`);
   }
+  try {
+    localStorage.setItem(
+      HEADS_UP_NOTIFIED_KEY,
+      JSON.stringify([...notifiedSet].slice(-100)),
+    );
+  } catch {}
+
+  const title =
+    dueTomorrow.length === 1
+      ? "Upcoming bill tomorrow"
+      : `${dueTomorrow.length} upcoming bills tomorrow`;
+  const body =
+    dueTomorrow.length === 1
+      ? `${dueTomorrow[0].description} (${formatTaka(dueTomorrow[0].amount)}) is due tomorrow.`
+      : `Due tomorrow: ${dueTomorrow.map((s) => `${s.description} (${formatTaka(s.amount)})`).join(", ")}.`;
+
+  await sendNativeBuiltinNotification({
+    title,
+    body,
+    tag: `spend-heads-up-${tomorrowStr}`,
+    tab: "plans",
+    tone: "reminder",
+  });
+}
+
+/**
+ * Check and notify for weekly spending summary on Sundays at/after reminderTime.
+ */
+export async function checkAndNotifyWeeklySummary(
+  expenses = [],
+  reminderTime = "09:00",
+) {
+  const now = new Date();
+  if (now.getDay() !== 0) return; // Sundays only
+  const currentTimeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  if (currentTimeStr < reminderTime) return;
+
+  const todayStr = localDate(now);
+  try {
+    if (localStorage.getItem(LAST_WEEKLY_SUMMARY_KEY) === todayStr) return;
+  } catch {}
+
+  const summary = getWeeklySpendSummary(expenses, now);
+  if (summary.count === 0) return;
+
+  try {
+    localStorage.setItem(LAST_WEEKLY_SUMMARY_KEY, todayStr);
+  } catch {}
+
+  await sendNativeBuiltinNotification({
+    title: "Weekly spending summary",
+    body: `You've tracked ${formatTaka(summary.total)} across ${summary.count} ${summary.count === 1 ? "expense" : "expenses"} over the last 7 days.`,
+    tag: `spend-weekly-${todayStr}`,
+    tab: "activity",
+    tone: "reminder",
+  });
 }
 
 /**

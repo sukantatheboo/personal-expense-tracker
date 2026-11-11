@@ -56,12 +56,15 @@ import {
 } from "./security.js";
 import {
   checkAndNotifyNewMonth,
+  checkAndNotifyUpcomingBills,
+  checkAndNotifyWeeklySummary,
   checkNotificationPermission,
   notifyNewUserSignedIn,
   requestNotificationPermission,
   sendNativeBuiltinNotification,
   setupNativeNotificationChannels,
   setupNotificationListeners,
+  syncNativeScheduledNotifications,
 } from "./notifications.js";
 
 const loadMobilePrototype = () => import("./MobilePrototype");
@@ -2052,6 +2055,22 @@ export default function App() {
   }
 
   useEffect(() => {
+    if (!isHydrated) return undefined;
+    void syncNativeScheduledNotifications({
+      recurringSchedules,
+      expenses,
+      reminderTime,
+    });
+    return undefined;
+  }, [
+    expenses,
+    isHydrated,
+    notificationPermission,
+    recurringSchedules,
+    reminderTime,
+  ]);
+
+  useEffect(() => {
     if (!supabase || !pushUser || !backgroundPushEnabled || !isHydrated)
       return undefined;
     let active = true;
@@ -2062,6 +2081,7 @@ export default function App() {
           pushUser.id,
           recurringSchedules,
           reminderTime,
+          { expenses },
         );
         if (active) setAuthStatus("");
       } catch (error) {
@@ -2078,6 +2098,7 @@ export default function App() {
     };
   }, [
     backgroundPushEnabled,
+    expenses,
     isHydrated,
     pushUser,
     recurringSchedules,
@@ -2378,6 +2399,8 @@ export default function App() {
       checkDailyReminder();
       checkBudgetMilestones();
       checkAndNotifyNewMonth();
+      checkAndNotifyUpcomingBills(recurringSchedules, reminderTime);
+      checkAndNotifyWeeklySummary(expenses, reminderTime);
     };
 
     const initialTimer = window.setTimeout(runChecks, 800);
@@ -2395,7 +2418,14 @@ export default function App() {
       window.clearInterval(intervalTimer);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, [checkDailyReminder, checkBudgetMilestones, selectedMonth]);
+  }, [
+    checkDailyReminder,
+    checkBudgetMilestones,
+    expenses,
+    recurringSchedules,
+    reminderTime,
+    selectedMonth,
+  ]);
 
   function saveMobileExpense(form) {
     const description = form.description.trim();
@@ -3879,10 +3909,17 @@ export default function App() {
       const perm = await checkNotificationPermission();
       setNotificationPermission(perm);
       if (granted) {
-        setNotificationStatus("Native notifications are enabled.");
+        await syncNativeScheduledNotifications({
+          recurringSchedules,
+          expenses,
+          reminderTime,
+        });
+        setNotificationStatus(
+          "Native background reminders are active for daily tracking, upcoming bills, weekly recaps, and monthly overviews.",
+        );
         await sendNativeBuiltinNotification({
           title: "Spend notifications enabled",
-          body: "Native built-in notifications are active on this device.",
+          body: "Closed-app reminders are active for daily tracking, bills, and summaries.",
           tag: "spend-test-confirmation",
           tone: "reminder",
         });
@@ -3997,11 +4034,11 @@ export default function App() {
       await enableBackgroundPush(pushUser.id);
       setBackgroundPushEnabled(true);
       setNotificationStatus(
-        "Background reminders are enabled. You’ll get a push when a recurring expense is due.",
+        "Background reminders are enabled for daily tracking, upcoming & due bills, weekly summaries, and monthly overviews.",
       );
       await sendNativeBuiltinNotification({
         title: "Spend notifications enabled",
-        body: "Background reminders are active on this device.",
+        body: "Closed-app reminders are active for daily tracking, bills, and summaries.",
         tag: "spend-test-confirmation",
         tone: "reminder",
       });

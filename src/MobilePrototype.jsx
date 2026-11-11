@@ -8559,22 +8559,25 @@ function AppSettingsPage({
 }) {
   const notificationUnavailable = notificationPermission === "unsupported";
   const notificationBlocked = notificationPermission === "denied";
+  const isNative = isNativePlatform();
   const needsSignInForPush = Boolean(
-    pushBackendConfigured && !profile?.connected,
+    !isNative && pushBackendConfigured && !profile?.connected,
   );
-  const isNotificationsActive = pushBackendConfigured
-    ? Boolean(profile?.connected && backgroundPushEnabled)
-    : notificationPermission === "granted";
+  const isNotificationsActive = isNative
+    ? notificationPermission === "granted"
+    : pushBackendConfigured
+      ? Boolean(profile?.connected && backgroundPushEnabled)
+      : notificationPermission === "granted";
 
   const notificationLabel = notificationUnavailable
     ? "Unavailable on this device"
     : notificationBlocked
-      ? "Blocked in browser settings"
+      ? "Blocked in device settings"
       : needsSignInForPush
-        ? "Sign in required for background alerts"
+        ? "Sign in required for closed-app web alerts"
         : isNotificationsActive
-          ? "Enabled for scheduled expenses"
-          : "Tap to enable device alerts";
+          ? "Active for daily, bill, weekly & monthly alerts"
+          : "Tap to enable closed-app reminder alerts";
 
   const notificationActionBadge = notificationUnavailable
     ? "Unavailable"
@@ -8612,7 +8615,7 @@ function AppSettingsPage({
             </i>
             <span className="nm">
               <b>Daily reminder</b>
-              <small>Time for recurring payments</small>
+              <small>Time for daily, bill &amp; summary alerts</small>
             </span>
             <div className="mfs-time-pill-wrap">
               <input
@@ -8690,9 +8693,9 @@ function AppSettingsPage({
           aria-live="polite"
         >
           {notificationStatus ||
-            (pushBackendConfigured && !profile?.connected
-              ? "Sign in to enable background reminders."
-              : "Notifications remind you when a scheduled expense is due.")}
+            (!isNative && pushBackendConfigured && !profile?.connected
+              ? "Sign in to enable closed-app background reminders."
+              : "Sends closed-app reminders for daily tracking, upcoming & due bills, weekly summaries, and monthly overviews.")}
         </p>
       </section>
 
