@@ -35,6 +35,7 @@ import {
   disableBackgroundPush,
   enableBackgroundPush,
   getSupabase,
+  PUSH_DISABLED_BY_USER_KEY,
   pushBackendConfigured,
   supabase,
   supabaseConfigured,
@@ -839,14 +840,11 @@ function mergeCloudSnapshots(
     deletedRecords,
     theme: local.theme,
     targetCurrency: local.targetCurrency,
-    reminderTime:
-      isValidReminderTime(local.reminderTime) && local.reminderTime !== "09:00"
-        ? local.reminderTime
-        : isValidReminderTime(cloud.reminderTime)
-          ? cloud.reminderTime
-          : isValidReminderTime(local.reminderTime)
-            ? local.reminderTime
-            : "09:00",
+    reminderTime: isValidReminderTime(local.reminderTime)
+      ? local.reminderTime
+      : isValidReminderTime(cloud.reminderTime)
+        ? cloud.reminderTime
+        : "09:00",
     ...mergedProfile,
   };
 }
@@ -2108,11 +2106,30 @@ export default function App() {
   useEffect(() => {
     if (!pushUser || !("serviceWorker" in navigator)) return undefined;
     let active = true;
+    let explicitlyDisabled = false;
+    try {
+      explicitlyDisabled =
+        localStorage.getItem(PUSH_DISABLED_BY_USER_KEY) === "true";
+    } catch {}
+
     navigator.serviceWorker
       .getRegistration()
-      .then((registration) =>
-        registration ? registration.pushManager.getSubscription() : null,
-      )
+      .then(async (registration) => {
+        const sub = registration
+          ? await registration.pushManager.getSubscription()
+          : null;
+        if (sub) return sub;
+        if (
+          !explicitlyDisabled &&
+          pushBackendConfigured &&
+          typeof window !== "undefined" &&
+          window.Notification?.permission === "granted"
+        ) {
+          const enabled = await enableBackgroundPush(pushUser.id);
+          return enabled?.subscription || null;
+        }
+        return null;
+      })
       .then((subscription) => {
         if (active) setBackgroundPushEnabled(Boolean(subscription));
       })
@@ -2125,7 +2142,7 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, [pushUser]);
+  }, [pushUser, notificationPermission]);
 
   const monthExpenses = useMemo(
     () =>
@@ -4180,6 +4197,23 @@ export default function App() {
     } catch (error) {
       setNotificationStatus(
         `Could not save the reminder time on this device: ${error.message}`,
+      );
+    }
+    void syncNativeScheduledNotifications({
+      recurringSchedules,
+      expenses,
+      reminderTime: value,
+    });
+    if (pushUser && backgroundPushEnabled) {
+      pushScheduleSyncRef.current = pushScheduleSyncRef.current.then(
+        () =>
+          syncBackgroundSchedules(pushUser.id, recurringSchedules, value, {
+            expenses,
+          }).catch(() => {}),
+        () =>
+          syncBackgroundSchedules(pushUser.id, recurringSchedules, value, {
+            expenses,
+          }).catch(() => {}),
       );
     }
   }
