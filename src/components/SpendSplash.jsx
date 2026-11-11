@@ -434,7 +434,7 @@ export default function SpendSplash({
 const CSS = `
 .sp-root {
   --sp-bg: #0c130f;
-  --sp-green: #316c51;
+  --sp-green: #d5f45b;
   --sp-ink: #eaf4ed;
   --tile: min(96px, 26vw);
   --gap: 16px;
@@ -460,7 +460,7 @@ const CSS = `
 }
 .sp-tile svg { display: block; width: 100%; height: 100%; overflow: visible; }
 .sp-arrow path {
-  fill: none; stroke: #fff; stroke-width: 7.5;
+  fill: none; stroke: #161d2b; stroke-width: 7.5;
   stroke-linecap: round; stroke-linejoin: round; opacity: 0;
 }
 .sp-word {

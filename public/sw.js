@@ -5,10 +5,11 @@ const STATIC_PATHS = [
   "index.html",
   "manifest.webmanifest",
   "favicon.svg",
-  "icons/apple-touch-icon.png",
+  "icon.svg",
+  "icons/icon-180.png",
   "icons/icon-192.png",
   "icons/icon-512.png",
-  "icons/icon-512-maskable.png",
+  "icons/icon-maskable-512.png",
 ];
 
 const scheduledTimers = new Map();

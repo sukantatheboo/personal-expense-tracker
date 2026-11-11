@@ -114,13 +114,13 @@ html[data-theme="dark"] .sl,
   filter: none !important;
 }
 .sl .sl__logo rect {
-  fill: #39785d !important;
+  fill: #d5f45b !important;
   stroke: none !important;
   stroke-width: 0 !important;
 }
 .sl .sl__logo path {
   fill: none !important;
-  stroke: #ffffff !important;
+  stroke: #161d2b !important;
   stroke-width: 4.5 !important;
   stroke-linecap: round !important;
   stroke-linejoin: round !important;

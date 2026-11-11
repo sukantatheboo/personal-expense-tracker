@@ -161,11 +161,11 @@ export default function SpendLogin({
           role="img"
           aria-label="Spend"
         >
-          <rect width="64" height="64" rx="16" fill="#39785d" />
+          <rect width="64" height="64" rx="16" fill="#d5f45b" />
           <path
             d="M22 43 43 22M28 22h15v15"
             fill="none"
-            stroke="#fff"
+            stroke="#161d2b"
             strokeLinecap="round"
             strokeLinejoin="round"
             strokeWidth="4.5"

@@ -4502,13 +4502,13 @@ export default function App() {
             >
               <div className="auth-modal-top">
                 <div className="auth-modal-logo" aria-hidden="true">
-                  <svg viewBox="0 0 44 44" width="44" height="44" fill="none">
-                    <rect width="44" height="44" rx="12" fill="#2D6B50" />
+                  <svg viewBox="0 0 64 64" width="44" height="44" fill="none">
+                    <rect width="64" height="64" rx="16" fill="#d5f45b" />
                     <path
-                      d="M15 29 29 15M19 15h10v10"
+                      d="M22 43 43 22M28 22h15v15"
                       fill="none"
-                      stroke="#fff"
-                      strokeWidth="3.2"
+                      stroke="#161d2b"
+                      strokeWidth="4.5"
                       strokeLinecap="round"
                       strokeLinejoin="round"
                     />
