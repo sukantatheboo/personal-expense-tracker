@@ -15,6 +15,7 @@ import {
   STORAGE_KEYS,
   currentMonth,
   formatDate,
+  getSavingsAccountId,
   isAccountId,
   isValidDateString,
   loadAccountData,
@@ -2151,10 +2152,14 @@ export default function App() {
   );
   const monthlyTotal = useMemo(
     () =>
-      monthExpenses.reduce(
-        (sum, expense) =>
-          sum + (expense.amount === null ? 0 : Number(expense.amount)),
-        0,
+      roundMoney(
+        monthExpenses
+          .filter((expense) => expense.category !== "Savings")
+          .reduce(
+            (sum, expense) =>
+              sum + (expense.amount === null ? 0 : Number(expense.amount)),
+            0,
+          ),
       ),
     [monthExpenses],
   );
@@ -2306,14 +2311,32 @@ export default function App() {
   }, [reminderTime]);
 
   const checkBudgetMilestones = useCallback(async () => {
-    const b = Number(budgets[selectedMonth] || 0);
-    if (b <= 0) return;
-    const pct = (monthlyTotal / b) * 100;
     const alertKey = BUDGET_ALERT_KEY_PREFIX + selectedMonth;
+    const b = Number(budgets[selectedMonth] || 0);
+    if (b <= 0) {
+      try {
+        localStorage.removeItem(alertKey);
+      } catch {}
+      return;
+    }
+    const pct = (monthlyTotal / b) * 100;
     let alertedMilestone = 0;
     try {
       alertedMilestone = Number(localStorage.getItem(alertKey) || "0");
     } catch {}
+
+    if (pct < 80 && alertedMilestone > 0) {
+      try {
+        localStorage.removeItem(alertKey);
+      } catch {}
+      return;
+    }
+    if (pct < 100 && alertedMilestone >= 100) {
+      try {
+        localStorage.setItem(alertKey, "80");
+      } catch {}
+      alertedMilestone = 80;
+    }
 
     if (pct >= 100 && alertedMilestone < 100) {
       try {
@@ -2352,14 +2375,37 @@ export default function App() {
     const currentTimeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
     const canProcessToday = currentTimeStr >= reminderTime;
     const checkKey = `${today}:${canProcessToday ? reminderTime : "pre"}`;
-    if (lastRecurringCheckRef.current === checkKey) return;
+    const cards = Array.isArray(accountData?.settings?.cards)
+      ? accountData.settings.cards
+      : [];
+    const savingsId = getSavingsAccountId(cards);
+    const savingsCard = savingsId
+      ? cards.find((c) => c.id === savingsId)
+      : null;
+    const isScheduleBlockedByFrozenCard = (schedule) => {
+      const targetCard = schedule.account
+        ? cards.find((c) => c.id === schedule.account)
+        : null;
+      if (targetCard?.frozen) return true;
+      if (schedule.category === "Savings" && savingsCard?.frozen) return true;
+      return false;
+    };
+    const hasDueSchedule = recurringSchedules.some(
+      (schedule) =>
+        schedule.active &&
+        !isScheduleBlockedByFrozenCard(schedule) &&
+        (schedule.nextDate < today ||
+          (schedule.nextDate === today && canProcessToday)),
+    );
+    if (lastRecurringCheckRef.current === checkKey && !hasDueSchedule) return;
     lastRecurringCheckRef.current = checkKey;
     const nextExpenses = [...expenses];
     let expensesChanged = false;
     let schedulesChanged = false;
     const dueExpenses = [];
     const nextSchedules = recurringSchedules.map((schedule) => {
-      if (!schedule.active) return schedule;
+      if (!schedule.active || isScheduleBlockedByFrozenCard(schedule))
+        return schedule;
       let nextDate = schedule.nextDate;
       let generated = 0;
       while (
@@ -2377,6 +2423,9 @@ export default function App() {
           );
         if (!exists) {
           const createdAt = Date.now();
+          const targetCard = schedule.account
+            ? cards.find((c) => c.id === schedule.account)
+            : null;
           nextExpenses.push({
             id: makeId(),
             createdAt,
@@ -2385,9 +2434,10 @@ export default function App() {
             amount: Number(schedule.amount),
             category: schedule.category,
             date: nextDate,
-            account: isAccountId(schedule.account, accountData)
-              ? schedule.account
-              : "",
+            account:
+              isAccountId(schedule.account, accountData) && !targetCard?.frozen
+                ? schedule.account
+                : "",
             recurringId: schedule.id,
           });
           dueExpenses.push({
@@ -2412,6 +2462,12 @@ export default function App() {
     if (schedulesChanged) setRecurringSchedules(nextSchedules);
     notifyDueExpenses(dueExpenses);
   };
+
+  useEffect(() => {
+    if (!isHydratedRef.current || (hasAppPin() && !isSessionUnlocked())) return;
+    lastRecurringCheckRef.current = "";
+    processDueSchedules.current?.();
+  }, [recurringSchedules, accountData, reminderTime, isHydrated]);
 
   useEffect(() => {
     const runChecks = () => {
@@ -2963,6 +3019,7 @@ export default function App() {
     let resolvedLast4 = last4;
     let resolvedNumber = targetNumber;
 
+    lastRecurringCheckRef.current = "";
     setRecordDeleted("cards", updatedCard.id, false);
     setAccountData((current) => {
       const currentCards = Array.isArray(current.settings.cards)
@@ -3133,6 +3190,7 @@ export default function App() {
   }
 
   function toggleMobileRecurring(scheduleId) {
+    lastRecurringCheckRef.current = "";
     setRecurringSchedules((current) =>
       current.map((schedule) => {
         if (schedule.id !== scheduleId) return schedule;
@@ -3140,7 +3198,7 @@ export default function App() {
           return { ...schedule, active: false, updatedAt: Date.now() };
         let nextDate = schedule.nextDate;
         let skipped = 0;
-        while (nextDate <= localDate() && skipped < 240) {
+        while (nextDate < localDate() && skipped < 240) {
           nextDate = nextOccurrenceDate(
             nextDate,
             schedule.interval,
@@ -3186,27 +3244,55 @@ export default function App() {
     }
     const existing = recurringSchedules.find((item) => item.id === scheduleId);
     if (!existing) return false;
+    const cards = Array.isArray(accountData?.settings?.cards)
+      ? accountData.settings.cards
+      : [];
+    const targetCard = account ? cards.find((c) => c.id === account) : null;
+    if (targetCard?.frozen) return false;
+    if (category === "Savings") {
+      const savingsId = getSavingsAccountId(cards);
+      const savingsCard = savingsId
+        ? cards.find((c) => c.id === savingsId)
+        : null;
+      if (savingsCard?.frozen) return false;
+      if (savingsId && (!account || account === "cash")) return false;
+    }
+    lastRecurringCheckRef.current = "";
     setRecurringSchedules((current) =>
       current.map((schedule) => {
         if (schedule.id !== scheduleId) return schedule;
+        const nextActive =
+          typeof form.active === "boolean"
+            ? form.active
+            : form.on !== undefined
+              ? Boolean(form.on)
+              : schedule.active;
         const nextDateChanged = nextDate !== schedule.nextDate;
         const dayOfMonth = nextDateChanged
           ? Number(nextDate.slice(-2))
           : schedule.dayOfMonth || Number(nextDate.slice(-2));
+        let resolvedNextDate = nextDate;
+        if (!schedule.active && nextActive && !nextDateChanged) {
+          let skipped = 0;
+          while (resolvedNextDate < localDate() && skipped < 240) {
+            resolvedNextDate = nextOccurrenceDate(
+              resolvedNextDate,
+              interval,
+              dayOfMonth,
+            );
+            skipped += 1;
+          }
+        }
         return {
           ...schedule,
           description,
           amount: roundMoney(amount),
           category,
           interval,
-          nextDate,
+          nextDate: resolvedNextDate,
           dayOfMonth,
           account: isAccountId(account, accountData) ? account : "",
-          ...(typeof form.active === "boolean"
-            ? { active: form.active }
-            : form.on !== undefined
-              ? { active: Boolean(form.on) }
-              : {}),
+          active: nextActive,
           updatedAt: Date.now(),
         };
       }),
@@ -3225,6 +3311,7 @@ export default function App() {
     );
     setRecordDeleted("recurringSchedules", scheduleId, true);
     return () => {
+      lastRecurringCheckRef.current = "";
       setRecordDeleted("recurringSchedules", scheduleId, false);
       setRecurringSchedules((current) => {
         if (current.some((item) => item.id === scheduleId)) return current;
@@ -3286,6 +3373,9 @@ export default function App() {
 
   function clearBudget() {
     const previousBudget = budgets[selectedMonth];
+    try {
+      localStorage.removeItem(BUDGET_ALERT_KEY_PREFIX + selectedMonth);
+    } catch {}
     setBudgets((current) => {
       const next = { ...current };
       delete next[selectedMonth];
@@ -4238,6 +4328,13 @@ export default function App() {
           onExpenseUpdate={saveMobileExpenseUpdate}
           onExpenseDelete={removeExpense}
           onBudgetSave={(amount) => {
+            const nextBudget = roundMoney(amount);
+            const prevBudget = Number(budgets[selectedMonth] || 0);
+            if (nextBudget !== prevBudget) {
+              try {
+                localStorage.removeItem(BUDGET_ALERT_KEY_PREFIX + selectedMonth);
+              } catch {}
+            }
             setRecordDeleted("budgets", selectedMonth, false);
             setBudgetUpdatedAt((current) => ({
               ...current,
@@ -4245,7 +4342,7 @@ export default function App() {
             }));
             setBudgets((current) => ({
               ...current,
-              [selectedMonth]: roundMoney(amount),
+              [selectedMonth]: nextBudget,
             }));
             return true;
           }}

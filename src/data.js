@@ -258,44 +258,29 @@ export function isAccountId(value, accountData = null) {
   const trimmed = value.trim();
   if (!trimmed) return false;
   if (trimmed === "cash") return true;
-  if (trimmed.startsWith("card_")) return true;
   if (
     Array.isArray(accountData) &&
     accountData.some((c) => (c?.id || c?.[0]) === trimmed)
   )
     return true;
-  if (accountData?.settings?.cards?.some((c) => c.id === trimmed)) return true;
-  if (
-    accountData?.settings?.balances &&
-    Object.hasOwn(accountData.settings.balances, trimmed)
-  )
-    return true;
-  if (
-    Array.isArray(accountData?.transactions) &&
-    accountData.transactions.some(
-      (t) =>
-        t.account === trimmed ||
-        t.fromAccount === trimmed ||
-        t.toAccount === trimmed,
+  if (accountData && typeof accountData === "object") {
+    if (accountData?.settings?.cards?.some((c) => c.id === trimmed))
+      return true;
+    if (
+      accountData?.settings?.balances &&
+      Object.hasOwn(accountData.settings.balances, trimmed)
     )
-  )
-    return true;
+      return true;
+    return false;
+  }
   try {
+    const deleted = readStorage(STORAGE_KEYS.deletedRecords, null);
+    if (deleted?.cards?.[trimmed]?.deleted) return false;
     const saved = readStorage(STORAGE_KEYS.accounts, null);
     if (saved?.settings?.cards?.some((c) => c.id === trimmed)) return true;
     if (
       saved?.settings?.balances &&
       Object.hasOwn(saved.settings.balances, trimmed)
-    )
-      return true;
-    if (
-      Array.isArray(saved?.transactions) &&
-      saved.transactions.some(
-        (t) =>
-          t.account === trimmed ||
-          t.fromAccount === trimmed ||
-          t.toAccount === trimmed,
-      )
     )
       return true;
   } catch {}

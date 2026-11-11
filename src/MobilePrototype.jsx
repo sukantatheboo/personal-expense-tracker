@@ -2142,10 +2142,14 @@ function Home({
     const daysRemaining = Math.max(1, daysInMonth - currentDay + 1);
     const expectedSpent = (b / daysInMonth) * daysPassed;
     const paceDiff = t - expectedSpent;
-    const dailyRemainingBudget = Math.max(
-      0,
-      Math.round(round2(b - t) / daysRemaining),
-    );
+    const remainingBudget = round2(b - t);
+    const rawDailyRemaining = remainingBudget > 0 ? remainingBudget / daysRemaining : 0;
+    const dailyRemainingBudget =
+      remainingBudget > 0
+        ? rawDailyRemaining < 1
+          ? Math.max(0.01, round2(rawDailyRemaining))
+          : Math.round(rawDailyRemaining)
+        : 0;
     const roundedPaceDiff = Math.round(paceDiff);
     homeVelocity = {
       daysRemaining,
@@ -3895,6 +3899,7 @@ function Accounts({
                   key={`${event.sourceType}-${event.id}`}
                   e={rowItem}
                   cards={cards}
+                  deletedCards={S?.deletedCards}
                   onOpen={onOpenExpense}
                   onOpenTransaction={onOpenTransaction}
                   onDelete={onDeleteExpense}
@@ -3986,12 +3991,25 @@ function Plans({
   onOpenRec,
   onToggleRec,
 }) {
-  const savingsThisMonth = monthExp(S)
-    .filter((expense) => expense.cat === "Savings" && expense.amt != null)
-    .reduce((sum, expense) => sum + expense.amt, 0);
-  const b = S.bud[S.m] || 0,
-    t = Math.max(0, tot(S, S.m) - savingsThisMonth),
+  const round2 = (val) => Math.round((Number(val) || 0) * 100) / 100;
+  const savingsThisMonth = round2(
+    monthExp(S)
+      .filter((expense) => expense.cat === "Savings" && expense.amt != null)
+      .reduce((sum, expense) => sum + expense.amt, 0),
+  );
+  const b = round2(S.bud[S.m] || 0),
+    t = Math.max(0, round2(round2(tot(S, S.m)) - savingsThisMonth)),
     pc = b ? t / b : 0,
+    displayUsedPct =
+      b > 0
+        ? t <= 0
+          ? 0
+          : t < b
+            ? Math.min(99, Math.max(1, Math.round(pc * 100)))
+            : t > b
+              ? Math.max(101, Math.round(pc * 100))
+              : 100
+        : 0,
     C = 2 * Math.PI * 62;
   const orderedRec = useMemo(() => {
     const parseTime = (val) => {
@@ -4027,12 +4045,22 @@ function Plans({
     [orderedRec],
   );
   const act = orderedRec.filter((r) => r.on);
-  const est = act
-    .filter((schedule) => schedule.cat !== "Savings")
-    .reduce((a, r) => a + r.amt * (r.iv === "weekly" ? 4 : 1), 0);
-  const savingsMonthlyEst = act
-    .filter((schedule) => schedule.cat === "Savings")
-    .reduce((a, r) => a + r.amt * (r.iv === "weekly" ? 4 : 1), 0);
+  const activeBillsAndOthersCount = act.filter(
+    (schedule) => schedule.cat !== "Savings",
+  ).length;
+  const activeSavingsCount = act.filter(
+    (schedule) => schedule.cat === "Savings",
+  ).length;
+  const est = round2(
+    act
+      .filter((schedule) => schedule.cat !== "Savings")
+      .reduce((a, r) => a + r.amt * (r.iv === "weekly" ? 4 : 1), 0),
+  );
+  const savingsMonthlyEst = round2(
+    act
+      .filter((schedule) => schedule.cat === "Savings")
+      .reduce((a, r) => a + r.amt * (r.iv === "weekly" ? 4 : 1), 0),
+  );
 
   const todayStr = ld();
   const isCurrentMonth = S.m === todayStr.slice(0, 7);
@@ -4048,10 +4076,19 @@ function Plans({
       ? Math.max(1, daysInMonth - currentDay + 1)
       : 0;
     const expectedSpent = (b / daysInMonth) * daysPassed;
-    const paceDiff = t - expectedSpent;
+    const paceDiff = round2(t - expectedSpent);
     const roundedPaceDiff = Math.round(paceDiff);
+    const remainingBudget = round2(b - t);
+    const rawDailyRemaining =
+      daysRemaining > 0 && remainingBudget > 0
+        ? remainingBudget / daysRemaining
+        : 0;
     const dailyRemainingBudget =
-      daysRemaining > 0 ? Math.max(0, Math.round((b - t) / daysRemaining)) : 0;
+      daysRemaining > 0 && remainingBudget > 0
+        ? rawDailyRemaining < 1
+          ? Math.max(0.01, round2(rawDailyRemaining))
+          : Math.round(rawDailyRemaining)
+        : 0;
     const currentDailyBurn = Math.round(t / daysPassed);
     const dailyTarget = Math.round(b / daysInMonth);
     const budgetUsedPct = Math.min(100, Math.max(0, (t / b) * 100));
@@ -4071,6 +4108,7 @@ function Plans({
       currentDailyBurn,
       dailyTarget,
       budgetUsedPct,
+      displayUsedPct,
       timeElapsedPct,
       isOverPace: t > b || roundedPaceDiff > 0,
       isUnderPace: t <= b && roundedPaceDiff < 0,
@@ -4133,7 +4171,7 @@ function Plans({
                 />
               </svg>
               <b>
-                {Math.round(pc * 100)}%<small>used</small>
+                {displayUsedPct}%<small>used</small>
               </b>
             </div>
             <div className="two" style={{ marginTop: 8 }}>
@@ -4148,8 +4186,8 @@ function Plans({
             </div>
             <p className="hint" style={{ marginTop: 14 }}>
               {t <= b
-                ? M(b - t) + " left — you’re within your limit."
-                : M(t - b) + " over — spending is above your limit."}
+                ? M(round2(b - t)) + " left — you’re within your limit."
+                : M(round2(t - b)) + " over — spending is above your limit."}
             </p>
           </>
         ) : (
@@ -4228,12 +4266,12 @@ function Plans({
             <p className="budget-pace-sub">
               {!isCurrentMonth
                 ? t > b
-                  ? `Average daily burn · Ended ${M(t - b)} over budget`
+                  ? `Average daily burn · Ended ${M(round2(t - b))} over budget`
                   : t < b
-                    ? `Average daily burn · Ended ${M(b - t)} under budget`
+                    ? `Average daily burn · Ended ${M(round2(b - t))} under budget`
                     : "Average daily burn · Ended right on budget"
                 : t > b
-                  ? `Over monthly budget by ${M(t - b)} · ${velocity.daysRemaining} ${velocity.daysRemaining === 1 ? "day" : "days"} left`
+                  ? `Over monthly budget by ${M(round2(t - b))} · ${velocity.daysRemaining} ${velocity.daysRemaining === 1 ? "day" : "days"} left`
                   : velocity.isOverPace
                     ? `Safe daily spend · ${M(Math.abs(velocity.roundedPaceDiff))} over expected pace`
                     : velocity.isUnderPace
@@ -4248,7 +4286,7 @@ function Plans({
               role="progressbar"
               aria-valuemin={0}
               aria-valuemax={100}
-              aria-valuenow={Math.round(velocity.budgetUsedPct)}
+              aria-valuenow={Math.min(100, velocity.displayUsedPct)}
               aria-label="Budget pace progress"
             >
               <span
@@ -4270,7 +4308,7 @@ function Plans({
             </div>
             <div className="budget-pace-meta">
               <span>
-                {Math.round(velocity.budgetUsedPct)}% spent · Expected{" "}
+                {velocity.displayUsedPct}% spent · Expected{" "}
                 {M(Math.round(velocity.expectedSpent))}
               </span>
               <span>
@@ -4305,9 +4343,9 @@ function Plans({
   const renderRecurringRow = (r) => {
     const acctName =
       S?.cards?.length > 0
-        ? getAccountDisplay(r.acct, S.cards)[0]
+        ? getAccountDisplay(r.acct, S.cards, S?.deletedCards)[0]
         : r.acct && r.acct !== "cash"
-          ? getAccountDisplay(r.acct, S?.cards)[0]
+          ? getAccountDisplay(r.acct, S?.cards, S?.deletedCards)[0]
           : "";
     return (
       <div
@@ -4388,7 +4426,7 @@ function Plans({
               <span>Bills &amp; Others</span>
               <span>
                 {billsAndOthersRec.length
-                  ? `${M(est)}/mo · ${billsAndOthersRec.length}`
+                  ? `${M(est)}/mo · ${activeBillsAndOthersCount}`
                   : "None"}
               </span>
             </div>
@@ -4411,7 +4449,7 @@ function Plans({
               <span>Savings</span>
               <span>
                 {savingsRec.length
-                  ? `${M(savingsMonthlyEst)}/mo · ${savingsRec.length}`
+                  ? `${M(savingsMonthlyEst)}/mo · ${activeSavingsCount}`
                   : "None"}
               </span>
             </div>
@@ -5279,14 +5317,21 @@ function TxSheet({
   );
 }
 
-function AccountTxDetailSheet({ tx, cards = [], onSave, onDelete, onClose }) {
+function AccountTxDetailSheet({
+  tx,
+  cards = [],
+  deletedCards = null,
+  onSave,
+  onDelete,
+  onClose,
+}) {
   const cardOptions = cards.map((c) => [c.id, c.name]);
   const ensureAccountOption = (...ids) => {
     const list = [...cardOptions];
     for (const rawId of ids) {
       if (!rawId || rawId === "cash") continue;
       if (!list.some(([optId]) => optId === rawId)) {
-        list.push([rawId, getAccountDisplay(rawId, cards)[0]]);
+        list.push([rawId, getAccountDisplay(rawId, cards, deletedCards)[0]]);
       }
     }
     return list;
@@ -5640,6 +5685,7 @@ function DetailSheet({
   expenses = [],
   suggestion,
   cards = [],
+  deletedCards = null,
   onSave,
   onDelete,
   onClose,
@@ -5658,7 +5704,10 @@ function DetailSheet({
     suggestedCategory(f.desc, expenses, e.id) || suggestion || "";
   const amtNum = parseAmount(f.amt);
   const isSavings = f.cat === "Savings";
-  const hasSavingsAccount = Boolean(getSavingsAccountId(cards));
+  const savingsId = getSavingsAccountId(cards);
+  const hasSavingsAccount = Boolean(savingsId);
+  const savingsCard = savingsId ? cards.find((c) => c.id === savingsId) : null;
+  const selectedCard = f.acct ? cards.find((c) => c.id === f.acct) : null;
   const nonSavingsCards = cards.filter(
     (c) =>
       c.type !== "savings" &&
@@ -5672,10 +5721,12 @@ function DetailSheet({
     Boolean(f.desc?.trim()) &&
     Boolean(f.date) &&
     (amtNum === null || (Number.isFinite(amtNum) && amtNum > 0)) &&
+    !selectedCard?.frozen &&
+    !(isSavings && savingsCard?.frozen) &&
     (!isSavings ||
       (amtNum !== null &&
         amtNum > 0 &&
-        (!hasSavingsAccount || spendableCards.length === 0 || Boolean(f.acct))));
+        (!hasSavingsAccount || (Boolean(f.acct) && f.acct !== "cash"))));
   return (
     <Sheet
       onClose={onClose}
@@ -5814,15 +5865,22 @@ function DetailSheet({
         onPick={(value) => set("acct", value)}
         cards={cards}
         options={
-          isSavings && hasSavingsAccount && spendableCards.length > 0 && f.acct !== ""
-            ? nonSavingsCards.map((c) => [c.id, c.name])
+          isSavings && hasSavingsAccount && nonSavingsCards.length > 0 && f.acct !== ""
+            ? [
+                ...nonSavingsCards.map((c) => [c.id, c.name]),
+                ...(f.acct &&
+                f.acct !== "cash" &&
+                !nonSavingsCards.some((c) => c.id === f.acct)
+                  ? [[f.acct, getAccountDisplay(f.acct, cards, deletedCards)[0]]]
+                  : []),
+              ]
             : [
                 ["", "Cash"],
                 ...nonSavingsCards.map((c) => [c.id, c.name]),
                 ...(f.acct &&
                 f.acct !== "cash" &&
                 !nonSavingsCards.some((c) => c.id === f.acct)
-                  ? [[f.acct, getAccountDisplay(f.acct, cards)[0]]]
+                  ? [[f.acct, getAccountDisplay(f.acct, cards, deletedCards)[0]]]
                   : []),
               ]
         }
@@ -5835,6 +5893,7 @@ function RecurringDetailSheet({
   r,
   expenses = [],
   cards = [],
+  deletedCards = null,
   onSave,
   onDelete,
   onClose,
@@ -5854,7 +5913,10 @@ function RecurringDetailSheet({
   const activeSuggestion = suggestedCategory(f.desc, expenses) || "";
   const amtNum = parseAmount(f.amt);
   const isSavings = f.cat === "Savings";
-  const hasSavingsAccount = Boolean(getSavingsAccountId(cards));
+  const savingsId = getSavingsAccountId(cards);
+  const hasSavingsAccount = Boolean(savingsId);
+  const savingsCard = savingsId ? cards.find((c) => c.id === savingsId) : null;
+  const selectedCard = f.acct ? cards.find((c) => c.id === f.acct) : null;
   const nonSavingsCards = cards.filter(
     (c) =>
       c.type !== "savings" &&
@@ -5869,7 +5931,9 @@ function RecurringDetailSheet({
     Boolean(f.next) &&
     Number.isFinite(amtNum) &&
     amtNum > 0 &&
-    (!isSavings || !hasSavingsAccount || spendableCards.length === 0 || Boolean(f.acct));
+    !selectedCard?.frozen &&
+    !(isSavings && savingsCard?.frozen) &&
+    (!isSavings || !hasSavingsAccount || (Boolean(f.acct) && f.acct !== "cash"));
 
   return (
     <Sheet
@@ -6007,15 +6071,22 @@ function RecurringDetailSheet({
         onPick={(value) => set("acct", value)}
         cards={cards}
         options={
-          isSavings && hasSavingsAccount && spendableCards.length > 0 && f.acct !== ""
-            ? nonSavingsCards.map((c) => [c.id, c.name])
+          isSavings && hasSavingsAccount && nonSavingsCards.length > 0 && f.acct !== ""
+            ? [
+                ...nonSavingsCards.map((c) => [c.id, c.name]),
+                ...(f.acct &&
+                f.acct !== "cash" &&
+                !nonSavingsCards.some((c) => c.id === f.acct)
+                  ? [[f.acct, getAccountDisplay(f.acct, cards, deletedCards)[0]]]
+                  : []),
+              ]
             : [
                 ["", "Cash"],
                 ...nonSavingsCards.map((c) => [c.id, c.name]),
                 ...(f.acct &&
                 f.acct !== "cash" &&
                 !nonSavingsCards.some((c) => c.id === f.acct)
-                  ? [[f.acct, getAccountDisplay(f.acct, cards)[0]]]
+                  ? [[f.acct, getAccountDisplay(f.acct, cards, deletedCards)[0]]]
                   : []),
               ]
         }
@@ -10458,21 +10529,27 @@ export default function MobilePrototype({
           : "Recurring expenses need an amount and description.",
       );
     }
-    const nonSavingsCards = cards.filter(
-      (c) =>
-        c.id !== getSavingsAccountId(cards) &&
-        c.type !== "savings" &&
-        c.category !== "savings" &&
-        c.provider !== "savings",
-    );
-    const spendableCards = nonSavingsCards.filter((c) => !c.frozen);
-    if (
-      isSavings &&
-      !form.acct &&
-      Boolean(getSavingsAccountId(cards)) &&
-      spendableCards.length > 0
-    ) {
+    const savingsId = getSavingsAccountId(cards);
+    if (isSavings && (!form.acct || form.acct === "cash") && Boolean(savingsId)) {
       return toast("Select an account to transfer from.");
+    }
+    if (form.acct && form.acct !== "cash") {
+      const targetCard = cards.find((c) => c.id === form.acct);
+      if (targetCard?.frozen) {
+        triggerHaptic("warning");
+        return toast(
+          `${targetCard.name || "This card"} is locked. Unlock it in Card Options first.`,
+        );
+      }
+    }
+    if (isSavings && savingsId) {
+      const savingsCard = cards.find((c) => c.id === savingsId);
+      if (savingsCard?.frozen) {
+        triggerHaptic("warning");
+        return toast(
+          `${savingsCard.name || "This card"} is locked. Unlock it in Card Options first.`,
+        );
+      }
     }
     const updated = onUpdateRec?.(id, {
       description: form.desc.trim(),
@@ -10656,16 +10733,17 @@ export default function MobilePrototype({
                   <circle cx="7" cy="15" r="1.5" fill="currentColor" />
                 </svg>
               </button>
-            ) : (
+            ) : plan === "budget" ? (
               <button
                 className="prototype-header-action"
                 type="button"
                 aria-label="Set monthly budget"
+                title="Set monthly budget"
                 onClick={openBudget}
               >
-                <Icon n="calendar" />
+                <Icon n="plans" />
               </button>
-            )}
+            ) : null}
           </div>
         )}
       </header>
@@ -11168,6 +11246,7 @@ export default function MobilePrototype({
           key={txDetail.id}
           tx={txDetail}
           cards={cards}
+          deletedCards={S?.deletedCards}
           onSave={updateTransaction}
           onDelete={deleteTransaction}
           onClose={close}
@@ -11180,6 +11259,7 @@ export default function MobilePrototype({
           expenses={S.exp}
           suggestion={suggestedCategory(detail.desc, S.exp, detail.id)}
           cards={cards}
+          deletedCards={S?.deletedCards}
           onSave={updateExpense}
           onDelete={deleteExpense}
           onClose={close}
@@ -11191,6 +11271,7 @@ export default function MobilePrototype({
           r={recDetail}
           expenses={S.exp}
           cards={cards}
+          deletedCards={S?.deletedCards}
           onSave={updateRecurring}
           onDelete={removeRecurring}
           onClose={close}
