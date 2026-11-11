@@ -1885,20 +1885,21 @@ a:active,
 .mobile-prototype .where-it-went-body {
   display: flex;
   align-items: center;
-  gap: 16px;
-  margin-top: 14px;
+  gap: 14px;
+  margin-top: 12px;
 }
 .mobile-prototype .where-donut-wrap {
   position: relative;
-  width: 142px;
-  height: 142px;
-  flex: 0 0 142px;
+  width: 154px;
+  height: 154px;
+  flex: 0 0 154px;
+  margin: -6px 0 -6px -6px;
   display: grid;
   place-items: center;
 }
 .mobile-prototype .where-donut-svg {
-  width: 142px;
-  height: 142px;
+  width: 154px;
+  height: 154px;
   display: block;
   overflow: visible;
   fill: none;
@@ -1938,7 +1939,7 @@ a:active,
   stroke-width: 0 !important;
 }
 .mobile-prototype .where-donut-arc-label {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 800;
   fill: #ffffff !important;
   stroke: none !important;
@@ -1948,7 +1949,7 @@ a:active,
 }
 .mobile-prototype .where-donut-center {
   position: absolute;
-  inset: 31px;
+  inset: 38px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1992,7 +1993,8 @@ a:active,
   flex-direction: column;
   gap: 4px;
 }
-.mobile-prototype .leg {
+.mobile-prototype .leg,
+.mobile-prototype .leg:not(:disabled):active {
   display: flex;
   width: calc(100% + 12px);
   margin: 0 -6px;
@@ -2007,9 +2009,9 @@ a:active,
   font-size: 14px;
   text-align: left;
   cursor: pointer;
-  transition:
-    background-color 200ms ease,
-    transform 100ms ease;
+  transform: none !important;
+  filter: none !important;
+  transition: background-color 200ms ease;
 }
 .mobile-prototype .leg[aria-pressed="true"],
 .mobile-prototype .leg.is-highlighted {

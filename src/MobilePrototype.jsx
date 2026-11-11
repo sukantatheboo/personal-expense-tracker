@@ -1,6 +1,7 @@
 import {
   Fragment,
   lazy,
+  memo,
   Suspense,
   useCallback,
   useEffect,
@@ -2086,10 +2087,10 @@ function EyeToggle({ shown, onToggle }) {
 }
 
 /* ───────────── screens ───────────── */
-const DONUT_CX = 120;
-const DONUT_CY = 120;
-const DONUT_RO = 102;
-const DONUT_RI = 70;
+const DONUT_CX = 140;
+const DONUT_CY = 140;
+const DONUT_RO = 104;
+const DONUT_RI = 74;
 const DONUT_RM = DONUT_RI + (DONUT_RO - DONUT_RI) * 0.4;
 const DONUT_POP = 14;
 const DONUT_PAD = 0.014;
@@ -2101,338 +2102,322 @@ const donutPt = (a, r) =>
 const donutArc = (a0, a1, r0, r1) => {
   const span = Math.max(0.001, Math.min(DONUT_TAU - 0.001, a1 - a0));
   const endAngle = a0 + span;
-  const largeArc = span > Math.PI ? 1 : 0;
-  return `M${donutPt(a0, r1)}A${r1} ${r1} 0 ${largeArc} 1 ${donutPt(endAngle, r1)}L${donutPt(endAngle, r0)}A${r0} ${r0} 0 ${largeArc} 0 ${donutPt(a0, r0)}Z`;
+  const L = span > Math.PI ? 1 : 0;
+  return `M${donutPt(a0, r1)}A${r1} ${r1} 0 ${L} 1 ${donutPt(endAngle, r1)}L${donutPt(endAngle, r0)}A${r0} ${r0} 0 ${L} 0 ${donutPt(a0, r0)}Z`;
 };
 
-function WhereItWentCard({
-  cs,
-  total,
-  saved,
-  highlightedCategory,
-  setHighlightedCategory,
-}) {
-  const svgRef = useRef(null);
-  const outerRefs = useRef([]);
-  const innerRefs = useRef([]);
-  const labelRefs = useRef([]);
-  const animStateRef = useRef([]);
-  const rafRef = useRef(null);
-  const draggingRef = useRef({ active: false, pointerId: null, moved: false });
+const WhereItWentCard = memo(
+  function WhereItWentCard({ cs, total, saved }) {
+    const svgRef = useRef(null);
+    const segsGroupRef = useRef(null);
+    const centerRef = useRef(null);
+    const outerRefs = useRef([]);
+    const innerRefs = useRef([]);
+    const labelRefs = useRef([]);
+    const rowRefs = useRef([]);
+    const stateRef = useRef([]);
+    const selRef = useRef(-1);
+    const runRef = useRef(false);
+    const rafRef = useRef(null);
+    const dragStateRef = useRef({ startHit: -1, scrubbed: false });
 
-  const csSignature = cs.map(([name, val]) => `${name}:${val}`).join("|");
+    const csSignature = cs.map(([name, val]) => `${name}:${val}`).join("|");
 
-  const segments = useMemo(() => {
-    let acc = 0;
-    return cs.map(([name, val]) => {
-      const a0 = total > 0 ? (acc / total) * DONUT_TAU : 0;
-      acc += val;
-      const a1 = total > 0 ? (acc / total) * DONUT_TAU : 0;
-      const pct = total > 0 ? Math.round((val / total) * 100) : 0;
-      const color = CAT[name]?.[1] || "#64748b";
-      return { name, val, a0, a1, pct, color };
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [csSignature, total]);
+    const D = useMemo(() => {
+      let acc = 0;
+      return cs.map(([n, v]) => {
+        const a0 = total > 0 ? (acc / total) * DONUT_TAU : 0;
+        acc += v;
+        const a1 = total > 0 ? (acc / total) * DONUT_TAU : 0;
+        const p = total > 0 ? Math.round((v / total) * 100) : 0;
+        const c = CAT[n]?.[1] || "#64748b";
+        return { n, v, a0, a1, p, c };
+      });
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [csSignature, total]);
 
-  const drawSegments = useCallback(() => {
-    const states = animStateRef.current;
-    const count = segments.length;
-    segments.forEach((seg, i) => {
-      const st = states[i] || { x: 0 };
-      const rawSpan = seg.a1 - seg.a0;
-      const pad =
-        count === 1 ? 0.002 : Math.min(DONUT_PAD, Math.max(0.002, rawSpan * 0.22));
-      const a0 = seg.a0 + pad;
-      const a1 = seg.a1 - pad;
-      const ro = DONUT_RO + DONUT_POP * st.x;
-      const ri = DONUT_RI - 2 * st.x;
+    const draw = useCallback(() => {
+      const items = stateRef.current;
+      const count = items.length;
+      for (let i = 0; i < count; i++) {
+        const d = items[i];
+        const rawSpan = d.a1 - d.a0;
+        const pad =
+          count === 1
+            ? 0.002
+            : Math.min(DONUT_PAD, Math.max(0.002, rawSpan * 0.22));
+        const a0 = d.a0 + pad;
+        const a1 = d.a1 - pad;
+        const ro = DONUT_RO + DONUT_POP * d.x;
+        const ri = DONUT_RI - 2 * d.x;
 
-      const outerEl = outerRefs.current[i];
-      if (outerEl) {
-        outerEl.setAttribute("d", donutArc(a0, a1, DONUT_RM, ro));
+        const oEl = outerRefs.current[i];
+        if (oEl) oEl.setAttribute("d", donutArc(a0, a1, DONUT_RM, ro));
+
+        const nEl = innerRefs.current[i];
+        if (nEl) nEl.setAttribute("d", donutArc(a0, a1, ri, DONUT_RM));
+
+        const lEl = labelRefs.current[i];
+        if (lEl) {
+          const m = (d.a0 + d.a1) / 2;
+          const r = (DONUT_RM + ro) / 2;
+          const [px, py] = donutPt(m, r).split(" ");
+          lEl.setAttribute("x", px);
+          lEl.setAttribute("y", py);
+          const canFitLabel = rawSpan >= 0.2 || count === 1;
+          lEl.setAttribute(
+            "opacity",
+            canFitLabel ? String(Math.max(0, Math.min(1, d.x * 1.4))) : "0",
+          );
+        }
       }
-      const innerEl = innerRefs.current[i];
-      if (innerEl) {
-        innerEl.setAttribute("d", donutArc(a0, a1, ri, DONUT_RM));
-      }
-      const labelEl = labelRefs.current[i];
-      if (labelEl) {
-        const midAngle = (seg.a0 + seg.a1) / 2;
-        const labelRadius = (DONUT_RM + ro) / 2;
-        const [lx, ly] = donutPt(midAngle, labelRadius).split(" ");
-        labelEl.setAttribute("x", lx);
-        labelEl.setAttribute("y", ly);
-        const canFitLabel = rawSpan >= 0.22 || count === 1;
-        labelEl.setAttribute(
-          "opacity",
-          canFitLabel ? String(Math.max(0, Math.min(1, st.x * 1.4))) : "0",
-        );
-      }
-    });
-  }, [segments]);
+    }, []);
 
-  const kickSpring = useCallback(() => {
-    if (rafRef.current) return;
-    const step = () => {
-      let keepGoing = false;
-      const states = animStateRef.current;
-      for (let i = 0; i < states.length; i++) {
-        const d = states[i];
-        if (!d) continue;
+    const step = useCallback(() => {
+      let go = false;
+      const items = stateRef.current;
+      for (let i = 0; i < items.length; i++) {
+        const d = items[i];
         d.vel = (d.vel + (d.t - d.x) * 0.2) * 0.72;
         d.x += d.vel;
         if (Math.abs(d.vel) > 0.001 || Math.abs(d.t - d.x) > 0.001) {
-          keepGoing = true;
+          go = true;
         } else {
           d.x = d.t;
           d.vel = 0;
         }
       }
-      drawSegments();
-      if (keepGoing) {
+      draw();
+      if (go) {
         rafRef.current = requestAnimationFrame(step);
       } else {
+        runRef.current = false;
         rafRef.current = null;
       }
-    };
-    rafRef.current = requestAnimationFrame(step);
-  }, [drawSegments]);
+    }, [draw]);
 
-  useLayoutEffect(() => {
-    const prev = animStateRef.current;
-    animStateRef.current = segments.map((seg) => {
-      const existing = prev.find((p) => p.name === seg.name);
-      const target = seg.name === highlightedCategory ? 1 : 0;
-      return existing
-        ? { name: seg.name, x: existing.x, vel: existing.vel, t: target }
-        : { name: seg.name, x: 0, vel: 0, t: target };
-    });
-    drawSegments();
-    kickSpring();
-  }, [segments, highlightedCategory, drawSegments, kickSpring]);
-
-  useEffect(() => {
-    return () => {
-      if (rafRef.current) {
-        cancelAnimationFrame(rafRef.current);
-        rafRef.current = null;
+    const kick = useCallback(() => {
+      if (!runRef.current) {
+        runRef.current = true;
+        rafRef.current = requestAnimationFrame(step);
       }
-    };
-  }, []);
+    }, [step]);
 
-  const selectCategory = useCallback(
-    (catName) => {
-      const next = catName || "";
-      if (next === highlightedCategory) return;
-      triggerHaptic("selection");
-      if (next && typeof navigator !== "undefined" && navigator.vibrate) {
-        try {
-          navigator.vibrate(8);
-        } catch {}
-      }
-      setHighlightedCategory(next);
-    },
-    [highlightedCategory, setHighlightedCategory],
-  );
+    const select = useCallback(
+      (i) => {
+        if (i === selRef.current) return;
+        selRef.current = i;
+        stateRef.current.forEach((d, k) => {
+          d.t = k === i ? 1 : 0;
+        });
+        rowRefs.current.forEach((r, k) => {
+          if (!r) return;
+          const active = k === i;
+          r.setAttribute("aria-pressed", String(active));
+          r.classList.toggle("is-highlighted", active);
+        });
+        centerRef.current?.classList.toggle("is-interactive", i >= 0);
+        if (i >= 0 && typeof navigator !== "undefined" && navigator.vibrate) {
+          try {
+            navigator.vibrate(8);
+          } catch {}
+        }
+        kick();
+      },
+      [kick],
+    );
 
-  const hitSegment = useCallback(
-    (e) => {
+    useLayoutEffect(() => {
+      const prev = stateRef.current;
+      stateRef.current = D.map((d, k) => {
+        const old = prev.find((p) => p.n === d.n);
+        const t = k === selRef.current ? 1 : 0;
+        return {
+          ...d,
+          x: old ? old.x : 0,
+          vel: old ? old.vel : 0,
+          t,
+        };
+      });
+      draw();
+    }, [D, draw]);
+
+    useEffect(() => {
+      return () => {
+        if (rafRef.current) {
+          cancelAnimationFrame(rafRef.current);
+          rafRef.current = null;
+        }
+        runRef.current = false;
+      };
+    }, []);
+
+    const hit = useCallback((e) => {
       const svg = svgRef.current;
-      if (!svg || !segments.length) return -1;
+      const items = stateRef.current;
+      if (!svg || !items.length) return -1;
       const b = svg.getBoundingClientRect();
       if (!b.width) return -1;
-      const k = 240 / b.width;
+      const k = 280 / b.width;
       const x = (e.clientX - b.left) * k - DONUT_CX;
       const y = (e.clientY - b.top) * k - DONUT_CY;
       const dist = Math.hypot(x, y);
       if (dist < DONUT_RI - 10 || dist > DONUT_RO + DONUT_POP + 6) return -1;
-      let angle = Math.atan2(x, -y);
-      if (angle < 0) angle += DONUT_TAU;
-      return segments.findIndex(
-        (q, idx) =>
-          angle >= q.a0 && (angle < q.a1 || idx === segments.length - 1),
+      let a = Math.atan2(x, -y);
+      if (a < 0) a += DONUT_TAU;
+      return items.findIndex(
+        (q, idx) => a >= q.a0 && (a < q.a1 || idx === items.length - 1),
       );
-    },
-    [segments],
-  );
+    }, []);
 
-  return (
-    <div className="card where-it-went-card">
-      <div className="category-card-heading">
-        <div>
-          <h2>Where it went</h2>
-          {saved > 0 && <small>Includes saved money</small>}
+    return (
+      <div className="card where-it-went-card">
+        <div className="category-card-heading">
+          <div>
+            <h2>Where it went</h2>
+            {saved > 0 && <small>Includes saved money</small>}
+          </div>
+          <span>
+            {cs.length} {cs.length === 1 ? "category" : "categories"}
+          </span>
         </div>
-        <span>
-          {cs.length} {cs.length === 1 ? "category" : "categories"}
-        </span>
-      </div>
-      <div className="where-it-went-body">
-        <div
-          className="where-donut-wrap"
-          role="group"
-          aria-label="Spending by category chart"
-        >
-          <svg
-            ref={svgRef}
-            viewBox="0 0 240 240"
-            className="where-donut-svg"
-            role="img"
-            aria-label="Donut chart of spending by category. Use the list to select a category."
-            onPointerDown={(e) => {
-              if (e.button != null && e.button !== 0) return;
-              try {
-                e.currentTarget.setPointerCapture(e.pointerId);
-              } catch {}
-              const idx = hitSegment(e);
-              const hitName = idx >= 0 ? segments[idx]?.name || "" : "";
-              draggingRef.current = {
-                active: true,
-                pointerId: e.pointerId,
-                startX: e.clientX,
-                startY: e.clientY,
-                lastHitName: hitName,
-                moved: false,
-              };
-              if (hitName && hitName === highlightedCategory) {
-                selectCategory("");
-              } else {
-                selectCategory(hitName);
-              }
-            }}
-            onPointerMove={(e) => {
-              if (
-                !draggingRef.current.active &&
-                !e.buttons
-              ) {
-                return;
-              }
-              const movedDist = Math.hypot(
-                e.clientX - (draggingRef.current.startX || 0),
-                e.clientY - (draggingRef.current.startY || 0),
-              );
-              if (movedDist < 6) return;
-              const idx = hitSegment(e);
-              if (idx >= 0) {
-                const hitName = segments[idx]?.name || "";
-                if (
-                  hitName &&
-                  hitName !== draggingRef.current.lastHitName
-                ) {
-                  draggingRef.current.moved = true;
-                  draggingRef.current.lastHitName = hitName;
-                  selectCategory(hitName);
-                }
-              }
-            }}
-            onPointerUp={(e) => {
-              draggingRef.current.active = false;
-              try {
-                if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
-                  e.currentTarget.releasePointerCapture(e.pointerId);
-                }
-              } catch {}
-            }}
-            onPointerCancel={() => {
-              draggingRef.current.active = false;
-            }}
-          >
-            <defs>
-              <mask
-                id="where-donut-sweep-mask"
-                maskUnits="userSpaceOnUse"
-                x="0"
-                y="0"
-                width="240"
-                height="240"
-              >
-                <circle
-                  className="where-donut-sweep"
-                  cx="120"
-                  cy="120"
-                  r="89"
-                  fill="none"
-                  stroke="#fff"
-                  strokeWidth="72"
-                  strokeDasharray="559.2"
-                  strokeDashoffset="559.2"
-                  transform="rotate(-90 120 120)"
-                />
-              </mask>
-            </defs>
-            <g mask="url(#where-donut-sweep-mask)">
-              {segments.map((seg, i) => (
-                <g className="where-donut-seg" key={seg.name}>
-                  <path
-                    ref={(el) => {
-                      outerRefs.current[i] = el;
-                    }}
-                    className="where-donut-seg-outer"
-                    style={{ fill: seg.color }}
-                  />
-                  <path
-                    ref={(el) => {
-                      innerRefs.current[i] = el;
-                    }}
-                    className="where-donut-seg-inner"
-                    style={{
-                      fill: `color-mix(in srgb, ${seg.color} 62%, #fff)`,
-                    }}
-                  />
-                  <text
-                    ref={(el) => {
-                      labelRefs.current[i] = el;
-                    }}
-                    className="where-donut-arc-label"
-                    opacity="0"
-                  >
-                    {seg.pct}%
-                  </text>
-                </g>
-              ))}
-            </g>
-          </svg>
+        <div className="where-it-went-body">
           <div
-            className={`where-donut-center${highlightedCategory ? " is-interactive" : ""}`}
-            onClick={() => {
-              if (highlightedCategory) {
-                selectCategory("");
-              }
-            }}
+            className="where-donut-wrap"
+            role="group"
+            aria-label="Spending by category chart"
           >
-            <span className="where-donut-label">Total</span>
-            <b className="where-donut-total">{M(total)}</b>
+            <svg
+              ref={svgRef}
+              viewBox="0 0 280 280"
+              className="where-donut-svg"
+              role="img"
+              aria-label="Donut chart of spending by category. Use the list to select a category."
+              onPointerDown={(e) => {
+                if (e.button != null && e.button !== 0) return;
+                try {
+                  e.currentTarget.setPointerCapture(e.pointerId);
+                } catch {}
+                const h = hit(e);
+                dragStateRef.current = { startHit: h, scrubbed: false };
+                select(h === selRef.current ? -1 : h);
+              }}
+              onPointerMove={(e) => {
+                if (e.buttons) {
+                  const i = hit(e);
+                  if (i >= 0 && i !== dragStateRef.current.startHit) {
+                    dragStateRef.current.scrubbed = true;
+                  }
+                  if (i >= 0 && dragStateRef.current.scrubbed) {
+                    select(i);
+                  }
+                }
+              }}
+            >
+              <defs>
+                <mask
+                  id="where-donut-sweep-mask"
+                  maskUnits="userSpaceOnUse"
+                  x="0"
+                  y="0"
+                  width="280"
+                  height="280"
+                >
+                  <circle
+                    className="where-donut-sweep"
+                    cx="140"
+                    cy="140"
+                    r="89"
+                    fill="none"
+                    stroke="#fff"
+                    strokeWidth="72"
+                    strokeDasharray="559.2"
+                    strokeDashoffset="559.2"
+                    transform="rotate(-90 140 140)"
+                    onAnimationEnd={() => {
+                      segsGroupRef.current?.removeAttribute("mask");
+                    }}
+                  />
+                </mask>
+              </defs>
+              <g ref={segsGroupRef} mask="url(#where-donut-sweep-mask)">
+                {D.map((d, i) => (
+                  <g className="where-donut-seg" key={d.n}>
+                    <path
+                      ref={(el) => {
+                        outerRefs.current[i] = el;
+                      }}
+                      className="where-donut-seg-outer"
+                      style={{ fill: d.c }}
+                    />
+                    <path
+                      ref={(el) => {
+                        innerRefs.current[i] = el;
+                      }}
+                      className="where-donut-seg-inner"
+                      style={{
+                        fill: `color-mix(in srgb, ${d.c} 62%, #fff)`,
+                      }}
+                    />
+                    <text
+                      ref={(el) => {
+                        labelRefs.current[i] = el;
+                      }}
+                      className="where-donut-arc-label"
+                      opacity="0"
+                    >
+                      {d.p}%
+                    </text>
+                  </g>
+                ))}
+              </g>
+            </svg>
+            <div
+              ref={centerRef}
+              className="where-donut-center"
+              onClick={() => select(-1)}
+            >
+              <span className="where-donut-label">Total</span>
+              <b className="where-donut-total">{M(total)}</b>
+            </div>
+          </div>
+
+          <div className="where-legend-list">
+            {D.map((d, i) => (
+              <button
+                ref={(el) => {
+                  rowRefs.current[i] = el;
+                }}
+                className="leg"
+                key={d.n}
+                type="button"
+                aria-pressed="false"
+                style={{ "--c": d.c }}
+                aria-label={`${d.n}, ${d.p}% of spending, ${M(d.v)}`}
+                onClick={() => select(i === selRef.current ? -1 : i)}
+              >
+                <span className="dot" style={{ "--c": d.c }} />
+                <span className="leg-info">
+                  <span className="leg-name">{d.n}</span>
+                  <em className="leg-pct">{d.p}%</em>
+                </span>
+                <b className="leg-amt">{M(d.v)}</b>
+              </button>
+            ))}
           </div>
         </div>
-
-        <div className="where-legend-list">
-          {segments.map((seg) => {
-            const isSelected = highlightedCategory === seg.name;
-            return (
-              <button
-                className={`leg${isSelected ? " is-highlighted" : ""}`}
-                key={seg.name}
-                type="button"
-                aria-pressed={isSelected}
-                style={{ "--c": seg.color }}
-                aria-label={`${seg.name}, ${seg.pct}% of spending, ${M(seg.val)}`}
-                onClick={() => selectCategory(isSelected ? "" : seg.name)}
-              >
-                <span className="dot" style={{ "--c": seg.color }} />
-                <span className="leg-info">
-                  <span className="leg-name">{seg.name}</span>
-                  <em className="leg-pct">{seg.pct}%</em>
-                </span>
-                <b className="leg-amt">{M(seg.val)}</b>
-              </button>
-            );
-          })}
-        </div>
       </div>
-    </div>
-  );
-}
+    );
+  },
+  (prev, next) =>
+    prev.total === next.total &&
+    prev.saved === next.saved &&
+    prev.cs.length === next.cs.length &&
+    prev.cs.every(
+      (item, idx) =>
+        item[0] === next.cs[idx]?.[0] && item[1] === next.cs[idx]?.[1],
+    ),
+);
 
 function Home({
   S,
@@ -2825,9 +2810,6 @@ function Home({
           cs={cs}
           total={total}
           saved={saved}
-          by={by}
-          highlightedCategory={highlightedCategory}
-          setHighlightedCategory={setHighlightedCategory}
         />
       )}
 
