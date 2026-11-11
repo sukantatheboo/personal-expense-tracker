@@ -10,6 +10,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import SpendSplash from "./components/SpendSplash.jsx";
+import WelcomeFlow from "./components/WelcomeFlow.jsx";
 import {
   emptyAccountData,
   STORAGE_KEYS,
@@ -83,6 +84,7 @@ const LOCAL_DATA_OWNER_KEY = "spend-local-data-owner-v1";
 const LOCAL_USER_SNAPSHOTS_KEY = "spend-local-user-snapshots-v1";
 const BUDGET_UPDATED_AT_KEY = STORAGE_KEYS.budgetUpdatedAt;
 const LAST_BACKUP_AT_KEY = "spend-last-backup-at-v1";
+const WELCOME_FLOW_SESSION_KEY = "spend-welcome-shown";
 
 function loadTheme() {
   try {
@@ -1020,6 +1022,7 @@ export default function App() {
   const [isHydrated, setIsHydrated] = useState(!hasAppPin());
   const isHydratedRef = useRef(!hasAppPin());
   const [ready, setReady] = useState(false);
+  const [showWelcomeFlow, setShowWelcomeFlow] = useState(false);
   const [prototypeMounted, setPrototypeMounted] = useState(false);
   const handlePrototypeMounted = useCallback(() => {
     setPrototypeMounted(true);
@@ -1799,6 +1802,54 @@ export default function App() {
       supabaseAuthInitRef.current = false;
     };
   }, [initSupabaseAuth]);
+
+  useEffect(() => {
+    if (!supabaseConfigured) return undefined;
+    let active = true;
+    let welcomeSubscription = null;
+    (supabase ? Promise.resolve(supabase) : getSupabase()).then((client) => {
+      if (!active || !client) return;
+      const {
+        data: { subscription },
+      } = client.auth.onAuthStateChange((event, session) => {
+        if (event === "INITIAL_SESSION" && session?.user) {
+          try {
+            sessionStorage.setItem(WELCOME_FLOW_SESSION_KEY, "1");
+          } catch {}
+          return;
+        }
+        if (event === "SIGNED_IN") {
+          if (
+            typeof window !== "undefined" &&
+            window.location.hash.includes("type=recovery")
+          ) {
+            return;
+          }
+          try {
+            if (sessionStorage.getItem(WELCOME_FLOW_SESSION_KEY) === "1") {
+              return;
+            }
+            sessionStorage.setItem(WELCOME_FLOW_SESSION_KEY, "1");
+          } catch {
+            // Proceed even if sessionStorage is restricted.
+          }
+          setShowWelcomeFlow(true);
+        } else if (event === "SIGNED_OUT") {
+          try {
+            sessionStorage.removeItem(WELCOME_FLOW_SESSION_KEY);
+          } catch {
+            // Ignore storage errors on sign-out.
+          }
+          setShowWelcomeFlow(false);
+        }
+      });
+      welcomeSubscription = subscription;
+    });
+    return () => {
+      active = false;
+      welcomeSubscription?.unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     if (!supabase || !pushUser || !cloudSyncEnabled || !isHydrated) {
@@ -4387,6 +4438,24 @@ export default function App() {
     <>
       {!ready && (
         <SpendSplash canExit={prototypeMounted} onDone={() => setReady(true)} />
+      )}
+      {showWelcomeFlow && (
+        <WelcomeFlow
+          theme={resolvedTheme}
+          onDone={() => {
+            try {
+              sessionStorage.setItem(WELCOME_FLOW_SESSION_KEY, "1");
+            } catch {}
+            setShowWelcomeFlow(false);
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(
+                new CustomEvent("spend:navigate-tab", {
+                  detail: { tab: "home" },
+                }),
+              );
+            }
+          }}
+        />
       )}
       <Suspense fallback={null}>
         <PrototypeMountSignal onMounted={handlePrototypeMounted} />

@@ -10214,6 +10214,8 @@ export default function MobilePrototype({
         targetTab &&
         ["home", "activity", "accounts", "plans"].includes(targetTab)
       ) {
+        setSheet(null);
+        setSheetClosing(false);
         setAppSettingsOpen(false);
         setProfileSettingsOpen(false);
         setTab(targetTab);
