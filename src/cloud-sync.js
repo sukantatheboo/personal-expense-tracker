@@ -617,7 +617,7 @@ export function subscribeToCloudChanges(
       table: "spend_user_data",
       filter: `user_id=eq.${userId}`,
     },
-    onChange,
+    (payload) => onChange?.(payload),
   );
 
   if (includeNormalizedAccounts) {
@@ -630,7 +630,7 @@ export function subscribeToCloudChanges(
           table: "spend_account_settings",
           filter: `user_id=eq.${userId}`,
         },
-        onChange,
+        (payload) => onChange?.(payload),
       )
       .on(
         "postgres_changes",
@@ -640,7 +640,7 @@ export function subscribeToCloudChanges(
           table: "spend_account_transactions",
           filter: `user_id=eq.${userId}`,
         },
-        onChange,
+        (payload) => onChange?.(payload),
       );
   }
 

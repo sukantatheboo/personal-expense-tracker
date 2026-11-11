@@ -389,7 +389,14 @@ function mergeBudgetValues(
       (!hasCloud ||
         localTime > cloudTime ||
         (localTime === cloudTime && preferLocalOnTie));
-    if (isRecordDeleted(deletedChanges, month)) continue;
+    const winningTime = chooseLocal ? localTime : cloudTime;
+    const tombstone = deletedChanges?.[month];
+    if (tombstone?.deleted) {
+      const tombstoneTime = Number(tombstone.updatedAt) || 0;
+      if (winningTime === 0 || tombstoneTime >= winningTime) {
+        continue;
+      }
+    }
     if (chooseLocal) {
       budgets[month] = localBudgets[month];
       updatedAt[month] = localTime;
@@ -495,6 +502,7 @@ function areAccountSettingsEqual(left, right) {
     left.startDate === right.startDate &&
     Boolean(left.configured) === Boolean(right.configured) &&
     Boolean(left.cardsConfigured) === Boolean(right.cardsConfigured) &&
+    (left.primaryCardId || "") === (right.primaryCardId || "") &&
     JSON.stringify(stableSnapshotValue(left.balances || {})) ===
       JSON.stringify(stableSnapshotValue(right.balances || {})) &&
     JSON.stringify(stableSnapshotValue(left.cards || [])) ===
@@ -636,6 +644,15 @@ function mergeAccountSettings(
     }
   }
   const mergedCards = orderedCardIds.map((id) => cardMap.get(id));
+  const preferredPrimaryId = preferLocalCards
+    ? localSettings.primaryCardId || cloudSettings.primaryCardId
+    : cloudSettings.primaryCardId || localSettings.primaryCardId;
+  const resolvedPrimaryCardId =
+    (typeof preferredPrimaryId === "string" &&
+      cardMap.has(preferredPrimaryId) &&
+      preferredPrimaryId) ||
+    mergedCards.find((c) => c?.isPrimary)?.id ||
+    "";
 
   return {
     startDate:
@@ -646,6 +663,7 @@ function mergeAccountSettings(
         : localSettings.startDate || cloudSettings.startDate || localDate(),
     balances: mergedBalances,
     cards: mergedCards,
+    ...(resolvedPrimaryCardId ? { primaryCardId: resolvedPrimaryCardId } : {}),
     configured: Boolean(localSettings.configured || cloudSettings.configured),
     cardsConfigured: Boolean(
       localSettings.cardsConfigured ||
@@ -745,7 +763,11 @@ function mergeCloudSnapshots(
     cloud.accountData ?? emptyAccountData(),
     deletedRecords,
   );
-  const cloudExpenses = loadExpenses(cloud.expenses ?? [], cloudAccounts);
+  const cloudExpenses = loadExpenses(
+    cloud.expenses ?? [],
+    cloudAccounts,
+    deletedRecords,
+  );
   const cloudBudgets = loadBudgets(cloud.budgets ?? {});
   const cloudSchedules = loadRecurringSchedules(
     cloud.recurringSchedules ?? [],
@@ -937,7 +959,11 @@ function loadLocalUserSnapshot(userId) {
     deletedRecords,
   );
   return {
-    expenses: loadExpenses(snapshot.expenses ?? [], loadedAccounts),
+    expenses: loadExpenses(
+      snapshot.expenses ?? [],
+      loadedAccounts,
+      deletedRecords,
+    ),
     budgets: loadBudgets(snapshot.budgets ?? {}),
     budgetUpdatedAt: normalizeBudgetUpdatedAt(snapshot.budgetUpdatedAt),
     recurringSchedules: loadRecurringSchedules(
@@ -1215,13 +1241,19 @@ export default function App() {
 
   function switchLocalUser(userId) {
     const previousUserId = localDataOwnerRef.current;
-    if (previousUserId && previousUserId !== userId) {
+    const isSwitchingDifferentUser =
+      Boolean(previousUserId) && previousUserId !== userId;
+    if (isSwitchingDifferentUser) {
       saveLocalUserSnapshot(previousUserId, cloudSnapshotRef.current);
+      clearSharedFinancialData();
     }
     const snapshot = loadLocalUserSnapshot(userId);
     adoptLocalDataForUser(userId);
     if (snapshot) {
-      if (hasMeaningfulLocalData(cloudSnapshotRef.current)) {
+      if (
+        !isSwitchingDifferentUser &&
+        hasMeaningfulLocalData(cloudSnapshotRef.current)
+      ) {
         const merged = mergeCloudSnapshots(
           cloudSnapshotRef.current,
           snapshot,
@@ -1231,7 +1263,10 @@ export default function App() {
       } else {
         applyCloudSnapshot(snapshot);
       }
-    } else if (!hasMeaningfulLocalData(cloudSnapshotRef.current)) {
+    } else if (
+      isSwitchingDifferentUser ||
+      !hasMeaningfulLocalData(cloudSnapshotRef.current)
+    ) {
       resetDataForNewUser();
     }
   }
@@ -1247,6 +1282,8 @@ export default function App() {
       adoptLocalDataForUser(userId);
     }
   }
+
+  const lastLocalSaveTimeRef = useRef(0);
 
   function queueCloudSnapshotSave(userId, { forceOverwrite = false } = {}) {
     const saveTask = cloudSaveQueueRef.current
@@ -1289,6 +1326,7 @@ export default function App() {
               authUserIdRef.current === userId &&
               localDataOwnerRef.current === userId
             ) {
+              lastLocalSaveTimeRef.current = Date.now();
               cloudVersionRef.current = savedVersion;
               cloudAccountSettingsRef.current = snapshot.accountData.settings;
               lastSyncedSnapshotRef.current = snapshot;
@@ -1983,9 +2021,29 @@ export default function App() {
     let active = true;
     setCloudRealtimeStatus("connecting");
 
-    const handleCloudChange = () => {
+    const handleCloudChange = (payload) => {
       if (!active || authUserIdRef.current !== pushUser.id) return;
       if (hasAppPin() && !isSessionUnlocked()) return;
+      const incomingUpdatedAt = payload?.new?.updated_at;
+      if (
+        payload?.table === "spend_user_data" &&
+        incomingUpdatedAt &&
+        cloudVersionRef.current &&
+        (incomingUpdatedAt === cloudVersionRef.current ||
+          Math.abs(
+            (Date.parse(incomingUpdatedAt) || 0) -
+              (Date.parse(cloudVersionRef.current) || 0),
+          ) < 1000)
+      ) {
+        return;
+      }
+      if (
+        (payload?.table === "spend_account_settings" ||
+          payload?.table === "spend_account_transactions") &&
+        Date.now() - lastLocalSaveTimeRef.current < 2500
+      ) {
+        return;
+      }
       window.clearTimeout(liveChangeTimerRef.current);
       setCloudSyncActivity("syncing");
       liveChangeTimerRef.current = window.setTimeout(async () => {
@@ -3448,7 +3506,8 @@ export default function App() {
     setDeletedRecords((current) => {
       const normalized = normalizeDeletedRecords(current);
       const existing = normalized[collection][id];
-      if (!isDeleted && !existing?.deleted) return current;
+      if (!isDeleted && !existing?.deleted && collection !== "budgets")
+        return current;
       const previous = existing?.updatedAt ?? 0;
       return {
         ...normalized,

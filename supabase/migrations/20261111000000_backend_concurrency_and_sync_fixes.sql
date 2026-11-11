@@ -169,7 +169,7 @@ begin
           end,
           'transactions',
           case
-            when s.start_date is not null and jsonb_array_length(tx.items) > 0 then
+            when s.start_date is not null then
               (
                 select coalesce(
                   jsonb_agg(merged_item order by (merged_item->>'createdAt')::bigint asc, merged_item->>'id' asc),
@@ -180,8 +180,9 @@ begin
                   union all
                   select value as merged_item from jsonb_array_elements(coalesce(r.data #> '{accountData,transactions}', '[]'::jsonb))
                   where not exists (
-                    select 1 from jsonb_array_elements(tx.items) t_sub
-                    where t_sub->>'id' = value->>'id'
+                    select 1 from public.spend_account_transactions t_any
+                    where t_any.user_id = auth.uid()
+                      and t_any.id = value->>'id'
                   )
                 ) sub
               )

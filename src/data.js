@@ -218,6 +218,7 @@ export function writeStorage(key, value, keyMaterial = getSessionKey()) {
 export function loadExpenses(
   saved = readStorage(STORAGE_KEYS.expenses, []),
   accountData = null,
+  deletedRecords = null,
 ) {
   return Array.isArray(saved)
     ? saved
@@ -236,7 +237,9 @@ export function loadExpenses(
           category: CATEGORIES.includes(item.category)
             ? item.category
             : "Other",
-          account: isAccountId(item.account, accountData) ? item.account : "",
+          account: isAccountId(item.account, accountData, deletedRecords)
+            ? item.account.trim()
+            : "",
         }))
     : [];
 }
@@ -253,11 +256,17 @@ export function loadBudgets(saved = readStorage(STORAGE_KEYS.budgets, {})) {
   );
 }
 
-export function isAccountId(value, accountData = null) {
+export function isAccountId(value, accountData = null, deletedRecords = null) {
   if (!value || typeof value !== "string") return false;
   const trimmed = value.trim();
   if (!trimmed) return false;
   if (trimmed === "cash") return true;
+  if (
+    deletedRecords?.cards &&
+    Object.hasOwn(deletedRecords.cards, trimmed)
+  ) {
+    return true;
+  }
   if (
     Array.isArray(accountData) &&
     accountData.some((c) => (c?.id || c?.[0]) === trimmed)
@@ -271,11 +280,16 @@ export function isAccountId(value, accountData = null) {
       Object.hasOwn(accountData.settings.balances, trimmed)
     )
       return true;
+    if (
+      accountData?.deletedCards &&
+      Object.hasOwn(accountData.deletedCards, trimmed)
+    )
+      return true;
     return false;
   }
   try {
     const deleted = readStorage(STORAGE_KEYS.deletedRecords, null);
-    if (deleted?.cards?.[trimmed]?.deleted) return false;
+    if (deleted?.cards && Object.hasOwn(deleted.cards, trimmed)) return true;
     const saved = readStorage(STORAGE_KEYS.accounts, null);
     if (saved?.settings?.cards?.some((c) => c.id === trimmed)) return true;
     if (
@@ -559,6 +573,13 @@ export function loadAccountData(
     },
   };
 
+  const resolvedPrimaryCardId =
+    (typeof settings.primaryCardId === "string" &&
+      cardMap.has(settings.primaryCardId) &&
+      settings.primaryCardId) ||
+    cards.find((c) => c.isPrimary)?.id ||
+    "";
+
   return {
     settings: {
       startDate: isValidDateString(settings.startDate)
@@ -566,6 +587,7 @@ export function loadAccountData(
         : localDate(),
       balances: initialBalances,
       cards,
+      ...(resolvedPrimaryCardId ? { primaryCardId: resolvedPrimaryCardId } : {}),
       configured: settings.configured === true || cards.length > 0,
       cardsConfigured: settings.cardsConfigured === true || cards.length > 0,
       updatedAt:
