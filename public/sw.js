@@ -1,4 +1,4 @@
-const CACHE_NAME = "spend-shell-v9";
+const CACHE_NAME = "spend-shell-v11";
 
 const STATIC_PATHS = [
   "",
@@ -10,6 +10,15 @@ const STATIC_PATHS = [
   "icons/icon-512.png",
   "icons/icon-512-maskable.png",
 ];
+
+const scheduledTimers = new Map();
+
+function clearScheduledTimers() {
+  for (const timerId of scheduledTimers.values()) {
+    clearTimeout(timerId);
+  }
+  scheduledTimers.clear();
+}
 
 function getScopeUrls() {
   const scope = self.registration.scope;
@@ -46,6 +55,92 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SYNC_SCHEDULED_NOTIFICATIONS") {
+    clearScheduledTimers();
+    const items = Array.isArray(event.data.items) ? event.data.items : [];
+    const now = Date.now();
+    const iconUrl = new URL(
+      "icons/icon-192.png",
+      self.registration.scope,
+    ).toString();
+    const badgeUrl = new URL(
+      "icons/icon-192.png",
+      self.registration.scope,
+    ).toString();
+
+    for (const item of items) {
+      const delay = Number(item.fireAt) - now;
+      if (!Number.isFinite(delay) || delay <= 0 || delay > 24 * 60 * 60 * 1000)
+        continue;
+      const key = item.tag || `${item.title}:${item.fireAt}`;
+      const timerId = setTimeout(() => {
+        scheduledTimers.delete(key);
+        const targetUrl = new URL(
+          item.url || self.registration.scope,
+          self.registration.scope,
+        ).toString();
+        self.registration
+          .showNotification(item.title, {
+            body: item.body,
+            icon: iconUrl,
+            badge: badgeUrl,
+            tag: key,
+            renotify: false,
+            vibrate: [200, 100, 200],
+            data: {
+              url: targetUrl,
+              tab: item.tab || "home",
+            },
+          })
+          .catch(() => {});
+      }, delay);
+      scheduledTimers.set(key, timerId);
+    }
+  } else if (event.data?.type === "SCHEDULE_TEST_NOTIFICATION") {
+    const delayMs = Number(event.data.delayMs) || 4000;
+    const iconUrl = new URL(
+      "icons/icon-192.png",
+      self.registration.scope,
+    ).toString();
+    const badgeUrl = new URL(
+      "icons/icon-192.png",
+      self.registration.scope,
+    ).toString();
+    const targetUrl = new URL(
+      "./?tab=home",
+      self.registration.scope,
+    ).toString();
+
+    event.waitUntil(
+      new Promise((resolve) => {
+        setTimeout(() => {
+          self.registration
+            .showNotification(
+              event.data.title || "Spend background test reminder",
+              {
+                body:
+                  event.data.body ||
+                  "Background notifications are working while Spend is inactive!",
+                icon: iconUrl,
+                badge: badgeUrl,
+                tag: `spend-bg-test-${Date.now()}`,
+                renotify: true,
+                vibrate: [200, 100, 200],
+                data: {
+                  url: targetUrl,
+                  tab: "home",
+                },
+              },
+            )
+            .catch(() => {})
+            .finally(resolve);
+        }, delayMs);
+      }),
+    );
+  }
+});
+
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET") return;
@@ -55,6 +150,15 @@ self.addEventListener("fetch", (event) => {
 
   const scopeUrl = new URL(self.registration.scope);
   if (!url.pathname.startsWith(scopeUrl.pathname)) return;
+
+  // Never intercept Vite dev-server module requests in local development
+  if (
+    url.pathname.includes("/src/") ||
+    url.pathname.includes("/@") ||
+    url.pathname.includes("/node_modules/")
+  ) {
+    return;
+  }
 
   if (request.mode === "navigate") {
     const indexUrl = new URL("index.html", self.registration.scope).toString();
@@ -124,6 +228,12 @@ self.addEventListener("push", (event) => {
     }
   }
 
+  const tag = payload.tag || fallback.tag;
+  if (scheduledTimers.has(tag)) {
+    clearTimeout(scheduledTimers.get(tag));
+    scheduledTimers.delete(tag);
+  }
+
   const iconUrl = new URL(
     "icons/icon-192.png",
     self.registration.scope,
@@ -143,7 +253,7 @@ self.addEventListener("push", (event) => {
       body: payload.body,
       icon: iconUrl,
       badge: badgeUrl,
-      tag: payload.tag || fallback.tag,
+      tag,
       renotify: Boolean(payload.renotify),
       vibrate: [200, 100, 200],
       data: {

@@ -180,10 +180,53 @@ export async function syncBackgroundSchedules(
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
   const deviceId = getDeviceId();
   const [hours, minutes] = reminderTime.split(":").map(Number);
+
+  // Ensure push_devices row is always present and synced for this (user_id, device_id)
+  // so send-due-reminders never deletes push_reminders as orphaned
+  if ("serviceWorker" in navigator && "PushManager" in window) {
+    try {
+      const registration = await navigator.serviceWorker.getRegistration();
+      const subscription = await registration?.pushManager?.getSubscription?.();
+      const serialized = subscription?.toJSON?.();
+      if (
+        serialized?.endpoint &&
+        serialized?.keys?.p256dh &&
+        serialized?.keys?.auth
+      ) {
+        await client.from("push_devices").upsert(
+          {
+            user_id: userId,
+            device_id: deviceId,
+            endpoint: serialized.endpoint,
+            subscription: serialized,
+          },
+          { onConflict: "user_id,device_id" },
+        );
+      }
+    } catch {
+      // Continue syncing reminders even if subscription check fails
+    }
+  }
+
   const now = new Date();
   const nowMs = now.getTime();
   const todayStr = localDate(now);
-  const hasExpenseToday = expenses.some((e) => e?.date === todayStr);
+  const todayNotifyAt = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+    hours,
+    minutes,
+    0,
+  );
+  const isTodayReminderInFuture = todayNotifyAt.getTime() > nowMs;
+
+  let dailyAlreadyFiredForThisTime = false;
+  try {
+    dailyAlreadyFiredForThisTime =
+      localStorage.getItem("spend-last-daily-reminder-date-v1") ===
+      `${todayStr}:${reminderTime}`;
+  } catch {}
 
   const reminders = [];
 
@@ -195,8 +238,16 @@ export async function syncBackgroundSchedules(
       schedule.dayOfMonth || Number(schedule.nextDate.slice(-2)),
     );
 
-    // Due-day reminder
-    let targetDate = schedule.nextDate;
+    // If an expense for this recurring schedule was generated today AND today's reminderTime is still in the future,
+    // allow today's reminder to fire at reminderTime rather than skipping to next month/week.
+    const generatedToday = expenses.some(
+      (e) =>
+        (e?.recurringId === schedule.id || e?.recId === schedule.id) &&
+        e?.date === todayStr,
+    );
+
+    let targetDate =
+      generatedToday && isTodayReminderInFuture ? todayStr : schedule.nextDate;
     let [year, month, day] = targetDate.split("-").map(Number);
     let notifyDate = new Date(year, month - 1, day, hours, minutes);
     let guard = 0;
@@ -269,7 +320,7 @@ export async function syncBackgroundSchedules(
     );
     if (
       daysAhead === 0 &&
-      (candidateDate.getTime() <= nowMs || hasExpenseToday)
+      (candidateDate.getTime() <= nowMs || dailyAlreadyFiredForThisTime)
     ) {
       daysAhead = 7;
       candidateDate = new Date(
@@ -373,31 +424,53 @@ export async function syncBackgroundSchedules(
     active: true,
   });
 
-  if (reminders.length) {
-    const { error } = await client
-      .from("push_reminders")
-      .upsert(reminders, { onConflict: "user_id,device_id,schedule_id" });
-    if (error) throw error;
-  }
-
+  // Fetch existing rows first so we can delete any row whose next_date moved earlier
+  // or whose reminder_time changed (bypassing older BEFORE UPDATE trigger restrictions)
   const { data: existing, error: loadError } = await client
     .from("push_reminders")
-    .select("schedule_id")
+    .select(
+      "schedule_id, next_date, reminder_time, pending_notification",
+    )
     .eq("user_id", userId)
     .eq("device_id", deviceId);
   if (loadError) throw loadError;
 
+  const existingById = new Map(
+    (existing ?? []).map((row) => [row.schedule_id, row]),
+  );
   const currentIds = new Set(reminders.map(({ schedule_id }) => schedule_id));
-  const staleIds = (existing ?? [])
-    .map((r) => r.schedule_id)
-    .filter((id) => !currentIds.has(id));
-  if (staleIds.length) {
-    const { error } = await client
+
+  const idsToReset = [];
+  for (const row of existing ?? []) {
+    if (!currentIds.has(row.schedule_id)) {
+      idsToReset.push(row.schedule_id);
+      continue;
+    }
+    const nextRow = reminders.find((r) => r.schedule_id === row.schedule_id);
+    if (
+      nextRow &&
+      !row.pending_notification &&
+      (nextRow.next_date < row.next_date ||
+        nextRow.reminder_time !== row.reminder_time)
+    ) {
+      idsToReset.push(row.schedule_id);
+    }
+  }
+
+  if (idsToReset.length > 0) {
+    const { error: delError } = await client
       .from("push_reminders")
       .delete()
       .eq("user_id", userId)
       .eq("device_id", deviceId)
-      .in("schedule_id", staleIds);
+      .in("schedule_id", idsToReset);
+    if (delError) throw delError;
+  }
+
+  if (reminders.length) {
+    const { error } = await client
+      .from("push_reminders")
+      .upsert(reminders, { onConflict: "user_id,device_id,schedule_id" });
     if (error) throw error;
   }
 }

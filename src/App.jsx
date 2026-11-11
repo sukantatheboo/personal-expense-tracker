@@ -2259,8 +2259,9 @@ export default function App() {
 
   const checkDailyReminder = useCallback(async () => {
     const today = localDate();
+    const dailyStamp = `${today}:${reminderTime}`;
     try {
-      if (localStorage.getItem(LAST_DAILY_REMINDER_KEY) === today) return;
+      if (localStorage.getItem(LAST_DAILY_REMINDER_KEY) === dailyStamp) return;
     } catch {}
 
     const now = new Date();
@@ -2270,11 +2271,8 @@ export default function App() {
 
     if (currentTimeStr < reminderTime) return;
 
-    const hasExpenseToday = expenses.some((e) => e.date === today);
-    if (hasExpenseToday) return;
-
     try {
-      localStorage.setItem(LAST_DAILY_REMINDER_KEY, today);
+      localStorage.setItem(LAST_DAILY_REMINDER_KEY, dailyStamp);
     } catch {}
 
     const title = "Daily expense reminder";
@@ -2288,7 +2286,7 @@ export default function App() {
       tab: "home",
       tone: "reminder",
     });
-  }, [expenses, reminderTime]);
+  }, [reminderTime]);
 
   const checkBudgetMilestones = useCallback(async () => {
     const b = Number(budgets[selectedMonth] || 0);
@@ -2333,8 +2331,12 @@ export default function App() {
   processDueSchedules.current = () => {
     if (!isHydratedRef.current || (hasAppPin() && !isSessionUnlocked())) return;
     const today = localDate();
-    if (lastRecurringCheckRef.current === today) return;
-    lastRecurringCheckRef.current = today;
+    const now = new Date();
+    const currentTimeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+    const canProcessToday = currentTimeStr >= reminderTime;
+    const checkKey = `${today}:${canProcessToday ? reminderTime : "pre"}`;
+    if (lastRecurringCheckRef.current === checkKey) return;
+    lastRecurringCheckRef.current = checkKey;
     const nextExpenses = [...expenses];
     let expensesChanged = false;
     let schedulesChanged = false;
@@ -2343,7 +2345,10 @@ export default function App() {
       if (!schedule.active) return schedule;
       let nextDate = schedule.nextDate;
       let generated = 0;
-      while (nextDate <= today && generated < 240) {
+      while (
+        (nextDate < today || (nextDate === today && canProcessToday)) &&
+        generated < 240
+      ) {
         const exists =
           isRecordDeleted(
             deletedRecords.expenses,
@@ -4050,7 +4055,59 @@ export default function App() {
   }
 
   async function handleTestNotification() {
-    setNotificationStatus("Sending native test notification…");
+    setNotificationStatus(
+      "Test scheduled! Minimize or lock Spend now — your notification will arrive in 4 seconds…",
+    );
+    const delayMs = 4000;
+    const isNative =
+      typeof window !== "undefined" &&
+      Boolean(window.Capacitor?.isNativePlatform?.());
+
+    if (isNative) {
+      try {
+        const sent = await sendNativeBuiltinNotification({
+          title: "Spend background test reminder",
+          body: "Closed-app notifications are working while Spend is inactive!",
+          tag: `spend-manual-test-${Date.now()}`,
+          tone: "reminder",
+          scheduleAt: new Date(Date.now() + delayMs),
+        });
+        if (sent) {
+          window.setTimeout(() => {
+            setNotificationStatus("Background test notification delivered.");
+          }, delayMs + 300);
+        } else {
+          setNotificationStatus(
+            "Could not trigger test notification. Check permissions.",
+          );
+        }
+      } catch (error) {
+        setNotificationStatus(
+          `Could not trigger test notification: ${error.message}`,
+        );
+      }
+      return;
+    }
+
+    if ("serviceWorker" in navigator && window.Notification?.permission === "granted") {
+      try {
+        const reg = await navigator.serviceWorker.getRegistration();
+        const sw = reg?.active || navigator.serviceWorker.controller;
+        if (sw) {
+          sw.postMessage({
+            type: "SCHEDULE_TEST_NOTIFICATION",
+            delayMs,
+            title: "Spend background test reminder",
+            body: "Background notifications are working while Spend is inactive!",
+          });
+          window.setTimeout(() => {
+            setNotificationStatus("Background test notification delivered.");
+          }, delayMs + 300);
+          return;
+        }
+      } catch {}
+    }
+
     window.setTimeout(async () => {
       try {
         const sent = await sendNativeBuiltinNotification({
@@ -4071,7 +4128,7 @@ export default function App() {
           `Could not trigger test notification: ${error.message}`,
         );
       }
-    }, 1500);
+    }, delayMs);
   }
 
   useEffect(() => {
@@ -4115,9 +4172,11 @@ export default function App() {
       setNotificationStatus("Choose a valid reminder time.");
       return;
     }
+    lastRecurringCheckRef.current = "";
     setReminderTime(value);
     try {
       localStorage.setItem(STORAGE_KEYS.reminderTime, value);
+      localStorage.removeItem(LAST_DAILY_REMINDER_KEY);
     } catch (error) {
       setNotificationStatus(
         `Could not save the reminder time on this device: ${error.message}`,

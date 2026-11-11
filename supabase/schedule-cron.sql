@@ -19,10 +19,10 @@ delete from vault.secrets where name in ('project_url', 'cron_secret');
 select vault.create_secret('https://<your-project-ref>.supabase.co', 'project_url');
 select vault.create_secret('<your-cron-secret>', 'cron_secret');
 
--- 3. Schedule the edge function to run every 5 minutes with authorization
+-- 3. Schedule the edge function to run every 1 minute for exact reminder_time delivery
 select cron.schedule(
   'send-due-reminders',
-  '*/5 * * * *',
+  '* * * * *',
   $$
   select net.http_post(
     url := (select decrypted_secret from vault.decrypted_secrets where name = 'project_url' order by created_at desc limit 1)
