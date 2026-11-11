@@ -81,6 +81,13 @@ export async function enableBackgroundPush(userId) {
     throw new Error("The browser returned an invalid push subscription.");
   }
 
+  // Ensure this subscription endpoint is detached from any older user on this browser to avoid privacy leaks
+  await client
+    .from("push_devices")
+    .delete()
+    .eq("endpoint", serialized.endpoint)
+    .neq("user_id", userId);
+
   const { error } = await client.from("push_devices").upsert(
     {
       user_id: userId,
@@ -127,6 +134,11 @@ export async function disableBackgroundPush(userId) {
     throw new Error(
       "The browser could not unsubscribe from push notifications.",
     );
+  }
+  try {
+    localStorage.removeItem("spend-push-device-id-v1");
+  } catch {
+    // Ignore storage errors on cleanup
   }
 }
 

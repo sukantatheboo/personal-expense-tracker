@@ -10129,6 +10129,16 @@ export default function MobilePrototype({
     if (isSavingsTransfer && spendableCards.length > 0 && !f.acct)
       return toast("Select an account to transfer from.");
 
+    if (f.acct) {
+      const targetCard = cards.find((c) => c.id === f.acct);
+      if (targetCard?.frozen) {
+        triggerHaptic("warning");
+        return toast(
+          `${targetCard.name || "This card"} is locked. Unlock it in Card Options first.`,
+        );
+      }
+    }
+
     const saved = onExpenseSave({
       description:
         f.desc.trim() || (isSavingsTransfer ? "Savings transfer" : resolvedCat),
@@ -10297,6 +10307,15 @@ export default function MobilePrototype({
       spendableCards.length > 0
     ) {
       return toast("Select an account to transfer from.");
+    }
+    if (form.acct) {
+      const targetCard = cards.find((c) => c.id === form.acct);
+      if (targetCard?.frozen) {
+        triggerHaptic("warning");
+        return toast(
+          `${targetCard.name || "This card"} is locked. Unlock it in Card Options first.`,
+        );
+      }
     }
     if (
       !onExpenseUpdate(id, {

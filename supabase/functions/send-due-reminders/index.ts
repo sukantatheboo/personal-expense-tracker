@@ -97,6 +97,8 @@ Deno.serve(async (req) => {
     .select("user_id, device_id, schedule_id, description, interval, day_of_month, next_date, next_notify_at, timezone, reminder_time")
     .eq("active", true)
     .lte("next_notify_at", now.toISOString())
+    .or(`claim_until.is.null,claim_until.lte.${now.toISOString()}`)
+    .order("next_notify_at", { ascending: true })
     .limit(200);
 
   if (error) return new Response(error.message, { status: 500 });
@@ -124,22 +126,13 @@ Deno.serve(async (req) => {
       continue;
     }
 
-    // move the row to its next FUTURE occurrence
-    let date: string = r.next_date;
-    let notifyAt = new Date(r.next_notify_at);
-    for (let i = 0; notifyAt.getTime() <= now.getTime() && i < 500; i += 1) {
-      date = nextDate(date, r.interval, r.day_of_month);
-      notifyAt = zonedTimeToUtc(date, r.reminder_time, r.timezone);
-    }
-
-    // claim first, so two overlapping runs can never send the same reminder twice
+    // Acquire atomic 5-minute lease so overlapping runs never double-send
+    const leaseUntil = new Date(now.getTime() + 5 * 60 * 1000).toISOString();
     const { data: claimed } = await supabase
       .from("push_reminders")
       .update({
-        next_date: date,
-        next_notify_at: notifyAt.toISOString(),
-        pending_notification: false,
-        claim_until: null,
+        claim_until: leaseUntil,
+        pending_notification: true,
       })
       .eq("user_id", r.user_id)
       .eq("device_id", r.device_id)
@@ -148,8 +141,31 @@ Deno.serve(async (req) => {
       .select("schedule_id");
     if (!claimed?.length) continue;
 
-    if (now.getTime() - new Date(r.next_notify_at).getTime() > STALE_MS) continue; // too old to be useful
+    // Calculate next FUTURE occurrence date
+    let date: string = r.next_date;
+    let notifyAt = new Date(r.next_notify_at);
+    for (let i = 0; notifyAt.getTime() <= now.getTime() && i < 500; i += 1) {
+      date = nextDate(date, r.interval, r.day_of_month);
+      notifyAt = zonedTimeToUtc(date, r.reminder_time, r.timezone);
+    }
 
+    // Skip sending if reminder is stale (>12h old), but advance schedule forward
+    if (now.getTime() - new Date(r.next_notify_at).getTime() > STALE_MS) {
+      await supabase
+        .from("push_reminders")
+        .update({
+          next_date: date,
+          next_notify_at: notifyAt.toISOString(),
+          claim_until: null,
+          pending_notification: false,
+        })
+        .eq("user_id", r.user_id)
+        .eq("device_id", r.device_id)
+        .eq("schedule_id", r.schedule_id);
+      continue;
+    }
+
+    let pushSucceeded = false;
     try {
       await webpush.sendNotification(
         device.subscription,
@@ -163,6 +179,7 @@ Deno.serve(async (req) => {
         { TTL: 6 * 60 * 60 },
       );
       sent += 1;
+      pushSucceeded = true;
     } catch (err) {
       const status = (err as { statusCode?: number }).statusCode;
       if (status === 404 || status === 410) {
@@ -177,9 +194,36 @@ Deno.serve(async (req) => {
           .delete()
           .eq("user_id", r.user_id)
           .eq("device_id", r.device_id);
+        continue;
       } else {
         console.error("push failed", status, (err as { body?: unknown }).body ?? err);
       }
+    }
+
+    if (pushSucceeded) {
+      // Advance to next occurrence ONLY AFTER successful push dispatch
+      await supabase
+        .from("push_reminders")
+        .update({
+          next_date: date,
+          next_notify_at: notifyAt.toISOString(),
+          claim_until: null,
+          pending_notification: false,
+        })
+        .eq("user_id", r.user_id)
+        .eq("device_id", r.device_id)
+        .eq("schedule_id", r.schedule_id);
+    } else {
+      // Release claim lease on transient error so next cron execution can retry
+      await supabase
+        .from("push_reminders")
+        .update({
+          claim_until: null,
+          pending_notification: false,
+        })
+        .eq("user_id", r.user_id)
+        .eq("device_id", r.device_id)
+        .eq("schedule_id", r.schedule_id);
     }
   }
   return Response.json({ due: due.length, sent });

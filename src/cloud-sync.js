@@ -540,6 +540,19 @@ export async function saveCloudData(userId, data, expectedUpdatedAt = null) {
   if (!client) throw new Error("Cloud sync is not configured.");
 
   const sanitized = sanitizeCloudPayload(data);
+
+  try {
+    const rpcRes = await client.rpc("save_spend_user_snapshot", {
+      p_data: sanitized,
+      p_expected_updated_at: expectedUpdatedAt || null,
+    });
+    if (!rpcRes.error && rpcRes.data !== undefined) {
+      return rpcRes.data ?? null;
+    }
+  } catch {
+    // Fall back to direct query if RPC is unavailable
+  }
+
   const { data: saved, error } = await executeSaveQuery(
     client,
     userId,
@@ -592,7 +605,7 @@ export function subscribeToCloudChanges(
   userId,
   onChange,
   onStatus,
-  includeNormalizedAccounts = true,
+  includeNormalizedAccounts = false,
 ) {
   if (!supabase) return () => {};
 
