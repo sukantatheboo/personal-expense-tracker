@@ -7675,222 +7675,170 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
   background: color-mix(in srgb, var(--card) 92%, var(--line));
 }
 
-/* ──── Mini Card Preview (56px × 35px Physical Credit Card Proportions) ──── */
-.mobile-prototype .mini-card-preview {
+/* ──── Prototype Mini Card Preview (Shared Layout, 4 Card Types) ──── */
+.mobile-prototype .mini-card-preview,
+.mobile-prototype .mini-card-preview.c {
   position: relative;
+  box-sizing: border-box;
   width: 56px;
   height: 35px;
   flex: 0 0 56px;
-  border-radius: 6px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  padding: 4px 5px 3.5px;
-  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 5px;
+  padding: 4px;
+  color: var(--fg, #ffffff);
+  background: var(--a, #2b2d33);
+  border: none;
   box-shadow:
-    0 3px 8px rgba(0, 0, 0, 0.24),
-    inset 0 0.5px 0 rgba(255, 255, 255, 0.35);
+    0 1px 2px rgba(0, 0, 0, 0.1),
+    0 6px 12px -6px rgba(0, 0, 0, 0.35);
   overflow: hidden;
-  box-sizing: border-box;
-  color: #ffffff;
   isolation: isolate;
   transform: translateZ(0);
+  font-family:
+    "Inter",
+    system-ui,
+    -apple-system,
+    sans-serif;
 }
-.mobile-prototype .mini-card-sheen {
+.mobile-prototype .mini-card-preview.cr {
+  background: linear-gradient(135deg, var(--a), var(--b));
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.22),
+    0 1px 2px rgba(0, 0, 0, 0.1),
+    0 6px 12px -6px rgba(0, 0, 0, 0.35);
+}
+.mobile-prototype .mini-card-preview.vt {
+  background: linear-gradient(135deg, var(--a), var(--b));
+  border: 1px dashed rgba(255, 255, 255, 0.65);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.1),
+    0 6px 12px -6px rgba(0, 0, 0, 0.35);
+}
+.mobile-prototype .mini-card-preview .ch {
   position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.28) 0%,
-    rgba(255, 255, 255, 0.06) 45%,
-    transparent 80%
-  );
-  z-index: 1;
+  left: 4.5px;
+  top: 4.5px;
+  width: 8.5px;
+  height: 6.5px;
+  box-sizing: border-box;
+  border: 1px solid currentColor;
+  border-radius: 1.6px;
+  opacity: 0.75;
+  font-style: normal;
 }
-.mobile-prototype .mini-card-pattern {
+.mobile-prototype .mini-card-preview .ch::after {
+  content: "";
   position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background-image:
-    radial-gradient(
-      circle at 86% 16%,
-      rgba(255, 255, 255, 0.16) 0%,
-      transparent 48%
-    ),
-    radial-gradient(
-      circle at 14% 86%,
-      rgba(255, 255, 255, 0.09) 0%,
-      transparent 44%
-    );
-  z-index: 1;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid currentColor;
+  transform: translateX(-0.5px);
 }
-.mobile-prototype .mini-card-top-row {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 2px;
-  height: 10px;
+.mobile-prototype .mini-card-preview.vt .ch,
+.mobile-prototype .mini-card-preview.vt .ch::after {
+  border-style: dashed;
 }
-.mobile-prototype .mini-card-chip-waves {
-  display: inline-flex;
-  align-items: center;
-  gap: 2.5px;
-}
-.mobile-prototype .mini-card-emv {
-  display: block;
-  width: 10px;
-  height: 7.5px;
-  flex: 0 0 10px;
-  filter: drop-shadow(0 0.5px 1px rgba(0, 0, 0, 0.3));
-}
-.mobile-prototype .mini-card-contactless {
-  display: block;
-  height: 7.5px;
-  width: auto;
-  max-height: 7.5px;
-  max-width: 9px;
-  object-fit: contain;
-  filter: drop-shadow(0 0.5px 1px rgba(0, 0, 0, 0.35));
+.mobile-prototype .mini-card-preview .mk {
+  position: absolute;
+  right: 4.5px;
+  top: 4.8px;
+  font-size: 4.4px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
   opacity: 0.9;
-}
-.mobile-prototype .mini-card-brand-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
-  max-width: 24px;
-  height: 10px;
-  overflow: hidden;
-  flex-shrink: 0;
-}
-.mobile-prototype .mini-card-brand-mark > svg,
-.mobile-prototype .mini-card-brand-mark > img {
-  display: block;
-  max-height: 8.5px;
-  width: auto;
-  max-width: 24px;
-  object-fit: contain;
-}
-.mobile-prototype .mini-card-tier-tag {
-  font-size: 5px;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  color: rgba(255, 255, 255, 0.92);
-  line-height: 1;
-}
-.mobile-prototype .mini-card-tier-tag.is-gold {
-  color: #fde68a;
-}
-.mobile-prototype .mini-card-tier-tag.is-virtual {
-  color: #99f6e4;
-}
-.mobile-prototype .mini-card-tier-tag.is-custom {
-  color: rgba(255, 255, 255, 0.85);
-}
-.mobile-prototype .mini-card-virtual-brand {
-  display: flex;
-  align-items: center;
-}
-.mobile-prototype .mini-card-cash-symbol {
-  font-size: 10px;
-  font-weight: 900;
-  color: #ffffff;
-  line-height: 1;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
-}
-.mobile-prototype .mini-card-mfs-brand,
-.mobile-prototype .mini-card-savings-brand {
-  display: flex;
-  align-items: center;
-}
-.mobile-prototype .mini-card-mfs-brand > img,
-.mobile-prototype .mini-card-savings-brand > img {
-  height: 10px;
-  width: auto;
-  object-fit: contain;
-  display: block;
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
-}
-.mobile-prototype .mini-card-bottom-row {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: nowrap;
-  gap: 2px;
-  width: 100%;
-  white-space: nowrap;
-}
-.mobile-prototype .mini-card-digits {
-  font-family: "SF Mono", "Menlo", monospace;
-  font-size: 6.5px;
-  font-weight: 750;
-  color: rgba(255, 255, 255, 0.94);
-  letter-spacing: 0.04em;
   line-height: 1;
   white-space: nowrap;
-  flex-shrink: 0;
-  text-shadow: 0 0.5px 2px rgba(0, 0, 0, 0.45);
 }
-.mobile-prototype .mini-card-network-emblem {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-shrink: 0;
-  line-height: 1;
-}
-.mobile-prototype .mini-card-network-emblem svg {
-  display: block;
-  width: auto;
-  height: auto;
-  stroke: none;
-  filter: drop-shadow(0 0.5px 1.5px rgba(0, 0, 0, 0.3));
-}
-.mobile-prototype .mini-card-visa-text {
-  font-family:
-    system-ui,
-    -apple-system,
-    sans-serif;
-  font-size: 7.5px;
-  font-weight: 900;
-  font-style: italic;
-  color: #ffffff;
-  letter-spacing: 0.02em;
-  line-height: 1;
-  white-space: nowrap;
-  text-shadow: 0 0.5px 2px rgba(0, 0, 0, 0.45);
-}
-.mobile-prototype .mini-card-amex-text {
-  font-family:
-    system-ui,
-    -apple-system,
-    sans-serif;
-  font-size: 6.5px;
-  font-weight: 900;
-  color: #ffffff;
+.mobile-prototype .mini-card-preview .n {
+  position: absolute;
+  left: 4.5px;
+  bottom: 4px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-weight: 600;
+  font-size: 5.2px;
   letter-spacing: 0.05em;
   line-height: 1;
   white-space: nowrap;
 }
-.mobile-prototype .mini-card-mfs-text {
-  font-size: 6px;
-  font-weight: 900;
-  letter-spacing: 0.06em;
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.28);
-  padding: 1px 3px;
-  border-radius: 2px;
+.mobile-prototype .mini-card-preview .v {
+  position: absolute;
+  right: 4.5px;
+  bottom: 3.6px;
+  font-style: italic;
+  font-weight: 800;
+  font-size: 5.8px;
+  letter-spacing: 0.02em;
   line-height: 1;
   white-space: nowrap;
 }
-.mobile-prototype .mini-card-vault-star {
-  font-size: 8px;
-  color: #fbd38d;
+.mobile-prototype .mini-card-preview .amex {
+  position: absolute;
+  right: 4.5px;
+  bottom: 3.8px;
+  font-style: normal;
+  font-weight: 800;
+  font-size: 5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   line-height: 1;
-  text-shadow: 0 0.5px 2px rgba(0, 0, 0, 0.35);
+  white-space: nowrap;
+}
+.mobile-prototype .mini-card-preview .m {
+  position: absolute;
+  right: 4.5px;
+  bottom: 3.8px;
+  width: 10px;
+  height: 6.2px;
+  font-style: normal;
+}
+.mobile-prototype .mini-card-preview .m::before,
+.mobile-prototype .mini-card-preview .m::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  width: 6.2px;
+  height: 6.2px;
+  border-radius: 50%;
+}
+.mobile-prototype .mini-card-preview .m::before {
+  left: 0;
+  background: #eb001b;
+}
+.mobile-prototype .mini-card-preview .m::after {
+  left: 3.8px;
+  background: #f79e1b;
+  opacity: 0.92;
+}
+.mobile-prototype .mini-card-preview .gl {
+  position: absolute;
+  left: 4.5px;
+  top: 4.5px;
+  width: 9.5px;
+  height: 9.5px;
+  margin: 0;
+  box-sizing: border-box;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 4.8px;
+  font-weight: 700;
+  font-style: normal;
+  line-height: 1;
+}
+.mobile-prototype .mini-card-preview .gl.ring {
+  margin: 0;
+}
+.mobile-prototype .mini-card-preview .gl.ring::after {
+  content: "";
+  width: 3.5px;
+  height: 3.5px;
+  box-sizing: border-box;
+  border: 1px solid currentColor;
+  border-radius: 50%;
 }
 
 /* ───────────── Prototype 2×2 Account Card Grid (Paid From, Income, Adjust & Transfer) ───────────── */
@@ -7985,40 +7933,78 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
   margin-bottom: 12px;
 }
 
-.mobile-prototype .tx-account-mini-card {
+.mobile-prototype .tx-account-mini-card,
+.mobile-prototype .mini-card-preview.tx-account-mini-card {
   width: 50px;
   height: 31px;
   flex: 0 0 50px;
-  padding: 3.5px 4.5px 3px;
-  border-radius: 6px;
+  padding: 3.5px;
+  border-radius: 4.5px;
   transition:
     filter 180ms ease,
     opacity 180ms ease,
     transform 180ms ease;
 }
 
-.mobile-prototype .tx-account-mini-card .mini-card-digits {
-  font-size: 5.8px;
-  letter-spacing: 0.02em;
+.mobile-prototype .tx-account-mini-card .ch {
+  left: 4px;
+  top: 4px;
+  width: 7.8px;
+  height: 5.8px;
 }
 
-.mobile-prototype .tx-account-mini-card .mini-card-visa-text {
-  font-size: 6.5px;
+.mobile-prototype .tx-account-mini-card .gl {
+  left: 4px;
+  top: 4px;
+  width: 8.6px;
+  height: 8.6px;
+  font-size: 4.4px;
 }
 
-.mobile-prototype .tx-account-mini-card .mini-card-amex-text {
-  font-size: 5.8px;
+.mobile-prototype .tx-account-mini-card .gl.ring::after {
+  width: 3.2px;
+  height: 3.2px;
 }
 
-.mobile-prototype .tx-account-mini-card .mini-card-mfs-text {
-  font-size: 5.2px;
-  padding: 1px 2.5px;
-  letter-spacing: 0.04em;
+.mobile-prototype .tx-account-mini-card .mk {
+  right: 4px;
+  top: 4.2px;
+  font-size: 4px;
 }
 
-.mobile-prototype .tx-account-mini-card .mini-card-network-emblem svg {
-  width: 12px !important;
-  height: 8px !important;
+.mobile-prototype .tx-account-mini-card .n {
+  left: 4px;
+  bottom: 3.5px;
+  font-size: 4.8px;
+}
+
+.mobile-prototype .tx-account-mini-card .v {
+  right: 4px;
+  bottom: 3.2px;
+  font-size: 5.3px;
+}
+
+.mobile-prototype .tx-account-mini-card .amex {
+  right: 4px;
+  bottom: 3.4px;
+  font-size: 4.6px;
+}
+
+.mobile-prototype .tx-account-mini-card .m {
+  right: 4px;
+  bottom: 3.5px;
+  width: 9px;
+  height: 5.6px;
+}
+
+.mobile-prototype .tx-account-mini-card .m::before,
+.mobile-prototype .tx-account-mini-card .m::after {
+  width: 5.6px;
+  height: 5.6px;
+}
+
+.mobile-prototype .tx-account-mini-card .m::after {
+  left: 3.4px;
 }
 
 .mobile-prototype .tx-account-card.is-sending-source .tx-account-mini-card,
