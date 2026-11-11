@@ -1112,6 +1112,36 @@ export default function App() {
   const authReturnFocusRef = useRef(null);
   const profileEditorTriggerRef = useRef(null);
   const backupFileInputRef = useRef(null);
+  const {
+    isOpen: updateModalOpen,
+    isClosing: updateModalClosing,
+    open: showUpdateModal,
+    close: hideUpdateModal,
+  } = usePopupPresence();
+  const [updateInfo, setUpdateInfo] = useState(null);
+  const [updateApplying, setUpdateApplying] = useState(false);
+  const dismissedBuildIdRef = useRef("");
+  const updateModalRef = useRef(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const handleUpdateEvent = (event) => {
+      const detail = event?.detail || window.__spendPendingUpdate || {};
+      const candidateId = detail.buildId || "sw-update";
+      if (dismissedBuildIdRef.current && dismissedBuildIdRef.current === candidateId) {
+        return;
+      }
+      setUpdateInfo(detail);
+      showUpdateModal();
+    };
+    window.addEventListener("spend:update-available", handleUpdateEvent);
+    if (window.__spendPendingUpdate) {
+      handleUpdateEvent({ detail: window.__spendPendingUpdate });
+    }
+    return () => {
+      window.removeEventListener("spend:update-available", handleUpdateEvent);
+    };
+  }, [showUpdateModal]);
   const pendingDueRef = useRef([]);
   const lastRecurringCheckRef = useRef("");
   const pushScheduleSyncRef = useRef(Promise.resolve());
@@ -4763,6 +4793,110 @@ export default function App() {
                   </button>
                 </div>
               </form>
+            </section>
+          </div>,
+          document.body,
+        )}
+      {updateModalOpen &&
+        createPortal(
+          <div
+            className={`update-modal-backdrop${updateModalClosing ? " is-closing" : ""}`}
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget && !updateApplying) {
+                dismissedBuildIdRef.current = updateInfo?.buildId || "sw-update";
+                hideUpdateModal();
+              }
+            }}
+          >
+            <section
+              className={`update-modal${updateModalClosing ? " is-closing" : ""}`}
+              ref={updateModalRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="update-modal-title"
+              onKeyDown={(event) => {
+                if (event.key === "Escape" && !updateApplying) {
+                  dismissedBuildIdRef.current = updateInfo?.buildId || "sw-update";
+                  hideUpdateModal();
+                  return;
+                }
+                if (event.key !== "Tab") return;
+                const focusable = event.currentTarget.querySelectorAll(
+                  "button:not([disabled])",
+                );
+                if (!focusable.length) return;
+                const first = focusable[0];
+                const last = focusable[focusable.length - 1];
+                if (event.shiftKey && document.activeElement === first) {
+                  event.preventDefault();
+                  last.focus();
+                } else if (!event.shiftKey && document.activeElement === last) {
+                  event.preventDefault();
+                  first.focus();
+                }
+              }}
+            >
+              <div className="update-modal-icon-badge" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  width="22"
+                  height="22"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M12 16V8" />
+                  <path d="m8.5 11.5 3.5-3.5 3.5 3.5" />
+                  <circle cx="12" cy="12" r="9" />
+                </svg>
+              </div>
+              <h2 id="update-modal-title" className="update-modal-title">
+                Update available
+              </h2>
+              <p className="update-modal-desc">
+                {updateInfo?.version
+                  ? `Spend v${updateInfo.version} is ready with the latest improvements.`
+                  : "A new version of Spend is ready with the latest improvements."}
+              </p>
+              <div className="update-modal-actions">
+                <button
+                  type="button"
+                  className="update-modal-btn is-later"
+                  disabled={updateApplying}
+                  onClick={() => {
+                    dismissedBuildIdRef.current = updateInfo?.buildId || "sw-update";
+                    hideUpdateModal();
+                  }}
+                >
+                  Later
+                </button>
+                <button
+                  type="button"
+                  className="update-modal-btn is-primary"
+                  disabled={updateApplying}
+                  onClick={async () => {
+                    if (updateApplying) return;
+                    setUpdateApplying(true);
+                    try {
+                      if (pushUser && cloudSyncEnabled && cloudSyncReady) {
+                        await Promise.race([
+                          queueCloudSnapshotSave(pushUser.id).catch(() => {}),
+                          new Promise((resolve) => window.setTimeout(resolve, 1200)),
+                        ]);
+                      }
+                    } catch {}
+                    if (typeof window.__spendApplyUpdate === "function") {
+                      await window.__spendApplyUpdate();
+                    } else {
+                      window.location.reload();
+                    }
+                  }}
+                >
+                  {updateApplying ? "Updating…" : "Update now"}
+                </button>
+              </div>
             </section>
           </div>,
           document.body,

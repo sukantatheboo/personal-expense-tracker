@@ -1234,7 +1234,7 @@ export function AdaptiveIconSvg({
 export function UtilitySymbol({
   name,
   className = "",
-  imgClassName = "category-symbol-img",
+  imgClassName = "",
   style,
 }) {
   const key = String(name || "").trim().toLowerCase();
@@ -1253,7 +1253,10 @@ export function UtilitySymbol({
       aria-hidden="true"
       style={style}
     >
-      <AdaptiveIconSvg iconKey={key} className={imgClassName} />
+      <AdaptiveIconSvg
+        iconKey={key}
+        className={imgClassName || "category-symbol-img"}
+      />
     </span>
   );
 }

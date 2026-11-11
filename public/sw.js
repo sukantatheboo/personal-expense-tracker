@@ -26,6 +26,7 @@ function getScopeUrls() {
 }
 
 self.addEventListener("install", (event) => {
+  const hasActiveController = Boolean(self.registration?.active);
   event.waitUntil(
     caches
       .open(CACHE_NAME)
@@ -36,7 +37,14 @@ self.addEventListener("install", (event) => {
           ),
         ),
       )
-      .then(() => self.skipWaiting()),
+      .then(() => {
+        // Activate immediately on first install; when updating an existing install,
+        // wait in the installed state so the app can prompt the user with the Update modal.
+        if (!hasActiveController) {
+          return self.skipWaiting();
+        }
+        return undefined;
+      }),
   );
 });
 
@@ -56,6 +64,10 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") {
+    self.skipWaiting();
+    return;
+  }
   if (event.data?.type === "SYNC_SCHEDULED_NOTIFICATIONS") {
     clearScheduledTimers();
     const items = Array.isArray(event.data.items) ? event.data.items : [];
@@ -157,6 +169,15 @@ self.addEventListener("fetch", (event) => {
     url.pathname.includes("/@") ||
     url.pathname.includes("/node_modules/")
   ) {
+    return;
+  }
+
+  // Always bypass cache for version manifest and service worker script
+  if (
+    url.pathname.endsWith("/version.json") ||
+    url.pathname.endsWith("/sw.js")
+  ) {
+    event.respondWith(fetch(request, { cache: "no-store" }));
     return;
   }
 

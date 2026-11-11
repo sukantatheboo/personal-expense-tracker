@@ -4635,7 +4635,80 @@ function AddSheet({
               : "Recurring expenses need an amount."}
       </p>
 
-      <span className="lbl">Category</span>
+      <span className="lbl">What was it for?</span>
+      <input
+        ref={descInputRef}
+        className="in"
+        maxLength={80}
+        aria-label="Expense description"
+        enterKeyHint="done"
+        placeholder={
+          f.cat === "Savings" && hasSavingsAccount
+            ? "e.g. Monthly savings"
+            : "e.g. Lunch"
+        }
+        value={f.desc}
+        onChange={(event) => {
+          const description = event.target.value;
+          set("desc", description);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            event.currentTarget.blur();
+            handleSave();
+          }
+        }}
+      />
+
+      <div className="category-header-row">
+        <span className="lbl">Category</span>
+        {categorySuggestion && categorySuggestion !== f.cat && (
+          <button
+            type="button"
+            className="category-suggestion-action is-inline-hint"
+            style={{
+              "--c":
+                getCategoryColor(categorySuggestion, f.desc) ||
+                CAT[categorySuggestion]?.[1] ||
+                "#64748b",
+            }}
+            aria-label={`Use suggestion: ${categorySuggestion}`}
+            onClick={() => {
+              triggerHaptic("selection");
+              setF((current) => {
+                let nextAcct = current.acct;
+                if (categorySuggestion === "Savings" && hasSavingsAccount) {
+                  if (
+                    !current.acct ||
+                    (spendableCards.length > 0 &&
+                      !spendableCards.some((sc) => sc.id === current.acct))
+                  ) {
+                    nextAcct = primaryCard?.id || spendableCards[0]?.id || "";
+                  }
+                } else if (
+                  current.cat === "Savings" &&
+                  categorySuggestion !== "Savings"
+                ) {
+                  nextAcct = prevNonSavingsAcctRef.current;
+                }
+                return {
+                  ...current,
+                  cat: categorySuggestion,
+                  acct: nextAcct,
+                };
+              });
+            }}
+          >
+            <UtilitySymbol name="suggestion" />
+            <span className="category-suggestion-label">Suggested</span>
+            <CategorySuggestionValue
+              category={categorySuggestion}
+              description={f.desc}
+            />
+          </button>
+        )}
+      </div>
       <div className="cg">
         {categoryOrder.map((c) => (
           <button
@@ -4680,64 +4753,6 @@ function AddSheet({
           Moves money from the selected account into Savings. It is not counted
           as spending or against your budget.
         </p>
-      )}
-
-      <span className="lbl">What was it for?</span>
-      <input
-        ref={descInputRef}
-        className="in"
-        maxLength={80}
-        aria-label="Expense description"
-        enterKeyHint="done"
-        placeholder={
-          f.cat === "Savings" && hasSavingsAccount
-            ? "e.g. Monthly savings"
-            : "e.g. Lunch"
-        }
-        value={f.desc}
-        onChange={(event) => {
-          const description = event.target.value;
-          set("desc", description);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            event.currentTarget.blur();
-            handleSave();
-          }
-        }}
-      />
-
-      {categorySuggestion && categorySuggestion !== f.cat && (
-        <button
-          type="button"
-          className="category-suggestion-action is-inline-hint"
-          style={{
-            "--c":
-              getCategoryColor(categorySuggestion, f.desc) ||
-              CAT[categorySuggestion]?.[1] ||
-              "#64748b",
-          }}
-          aria-label={`Use suggestion: ${categorySuggestion}`}
-          onClick={() => {
-            triggerHaptic("selection");
-            setF((current) => ({
-              ...current,
-              cat: categorySuggestion,
-              acct:
-                current.cat === "Savings" && categorySuggestion !== "Savings"
-                  ? prevNonSavingsAcctRef.current
-                  : current.acct,
-            }));
-          }}
-        >
-          <UtilitySymbol name="suggestion" />
-          <span className="category-suggestion-label">Suggested:</span>
-          <CategorySuggestionValue
-            category={categorySuggestion}
-            description={f.desc}
-          />
-        </button>
       )}
 
       <span className="lbl">Date</span>
@@ -5778,39 +5793,41 @@ function DetailSheet({
           }
         }}
       />
-      {activeSuggestion && activeSuggestion !== f.cat && (
-        <button
-          className="category-suggestion-action is-inline-hint"
-          type="button"
-          style={{
-            "--c":
-              getCategoryColor(activeSuggestion, f.desc) ||
-              CAT[activeSuggestion]?.[1] ||
-              "#64748b",
-          }}
-          aria-label={`Use suggestion: ${activeSuggestion}`}
-          onClick={() => {
-            triggerHaptic("selection");
-            setF((current) => ({
-              ...current,
-              cat: activeSuggestion,
-              ...(activeSuggestion === "Savings" &&
-              hasSavingsAccount &&
-              !current.acct
-                ? { acct: primaryCard?.id || spendableCards[0]?.id || "" }
-                : {}),
-            }));
-          }}
-        >
-          <UtilitySymbol name="suggestion" />
-          <span className="category-suggestion-label">Suggested:</span>
-          <CategorySuggestionValue
-            category={activeSuggestion}
-            description={f.desc}
-          />
-        </button>
-      )}
-      <span className="lbl">Category</span>
+      <div className="category-header-row">
+        <span className="lbl">Category</span>
+        {activeSuggestion && activeSuggestion !== f.cat && (
+          <button
+            className="category-suggestion-action is-inline-hint"
+            type="button"
+            style={{
+              "--c":
+                getCategoryColor(activeSuggestion, f.desc) ||
+                CAT[activeSuggestion]?.[1] ||
+                "#64748b",
+            }}
+            aria-label={`Use suggestion: ${activeSuggestion}`}
+            onClick={() => {
+              triggerHaptic("selection");
+              setF((current) => ({
+                ...current,
+                cat: activeSuggestion,
+                ...(activeSuggestion === "Savings" &&
+                hasSavingsAccount &&
+                !current.acct
+                  ? { acct: primaryCard?.id || spendableCards[0]?.id || "" }
+                  : {}),
+              }));
+            }}
+          >
+            <UtilitySymbol name="suggestion" />
+            <span className="category-suggestion-label">Suggested</span>
+            <CategorySuggestionValue
+              category={activeSuggestion}
+              description={f.desc}
+            />
+          </button>
+        )}
+      </div>
       <div className="cg">
         {Object.keys(CAT).map((category) => (
           <button
@@ -5988,39 +6005,41 @@ function RecurringDetailSheet({
           }
         }}
       />
-      {activeSuggestion && activeSuggestion !== f.cat && (
-        <button
-          className="category-suggestion-action is-inline-hint"
-          type="button"
-          style={{
-            "--c":
-              getCategoryColor(activeSuggestion, f.desc) ||
-              CAT[activeSuggestion]?.[1] ||
-              "#64748b",
-          }}
-          aria-label={`Use suggestion: ${activeSuggestion}`}
-          onClick={() => {
-            triggerHaptic("selection");
-            setF((current) => ({
-              ...current,
-              cat: activeSuggestion,
-              ...(activeSuggestion === "Savings" &&
-              hasSavingsAccount &&
-              !current.acct
-                ? { acct: primaryCard?.id || spendableCards[0]?.id || "" }
-                : {}),
-            }));
-          }}
-        >
-          <UtilitySymbol name="suggestion" />
-          <span className="category-suggestion-label">Suggested:</span>
-          <CategorySuggestionValue
-            category={activeSuggestion}
-            description={f.desc}
-          />
-        </button>
-      )}
-      <span className="lbl">Category</span>
+      <div className="category-header-row">
+        <span className="lbl">Category</span>
+        {activeSuggestion && activeSuggestion !== f.cat && (
+          <button
+            className="category-suggestion-action is-inline-hint"
+            type="button"
+            style={{
+              "--c":
+                getCategoryColor(activeSuggestion, f.desc) ||
+                CAT[activeSuggestion]?.[1] ||
+                "#64748b",
+            }}
+            aria-label={`Use suggestion: ${activeSuggestion}`}
+            onClick={() => {
+              triggerHaptic("selection");
+              setF((current) => ({
+                ...current,
+                cat: activeSuggestion,
+                ...(activeSuggestion === "Savings" &&
+                hasSavingsAccount &&
+                !current.acct
+                  ? { acct: primaryCard?.id || spendableCards[0]?.id || "" }
+                  : {}),
+              }));
+            }}
+          >
+            <UtilitySymbol name="suggestion" />
+            <span className="category-suggestion-label">Suggested</span>
+            <CategorySuggestionValue
+              category={activeSuggestion}
+              description={f.desc}
+            />
+          </button>
+        )}
+      </div>
       <div className="cg">
         {Object.keys(CAT).map((category) => (
           <button
