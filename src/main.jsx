@@ -75,6 +75,39 @@ if (typeof window !== "undefined") {
 
   window.__spendCheckForUpdates = checkRemoteVersion;
 
+  const waitForWaitingWorker = (reg, timeoutMs = 1500) =>
+    new Promise((resolve) => {
+      if (!reg) {
+        resolve(null);
+        return;
+      }
+      if (reg.waiting) {
+        resolve(reg.waiting);
+        return;
+      }
+      const installing = reg.installing;
+      if (!installing) {
+        resolve(null);
+        return;
+      }
+      let settled = false;
+      const done = (worker) => {
+        if (settled) return;
+        settled = true;
+        resolve(worker || null);
+      };
+      const timer = window.setTimeout(() => done(reg.waiting), timeoutMs);
+      installing.addEventListener("statechange", () => {
+        if (installing.state === "installed") {
+          window.clearTimeout(timer);
+          done(reg.waiting || installing);
+        } else if (installing.state === "redundant") {
+          window.clearTimeout(timer);
+          done(null);
+        }
+      });
+    });
+
   window.__spendApplyUpdate = async () => {
     if (refreshing) return;
     updateAccepted = true;
@@ -89,26 +122,31 @@ if (typeof window !== "undefined") {
     };
 
     try {
-      if (swRegistration?.waiting) {
-        swRegistration.waiting.postMessage({ type: "SKIP_WAITING" });
+      let waitingWorker = swRegistration?.waiting || null;
+      if (!waitingWorker && swRegistration) {
+        if (!swRegistration.installing) {
+          await swRegistration.update().catch(() => {});
+        }
+        waitingWorker = await waitForWaitingWorker(swRegistration, 1500);
+      }
+
+      if (waitingWorker) {
+        waitingWorker.postMessage({ type: "SKIP_WAITING" });
         window.setTimeout(reloadCleanly, 700);
         return;
       }
 
-      if (swRegistration) {
-        await swRegistration.update().catch(() => {});
-        if (swRegistration.waiting) {
-          swRegistration.waiting.postMessage({ type: "SKIP_WAITING" });
-          window.setTimeout(reloadCleanly, 700);
-          return;
-        }
-      }
-
       if ("caches" in window) {
+        const targetBuildId = latestDetectedManifest?.buildId || "";
+        const keepCacheName = targetBuildId
+          ? `spend-shell-${targetBuildId}`
+          : "";
         const keys = await window.caches.keys();
         await Promise.all(
           keys
-            .filter((key) => key.startsWith("spend-shell-"))
+            .filter(
+              (key) => key.startsWith("spend-shell-") && key !== keepCacheName,
+            )
             .map((key) => window.caches.delete(key)),
         );
       }
@@ -118,6 +156,20 @@ if (typeof window !== "undefined") {
 
     await reloadCleanly();
   };
+
+  const triggerUpdateCheck = () => {
+    if (document.visibilityState === "visible") {
+      swRegistration?.update().catch(() => {});
+      void checkRemoteVersion();
+    }
+  };
+
+  document.addEventListener("visibilitychange", triggerUpdateCheck);
+  window.addEventListener("focus", triggerUpdateCheck);
+  window.addEventListener("pageshow", triggerUpdateCheck);
+  window.addEventListener("online", triggerUpdateCheck);
+  window.setTimeout(triggerUpdateCheck, 800);
+  window.setInterval(triggerUpdateCheck, 45 * 1000);
 
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.addEventListener("controllerchange", () => {
@@ -138,7 +190,7 @@ if (typeof window !== "undefined") {
           worker.state === "installed" &&
           navigator.serviceWorker.controller
         ) {
-          void checkRemoteVersion().then((found) => {
+          void checkRemoteVersion({ force: true }).then((found) => {
             if (!found) {
               dispatchUpdateAvailable({ source: "sw-installed" });
             }
@@ -156,7 +208,7 @@ if (typeof window !== "undefined") {
           swRegistration = registration;
 
           if (registration.waiting && navigator.serviceWorker.controller) {
-            void checkRemoteVersion().then((found) => {
+            void checkRemoteVersion({ force: true }).then((found) => {
               if (!found) {
                 dispatchUpdateAvailable({ source: "sw-waiting" });
               }
@@ -171,17 +223,7 @@ if (typeof window !== "undefined") {
             watchInstallingWorker(registration.installing);
           });
 
-          const checkForUpdates = () => {
-            if (document.visibilityState === "visible") {
-              registration.update().catch(() => {});
-              void checkRemoteVersion();
-            }
-          };
-
-          document.addEventListener("visibilitychange", checkForUpdates);
-          window.addEventListener("online", checkForUpdates);
-          window.setTimeout(checkForUpdates, 3500);
-          window.setInterval(checkForUpdates, 3 * 60 * 1000);
+          triggerUpdateCheck();
         })
         .catch((error) => {
           console.error("Service worker registration failed:", error);

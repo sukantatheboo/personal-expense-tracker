@@ -177,25 +177,42 @@ self.addEventListener("fetch", (event) => {
     url.pathname.endsWith("/version.json") ||
     url.pathname.endsWith("/sw.js")
   ) {
-    event.respondWith(fetch(request, { cache: "no-store" }));
+    event.respondWith(
+      fetch(request.url, {
+        cache: "no-store",
+        headers: {
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+        },
+      }),
+    );
     return;
   }
 
   if (request.mode === "navigate") {
     const indexUrl = new URL("index.html", self.registration.scope).toString();
     event.respondWith(
-      fetch(request, { cache: "no-cache" })
-        .then((response) => {
-          if (response.ok) {
-            const copy = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(indexUrl, copy));
-          }
-          return response;
-        })
-        .catch(async () => {
-          const cachedIndex = await caches.match(indexUrl);
-          return cachedIndex || caches.match(request);
-        }),
+      caches
+        .open(CACHE_NAME)
+        .then((cache) => cache.match(indexUrl))
+        .then(
+          (cachedIndex) =>
+            cachedIndex ||
+            fetch(request, { cache: "no-store" })
+              .then((response) => {
+                if (response.ok) {
+                  const copy = response.clone();
+                  caches
+                    .open(CACHE_NAME)
+                    .then((cache) => cache.put(indexUrl, copy));
+                }
+                return response;
+              })
+              .catch(async () => {
+                const fallback = await caches.match(indexUrl);
+                return fallback || caches.match(request);
+              }),
+        ),
     );
     return;
   }

@@ -6192,6 +6192,11 @@ function SettingsSheet({
   onOpenUpdateModal,
   onClose,
 }) {
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.__spendCheckForUpdates?.({ force: true });
+    }
+  }, []);
   const themeMode =
     S?.themeMode ||
     (S?.theme === "auto" || S?.theme === "light" || S?.theme === "dark"
@@ -10877,6 +10882,9 @@ export default function MobilePrototype({
           if (ptrState.phase === "ready") {
             triggerHaptic("medium");
             setPtrState({ pullY: 48, phase: "refreshing" });
+            if (typeof window !== "undefined") {
+              window.__spendCheckForUpdates?.({ force: true });
+            }
             if (profile?.connected && onResumeSync) {
               try {
                 onResumeSync();
