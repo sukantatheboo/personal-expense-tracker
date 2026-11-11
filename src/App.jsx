@@ -1127,11 +1127,15 @@ export default function App() {
     if (typeof window === "undefined") return undefined;
     const handleUpdateEvent = (event) => {
       const detail = event?.detail || window.__spendPendingUpdate || {};
-      const candidateId = detail.buildId || "sw-update";
-      if (dismissedBuildIdRef.current && dismissedBuildIdRef.current === candidateId) {
+      const candidateId = detail.buildId || "sw-pending-update";
+      setUpdateInfo(detail);
+      if (
+        dismissedBuildIdRef.current &&
+        (dismissedBuildIdRef.current === candidateId ||
+          dismissedBuildIdRef.current === "sw-pending-update")
+      ) {
         return;
       }
-      setUpdateInfo(detail);
       showUpdateModal();
     };
     window.addEventListener("spend:update-available", handleUpdateEvent);
@@ -2548,6 +2552,21 @@ export default function App() {
     ) {
       return false;
     }
+    const cards = Array.isArray(accountData?.settings?.cards)
+      ? accountData.settings.cards
+      : [];
+    const targetCard = form.account
+      ? cards.find((c) => c.id === form.account)
+      : null;
+    if (targetCard?.frozen) return false;
+    if (form.category === "Savings") {
+      const savingsId = getSavingsAccountId(cards);
+      const savingsCard = savingsId
+        ? cards.find((c) => c.id === savingsId)
+        : null;
+      if (savingsCard?.frozen) return false;
+      if (savingsId && (!form.account || form.account === "cash")) return false;
+    }
     let createdExpenseId = null;
     let didGenerateExpenses = false;
     if (form.interval === "none") {
@@ -2560,7 +2579,7 @@ export default function App() {
         amount: amount === null ? null : roundMoney(amount),
         category: form.category,
         date: form.date,
-        account: form.account,
+        account: isAccountId(form.account, accountData) ? form.account : "",
       };
       createdExpenseId = newExpense.id;
       setExpenses((current) => [...current, newExpense]);
@@ -2570,6 +2589,9 @@ export default function App() {
       const today = localDate();
       const generatedExpenses = [];
       let generated = 0;
+      const resolvedAccount = isAccountId(form.account, accountData)
+        ? form.account
+        : "";
       while (nextDate <= today && generated < 240) {
         const createdAt = Date.now();
         generatedExpenses.push({
@@ -2580,7 +2602,7 @@ export default function App() {
           amount: roundMoney(amount),
           category: form.category,
           date: nextDate,
-          account: form.account,
+          account: resolvedAccount,
           recurringId: scheduleId,
         });
         nextDate = nextOccurrenceDate(
@@ -2601,7 +2623,7 @@ export default function App() {
           amount: roundMoney(amount),
           category: form.category,
           interval: form.interval,
-          account: form.account,
+          account: resolvedAccount,
           dayOfMonth: Number(form.date.slice(-2)),
           nextDate,
           active: true,
@@ -2635,12 +2657,29 @@ export default function App() {
     const date = existingExpense?.recurringId
       ? existingExpense.date
       : form.date;
+    const isSavings = form.category === "Savings";
     if (
       !form.description.trim() ||
       !isValidDateString(date) ||
-      (amount !== null && (!Number.isFinite(amount) || amount <= 0))
+      (amount !== null && (!Number.isFinite(amount) || amount <= 0)) ||
+      (isSavings && (amount === null || !Number.isFinite(amount) || amount <= 0))
     )
       return false;
+    const cards = Array.isArray(accountData?.settings?.cards)
+      ? accountData.settings.cards
+      : [];
+    const targetCard = form.account
+      ? cards.find((c) => c.id === form.account)
+      : null;
+    if (targetCard?.frozen) return false;
+    if (isSavings) {
+      const savingsId = getSavingsAccountId(cards);
+      const savingsCard = savingsId
+        ? cards.find((c) => c.id === savingsId)
+        : null;
+      if (savingsCard?.frozen) return false;
+      if (savingsId && (!form.account || form.account === "cash")) return false;
+    }
     setExpenses((current) =>
       current.map((expense) =>
         expense.id === expenseId
@@ -2650,7 +2689,9 @@ export default function App() {
               amount: amount === null ? null : roundMoney(amount),
               category: form.category,
               date: expense.recurringId ? expense.date : form.date,
-              account: form.account,
+              account: isAccountId(form.account, accountData)
+                ? form.account
+                : "",
               updatedAt: Date.now(),
             }
           : expense,
@@ -4435,6 +4476,8 @@ export default function App() {
           accountStatus={cloudSyncStatus || authStatus}
           authBusy={authBusy}
           onSignIn={openSignInModal}
+          updateAvailable={Boolean(updateInfo)}
+          onOpenUpdateModal={showUpdateModal}
         />
       </Suspense>
       {authModalOpen &&
@@ -4803,7 +4846,7 @@ export default function App() {
             className={`update-modal-backdrop${updateModalClosing ? " is-closing" : ""}`}
             onMouseDown={(event) => {
               if (event.target === event.currentTarget && !updateApplying) {
-                dismissedBuildIdRef.current = updateInfo?.buildId || "sw-update";
+                dismissedBuildIdRef.current = updateInfo?.buildId || "sw-pending-update";
                 hideUpdateModal();
               }
             }}
@@ -4816,7 +4859,7 @@ export default function App() {
               aria-labelledby="update-modal-title"
               onKeyDown={(event) => {
                 if (event.key === "Escape" && !updateApplying) {
-                  dismissedBuildIdRef.current = updateInfo?.buildId || "sw-update";
+                  dismissedBuildIdRef.current = updateInfo?.buildId || "sw-pending-update";
                   hideUpdateModal();
                   return;
                 }
@@ -4866,7 +4909,7 @@ export default function App() {
                   className="update-modal-btn is-later"
                   disabled={updateApplying}
                   onClick={() => {
-                    dismissedBuildIdRef.current = updateInfo?.buildId || "sw-update";
+                    dismissedBuildIdRef.current = updateInfo?.buildId || "sw-pending-update";
                     hideUpdateModal();
                   }}
                 >

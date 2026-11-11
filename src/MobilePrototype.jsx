@@ -6188,6 +6188,8 @@ function SettingsSheet({
   onAdvanced,
   onProfileSettings,
   onSecurity,
+  updateAvailable = false,
+  onOpenUpdateModal,
   onClose,
 }) {
   const themeMode =
@@ -6452,6 +6454,42 @@ function SettingsSheet({
                 <Icon n="r" />
               </span>
             </button>
+
+            {updateAvailable && (
+              <button
+                className="ri mfs-settings-row"
+                type="button"
+                onClick={() => {
+                  triggerHaptic("selection");
+                  onClose?.();
+                  onOpenUpdateModal?.();
+                }}
+              >
+                <i className="ic mfs-row-icon" style={{ "--c": "#10b981" }}>
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.1"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M12 16V8" />
+                    <path d="m8.5 11.5 3.5-3.5 3.5 3.5" />
+                    <circle cx="12" cy="12" r="9" />
+                  </svg>
+                </i>
+                <span className="nm">
+                  <b>Update available</b>
+                  <small>New version ready to install</small>
+                </span>
+                <span className="mfs-row-badge is-active">Update</span>
+                <span className="settings-chevron" aria-hidden="true">
+                  <Icon n="r" />
+                </span>
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -9620,6 +9658,8 @@ export default function MobilePrototype({
   accountStatus,
   authBusy,
   onResumeSync,
+  updateAvailable = false,
+  onOpenUpdateModal,
 }) {
   const [tab, setTab] = useState("home");
   const cards = Array.isArray(S.cards) ? S.cards : [];
@@ -10435,19 +10475,20 @@ export default function MobilePrototype({
       }
       return toast("Check the description, amount, and date.");
     }
-    const nonSavingsCards = cards.filter(
-      (c) =>
-        c.id !== getSavingsAccountId(cards) &&
-        c.type !== "savings" &&
-        c.category !== "savings" &&
-        c.provider !== "savings",
-    );
-    const spendableCards = nonSavingsCards.filter((c) => !c.frozen);
+    const savingsId = getSavingsAccountId(cards);
+    const savingsCard = savingsId
+      ? cards.find((c) => c.id === savingsId)
+      : null;
+    if (isSavings && savingsCard?.frozen) {
+      triggerHaptic("warning");
+      return toast(
+        `${savingsCard.name || "Savings account"} is locked. Unlock it in Card Options first.`,
+      );
+    }
     if (
       isSavings &&
-      !form.acct &&
-      Boolean(getSavingsAccountId(cards)) &&
-      spendableCards.length > 0
+      (!form.acct || form.acct === "cash") &&
+      Boolean(savingsId)
     ) {
       return toast("Select an account to transfer from.");
     }
@@ -11315,6 +11356,8 @@ export default function MobilePrototype({
           onAdvanced={advanced}
           onProfileSettings={openProfileSettings}
           onSecurity={() => openSheet({ type: "sec" })}
+          updateAvailable={updateAvailable}
+          onOpenUpdateModal={onOpenUpdateModal}
         />
       )}
       {sheet?.type === "sec" && (

@@ -19,7 +19,7 @@ if (typeof window !== "undefined") {
       buildId:
         info.buildId ||
         latestDetectedManifest?.buildId ||
-        `sw-${Date.now()}`,
+        "sw-pending-update",
       version:
         info.version || latestDetectedManifest?.version || CURRENT_VERSION,
       commit: info.commit || latestDetectedManifest?.commit || "",
@@ -79,9 +79,12 @@ if (typeof window !== "undefined") {
     if (refreshing) return;
     updateAccepted = true;
 
-    const reloadCleanly = () => {
+    const reloadCleanly = async () => {
       if (refreshing) return;
       refreshing = true;
+      try {
+        await fetch(window.location.href, { cache: "reload" });
+      } catch {}
       window.location.reload();
     };
 
@@ -113,21 +116,18 @@ if (typeof window !== "undefined") {
       // Fall through to reload if cache cleanup or SW messaging fails.
     }
 
-    reloadCleanly();
+    await reloadCleanly();
   };
 
   if ("serviceWorker" in navigator) {
-    const hadController = Boolean(navigator.serviceWorker.controller);
-
     navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (
-        import.meta.env.PROD &&
-        hadController &&
-        updateAccepted &&
-        !refreshing
-      ) {
+      if (updateAccepted && !refreshing) {
         refreshing = true;
-        window.location.reload();
+        fetch(window.location.href, { cache: "reload" })
+          .catch(() => {})
+          .finally(() => {
+            window.location.reload();
+          });
       }
     });
 

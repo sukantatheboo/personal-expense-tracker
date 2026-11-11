@@ -184,7 +184,7 @@ self.addEventListener("fetch", (event) => {
   if (request.mode === "navigate") {
     const indexUrl = new URL("index.html", self.registration.scope).toString();
     event.respondWith(
-      fetch(request)
+      fetch(request, { cache: "no-cache" })
         .then((response) => {
           if (response.ok) {
             const copy = response.clone();
