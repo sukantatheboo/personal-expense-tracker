@@ -1296,437 +1296,309 @@ export function renderProviderLogo(
   }
 }
 
+const MINI_CARD_PROTOTYPE_SPECS = {
+  // Debit (.c)
+  brac: { variant: "", a: "#1F3A68", mk: "BRAC", digits: "9018", net: "visa" },
+  dbbl: { variant: "", a: "#1F6B5E", mk: "DBBL", digits: "8841", net: "visa" },
+  hdfc_visa: {
+    variant: "",
+    a: "#223E7A",
+    mk: "HDFC",
+    digits: "7892",
+    net: "visa",
+  },
+
+  // Credit (.c.cr)
+  city: {
+    variant: "cr",
+    a: "#A6283A",
+    b: "#7E1D2C",
+    mk: "City",
+    digits: "0241",
+    net: "mastercard",
+  },
+  ebl: {
+    variant: "cr",
+    a: "#8A3B3F",
+    b: "#5F2629",
+    mk: "EBL",
+    digits: "7890",
+    net: "mastercard",
+  },
+  sc: {
+    variant: "cr",
+    a: "#2F6DB8",
+    b: "#1E4C8A",
+    mk: "SC",
+    digits: "5592",
+    net: "visa",
+  },
+  amazon: {
+    variant: "cr",
+    a: "#5A55C4",
+    b: "#3C3894",
+    mk: "Amazon",
+    digits: "9018",
+    net: "mastercard",
+  },
+  citi: {
+    variant: "cr",
+    a: "#323845",
+    b: "#1D2129",
+    mk: "Citi",
+    digits: "4328",
+    net: "mastercard",
+  },
+  citi_mc: {
+    variant: "cr",
+    a: "#323845",
+    b: "#1D2129",
+    mk: "Citi",
+    digits: "4328",
+    net: "mastercard",
+  },
+  sc_visa: {
+    variant: "cr",
+    a: "#3377B8",
+    b: "#225A91",
+    mk: "SC",
+    digits: "3245",
+    net: "visa",
+  },
+  hdfc: {
+    variant: "cr",
+    a: "#2A3F8A",
+    b: "#182A63",
+    mk: "HDFC",
+    digits: "2219",
+    net: "visa",
+  },
+  hdfc_credit: {
+    variant: "cr",
+    a: "#2A3F8A",
+    b: "#182A63",
+    mk: "HDFC",
+    digits: "2219",
+    net: "visa",
+  },
+  gold_mc: {
+    variant: "cr",
+    a: "#E0BC73",
+    b: "#B98A3E",
+    fg: "#2B1E08",
+    mk: "Gold",
+    digits: "1234",
+    net: "mastercard",
+  },
+  citi_credit: {
+    variant: "cr",
+    a: "#2F7F70",
+    b: "#1E5A4F",
+    mk: "Citi",
+    digits: "2134",
+    net: "mastercard",
+  },
+
+  // Wallets (.c)
+  rocket: { variant: "", a: "#7A2F8E", gl: "R", mk: "Wallet", digits: "78" },
+  upay: { variant: "", a: "#1D3C8F", gl: "U", mk: "Wallet", digits: "78" },
+  bkash: { variant: "", a: "#C41E5A", gl: "b", mk: "Wallet", digits: "78" },
+  nagad: { variant: "", a: "#C93F18", gl: "N", mk: "Wallet", digits: "10" },
+
+  // Virtual and other
+  virtual_mc: {
+    variant: "vt",
+    a: "#4A4F8F",
+    b: "#2E3260",
+    mk: "Virtual",
+    digits: "4455",
+    net: "mastercard",
+  },
+  virtual_visa: {
+    variant: "vt",
+    a: "#25807B",
+    b: "#17605C",
+    mk: "Virtual",
+    digits: "6677",
+    net: "visa",
+  },
+  savings: { variant: "", a: "#2F6B4F", ring: true, mk: "Vault" },
+  custom: {
+    variant: "",
+    a: "#2B2D33",
+    mk: "Sign",
+    digits: "9010",
+    net: "visa",
+  },
+  cash: { variant: "", a: "#1F6B5E", gl: "৳", mk: "Cash" },
+};
+
 /**
- * Senior Native App Dev Grade Mini Card Preview (56px × 35px)
- * Minimalist thumbnail representation for Bank, MFS, Savings, and Cash accounts.
+ * Prototype Mini Card Preview (56px × 35px / 50px × 31px)
+ * Implements the shared 4-type layout (Debit flat, Credit gradient, Wallets round mark, Virtual dashed outline)
+ * with dynamic Visa / Mastercard / Amex support.
  */
 export function MiniCardPreview({ provider, card, className = "" }) {
   const isCash = card?.id === "cash" || card?.type === "cash";
-  const provId = card?.provider || card?.id;
+  const matchedByName =
+    !provider && !card?.provider && card?.name
+      ? CARD_PROVIDERS.find(
+          (item) =>
+            item.name.toLowerCase() === String(card.name).trim().toLowerCase(),
+        )?.id
+      : null;
+  const rawProvId = isCash
+    ? "cash"
+    : card?.provider || matchedByName || provider?.id || card?.id;
   const p =
-    provider || (provId ? getProviderMeta(provId) : null) || CARD_PROVIDERS[0];
-  const network = card?.network || p?.defaultNetwork || "visa";
+    provider ||
+    (rawProvId ? getProviderMeta(rawProvId) : null) ||
+    CARD_PROVIDERS[0];
+  const brandKey = isCash
+    ? "cash"
+    : MINI_CARD_PROTOTYPE_SPECS[rawProvId]
+      ? rawProvId
+      : p?.id || "custom";
+  const spec =
+    MINI_CARD_PROTOTYPE_SPECS[brandKey] || MINI_CARD_PROTOTYPE_SPECS.custom;
+
   const category = card?.category || p?.category || "bank";
-  const brandKey = provId || p?.id || "";
-  const isVirtual = brandKey === "virtual_mc" || brandKey === "virtual_visa";
   const isMfs =
     !isCash &&
-    (category === "mfs" ||
+    (Boolean(spec.gl) ||
+      category === "mfs" ||
       card?.type === "mfs" ||
-      network === "mfs" ||
+      card?.network === "mfs" ||
       Boolean(card?.isPhone || p?.isPhone));
   const isSavings =
     !isCash &&
-    (category === "savings" ||
+    (Boolean(spec.ring) ||
+      category === "savings" ||
       card?.type === "savings" ||
-      p?.id === "savings" ||
-      provId === "savings");
-  const gradient = isCash
-    ? "linear-gradient(135deg, #10b981 0%, #059669 60%, #047857 100%)"
-    : resolveCardGradient(card, p);
+      brandKey === "savings");
+  const isVirtual =
+    !isCash &&
+    !isMfs &&
+    !isSavings &&
+    (spec.variant === "vt" ||
+      brandKey === "virtual_mc" ||
+      brandKey === "virtual_visa" ||
+      card?.type === "virtual" ||
+      Boolean(card?.isVirtual));
 
-  // Extract last 4 digits or masked identifier
-  const rawNum = card?.last4 || card?.number || p?.numberPlaceholder || "4328";
-  const cleanDigits = String(rawNum).replace(/\D/g, "");
-  const last4 =
-    cleanDigits.slice(-4) ||
-    (p?.numberPrefix ? p.numberPrefix.slice(-4) : "4328");
+  // Determine variant class: "" (flat), "cr" (credit gradient), or "vt" (virtual dashed)
+  let variant = spec.variant;
+  if (isVirtual) {
+    variant = "vt";
+  } else if (!isCash && !isMfs && !isSavings && brandKey !== "custom") {
+    if (card?.type === "debit") variant = "";
+    else if (card?.type === "credit") variant = "cr";
+  }
+
+  // Allow custom card color override if user explicitly selected a non-default swatch
+  let colorA = spec.a;
+  let colorB =
+    spec.b ||
+    (variant === "cr" ? `color-mix(in srgb, ${spec.a} 72%, #000000)` : spec.a);
+  const rawColor = card?.color ? String(card.color).trim().toLowerCase() : "";
+  if (
+    brandKey === "custom" &&
+    rawColor &&
+    rawColor !== "#1e293b" &&
+    rawColor !== "#1f2430"
+  ) {
+    colorA = card.color;
+    colorB =
+      variant === "cr"
+        ? `color-mix(in srgb, ${card.color} 72%, #000000)`
+        : card.color;
+  }
+
+  // Dynamic network resolution: visa, mastercard (mc), or amex
+  const rawNet = String(
+    card?.network || spec.net || p?.defaultNetwork || "visa",
+  )
+    .trim()
+    .toLowerCase();
+  const isMastercard = rawNet === "mastercard" || rawNet === "mc";
+  const isAmex =
+    rawNet === "amex" ||
+    rawNet === "american express" ||
+    rawNet === "american_express";
+  const isVisa = !isMastercard && !isAmex;
+
+  // Dynamic digits resolution
+  const explicitNum = card?.last4 || card?.number || "";
+  const cleanExplicit = String(explicitNum).replace(/\D/g, "");
+  let displayDigits = "";
+  if (isMfs) {
+    const last2 =
+      cleanExplicit.slice(-2) ||
+      spec.digits ||
+      String(p?.numberPlaceholder || "")
+        .replace(/\D/g, "")
+        .slice(-2) ||
+      "78";
+    displayDigits = `•• ${last2}`;
+  } else if (!isCash && !isSavings) {
+    const last4 =
+      cleanExplicit.slice(-4) ||
+      spec.digits ||
+      String(p?.numberPlaceholder || "")
+        .replace(/\D/g, "")
+        .slice(-4) ||
+      "9010";
+    displayDigits = `•• ${last4}`;
+  }
+
+  // Top-right mark (.mk)
+  const markText =
+    isVirtual
+      ? "Virtual"
+      : isMfs
+        ? "Wallet"
+        : isSavings
+          ? "Vault"
+          : isCash
+            ? "Cash"
+            : spec.mk || (p?.shortCode ? p.shortCode : "Sign");
+
+  // Top-left round glyph for Wallets / Cash
+  const glyphChar = isCash
+    ? "৳"
+    : spec.gl || (isMfs ? (p?.name || "W").charAt(0) : "");
+
+  const styleVars = {
+    "--a": colorA,
+    ...(colorB ? { "--b": colorB } : {}),
+    ...(spec.fg ? { "--fg": spec.fg } : {}),
+  };
 
   return (
     <div
-      className={`mini-card-preview ${isCash ? "is-cash" : ""} ${isSavings ? "is-savings" : ""} ${className}`}
-      style={{ background: gradient }}
+      className={`mini-card-preview c ${variant ? variant : ""} ${isCash ? "is-cash" : ""} ${isSavings ? "is-savings" : ""} ${className}`.trim()}
+      style={styleVars}
       aria-hidden="true"
     >
-      <div className="mini-card-sheen" />
-      <div className="mini-card-pattern" />
+      {isSavings ? (
+        <i className="gl ring" />
+      ) : isMfs || isCash ? (
+        <i className="gl">{glyphChar}</i>
+      ) : (
+        <i className="ch" />
+      )}
 
-      {/* Top Row: Micro EMV Chip / Digital Mark (Left) & Brand Mark (Right) */}
-      <div className="mini-card-top-row">
-        {isCash ? (
-          <span className="mini-card-cash-symbol">৳</span>
-        ) : isMfs ? (
-          <div className="mini-card-mfs-brand">
-            {brandKey === "bkash" && (
-              <img
-                src={bkashSvg}
-                alt="bKash"
-                style={{
-                  height: 11,
-                  width: "auto",
-                  maxHeight: "none",
-                  filter: "drop-shadow(0 0 0.8px rgba(255,255,255,0.9))",
-                }}
-              />
-            )}
-            {brandKey === "nagad" && (
-              <div
-                style={{
-                  width: 11,
-                  height: 11,
-                  overflow: "hidden",
-                  flexShrink: 0,
-                }}
-              >
-                <img
-                  src={nagadImg}
-                  alt="Nagad"
-                  style={{
-                    height: 11,
-                    width: 31,
-                    maxWidth: "none",
-                    maxHeight: "none",
-                    objectFit: "fill",
-                    filter: "drop-shadow(0 0 0.8px rgba(255,255,255,0.85))",
-                  }}
-                />
-              </div>
-            )}
-            {brandKey === "rocket" && (
-              <img
-                src={rocketImg}
-                alt="Rocket"
-                style={{
-                  height: 10,
-                  width: "auto",
-                  maxHeight: "none",
-                  filter: "brightness(0) invert(1)",
-                }}
-              />
-            )}
-            {brandKey === "upay" && (
-              <div
-                style={{
-                  width: 10,
-                  height: 10,
-                  overflow: "hidden",
-                  flexShrink: 0,
-                }}
-              >
-                <img
-                  src={upayImg}
-                  alt="Upay"
-                  style={{
-                    width: 16,
-                    height: 16,
-                    maxWidth: "none",
-                    maxHeight: "none",
-                    objectFit: "fill",
-                    marginLeft: -3,
-                    marginTop: -1,
-                    filter: "drop-shadow(0 0 0.8px rgba(255,255,255,0.9))",
-                  }}
-                />
-              </div>
-            )}
-            {!["bkash", "nagad", "rocket", "upay"].includes(brandKey) && (
-              <ContactlessWaves size={7.5} className="mini-card-contactless" />
-            )}
-          </div>
-        ) : isSavings ? (
-          <div className="mini-card-savings-brand">
-            <svg
-              width="10"
-              height="10"
-              style={{
-                width: 10,
-                height: 10,
-                display: "block",
-                stroke: "none",
-              }}
-              viewBox="0 0 24 24"
-              fill="none"
-            >
-              <rect
-                x="2.5"
-                y="2.5"
-                width="19"
-                height="19"
-                rx="5"
-                stroke="rgba(255,255,255,0.88)"
-                strokeWidth="2"
-              />
-              <circle
-                cx="12"
-                cy="12"
-                r="4"
-                stroke="rgba(255,255,255,0.88)"
-                strokeWidth="1.8"
-              />
-              <circle cx="12" cy="12" r="1.3" fill="rgba(255,255,255,0.9)" />
-            </svg>
-          </div>
-        ) : brandKey === "virtual_visa" ? (
-          <div className="mini-card-virtual-brand">
-            <svg
-              width="10"
-              height="10"
-              style={{
-                width: 10,
-                height: 10,
-                display: "block",
-                stroke: "none",
-              }}
-              viewBox="0 0 24 24"
-              fill="none"
-            >
-              <path
-                d="M2 15C5.5 11 8.5 11 12 15C15.5 19 18.5 19 22 15M2 9.5C5.5 5.5 8.5 5.5 12 9.5C15.5 13.5 18.5 13.5 22 9.5"
-                stroke="#5EEAD4"
-                strokeWidth="2.2"
-                strokeLinecap="round"
-              />
-            </svg>
-          </div>
-        ) : brandKey === "virtual_mc" ? (
-          <div className="mini-card-virtual-brand">
-            <svg
-              width="10"
-              height="10"
-              style={{
-                width: 10,
-                height: 10,
-                display: "block",
-                stroke: "none",
-              }}
-              viewBox="0 0 24 24"
-              fill="none"
-            >
-              <rect
-                x="2.5"
-                y="5.5"
-                width="12"
-                height="9"
-                rx="2"
-                stroke="#A5B4FC"
-                strokeWidth="2"
-              />
-              <rect
-                x="9.5"
-                y="9.5"
-                width="12"
-                height="9"
-                rx="2"
-                stroke="#FDA4AF"
-                strokeWidth="2"
-              />
-            </svg>
-          </div>
-        ) : (
-          <div className="mini-card-chip-waves">
-            <svg
-              className="mini-card-emv"
-              width="10"
-              height="7.5"
-              style={{ width: 10, height: 7.5, stroke: "none" }}
-              viewBox="0 0 20 15"
-              fill="none"
-            >
-              <rect
-                x="0.5"
-                y="0.5"
-                width="19"
-                height="14"
-                rx="2.5"
-                fill="#E5C158"
-                stroke="#9A7B1C"
-                strokeWidth="1"
-              />
-              <path
-                d="M0.5 5.5H7.5M0.5 9.5H7.5M12.5 5.5H19.5M12.5 9.5H19.5M9.5 0.5V5.5M9.5 9.5V14.5"
-                stroke="#7A5612"
-                strokeWidth="0.8"
-              />
-              <rect
-                x="7"
-                y="4.5"
-                width="6"
-                height="6"
-                rx="1"
-                fill="#FFEAA0"
-                stroke="#7A5612"
-                strokeWidth="0.7"
-              />
-            </svg>
-          </div>
-        )}
+      <b className="mk">{markText}</b>
 
-        {!isCash && !isMfs && !isSavings && (
-          <div className="mini-card-brand-mark">
-            {(brandKey === "citi" ||
-              brandKey === "citi_mc" ||
-              brandKey === "citi_credit") && <CitiLogo height={8.5} />}
-            {brandKey === "amazon" && <AmazonLogo height={7.5} />}
-            {(brandKey === "hdfc" ||
-              brandKey === "hdfc_visa" ||
-              brandKey === "hdfc_credit") && (
-              <svg
-                width="9"
-                height="9"
-                style={{ width: 9, height: 9, stroke: "none" }}
-                viewBox="0 0 24 24"
-                fill="none"
-              >
-                <rect width="24" height="24" rx="3" fill="#FFFFFF" />
-                <rect x="2" y="2" width="20" height="20" fill="#ED232A" />
-                <rect x="10" y="2" width="4" height="20" fill="#FFFFFF" />
-                <rect x="2" y="10" width="20" height="4" fill="#FFFFFF" />
-                <rect x="7" y="7" width="10" height="10" fill="#004C8F" />
-              </svg>
-            )}
-            {(brandKey === "sc" || brandKey === "sc_visa") && (
-              <img
-                src={scbImg}
-                alt=""
-                style={{ height: 10, width: "auto", objectFit: "contain" }}
-              />
-            )}
-            {brandKey === "brac" && (
-              <div
-                style={{
-                  width: 9,
-                  height: 9,
-                  overflow: "hidden",
-                  borderRadius: 2,
-                  flexShrink: 0,
-                }}
-              >
-                <img
-                  src={bracBankSvg}
-                  alt=""
-                  style={{
-                    height: 9,
-                    width: 83,
-                    maxWidth: "none",
-                    maxHeight: "none",
-                    objectFit: "fill",
-                  }}
-                />
-              </div>
-            )}
-            {brandKey === "city" && (
-              <div
-                style={{
-                  width: 10,
-                  height: 10,
-                  overflow: "hidden",
-                  flexShrink: 0,
-                }}
-              >
-                <img
-                  src={cityBankImg}
-                  alt=""
-                  style={{
-                    height: 11,
-                    width: 16,
-                    maxWidth: "none",
-                    maxHeight: "none",
-                    objectFit: "fill",
-                    clipPath:
-                      "polygon(0 0, 100% 0, 100% 63.5%, 18.2% 63.5%, 18.2% 100%, 0 100%)",
-                  }}
-                />
-              </div>
-            )}
-            {brandKey === "ebl" && (
-              <div
-                style={{
-                  width: 13,
-                  height: 9,
-                  overflow: "hidden",
-                  flexShrink: 0,
-                }}
-              >
-                <img
-                  src={eblSvg}
-                  alt=""
-                  style={{
-                    height: 9,
-                    width: 56,
-                    maxWidth: "none",
-                    maxHeight: "none",
-                    objectFit: "fill",
-                  }}
-                />
-              </div>
-            )}
-            {brandKey === "dbbl" && (
-              <div
-                style={{
-                  width: 14,
-                  height: 9,
-                  overflow: "hidden",
-                  flexShrink: 0,
-                }}
-              >
-                <img
-                  src={dbblImg}
-                  alt=""
-                  style={{
-                    height: 9,
-                    width: 47,
-                    maxWidth: "none",
-                    maxHeight: "none",
-                    objectFit: "fill",
-                  }}
-                />
-              </div>
-            )}
-            {brandKey === "gold_mc" && (
-              <span className="mini-card-tier-tag is-gold">GOLD</span>
-            )}
-            {brandKey === "virtual_visa" && (
-              <span className="mini-card-tier-tag is-virtual">AERO</span>
-            )}
-            {brandKey === "virtual_mc" && (
-              <span className="mini-card-tier-tag is-virtual">STLH</span>
-            )}
-            {brandKey === "custom" && (
-              <span className="mini-card-tier-tag is-custom">SIGN</span>
-            )}
-          </div>
-        )}
-      </div>
+      {displayDigits && <span className="n">{displayDigits}</span>}
 
-      {/* Bottom Row: Digits + Network Emblem */}
-      <div className="mini-card-bottom-row">
-        <span className="mini-card-digits">
-          {isCash
-            ? "CASH"
-            : isMfs
-              ? `•• ${last4.slice(-2) || "88"}`
-              : isSavings
-                ? "VAULT"
-                : `•• ${last4}`}
-        </span>
-
-        <div className="mini-card-network-emblem">
-          {!isCash && !isMfs && !isSavings && network === "mastercard" && (
-            <svg
-              width="13"
-              height="8.5"
-              style={{ width: 13, height: 8.5, stroke: "none" }}
-              viewBox="0 0 30 20"
-              fill="none"
-            >
-              <circle cx="10" cy="10" r="9.5" fill="#EB001B" />
-              <circle
-                cx="20"
-                cy="10"
-                r="9.5"
-                fill="#F79E1B"
-                fillOpacity="0.88"
-              />
-            </svg>
-          )}
-          {!isCash && !isMfs && !isSavings && network === "visa" && (
-            <span className="mini-card-visa-text">VISA</span>
-          )}
-          {!isCash && !isMfs && !isSavings && network === "amex" && (
-            <span className="mini-card-amex-text">AMEX</span>
-          )}
-        </div>
-      </div>
+      {!isCash && !isMfs && !isSavings && (
+        <>
+          {isMastercard && <i className="m" />}
+          {isVisa && <em className="v">VISA</em>}
+          {isAmex && <em className="amex">AMEX</em>}
+        </>
+      )}
     </div>
   );
 }
