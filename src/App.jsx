@@ -70,7 +70,14 @@ import {
   syncNativeScheduledNotifications,
 } from "./notifications.js";
 
-const loadMobilePrototype = () => import("./MobilePrototype");
+import "./MobilePrototype.css";
+
+let resolvedMobilePrototype = null;
+const loadMobilePrototype = () =>
+  import("./MobilePrototype").then((mod) => {
+    resolvedMobilePrototype = mod.default || mod;
+    return mod;
+  });
 const MobilePrototype = lazy(loadMobilePrototype);
 
 function PrototypeMountSignal({ onMounted }) {
@@ -84,7 +91,39 @@ const LOCAL_DATA_OWNER_KEY = "spend-local-data-owner-v1";
 const LOCAL_USER_SNAPSHOTS_KEY = "spend-local-user-snapshots-v1";
 const BUDGET_UPDATED_AT_KEY = STORAGE_KEYS.budgetUpdatedAt;
 const LAST_BACKUP_AT_KEY = "spend-last-backup-at-v1";
-const WELCOME_FLOW_SESSION_KEY = "spend-welcome-shown";
+const WELCOME_SEEN_STORAGE_KEY = "spend:welcome-seen";
+let welcomeSeenInMemory = false;
+
+function readWelcomeSeen() {
+  if (welcomeSeenInMemory) return true;
+  try {
+    if (localStorage.getItem(WELCOME_SEEN_STORAGE_KEY) === "1") {
+      welcomeSeenInMemory = true;
+      return true;
+    }
+  } catch {
+    // Fall back to in-memory state when localStorage is unavailable.
+  }
+  return false;
+}
+
+function markWelcomeSeen() {
+  welcomeSeenInMemory = true;
+  try {
+    localStorage.setItem(WELCOME_SEEN_STORAGE_KEY, "1");
+  } catch {
+    // In-memory fallback keeps the welcome flow from looping in this session.
+  }
+}
+
+function isDevForcedWelcome() {
+  if (!import.meta.env.DEV || typeof window === "undefined") return false;
+  try {
+    return new URLSearchParams(window.location.search).get("welcome") === "1";
+  } catch {
+    return false;
+  }
+}
 
 function loadTheme() {
   try {
@@ -1048,7 +1087,12 @@ export default function App() {
   const [isHydrated, setIsHydrated] = useState(!hasAppPin());
   const isHydratedRef = useRef(!hasAppPin());
   const [ready, setReady] = useState(false);
-  const [showWelcomeFlow, setShowWelcomeFlow] = useState(false);
+  const [sessionResolving, setSessionResolving] = useState(() =>
+    Boolean(supabaseConfigured),
+  );
+  const [sessionUser, setSessionUser] = useState(null);
+  const [welcomeSeen, setWelcomeSeen] = useState(readWelcomeSeen);
+  const [devForceWelcome, setDevForceWelcome] = useState(isDevForcedWelcome);
   const [prototypeMounted, setPrototypeMounted] = useState(false);
   const handlePrototypeMounted = useCallback(() => {
     setPrototypeMounted(true);
@@ -1842,52 +1886,59 @@ export default function App() {
   }, [initSupabaseAuth]);
 
   useEffect(() => {
-    if (!supabaseConfigured) return undefined;
+    if (!supabaseConfigured) {
+      setSessionResolving(false);
+      return undefined;
+    }
     let active = true;
-    let welcomeSubscription = null;
-    (supabase ? Promise.resolve(supabase) : getSupabase()).then((client) => {
-      if (!active || !client) return;
-      const {
-        data: { subscription },
-      } = client.auth.onAuthStateChange((event, session) => {
-        if (event === "INITIAL_SESSION" && session?.user) {
-          try {
-            sessionStorage.setItem(WELCOME_FLOW_SESSION_KEY, "1");
-          } catch {}
+    let sessionSubscription = null;
+    (supabase ? Promise.resolve(supabase) : getSupabase())
+      .then((client) => {
+        if (!active) return;
+        if (!client) {
+          setSessionResolving(false);
           return;
         }
-        if (event === "SIGNED_IN") {
-          if (
-            typeof window !== "undefined" &&
-            window.location.hash.includes("type=recovery")
-          ) {
-            return;
-          }
-          try {
-            if (sessionStorage.getItem(WELCOME_FLOW_SESSION_KEY) === "1") {
-              return;
+        client.auth
+          .getSession()
+          .then(({ data }) => {
+            if (!active) return;
+            const user = data?.session?.user || null;
+            setSessionUser(user);
+            if (user) {
+              markWelcomeSeen();
+              setWelcomeSeen(true);
+              initSupabaseAuth();
             }
-            sessionStorage.setItem(WELCOME_FLOW_SESSION_KEY, "1");
-          } catch {
-            // Proceed even if sessionStorage is restricted.
+            setSessionResolving(false);
+          })
+          .catch(() => {
+            if (!active) return;
+            setSessionResolving(false);
+          });
+        const {
+          data: { subscription },
+        } = client.auth.onAuthStateChange((_event, session) => {
+          if (!active) return;
+          const user = session?.user || null;
+          setSessionUser(user);
+          if (user) {
+            markWelcomeSeen();
+            setWelcomeSeen(true);
           }
-          setShowWelcomeFlow(true);
-        } else if (event === "SIGNED_OUT") {
-          try {
-            sessionStorage.removeItem(WELCOME_FLOW_SESSION_KEY);
-          } catch {
-            // Ignore storage errors on sign-out.
-          }
-          setShowWelcomeFlow(false);
-        }
+          setSessionResolving(false);
+        });
+        sessionSubscription = subscription;
+      })
+      .catch(() => {
+        if (!active) return;
+        setSessionResolving(false);
       });
-      welcomeSubscription = subscription;
-    });
     return () => {
       active = false;
-      welcomeSubscription?.unsubscribe();
+      sessionSubscription?.unsubscribe();
     };
-  }, []);
+  }, [initSupabaseAuth]);
 
   useEffect(() => {
     if (!supabase || !pushUser || !cloudSyncEnabled || !isHydrated) {
@@ -2154,6 +2205,13 @@ export default function App() {
 
   useEffect(() => {
     if (!authModalOpen || authModalClosing) return undefined;
+    const modalEl = authModalRef.current;
+    if (modalEl && !modalEl.contains(document.activeElement)) {
+      const preferredInput =
+        modalEl.querySelector("#push-email:not([disabled])") ||
+        modalEl.querySelector("input:not([disabled]), button:not([disabled])");
+      preferredInput?.focus();
+    }
     const closeOnEscape = (event) => {
       if (event.key === "Escape" && !authBusy) hideAuthModal();
     };
@@ -3993,6 +4051,9 @@ export default function App() {
       } else {
         const signedInUser = result.data?.session?.user || result.data?.user;
         if (signedInUser) {
+          setSessionUser(signedInUser);
+          markWelcomeSeen();
+          setWelcomeSeen(true);
           notifyNewUserSignedIn(signedInUser);
         }
         setAuthStatus(
@@ -4003,6 +4064,16 @@ export default function App() {
               : "Signed in.",
         );
         hideAuthModal();
+        if (typeof window !== "undefined") {
+          window.history.replaceState(
+            window.history.state,
+            "",
+            `${window.location.pathname}${window.location.search}${window.location.hash}`,
+          );
+          window.dispatchEvent(
+            new CustomEvent("spend:navigate-tab", { detail: { tab: "home" } }),
+          );
+        }
       }
       setAuthPassword("");
     } catch (error) {
@@ -4048,14 +4119,18 @@ export default function App() {
     showAuthModal();
   }
 
-  function openSignInModal() {
+  function openSignInModal(preferredMode) {
     initSupabaseAuth();
     authTriggerRef.current =
       document.activeElement instanceof HTMLElement
         ? document.activeElement
         : null;
     authReturnFocusRef.current = authTriggerRef.current;
-    setAuthMode("sign-in");
+    const nextMode =
+      preferredMode === "sign-up" || preferredMode === "sign-in"
+        ? preferredMode
+        : "sign-in";
+    setAuthMode(nextMode);
     setAuthStatus("");
     setAuthPassword("");
     setShowAuthPassword(false);
@@ -4493,32 +4568,54 @@ export default function App() {
     setSelectedMonth((month) => shiftMonth(month, offset));
   }
 
+  const hasActiveSession = Boolean(sessionUser || pushUser);
+  const shouldShowWelcome =
+    !sessionResolving && !hasActiveSession && (!welcomeSeen || devForceWelcome);
+
+  function handleWelcomeDone() {
+    markWelcomeSeen();
+    if (import.meta.env.DEV && typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("welcome")) {
+        url.searchParams.delete("welcome");
+        window.history.replaceState(
+          window.history.state,
+          "",
+          `${url.pathname}${url.search}${url.hash}`,
+        );
+      }
+      setDevForceWelcome(false);
+    }
+    if (typeof window !== "undefined") {
+      window.history.replaceState(
+        window.history.state,
+        "",
+        `${window.location.pathname}${window.location.search}${window.location.hash}`,
+      );
+    }
+    setWelcomeSeen(true);
+    setReady(true);
+    openSignInModal("sign-up");
+  }
+
+  if (sessionResolving) {
+    return <SpendSplash canExit={false} onDone={() => setReady(true)} />;
+  }
+
+  if (shouldShowWelcome) {
+    return <WelcomeFlow theme={resolvedTheme} onDone={handleWelcomeDone} />;
+  }
+
+  const ActivePrototype = resolvedMobilePrototype || MobilePrototype;
+
   return (
     <>
       {!ready && (
         <SpendSplash canExit={prototypeMounted} onDone={() => setReady(true)} />
       )}
-      {showWelcomeFlow && (
-        <WelcomeFlow
-          theme={resolvedTheme}
-          onDone={() => {
-            try {
-              sessionStorage.setItem(WELCOME_FLOW_SESSION_KEY, "1");
-            } catch {}
-            setShowWelcomeFlow(false);
-            if (typeof window !== "undefined") {
-              window.dispatchEvent(
-                new CustomEvent("spend:navigate-tab", {
-                  detail: { tab: "home" },
-                }),
-              );
-            }
-          }}
-        />
-      )}
       <Suspense fallback={null}>
         <PrototypeMountSignal onMounted={handlePrototypeMounted} />
-        <MobilePrototype
+        <ActivePrototype
           S={mobilePrototypeData}
           onUnlock={handleAppUnlock}
           onResetPin={handleResetForgottenPin}

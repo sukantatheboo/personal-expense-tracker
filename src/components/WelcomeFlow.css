@@ -121,6 +121,15 @@ html[data-theme="light"] .welcome-flow,
   display: flex;
   flex-direction: column;
   box-shadow: 0 30px 80px -30px rgba(0, 0, 0, 0.45);
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s cubic-bezier(0.4, 0, 1, 1);
+}
+
+.welcome-flow.is-exiting .phone {
+  opacity: 0;
+  transform: translateY(-12px) scale(0.985);
+  pointer-events: none;
 }
 
 @media (max-width: 520px) {

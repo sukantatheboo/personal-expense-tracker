@@ -17,11 +17,14 @@ export default function WelcomeFlow({ onDone, theme }) {
   const [slidesReady, setSlidesReady] = useState(false);
   const [amountShown, setAmountShown] = useState(false);
 
+  const [exiting, setExiting] = useState(false);
+
   const pointerStartXRef = useRef(null);
   const pointerIdRef = useRef(null);
   const touchStartXRef = useRef(null);
   const splashGoneRef = useRef(false);
   const finishedRef = useRef(false);
+  const exitTimerRef = useRef(null);
 
   useEffect(() => {
     splashGoneRef.current = splashGone;
@@ -60,20 +63,31 @@ export default function WelcomeFlow({ onDone, theme }) {
   const finish = useCallback(() => {
     if (finishedRef.current) return;
     finishedRef.current = true;
-    if (typeof document !== "undefined") {
-      document.dispatchEvent(new CustomEvent("spendit:welcome-done"));
+    const reducedMotion =
+      typeof window !== "undefined" &&
+      Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches);
+    if (reducedMotion) {
+      onDone?.();
+      return;
     }
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(
-        new CustomEvent("spend:navigate-tab", { detail: { tab: "home" } }),
-      );
-    }
-    onDone?.();
+    setExiting(true);
+    exitTimerRef.current = window.setTimeout(() => {
+      onDone?.();
+    }, 180);
   }, [onDone]);
 
   useEffect(() => {
+    if (typeof document !== "undefined") {
+      document.getElementById("initial-splash")?.remove();
+      document.documentElement.style.backgroundColor = "";
+      document.body.style.backgroundColor = "";
+    }
+    const reducedMotion =
+      typeof window !== "undefined" &&
+      Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches);
+
     setSlideIndex(0);
-    setSlidesReady(false);
+    setSlidesReady(reducedMotion);
     setSplashGone(false);
     splashGoneRef.current = false;
     setSplashRun(true);
@@ -82,14 +96,19 @@ export default function WelcomeFlow({ onDone, theme }) {
     const splashTimer = window.setTimeout(() => {
       splashGoneRef.current = true;
       setSplashGone(true);
-      slideTimer = window.setTimeout(() => {
+      if (reducedMotion) {
         setSlidesReady(true);
-      }, SPLASH_SLIDE_DELAY_MS);
+      } else {
+        slideTimer = window.setTimeout(() => {
+          setSlidesReady(true);
+        }, SPLASH_SLIDE_DELAY_MS);
+      }
     }, SPLASH_DURATION_MS);
 
     return () => {
       window.clearTimeout(splashTimer);
       if (slideTimer) window.clearTimeout(slideTimer);
+      if (exitTimerRef.current) window.clearTimeout(exitTimerRef.current);
     };
   }, []);
 
@@ -178,7 +197,7 @@ export default function WelcomeFlow({ onDone, theme }) {
 
   return (
     <div
-      className="welcome-flow"
+      className={`welcome-flow${exiting ? " is-exiting" : ""}`}
       data-theme={theme === "dark" || theme === "light" ? theme : undefined}
       role="region"
       aria-label="Welcome to Spend"
