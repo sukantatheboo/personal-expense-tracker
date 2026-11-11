@@ -13,6 +13,8 @@ export const pushBackendConfigured = Boolean(
   supabaseConfigured && vapidPublicKey,
 );
 
+export const PUSH_DISABLED_BY_USER_KEY = "spend-push-disabled-by-user-v1";
+
 export let supabase = null;
 let supabaseInitPromise = null;
 
@@ -66,6 +68,20 @@ function clampDayOfMonth(day) {
   return Math.max(1, Math.min(31, Math.round(num)));
 }
 
+async function getActiveServiceWorkerRegistration() {
+  if (!("serviceWorker" in navigator)) return null;
+  const existing = await navigator.serviceWorker.getRegistration();
+  if (existing?.active) return existing;
+  try {
+    return await Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise((resolve) => setTimeout(() => resolve(existing || null), 4000)),
+    ]);
+  } catch {
+    return existing || null;
+  }
+}
+
 export async function enableBackgroundPush(userId) {
   const client = await getSupabase();
   if (!client || !vapidPublicKey) {
@@ -75,7 +91,7 @@ export async function enableBackgroundPush(userId) {
     throw new Error("Push notifications are not supported by this browser.");
   }
 
-  const registration = await navigator.serviceWorker.getRegistration();
+  const registration = await getActiveServiceWorkerRegistration();
   if (!registration?.active) {
     throw new Error(
       "The installed Spend app needs to finish loading before push can be enabled.",
@@ -113,6 +129,9 @@ export async function enableBackgroundPush(userId) {
     { onConflict: "user_id,device_id" },
   );
   if (error) throw error;
+  try {
+    localStorage.removeItem(PUSH_DISABLED_BY_USER_KEY);
+  } catch {}
   return { registration, subscription };
 }
 
@@ -152,6 +171,7 @@ export async function disableBackgroundPush(userId) {
   }
   try {
     localStorage.removeItem("spend-push-device-id-v1");
+    localStorage.setItem(PUSH_DISABLED_BY_USER_KEY, "true");
   } catch {
     // Ignore storage errors on cleanup
   }
@@ -185,23 +205,41 @@ export async function syncBackgroundSchedules(
   // so send-due-reminders never deletes push_reminders as orphaned
   if ("serviceWorker" in navigator && "PushManager" in window) {
     try {
-      const registration = await navigator.serviceWorker.getRegistration();
-      const subscription = await registration?.pushManager?.getSubscription?.();
-      const serialized = subscription?.toJSON?.();
-      if (
-        serialized?.endpoint &&
-        serialized?.keys?.p256dh &&
-        serialized?.keys?.auth
-      ) {
-        await client.from("push_devices").upsert(
-          {
-            user_id: userId,
-            device_id: deviceId,
-            endpoint: serialized.endpoint,
-            subscription: serialized,
-          },
-          { onConflict: "user_id,device_id" },
-        );
+      const registration = await getActiveServiceWorkerRegistration();
+      if (registration?.pushManager) {
+        let subscription = await registration.pushManager.getSubscription();
+        if (
+          !subscription &&
+          vapidPublicKey &&
+          typeof window !== "undefined" &&
+          window.Notification?.permission === "granted"
+        ) {
+          subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: vapidKeyBytes(vapidPublicKey),
+          });
+        }
+        const serialized = subscription?.toJSON?.();
+        if (
+          serialized?.endpoint &&
+          serialized?.keys?.p256dh &&
+          serialized?.keys?.auth
+        ) {
+          await client
+            .from("push_devices")
+            .delete()
+            .eq("endpoint", serialized.endpoint)
+            .neq("user_id", userId);
+          await client.from("push_devices").upsert(
+            {
+              user_id: userId,
+              device_id: deviceId,
+              endpoint: serialized.endpoint,
+              subscription: serialized,
+            },
+            { onConflict: "user_id,device_id" },
+          );
+        }
       }
     } catch {
       // Continue syncing reminders even if subscription check fails
@@ -424,20 +462,17 @@ export async function syncBackgroundSchedules(
     active: true,
   });
 
-  // Fetch existing rows first so we can delete any row whose next_date moved earlier
-  // or whose reminder_time changed (bypassing older BEFORE UPDATE trigger restrictions)
+  // Fetch existing rows first so we can delete any row whose next_date or reminder_time changed
+  // (bypassing any BEFORE UPDATE trigger restrictions and clearing stale claims)
   const { data: existing, error: loadError } = await client
     .from("push_reminders")
     .select(
-      "schedule_id, next_date, reminder_time, pending_notification",
+      "schedule_id, next_date, next_notify_at, reminder_time, pending_notification",
     )
     .eq("user_id", userId)
     .eq("device_id", deviceId);
   if (loadError) throw loadError;
 
-  const existingById = new Map(
-    (existing ?? []).map((row) => [row.schedule_id, row]),
-  );
   const currentIds = new Set(reminders.map(({ schedule_id }) => schedule_id));
 
   const idsToReset = [];
@@ -449,9 +484,9 @@ export async function syncBackgroundSchedules(
     const nextRow = reminders.find((r) => r.schedule_id === row.schedule_id);
     if (
       nextRow &&
-      !row.pending_notification &&
-      (nextRow.next_date < row.next_date ||
-        nextRow.reminder_time !== row.reminder_time)
+      (nextRow.next_date !== row.next_date ||
+        nextRow.reminder_time !== row.reminder_time ||
+        row.pending_notification)
     ) {
       idsToReset.push(row.schedule_id);
     }

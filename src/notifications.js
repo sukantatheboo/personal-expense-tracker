@@ -412,7 +412,7 @@ export async function syncNativeScheduledNotifications({
         channelId: "spend_monthly",
         sound: "reminder.wav",
         foreground: true,
-        schedule: { at: candidate },
+        schedule: { at: candidate, allowWhileIdle: true },
         extra: {
           tab: "home",
           tag: `spend-new-month-${localDate(candidate).slice(0, 7)}`,
@@ -449,7 +449,7 @@ export async function syncNativeScheduledNotifications({
       channelId: "spend_reminders",
       sound: "reminder.wav",
       foreground: true,
-      schedule: { at: sundayDate },
+      schedule: { at: sundayDate, allowWhileIdle: true },
       extra: {
         tab: "activity",
         tag: `spend-weekly-${localDate(sundayDate)}`,
@@ -478,7 +478,7 @@ export async function syncNativeScheduledNotifications({
       channelId: "spend_reminders",
       sound: "reminder.wav",
       foreground: true,
-      schedule: { at: targetDay },
+      schedule: { at: targetDay, allowWhileIdle: true },
       extra: {
         tab: "home",
         tag: `spend-daily-${dateStr}`,
@@ -523,7 +523,7 @@ export async function syncNativeScheduledNotifications({
           channelId: "spend_reminders",
           sound: "reminder.wav",
           foreground: true,
-          schedule: { at: headsUpAt },
+          schedule: { at: headsUpAt, allowWhileIdle: true },
           extra: {
             tab: "plans",
             tag: `heads-up:${schedule.id}:${headsUpDateStr}`,
@@ -544,7 +544,7 @@ export async function syncNativeScheduledNotifications({
           channelId: "spend_reminders",
           sound: "reminder.wav",
           foreground: true,
-          schedule: { at: dueAt },
+          schedule: { at: dueAt, allowWhileIdle: true },
           extra: {
             tab: "activity",
             tag: `${schedule.id}:${occDate}`,
