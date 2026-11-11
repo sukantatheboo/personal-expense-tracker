@@ -2101,7 +2101,6 @@ function Home({
 }) {
   const [currentTime, setCurrentTime] = useState(() => new Date());
   const [highlightedCategory, setHighlightedCategory] = useState("");
-  const stackScrubRef = useRef({ active: false, lastCat: "" });
   const { shown, toggle } = useReveal(5000);
   const todayStr = ld();
   const currentMonthKey = todayStr.slice(0, 7);
@@ -2406,16 +2405,25 @@ function Home({
 
       <div className="mini">
         <div className="card">
+          <div className="mini-card-top">
+            <span
+              className="mini-icon-badge is-category"
+              style={{
+                "--c": topCategory
+                  ? getCategoryColor(topCategory[0]) ||
+                    CAT[topCategory[0]]?.[1] ||
+                    "#8b5cf6"
+                  : "#64748b",
+              }}
+            >
+              <CategorySymbol
+                category={topCategory ? topCategory[0] : "Other"}
+              />
+            </span>
+          </div>
           <small>Top category</small>
           <b className="top-category-value">
-            {topCategory ? (
-              <>
-                <CategorySymbol category={topCategory[0]} />
-                <span>{topCategory[0]}</span>
-              </>
-            ) : (
-              "—"
-            )}
+            <span>{topCategory ? topCategory[0] : "—"}</span>
           </b>
           <span className="mini-caption">
             {topCategory
@@ -2424,6 +2432,33 @@ function Home({
           </span>
         </div>
         <div className="card">
+          <div className="mini-card-top">
+            <span className="mini-icon-badge is-repeat">
+              <UtilitySymbol name="repeat" />
+            </span>
+            {nx &&
+              (() => {
+                if (typeof nx.next !== "string") return null;
+                const [ty, tm, td] = todayStr.split("-").map(Number);
+                const [ny, nm, nd] = nx.next.split("-").map(Number);
+                if ([ty, tm, td, ny, nm, nd].some(isNaN)) return null;
+                const diffDays = Math.round(
+                  (Date.UTC(ny, nm - 1, nd) - Date.UTC(ty, tm - 1, td)) /
+                    86400000,
+                );
+                const label =
+                  diffDays === 0
+                    ? "Today"
+                    : diffDays === 1
+                      ? "in 1 day"
+                      : diffDays > 1
+                        ? `in ${diffDays} days`
+                        : diffDays === -1
+                          ? "1 day ago"
+                          : `${Math.abs(diffDays)}d ago`;
+                return <span className="mini-days-pill">{label}</span>;
+              })()}
+          </div>
           <small>Next recurring</small>
           <b className="mini-next-value">{nx ? nx.desc : "Nothing due"}</b>
           <span className="mini-caption">
@@ -2433,135 +2468,150 @@ function Home({
       </div>
 
       {cs.length > 0 && total > 0 && (
-        <div className="card">
+        <div className="card where-it-went-card">
           <div className="category-card-heading">
             <div>
               <h2>Where it went</h2>
               {saved > 0 && <small>Includes saved money</small>}
             </div>
-            {highlightedCategory && by[highlightedCategory] != null ? (
-              <span
-                className="stack-scrub-pill"
-                style={{ "--c": CAT[highlightedCategory]?.[1] || "#64748b" }}
-              >
-                <span className="stack-scrub-dot" aria-hidden="true" />
-                <b>{highlightedCategory}</b>
-                <span>{M(by[highlightedCategory])}</span>
-              </span>
-            ) : (
-              <span>{M(total)}</span>
-            )}
+            <span>
+              {cs.length} {cs.length === 1 ? "category" : "categories"}
+            </span>
           </div>
-          <div
-            className="stack"
-            role="group"
-            aria-label="Spending by category (drag across bar to inspect)"
-            onPointerDown={(e) => {
-              const el =
-                document.elementFromPoint(e.clientX, e.clientY) || e.target;
-              const seg = el?.closest?.("[data-stack-cat]");
-              const cat = seg?.getAttribute("data-stack-cat") || "";
-              stackScrubRef.current = {
-                active: true,
-                lastCat: cat,
-                moved: false,
-              };
-              try {
-                e.currentTarget.setPointerCapture?.(e.pointerId);
-              } catch {}
-            }}
-            onPointerMove={(e) => {
-              if (!stackScrubRef.current.active) return;
-              const el = document.elementFromPoint(e.clientX, e.clientY);
-              let seg = el?.closest?.("[data-stack-cat]");
-              if (!seg) {
-                const rect = e.currentTarget.getBoundingClientRect();
-                const midY = rect.top + rect.height / 2;
-                seg = document
-                  .elementFromPoint(e.clientX, midY)
-                  ?.closest?.("[data-stack-cat]");
-              }
-              const cat = seg?.getAttribute("data-stack-cat") || "";
-              if (cat && cat !== stackScrubRef.current.lastCat) {
-                stackScrubRef.current.lastCat = cat;
-                stackScrubRef.current.moved = true;
-                triggerHaptic("selection");
-                setHighlightedCategory(cat);
-              }
-            }}
-            onPointerUp={(e) => {
-              try {
-                if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
-                  e.currentTarget.releasePointerCapture(e.pointerId);
-                }
-              } catch {}
-              stackScrubRef.current.active = false;
-            }}
-            onPointerCancel={(e) => {
-              try {
-                if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
-                  e.currentTarget.releasePointerCapture(e.pointerId);
-                }
-              } catch {}
-              stackScrubRef.current.active = false;
-            }}
-            onLostPointerCapture={() => {
-              stackScrubRef.current.active = false;
-            }}
-            onClick={(e) => {
-              if (e.target !== e.currentTarget) return;
-              if (stackScrubRef.current.moved) {
-                stackScrubRef.current.moved = false;
-                return;
-              }
-              const cat = stackScrubRef.current.lastCat;
-              if (!cat) return;
-              triggerHaptic("selection");
-              setHighlightedCategory((current) =>
-                current === cat ? "" : cat,
-              );
-            }}
-          >
-            {cs.map(([c, v]) => (
-              <button
-                key={c}
-                type="button"
-                data-stack-cat={c}
-                className={`stack-segment${highlightedCategory === c ? " is-highlighted" : ""}`}
-                aria-label={`${c}: ${M(v)}`}
-                aria-pressed={highlightedCategory === c}
-                onClick={() => {
-                  if (stackScrubRef.current.moved) {
-                    stackScrubRef.current.moved = false;
-                    return;
-                  }
-                  triggerHaptic("selection");
-                  setHighlightedCategory((current) => (current === c ? "" : c));
-                }}
-                style={{
-                  width: total > 0 ? (v / total) * 100 + "%" : "0%",
-                  background: CAT[c]?.[1] || "#64748b",
-                }}
-              />
-            ))}
-          </div>
-          {cs.map(([c, v]) => (
-            <button
-              className={`leg${highlightedCategory === c ? " is-highlighted" : ""}`}
-              key={c}
-              type="button"
-              aria-label={`View ${c} activity, ${M(v)}`}
-              onClick={() => onCategory(c)}
+          <div className="where-it-went-body">
+            <div
+              className="where-donut-wrap"
+              role="group"
+              aria-label="Spending by category chart"
             >
-              <span
-                className="dot"
-                style={{ "--c": CAT[c]?.[1] || "#64748b" }}
-              />
-              <span>{c}</span>
-              <b>{M(v)}</b>
-              <em>{total > 0 ? Math.round((v / total) * 100) : 0}%</em>
-            </button>
-          ))}
+              <svg
+                viewBox="0 0 132 132"
+                className="where-donut-svg"
+                onClick={(e) => {
+                  if (e.target === e.currentTarget && highlightedCategory) {
+                    triggerHaptic("selection");
+                    setHighlightedCategory("");
+                  }
+                }}
+              >
+                {(() => {
+                  const r = 51;
+                  const C = 2 * Math.PI * r;
+                  if (cs.length === 1) {
+                    const [c] = cs[0];
+                    const isHighlighted = highlightedCategory === c;
+                    return (
+                      <circle
+                        key={c}
+                        cx="66"
+                        cy="66"
+                        r={r}
+                        fill="none"
+                        stroke={CAT[c]?.[1] || "#64748b"}
+                        strokeWidth={isHighlighted ? 15.5 : 14}
+                        className={`where-donut-segment${isHighlighted ? " is-highlighted" : ""}${highlightedCategory && !isHighlighted ? " is-dimmed" : ""}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          triggerHaptic("selection");
+                          setHighlightedCategory((curr) =>
+                            curr === c ? "" : c,
+                          );
+                        }}
+                      />
+                    );
+                  }
+                  const gapPx = 4.5;
+                  const availLen = Math.max(
+                    cs.length * 4,
+                    C - cs.length * gapPx,
+                  );
+                  const rawLens = cs.map(([, v]) =>
+                    Math.max(4.5, (v / total) * availLen),
+                  );
+                  const sumRaw =
+                    rawLens.reduce((acc, val) => acc + val, 0) || 1;
+                  const segLens = rawLens.map(
+                    (len) => (len / sumRaw) * availLen,
+                  );
+                  let cumOffset = gapPx / 2;
+                  return cs.map(([c], idx) => {
+                    const segLen = segLens[idx];
+                    const startOffset = cumOffset;
+                    cumOffset += segLen + gapPx;
+                    const isHighlighted = highlightedCategory === c;
+                    return (
+                      <circle
+                        key={c}
+                        cx="66"
+                        cy="66"
+                        r={r}
+                        fill="none"
+                        stroke={CAT[c]?.[1] || "#64748b"}
+                        strokeWidth={isHighlighted ? 15.5 : 14}
+                        strokeLinecap="butt"
+                        strokeDasharray={`${segLen} ${C}`}
+                        strokeDashoffset={-startOffset}
+                        className={`where-donut-segment${isHighlighted ? " is-highlighted" : ""}${highlightedCategory && !isHighlighted ? " is-dimmed" : ""}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          triggerHaptic("selection");
+                          setHighlightedCategory((curr) =>
+                            curr === c ? "" : c,
+                          );
+                        }}
+                      />
+                    );
+                  });
+                })()}
+              </svg>
+              <div
+                className={`where-donut-center${highlightedCategory ? " is-interactive" : ""}`}
+                onClick={() => {
+                  if (highlightedCategory) {
+                    triggerHaptic("selection");
+                    setHighlightedCategory("");
+                  }
+                }}
+              >
+                <span className="where-donut-label">
+                  {highlightedCategory && by[highlightedCategory] != null
+                    ? highlightedCategory
+                    : "Total"}
+                </span>
+                <b className="where-donut-total">
+                  {M(
+                    highlightedCategory && by[highlightedCategory] != null
+                      ? by[highlightedCategory]
+                      : total,
+                  )}
+                </b>
+              </div>
+            </div>
+
+            <div className="where-legend-list">
+              {cs.map(([c, v]) => (
+                <button
+                  className={`leg${highlightedCategory === c ? " is-highlighted" : ""}`}
+                  key={c}
+                  type="button"
+                  aria-label={`View ${c} activity, ${M(v)}`}
+                  onClick={() => onCategory(c)}
+                >
+                  <span
+                    className="dot"
+                    style={{ "--c": CAT[c]?.[1] || "#64748b" }}
+                  />
+                  <span className="leg-info">
+                    <span className="leg-name">{c}</span>
+                    <em className="leg-pct">
+                      {total > 0 ? Math.round((v / total) * 100) : 0}%
+                    </em>
+                  </span>
+                  <b className="leg-amt">{M(v)}</b>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
