@@ -3470,6 +3470,16 @@ function Accounts({
   }, [selectedAccount, onActiveAccountChange]);
 
   useEffect(() => {
+    if (
+      initialSelectedAccount &&
+      cards.some((c) => c.id === initialSelectedAccount)
+    ) {
+      setSelectedAccount(initialSelectedAccount);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialSelectedAccount]);
+
+  useEffect(() => {
     if (cards.length === 0) {
       if (selectedAccount !== "") setSelectedAccount("");
       prevCardCountRef.current = 0;
@@ -3636,7 +3646,7 @@ function Accounts({
     .sort(
       (left, right) =>
         right.d.localeCompare(left.d) ||
-        activityTime(right) - activityTime(left) ||
+        itemCreationTime(right) - itemCreationTime(left) ||
         right.id.localeCompare(left.id),
     );
   const visibleEvents = showAllTx ? filteredEvents : filteredEvents.slice(0, 8);
@@ -4623,7 +4633,14 @@ function AddSheet({
           aria-label={`Use suggestion: ${categorySuggestion}`}
           onClick={() => {
             triggerHaptic("selection");
-            set("cat", categorySuggestion);
+            setF((current) => ({
+              ...current,
+              cat: categorySuggestion,
+              acct:
+                current.cat === "Savings" && categorySuggestion !== "Savings"
+                  ? prevNonSavingsAcctRef.current
+                  : current.acct,
+            }));
           }}
         >
           <UtilitySymbol name="suggestion" />
@@ -4886,7 +4903,7 @@ function TxSheet({
   const defaultFrom =
     defaultAccount && cards.some((c) => c.id === defaultAccount)
       ? defaultAccount
-      : cards[0]?.id || "";
+      : unfrozenFromOptions[0]?.[0] || cards[0]?.id || "";
   const defaultTransferFrom =
     defaultAccount && unfrozenFromOptions.some(([id]) => id === defaultAccount)
       ? defaultAccount
@@ -4947,9 +4964,14 @@ function TxSheet({
       onClose={onClose}
       actions={
         <button
+          type="button"
           className="btn"
           disabled={!canSave}
-          onClick={() => canSave && onSave(g)}
+          onClick={() => {
+            if (!canSave) return;
+            triggerHaptic("selection");
+            onSave(g);
+          }}
         >
           Save
         </button>
@@ -5130,14 +5152,24 @@ function TxSheet({
       <span className="lbl">Date</span>
       <div className="seg">
         <button
+          type="button"
+          aria-pressed={g.date === ld()}
           className={g.date === ld() ? "on" : ""}
-          onClick={() => set("date", ld())}
+          onClick={() => {
+            triggerHaptic("selection");
+            set("date", ld());
+          }}
         >
           Today
         </button>
         <button
+          type="button"
+          aria-pressed={g.date === ago(1)}
           className={g.date === ago(1) ? "on" : ""}
-          onClick={() => set("date", ago(1))}
+          onClick={() => {
+            triggerHaptic("selection");
+            set("date", ago(1));
+          }}
         >
           Yesterday
         </button>
@@ -5209,26 +5241,38 @@ function AccountTxDetailSheet({ tx, cards = [], onSave, onDelete, onClose }) {
     }
     return list;
   };
+  const fallbackFrom =
+    tx.acct && tx.acct !== "cash" ? tx.acct : cards[0]?.id || "";
   const [g, setG] = useState({
     type: tx.type === "adjustment" ? "adjust" : tx.type || "income",
     amt: tx.amt ?? "",
-    acct: tx.acct || cards[0]?.id || "",
+    acct: fallbackFrom,
     dir: tx.dir || (tx.direction === "decrease" ? "down" : "up"),
     note: tx.note || "",
     date: tx.date || ld(),
-    fromAccount: tx.acct || cards[0]?.id || "",
-    toAccount: tx.to || cards.find((c) => c.id !== tx.acct)?.id || "",
+    fromAccount: fallbackFrom,
+    toAccount:
+      tx.to && tx.to !== "cash"
+        ? tx.to
+        : cards.find((c) => c.id !== fallbackFrom)?.id || "",
   });
   const amtInputRef = useRef(null);
   const noteInputRef = useRef(null);
   const reasonSelectRef = useRef(null);
   const set = (k, v) => setG((x) => ({ ...x, [k]: v }));
   const tr = g.type === "transfer";
+  const customDate = g.date !== ld() && g.date !== ago(1);
   const allTransferOptions = ensureAccountOption(g.fromAccount, g.toAccount);
-  const normFrom = g.fromAccount === "" ? "cash" : g.fromAccount;
+  const normFrom =
+    !g.fromAccount || g.fromAccount === "cash"
+      ? allTransferOptions[0]?.[0] || ""
+      : g.fromAccount;
   const allToOptions = allTransferOptions.filter(([id]) => id !== normFrom);
   const singleAccountOptions = ensureAccountOption(g.acct);
-  const normTo = g.toAccount === "" ? "cash" : g.toAccount;
+  const normTo =
+    !g.toAccount || g.toAccount === "cash"
+      ? allToOptions[0]?.[0] || ""
+      : g.toAccount;
   const amtNum = parseAmount(g.amt);
   const hasValidAmt = Number.isFinite(amtNum) && amtNum > 0;
   const fromCardIsFrozen = Boolean(
@@ -5246,9 +5290,11 @@ function AccountTxDetailSheet({ tx, cards = [], onSave, onDelete, onClose }) {
     (tr
       ? allTransferOptions.length >= 1 &&
         allToOptions.length >= 1 &&
+        Boolean(normFrom) &&
+        Boolean(normTo) &&
         normFrom !== normTo &&
         !fromCardIsFrozen
-      : singleAccountOptions.length > 0);
+      : singleAccountOptions.length > 0 && Boolean(g.acct));
 
   const handleSwapTransferAccounts = () => {
     if (!canSwap) {
@@ -5258,9 +5304,9 @@ function AccountTxDetailSheet({ tx, cards = [], onSave, onDelete, onClose }) {
     triggerHaptic("selection");
     setG((current) => ({
       ...current,
-      fromAccount: current.toAccount,
-      acct: current.toAccount,
-      toAccount: current.fromAccount,
+      fromAccount: normTo,
+      acct: normTo,
+      toAccount: normFrom,
     }));
   };
 
@@ -5271,13 +5317,26 @@ function AccountTxDetailSheet({ tx, cards = [], onSave, onDelete, onClose }) {
       actions={
         <>
           <button
+            type="button"
             className="btn"
             disabled={!canSave}
-            onClick={() => canSave && onSave(tx.id, g)}
+            onClick={() => {
+              if (!canSave) return;
+              triggerHaptic("selection");
+              onSave(tx.id, {
+                ...g,
+                fromAccount: tr ? normFrom : g.fromAccount,
+                toAccount: tr ? normTo : g.toAccount,
+              });
+            }}
           >
             Save changes
           </button>
-          <button className="btn del" onClick={() => onDelete(tx.id)}>
+          <button
+            type="button"
+            className="btn del"
+            onClick={() => onDelete(tx.id)}
+          >
             Delete
           </button>
         </>
@@ -5443,15 +5502,39 @@ function AccountTxDetailSheet({ tx, cards = [], onSave, onDelete, onClose }) {
       )}
 
       <span className="lbl">Date</span>
-      <input
-        className="in"
-        type="date"
-        aria-label="Transaction date"
-        value={g.date}
-        onChange={(e) => {
-          if (e.target.value) set("date", e.target.value);
-        }}
-      />
+      <div className="seg">
+        <button
+          type="button"
+          aria-pressed={g.date === ld()}
+          className={g.date === ld() ? "on" : ""}
+          onClick={() => {
+            triggerHaptic("selection");
+            set("date", ld());
+          }}
+        >
+          Today
+        </button>
+        <button
+          type="button"
+          aria-pressed={g.date === ago(1)}
+          className={g.date === ago(1) ? "on" : ""}
+          onClick={() => {
+            triggerHaptic("selection");
+            set("date", ago(1));
+          }}
+        >
+          Yesterday
+        </button>
+        <input
+          type="date"
+          className={customDate ? "on" : ""}
+          aria-label="Transaction date"
+          value={g.date}
+          onChange={(e) => {
+            if (e.target.value) set("date", e.target.value);
+          }}
+        />
+      </div>
 
       {g.type === "adjust" ? (
         <>
@@ -5533,6 +5616,8 @@ function DetailSheet({
       c.provider !== "savings",
   );
   const spendableCards = nonSavingsCards.filter((c) => !c.frozen);
+  const primaryCard =
+    spendableCards.find((c) => c.isPrimary) || spendableCards[0];
   const canSave =
     Boolean(f.desc?.trim()) &&
     Boolean(f.date) &&
@@ -5540,7 +5625,7 @@ function DetailSheet({
     (!isSavings ||
       (amtNum !== null &&
         amtNum > 0 &&
-        (!hasSavingsAccount || Boolean(f.acct))));
+        (!hasSavingsAccount || spendableCards.length === 0 || Boolean(f.acct))));
   return (
     <Sheet
       onClose={onClose}
@@ -5592,10 +5677,9 @@ function DetailSheet({
           }
         }}
       />
-      <span className="lbl">Category</span>
       {activeSuggestion && activeSuggestion !== f.cat && (
         <button
-          className="category-suggestion-action"
+          className="category-suggestion-action is-inline-hint"
           type="button"
           style={{
             "--c":
@@ -5612,7 +5696,7 @@ function DetailSheet({
               ...(activeSuggestion === "Savings" &&
               hasSavingsAccount &&
               !current.acct
-                ? { acct: spendableCards[0]?.id || "" }
+                ? { acct: primaryCard?.id || spendableCards[0]?.id || "" }
                 : {}),
             }));
           }}
@@ -5625,18 +5709,21 @@ function DetailSheet({
           />
         </button>
       )}
+      <span className="lbl">Category</span>
       <div className="cg">
         {Object.keys(CAT).map((category) => (
           <button
             type="button"
             key={category}
+            aria-pressed={f.cat === category}
             className={f.cat === category ? "on" : ""}
             onClick={() => {
+              triggerHaptic("selection");
               setF((current) => ({
                 ...current,
                 cat: category,
                 ...(category === "Savings" && hasSavingsAccount && !current.acct
-                  ? { acct: spendableCards[0]?.id || "" }
+                  ? { acct: primaryCard?.id || spendableCards[0]?.id || "" }
                   : {}),
               }));
             }}
@@ -5677,7 +5764,7 @@ function DetailSheet({
         onPick={(value) => set("acct", value)}
         cards={cards}
         options={
-          isSavings && hasSavingsAccount && nonSavingsCards.length > 0
+          isSavings && hasSavingsAccount && spendableCards.length > 0 && f.acct !== ""
             ? nonSavingsCards.map((c) => [c.id, c.name])
             : [
                 ["", "Cash"],
@@ -5725,12 +5812,14 @@ function RecurringDetailSheet({
       c.provider !== "savings",
   );
   const spendableCards = nonSavingsCards.filter((c) => !c.frozen);
+  const primaryCard =
+    spendableCards.find((c) => c.isPrimary) || spendableCards[0];
   const canSave =
     Boolean(f.desc?.trim()) &&
     Boolean(f.next) &&
     Number.isFinite(amtNum) &&
     amtNum > 0 &&
-    (!isSavings || !hasSavingsAccount || Boolean(f.acct));
+    (!isSavings || !hasSavingsAccount || spendableCards.length === 0 || Boolean(f.acct));
 
   return (
     <Sheet
@@ -5785,10 +5874,9 @@ function RecurringDetailSheet({
           }
         }}
       />
-      <span className="lbl">Category</span>
       {activeSuggestion && activeSuggestion !== f.cat && (
         <button
-          className="category-suggestion-action"
+          className="category-suggestion-action is-inline-hint"
           type="button"
           style={{
             "--c":
@@ -5805,7 +5893,7 @@ function RecurringDetailSheet({
               ...(activeSuggestion === "Savings" &&
               hasSavingsAccount &&
               !current.acct
-                ? { acct: spendableCards[0]?.id || "" }
+                ? { acct: primaryCard?.id || spendableCards[0]?.id || "" }
                 : {}),
             }));
           }}
@@ -5818,18 +5906,21 @@ function RecurringDetailSheet({
           />
         </button>
       )}
+      <span className="lbl">Category</span>
       <div className="cg">
         {Object.keys(CAT).map((category) => (
           <button
             type="button"
             key={category}
+            aria-pressed={f.cat === category}
             className={f.cat === category ? "on" : ""}
             onClick={() => {
+              triggerHaptic("selection");
               setF((current) => ({
                 ...current,
                 cat: category,
                 ...(category === "Savings" && hasSavingsAccount && !current.acct
-                  ? { acct: spendableCards[0]?.id || "" }
+                  ? { acct: primaryCard?.id || spendableCards[0]?.id || "" }
                   : {}),
               }));
             }}
@@ -5866,7 +5957,7 @@ function RecurringDetailSheet({
         onPick={(value) => set("acct", value)}
         cards={cards}
         options={
-          isSavings && hasSavingsAccount && nonSavingsCards.length > 0
+          isSavings && hasSavingsAccount && spendableCards.length > 0 && f.acct !== ""
             ? nonSavingsCards.map((c) => [c.id, c.name])
             : [
                 ["", "Cash"],
@@ -6290,7 +6381,14 @@ const CARD_FILTER_TABS = [
   { id: "custom", label: "Custom" },
 ];
 
-function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
+function AddCardSheet({
+  onClose,
+  onAddCard,
+  cards = [],
+  onOpenExistingCard,
+  onToast,
+  userProfileName = "Cardholder",
+}) {
   const [step, setStep] = useState("catalog"); // 'catalog' | 'customize' | 'success'
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
@@ -6344,6 +6442,15 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
   }, [searchQuery, activeFilter]);
 
   const handlePickProvider = (prov) => {
+    if (prov.category === "savings") {
+      const existingVaultId = getSavingsAccountId(cards);
+      if (existingVaultId) {
+        triggerHaptic("warning");
+        onToast?.("You already have a Savings Vault in your wallet.");
+        onOpenExistingCard?.(existingVaultId);
+        return;
+      }
+    }
     setSelectedProvider(prov);
     setFormData({
       name: "",
@@ -6396,6 +6503,17 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
     e?.preventDefault();
     const isMfs = selectedProvider.category === "mfs";
     const isSavings = selectedProvider.category === "savings";
+
+    if (!isMfs && !isSavings && formData.expiry.trim()) {
+      const expMatch = formData.expiry
+        .trim()
+        .match(/^(0[1-9]|1[0-2])\/(\d{2})$/);
+      if (!expMatch) {
+        triggerHaptic("warning");
+        onToast?.("Enter a valid expiry date (MM/YY).");
+        return;
+      }
+    }
 
     const defaultNum = selectedProvider.numberPlaceholder.replace(/\s+/g, "");
     const defaultDigits = defaultNum.replace(/\D/g, "");
@@ -6842,9 +6960,22 @@ function AddCardSheet({ onClose, onAddCard, userProfileName = "Cardholder" }) {
                   enterKeyHint="done"
                   placeholder="0.00"
                   value={formData.initialBalance}
-                  onChange={(e) =>
-                    handleFormChange("initialBalance", e.target.value)
-                  }
+                  onChange={(e) => {
+                    let next = e.target.value
+                      .replace(/,/g, ".")
+                      .replace(/[^0-9.]/g, "");
+                    if (next.startsWith(".")) {
+                      next = "0" + next;
+                    }
+                    next = next.replace(/^0+(?=\d)/, "");
+                    const firstDot = next.indexOf(".");
+                    if (firstDot !== -1) {
+                      next =
+                        next.slice(0, firstDot + 1) +
+                        next.slice(firstDot + 1).replace(/\./g, "").slice(0, 2);
+                    }
+                    handleFormChange("initialBalance", next);
+                  }}
                   autoComplete="off"
                   autoCorrect="off"
                   spellCheck="false"
@@ -7064,6 +7195,7 @@ function CardOptionsSheet({
   onAdjustBalance,
   onSetPrimaryCard,
   onMoveCardToFront,
+  onSelectCard,
   onToast,
 }) {
   const [selectedId, setSelectedId] = useState(
@@ -7098,12 +7230,26 @@ function CardOptionsSheet({
   const isSavings =
     selectedCard?.category === "savings" ||
     selectedCard?.type === "savings" ||
-    selectedCard?.provider === "savings";
+    selectedCard?.provider === "savings" ||
+    String(selectedCard?.number || "").startsWith("SAV-") ||
+    String(selectedCard?.number || "").startsWith("VAULT-") ||
+    String(selectedCard?.number || "").startsWith("DPS-");
 
   const isCard = !isMfs && !isSavings;
   const initialCardBal =
     (selectedCard?.id != null ? startBalances[selectedCard.id] : undefined) ??
     selectedCard?.initialBalance;
+
+  const getEditableCardNumber = (card, mfsFlag) => {
+    const rawNum = String(card?.number || "");
+    if (!mfsFlag) return rawNum;
+    if (rawNum.includes("•")) {
+      const l4 =
+        card?.last4 || rawNum.replace(/\D/g, "").slice(-4) || "";
+      return l4;
+    }
+    return rawNum.replace(/\D/g, "").slice(0, 11);
+  };
 
   const [formData, setFormData] = useState({
     name: selectedCard?.name || "",
@@ -7114,7 +7260,7 @@ function CardOptionsSheet({
       (selectedCard?.number
         ? selectedCard.number.replace(/\D/g, "").slice(-4)
         : ""),
-    number: selectedCard?.number || "",
+    number: getEditableCardNumber(selectedCard, isMfs),
     expiry: selectedCard?.expiry || "",
     network: selectedCard?.network || "visa",
     type: selectedCard?.type || "credit",
@@ -7142,6 +7288,14 @@ function CardOptionsSheet({
         (selectedCard.id != null
           ? startBalances[selectedCard.id]
           : undefined) ?? selectedCard.initialBalance;
+      const mfsCard =
+        selectedCard.category === "mfs" ||
+        selectedCard.type === "mfs" ||
+        selectedCard.network === "mfs" ||
+        selectedCard.provider === "bkash" ||
+        selectedCard.provider === "nagad" ||
+        selectedCard.provider === "rocket" ||
+        Boolean(selectedCard.isPhone);
       setFormData({
         name: selectedCard.name || "",
         holderName: selectedCard.holderName || "Cardholder",
@@ -7151,7 +7305,7 @@ function CardOptionsSheet({
           (selectedCard.number
             ? selectedCard.number.replace(/\D/g, "").slice(-4)
             : ""),
-        number: selectedCard.number || "",
+        number: getEditableCardNumber(selectedCard, mfsCard),
         expiry: selectedCard.expiry || "",
         network: selectedCard.network || "visa",
         type: selectedCard.type || "credit",
@@ -7165,7 +7319,8 @@ function CardOptionsSheet({
       setIsFrozen(Boolean(selectedCard.frozen));
       setConfirmDeleteOpen(false);
     }
-  }, [selectedCard?.id, startBalances]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCard?.id]);
 
   const previewCard = useMemo(() => {
     if (!selectedCard) return null;
@@ -7245,26 +7400,53 @@ function CardOptionsSheet({
     triggerHaptic("warning");
     const nextFrozen = !isFrozen;
     setIsFrozen(nextFrozen);
-    const { initialBalance: _initBal, ...safeFormData } = formData;
-    onUpdateCard?.({
-      ...selectedCard,
-      ...safeFormData,
-      frozen: nextFrozen,
-      id: selectedCard.id,
-    });
+    onUpdateCard?.(
+      {
+        ...selectedCard,
+        frozen: nextFrozen,
+        id: selectedCard.id,
+      },
+      nextFrozen ? "Card locked" : "Card unlocked",
+    );
   };
 
   const handleSave = () => {
     if (!selectedCard) return;
+    if (isCard && formData.expiry.trim()) {
+      const expMatch = formData.expiry.trim().match(/^(0[1-9]|1[0-2])\/(\d{2})$/);
+      if (!expMatch) {
+        triggerHaptic("warning");
+        onToast?.("Enter a valid expiry date (MM/YY).");
+        return;
+      }
+    }
     triggerHaptic("success");
     const trimmed = String(formData.initialBalance || "").trim();
     const rawBal = trimmed !== "" ? parseAmount(trimmed) : NaN;
     const parsedInitial =
       Number.isFinite(rawBal) && rawBal >= 0 ? rawBal : undefined;
     const { initialBalance: _initBal, ...safeFormData } = formData;
+    const cleanedName = safeFormData.name.trim() || selectedCard.name || "Card";
+    const cleanedHolder =
+      safeFormData.holderName.trim() || selectedCard.holderName || "Cardholder";
+    const mfsDigits = isMfs ? String(safeFormData.number || "").replace(/\D/g, "") : "";
+    const resolvedNumber = isMfs
+      ? mfsDigits.length >= 10
+        ? mfsDigits.slice(0, 11)
+        : mfsDigits.length > 0
+          ? `01••• •••${mfsDigits.slice(-4)}`
+          : selectedCard.number
+      : safeFormData.number;
+    const resolvedLast4 = isMfs
+      ? mfsDigits.slice(-4) || selectedCard.last4 || ""
+      : safeFormData.last4;
     onUpdateCard?.({
       ...selectedCard,
       ...safeFormData,
+      name: cleanedName,
+      holderName: cleanedHolder,
+      number: resolvedNumber,
+      last4: resolvedLast4,
       ...(parsedInitial !== undefined ? { initialBalance: parsedInitial } : {}),
       frozen: isFrozen,
       id: selectedCard.id,
@@ -7306,6 +7488,7 @@ function CardOptionsSheet({
                   onClick={() => {
                     triggerHaptic("selection");
                     setSelectedId(c.id);
+                    onSelectCard?.(c.id);
                   }}
                 >
                   <span
@@ -7324,7 +7507,6 @@ function CardOptionsSheet({
               className="card-options-pill is-add-pill"
               onClick={() => {
                 triggerHaptic("light");
-                onClose();
                 onAddCardClick?.();
               }}
             >
@@ -7448,69 +7630,75 @@ function CardOptionsSheet({
               </button>
             </div>
 
-            <div className="card-options-quick-row is-wallet-row">
-              <button
-                type="button"
-                className={`card-options-bar-btn ${selectedCard?.isPrimary ? "is-primary-card" : ""}`}
-                onClick={() => {
-                  if (selectedCard?.id) {
-                    triggerHaptic("success");
-                    onSetPrimaryCard?.(selectedCard.id);
-                  }
-                }}
-                aria-label={
-                  selectedCard?.isPrimary
-                    ? "Primary card (Tap to undo)"
-                    : "Set as primary card"
-                }
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill={selectedCard?.isPrimary ? "currentColor" : "none"}
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                </svg>
-                <span>
-                  {selectedCard?.isPrimary
-                    ? "Primary Card ★"
-                    : "Set as Primary"}
-                </span>
-              </button>
-
-              {cards.length > 1 && cards[0]?.id !== selectedCard?.id && (
-                <button
-                  type="button"
-                  className="card-options-bar-btn"
-                  onClick={() => {
-                    if (selectedCard?.id) {
-                      triggerHaptic("selection");
-                      onMoveCardToFront?.(selectedCard.id);
+            {(!isSavings ||
+              (cards.length > 1 && cards[0]?.id !== selectedCard?.id)) && (
+              <div className="card-options-quick-row is-wallet-row">
+                {!isSavings && (
+                  <button
+                    type="button"
+                    className={`card-options-bar-btn ${selectedCard?.isPrimary ? "is-primary-card" : ""}`}
+                    onClick={() => {
+                      if (selectedCard?.id) {
+                        triggerHaptic("success");
+                        onSetPrimaryCard?.(selectedCard.id);
+                      }
+                    }}
+                    aria-label={
+                      selectedCard?.isPrimary
+                        ? "Primary card (Tap to undo)"
+                        : "Set as primary card"
                     }
-                  }}
-                  aria-label="Move card to front of deck"
-                >
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
                   >
-                    <polygon points="12 2 2 7 12 12 22 7 12 2" />
-                    <polyline points="2 17 12 22 22 17" />
-                    <polyline points="2 12 12 17 22 12" />
-                  </svg>
-                  <span>Move to Top</span>
-                </button>
-              )}
-            </div>
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill={selectedCard?.isPrimary ? "currentColor" : "none"}
+                      stroke="currentColor"
+                      strokeWidth="2.2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                    </svg>
+                    <span>
+                      {selectedCard?.isPrimary
+                        ? "Primary Card ★"
+                        : "Set as Primary"}
+                    </span>
+                  </button>
+                )}
+
+                {cards.length > 1 && cards[0]?.id !== selectedCard?.id && (
+                  <button
+                    type="button"
+                    className="card-options-bar-btn"
+                    onClick={() => {
+                      if (selectedCard?.id) {
+                        triggerHaptic("selection");
+                        onSelectCard?.(selectedCard.id);
+                        onMoveCardToFront?.(selectedCard.id);
+                      }
+                    }}
+                    aria-label="Move card to front of deck"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <polygon points="12 2 2 7 12 12 22 7 12 2" />
+                      <polyline points="2 17 12 22 22 17" />
+                      <polyline points="2 12 12 17 22 12" />
+                    </svg>
+                    <span>Move to Top</span>
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -7877,12 +8065,25 @@ function CardOptionsSheet({
                   inputMode="decimal"
                   placeholder="0.00"
                   value={formData.initialBalance}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    let next = e.target.value
+                      .replace(/,/g, ".")
+                      .replace(/[^0-9.]/g, "");
+                    if (next.startsWith(".")) {
+                      next = "0" + next;
+                    }
+                    next = next.replace(/^0+(?=\d)/, "");
+                    const firstDot = next.indexOf(".");
+                    if (firstDot !== -1) {
+                      next =
+                        next.slice(0, firstDot + 1) +
+                        next.slice(firstDot + 1).replace(/\./g, "").slice(0, 2);
+                    }
                     setFormData((prev) => ({
                       ...prev,
-                      initialBalance: e.target.value,
-                    }))
-                  }
+                      initialBalance: next,
+                    }));
+                  }}
                   autoComplete="off"
                   autoCorrect="off"
                   spellCheck="false"
@@ -7907,7 +8108,6 @@ function CardOptionsSheet({
             type="button"
             className="card-options-adj-btn"
             onClick={() => {
-              onClose();
               onAdjustBalance?.(selectedCard?.id);
             }}
           >
@@ -9290,7 +9490,13 @@ export default function MobilePrototype({
       return null;
     }
   });
+  const [activeAccountId, setActiveAccountId] = useState("");
   const activeAccountRef = useRef("");
+  const syncActiveAccount = useCallback((acct) => {
+    const nextAcct = acct ?? "";
+    activeAccountRef.current = nextAcct;
+    setActiveAccountId(nextAcct);
+  }, []);
 
   const handlePreferredAccountChange = useCallback((acct) => {
     const nextAccount = acct ?? "";
@@ -9841,7 +10047,9 @@ export default function MobilePrototype({
           activeElement !== document.body &&
           !activeElement.closest(".sh")
         ? activeElement
-        : null;
+        : sheetReturnFocusRef.current?.isConnected
+          ? sheetReturnFocusRef.current
+          : null;
     sheetTriggerCandidateRef.current = null;
     setSheetClosing(false);
     setSheetExitDuration(SHEET_EXIT_MS);
@@ -10012,6 +10220,29 @@ export default function MobilePrototype({
     toast("Skipped this recurring occurrence", undo);
   };
   const duplicateExpense = (expense) => {
+    const targetCard = expense?.acct
+      ? cards.find((c) => c.id === expense.acct)
+      : null;
+    if (targetCard?.frozen) {
+      triggerHaptic("warning");
+      toast(
+        `${targetCard.name || "This card"} is locked. Unlock it in Card Options first.`,
+      );
+      return false;
+    }
+    if (expense?.cat === "Savings") {
+      const savingsId = getSavingsAccountId(cards);
+      const savingsCard = savingsId
+        ? cards.find((c) => c.id === savingsId)
+        : null;
+      if (savingsCard?.frozen) {
+        triggerHaptic("warning");
+        toast(
+          `${savingsCard.name || "This card"} is locked. Unlock it in Card Options first.`,
+        );
+        return false;
+      }
+    }
     const targetDate = expense?.date || ld();
     const saved = onExpenseSave({
       description: expense?.desc || "Expense",
@@ -10051,7 +10282,20 @@ export default function MobilePrototype({
       }
       return toast("Check the description, amount, and date.");
     }
-    if (isSavings && !form.acct && Boolean(getSavingsAccountId(cards))) {
+    const nonSavingsCards = cards.filter(
+      (c) =>
+        c.id !== getSavingsAccountId(cards) &&
+        c.type !== "savings" &&
+        c.category !== "savings" &&
+        c.provider !== "savings",
+    );
+    const spendableCards = nonSavingsCards.filter((c) => !c.frozen);
+    if (
+      isSavings &&
+      !form.acct &&
+      Boolean(getSavingsAccountId(cards)) &&
+      spendableCards.length > 0
+    ) {
       return toast("Select an account to transfer from.");
     }
     if (
@@ -10142,7 +10386,20 @@ export default function MobilePrototype({
           : "Recurring expenses need an amount and description.",
       );
     }
-    if (isSavings && !form.acct && Boolean(getSavingsAccountId(cards))) {
+    const nonSavingsCards = cards.filter(
+      (c) =>
+        c.id !== getSavingsAccountId(cards) &&
+        c.type !== "savings" &&
+        c.category !== "savings" &&
+        c.provider !== "savings",
+    );
+    const spendableCards = nonSavingsCards.filter((c) => !c.frozen);
+    if (
+      isSavings &&
+      !form.acct &&
+      Boolean(getSavingsAccountId(cards)) &&
+      spendableCards.length > 0
+    ) {
       return toast("Select an account to transfer from.");
     }
     const updated = onUpdateRec?.(id, {
@@ -10588,10 +10845,10 @@ export default function MobilePrototype({
                       )
                     }
                     onAddExpense={(acct) => openSheet({ type: "add", acct })}
-                    initialSelectedAccount={activeAccountRef.current}
-                    onActiveAccountChange={(acct) => {
-                      activeAccountRef.current = acct;
-                    }}
+                    initialSelectedAccount={
+                      activeAccountId || activeAccountRef.current
+                    }
+                    onActiveAccountChange={syncActiveAccount}
                   />
                 </div>
                 <div
@@ -10715,11 +10972,26 @@ export default function MobilePrototype({
           balances={Object.fromEntries(cards.map((c) => [c.id, bal(S, c.id)]))}
           startBalances={S?.start || {}}
           onClose={close}
-          onUpdateCard={(updated) => {
+          onUpdateCard={(updated, customToast) => {
             onUpdateCard?.(updated);
-            toast("Card updated");
+            toast(customToast || "Card updated");
           }}
           onDeleteCard={(cardId) => {
+            const remainingNonSavings = cards.filter(
+              (c) =>
+                c.id !== cardId &&
+                c.id !== getSavingsAccountId(cards) &&
+                c.type !== "savings" &&
+                c.category !== "savings" &&
+                c.provider !== "savings",
+            );
+            if (preferredAccount === cardId) {
+              const fallbackCard =
+                remainingNonSavings.find((c) => c.isPrimary && !c.frozen) ||
+                remainingNonSavings.find((c) => !c.frozen) ||
+                remainingNonSavings[0];
+              handlePreferredAccountChange(fallbackCard?.id || "");
+            }
             const undo = onDeleteCard?.(cardId);
             toast("Card removed", undo);
           }}
@@ -10733,6 +11005,17 @@ export default function MobilePrototype({
               res && typeof res === "object" ? res.isPrimary : true;
             if (isPrimary && cardId) {
               handlePreferredAccountChange(cardId);
+            } else if (!isPrimary && preferredAccount === cardId) {
+              const fallbackCard = cards.find(
+                (c) =>
+                  c.id !== cardId &&
+                  !c.frozen &&
+                  c.id !== getSavingsAccountId(cards) &&
+                  c.type !== "savings" &&
+                  c.category !== "savings" &&
+                  c.provider !== "savings",
+              );
+              handlePreferredAccountChange(fallbackCard?.id || "");
             }
             if (res && typeof res === "object") {
               const msg = res.isPrimary
@@ -10744,15 +11027,20 @@ export default function MobilePrototype({
             }
           }}
           onMoveCardToFront={(cardId) => {
+            if (cardId) syncActiveAccount(cardId);
             onMoveCardToFront?.(cardId);
             toast("Card moved to top");
           }}
+          onSelectCard={syncActiveAccount}
           onToast={toast}
         />
       )}
       {sheet?.type === "addCard" && (
         <AddCardSheet
           onClose={close}
+          cards={cards}
+          onOpenExistingCard={(cardId) => openSheet({ type: "cardOptions", cardId })}
+          onToast={toast}
           onAddCard={(newCard) => {
             const added = onAddCard?.(newCard);
             const cardId = added?.id || newCard?.id;

@@ -2566,7 +2566,9 @@ export default function App() {
       transactions: [...current.transactions, transaction],
     }));
     if (txDate && isValidDateString(txDate)) {
-      setSelectedMonth(txDate.slice(0, 7));
+      const targetMonth = txDate.slice(0, 7);
+      const currMonth = currentMonth();
+      setSelectedMonth(targetMonth > currMonth ? currMonth : targetMonth);
     }
     return { success: true, transactionId: transaction.id };
   }
@@ -2617,7 +2619,9 @@ export default function App() {
       }),
     }));
     if (txDate && isValidDateString(txDate)) {
-      setSelectedMonth(txDate.slice(0, 7));
+      const targetMonth = txDate.slice(0, 7);
+      const currMonth = currentMonth();
+      setSelectedMonth(targetMonth > currMonth ? currMonth : targetMonth);
     }
     return true;
   }
@@ -2687,8 +2691,20 @@ export default function App() {
       const currentCards = Array.isArray(current.settings.cards)
         ? current.settings.cards
         : [];
-      const isFirst = currentCards.length === 0;
-      const isPrimary = Boolean(newCard?.isPrimary ?? isFirst);
+      const isCardSavings = (c) =>
+        Boolean(
+          c?.category === "savings" ||
+            c?.type === "savings" ||
+            c?.provider === "savings" ||
+            String(c?.number || "").startsWith("SAV-") ||
+            String(c?.number || "").startsWith("VAULT-") ||
+            String(c?.number || "").startsWith("DPS-"),
+        );
+      const isFirstNonSavings =
+        !isSavings && !currentCards.some((c) => !isCardSavings(c));
+      const isPrimary = isSavings
+        ? false
+        : Boolean(newCard?.isPrimary ?? isFirstNonSavings);
       const card = {
         ...safeCard,
         id: cardId,
@@ -2709,6 +2725,7 @@ export default function App() {
           updatedAt: Date.now(),
           cardsConfigured: true,
           configured: true,
+          ...(isPrimary ? { primaryCardId: cardId } : {}),
           cards: nextCards,
           balances: {
             ...current.settings.balances,
@@ -2742,8 +2759,23 @@ export default function App() {
       const remainingCards = currentCards.filter((c) => c.id !== cardId);
       const wasPrimary =
         existingCard?.isPrimary || current.settings.primaryCardId === cardId;
-      const nextCards = remainingCards.map((c, idx) =>
-        wasPrimary && idx === 0 ? { ...c, isPrimary: true, updatedAt: now } : c,
+      const isCardSavings = (c) =>
+        Boolean(
+          c?.category === "savings" ||
+            c?.type === "savings" ||
+            c?.provider === "savings" ||
+            String(c?.number || "").startsWith("SAV-") ||
+            String(c?.number || "").startsWith("VAULT-") ||
+            String(c?.number || "").startsWith("DPS-"),
+        );
+      const promoteCandidate =
+        remainingCards.find((c) => !isCardSavings(c) && !c.frozen) ||
+        remainingCards.find((c) => !isCardSavings(c)) ||
+        null;
+      const nextCards = remainingCards.map((c) =>
+        wasPrimary && promoteCandidate && c.id === promoteCandidate.id
+          ? { ...c, isPrimary: true, updatedAt: now }
+          : c,
       );
       const nextBalances = { ...current.settings.balances };
       delete nextBalances[cardId];
@@ -2754,7 +2786,9 @@ export default function App() {
           updatedAt: now,
           cardsConfigured: true,
           primaryCardId:
-            nextCards.find((c) => c.isPrimary)?.id || nextCards[0]?.id || "",
+            nextCards.find((c) => c.isPrimary)?.id ||
+            promoteCandidate?.id ||
+            "",
           cards: nextCards,
           balances: nextBalances,
         },
@@ -2767,6 +2801,10 @@ export default function App() {
     });
 
     if (existingCard) {
+      const wasPrimaryOnDelete = Boolean(
+        existingCard?.isPrimary ||
+          accountData.settings.primaryCardId === cardId,
+      );
       return () => {
         const restoreTime = Date.now();
         setRecordDeleted("cards", cardId, false);
@@ -2776,16 +2814,29 @@ export default function App() {
             : [];
           if (currentCards.some((c) => c.id === existingCard.id))
             return current;
+          const baseCards = wasPrimaryOnDelete
+            ? currentCards.map((c) =>
+                c.isPrimary ? { ...c, isPrimary: false, updatedAt: restoreTime } : c,
+              )
+            : currentCards;
+          const restoredCards = [
+            ...baseCards,
+            {
+              ...existingCard,
+              isPrimary: wasPrimaryOnDelete ? true : Boolean(existingCard.isPrimary),
+              updatedAt: restoreTime,
+            },
+          ];
           return {
             ...current,
             settings: {
               ...current.settings,
               updatedAt: restoreTime,
               cardsConfigured: true,
-              cards: [
-                ...currentCards,
-                { ...existingCard, updatedAt: restoreTime },
-              ],
+              primaryCardId: wasPrimaryOnDelete
+                ? existingCard.id
+                : current.settings.primaryCardId || "",
+              cards: restoredCards,
               balances: {
                 ...current.settings.balances,
                 ...(existingBalance !== undefined
