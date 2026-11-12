@@ -3848,13 +3848,13 @@ function Accounts({
       left.id.localeCompare(right.id),
   );
   const runningBalances = {
+    ...S.start,
     ...Object.fromEntries(
       cards.map((c) => [
         c.id,
         Number(S?.start?.[c.id] ?? c.initialBalance) || 0,
       ]),
     ),
-    ...S.start,
   };
   const adjustmentBalances = new Map();
   for (const event of ascendingEvents) {
@@ -6892,19 +6892,19 @@ function AddCardSheet({
       }
     }
 
-    const defaultNum = selectedProvider.numberPlaceholder.replace(/\s+/g, "");
-    const defaultDigits = defaultNum.replace(/\D/g, "");
-    const defaultLast4 = defaultDigits.slice(-4) || "4710";
-    const last4 =
-      (
-        formData.last4 ||
-        (formData.number ? formData.number.replace(/\D/g, "").slice(-4) : "")
-      ).trim() || defaultLast4;
+    const enteredLast4 = (
+      formData.last4 ||
+      (formData.number ? formData.number.replace(/\D/g, "").slice(-4) : "")
+    ).trim();
+    const last4 = isSavings ? enteredLast4 || "4710" : enteredLast4;
+    const enteredPhoneDigits = formData.number.replace(/\D/g, "").slice(0, 11);
     const number = selectedProvider.isPhone
-      ? formData.number.replace(/\D/g, "").slice(0, 11) || defaultDigits.slice(0, 11)
+      ? enteredPhoneDigits
       : isSavings
         ? `SAV-${last4}`
-        : `•••• •••• •••• ${last4}`;
+        : last4
+          ? `•••• •••• •••• ${last4}`
+          : "";
     const holderName =
       formData.holderName.trim() || userProfileName || "Cardholder";
     const network = isMfs
@@ -6938,7 +6938,7 @@ function AddCardSheet({
             : selectedProvider.subtitle,
       last4,
       number,
-      expiry: isMfs || isSavings ? "" : formData.expiry.trim() || "12/28",
+      expiry: isMfs || isSavings ? "" : formData.expiry.trim(),
       color: formData.color || selectedProvider.color,
       gradient: formData.gradient || selectedProvider.gradient,
       initialBalance: parseAmount(formData.initialBalance) || 0,
@@ -7697,7 +7697,7 @@ function CardOptionsSheet({
       setConfirmDeleteOpen(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCard?.id]);
+  }, [selectedCard?.id, selectedCard?.updatedAt, initialCardBal]);
 
   const previewCard = useMemo(() => {
     if (!selectedCard) return null;
@@ -7798,8 +7798,8 @@ function CardOptionsSheet({
       }
     }
     triggerHaptic("success");
-    const trimmed = String(formData.initialBalance || "").trim();
-    const rawBal = trimmed !== "" ? parseAmount(trimmed) : NaN;
+    const trimmed = String(formData.initialBalance ?? "").trim();
+    const rawBal = trimmed !== "" ? parseAmount(trimmed) : 0;
     const parsedInitial =
       Number.isFinite(rawBal) && rawBal >= 0 ? rawBal : undefined;
     const { initialBalance: _initBal, ...safeFormData } = formData;

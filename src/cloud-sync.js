@@ -1,5 +1,10 @@
 import { getSupabase, supabase } from "./push.js";
-import { emptyAccountData, loadAccountData } from "./data.js";
+import {
+  emptyAccountData,
+  isPhantomAutoReconstructedCard,
+  isSavingsCard,
+  loadAccountData,
+} from "./data.js";
 
 export const CLOUD_SYNC_USER_KEY = "spend-cloud-sync-user-v1";
 
@@ -65,6 +70,17 @@ function isLegacyDbCompatibleTransaction(tx) {
   return false;
 }
 
+function parseRecordTime(value) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const num = Number(value);
+    if (Number.isFinite(num)) return num;
+    const parsed = Date.parse(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return 0;
+}
+
 function mergeAccountDataWithRawSnapshot(
   normalizedAccountData,
   rawSnapshotData,
@@ -76,48 +92,36 @@ function mergeAccountDataWithRawSnapshot(
   const deletedCardTombstones = deletedRecords.cards || {};
   const deletedTxTombstones = deletedRecords.accountTransactions || {};
 
+  const rawUpdatedAt = parseRecordTime(rawSettings.updatedAt);
+  const normUpdatedAt = parseRecordTime(normSettings.updatedAt);
+  const preferRaw = rawUpdatedAt >= normUpdatedAt;
+
   const cardMap = new Map();
   if (Array.isArray(normSettings.cards)) {
     for (const c of normSettings.cards) {
-      if (!c?.id) continue;
+      if (!c?.id || isPhantomAutoReconstructedCard(c)) continue;
       const tombstone = deletedCardTombstones[c.id];
-      const cTime =
-        typeof c.updatedAt === "number"
-          ? c.updatedAt
-          : Date.parse(c.updatedAt) || 0;
+      const cTime = parseRecordTime(c.updatedAt) || parseRecordTime(c.createdAt);
       if (tombstone?.deleted && tombstone.updatedAt >= cTime) continue;
       cardMap.set(c.id, c);
     }
   }
   if (Array.isArray(rawSettings.cards)) {
     for (const c of rawSettings.cards) {
-      if (!c?.id) continue;
+      if (!c?.id || isPhantomAutoReconstructedCard(c)) continue;
       const tombstone = deletedCardTombstones[c.id];
-      const cTime =
-        typeof c.updatedAt === "number"
-          ? c.updatedAt
-          : Date.parse(c.updatedAt) || 0;
+      const cTime = parseRecordTime(c.updatedAt) || parseRecordTime(c.createdAt);
       if (tombstone?.deleted && tombstone.updatedAt >= cTime) continue;
       const existing = cardMap.get(c.id);
       const exTime =
-        typeof existing?.updatedAt === "number"
-          ? existing.updatedAt
-          : Date.parse(existing?.updatedAt) || 0;
+        parseRecordTime(existing?.updatedAt) ||
+        parseRecordTime(existing?.createdAt);
       if (!existing || cTime >= exTime) {
         cardMap.set(c.id, c);
       }
     }
   }
-  const rawUpdatedAt =
-    typeof rawSettings.updatedAt === "number"
-      ? rawSettings.updatedAt
-      : Date.parse(rawSettings.updatedAt) || 0;
-  const normUpdatedAt =
-    typeof normSettings.updatedAt === "number"
-      ? normSettings.updatedAt
-      : Date.parse(normSettings.updatedAt) || 0;
 
-  const preferRaw = rawUpdatedAt >= normUpdatedAt;
   const rawCards = Array.isArray(rawSettings.cards) ? rawSettings.cards : [];
   const normCards = Array.isArray(normSettings.cards) ? normSettings.cards : [];
   const primaryCards = preferRaw ? rawCards : normCards;
@@ -143,16 +147,106 @@ function mergeAccountDataWithRawSnapshot(
       seenIds.add(id);
     }
   }
-  const mergedCards = orderedCardIds.map((id) => cardMap.get(id));
 
-  const mergedBalances = {
-    ...(rawSettings.balances && typeof rawSettings.balances === "object"
+  const rawBalances =
+    rawSettings.balances && typeof rawSettings.balances === "object"
       ? rawSettings.balances
-      : {}),
-    ...(normSettings.balances && typeof normSettings.balances === "object"
+      : {};
+  const normBalances =
+    normSettings.balances && typeof normSettings.balances === "object"
       ? normSettings.balances
-      : {}),
-  };
+      : {};
+
+  const mergedBalances = {};
+  const mergedCards = orderedCardIds.map((id) => {
+    const card = cardMap.get(id);
+    const rawCard = rawCards.find((c) => c?.id === id);
+    const normCard = normCards.find((c) => c?.id === id);
+    const rawCardTime =
+      parseRecordTime(rawCard?.updatedAt) ||
+      parseRecordTime(rawCard?.createdAt) ||
+      rawUpdatedAt;
+    const normCardTime =
+      parseRecordTime(normCard?.updatedAt) ||
+      parseRecordTime(normCard?.createdAt) ||
+      normUpdatedAt;
+    const useRawForCard = rawCard && (!normCard || rawCardTime >= normCardTime);
+
+    const hasRawBal =
+      Object.hasOwn(rawBalances, id) &&
+      rawBalances[id] !== undefined &&
+      rawBalances[id] !== null &&
+      Number.isFinite(Number(rawBalances[id]));
+    const hasNormBal =
+      Object.hasOwn(normBalances, id) &&
+      normBalances[id] !== undefined &&
+      normBalances[id] !== null &&
+      Number.isFinite(Number(normBalances[id]));
+    const hasCardInitBal =
+      card?.initialBalance !== undefined &&
+      card?.initialBalance !== null &&
+      String(card.initialBalance).trim() !== "" &&
+      Number.isFinite(Number(card.initialBalance));
+
+    let resolvedBal = 0;
+    if (useRawForCard) {
+      if (hasRawBal) {
+        resolvedBal = Number(rawBalances[id]);
+      } else if (hasCardInitBal) {
+        resolvedBal = Number(card.initialBalance);
+      } else if (hasNormBal) {
+        resolvedBal = Number(normBalances[id]);
+      }
+    } else if (hasNormBal) {
+      resolvedBal = Number(normBalances[id]);
+    } else if (hasCardInitBal) {
+      resolvedBal = Number(card.initialBalance);
+    } else if (hasRawBal) {
+      resolvedBal = Number(rawBalances[id]);
+    }
+
+    if (
+      hasCardInitBal &&
+      Number(card.initialBalance) > 0 &&
+      resolvedBal === 0 &&
+      hasRawBal &&
+      Number(rawBalances[id]) === Number(card.initialBalance)
+    ) {
+      resolvedBal = Number(card.initialBalance);
+    }
+
+    const cleanBal =
+      Number.isFinite(resolvedBal) && resolvedBal >= 0
+        ? Math.round(resolvedBal * 100) / 100
+        : 0;
+    mergedBalances[id] = cleanBal;
+    return {
+      ...card,
+      initialBalance: cleanBal,
+    };
+  });
+
+  // Deduplicate singleton Savings Vault across normalized and raw snapshots
+  const remappedSavingsIds = {};
+  const savingsInMerged = mergedCards.filter(isSavingsCard);
+  if (savingsInMerged.length > 1) {
+    savingsInMerged.sort((a, b) => {
+      const tDiff =
+        (parseRecordTime(b.updatedAt) || 0) -
+        (parseRecordTime(a.updatedAt) || 0);
+      if (tDiff !== 0) return tDiff;
+      return (Number(b.initialBalance) || 0) - (Number(a.initialBalance) || 0);
+    });
+    const winner = savingsInMerged[0];
+    for (let i = 1; i < savingsInMerged.length; i += 1) {
+      const loser = savingsInMerged[i];
+      remappedSavingsIds[loser.id] = winner.id;
+      delete mergedBalances[loser.id];
+    }
+  }
+  const deduplicatedCards = mergedCards.filter(
+    (c) => !Object.hasOwn(remappedSavingsIds, c.id),
+  );
 
   for (const [id, tombstone] of Object.entries(deletedCardTombstones)) {
     if (tombstone?.deleted && !cardMap.has(id)) {
@@ -173,59 +267,50 @@ function mergeAccountDataWithRawSnapshot(
     : [];
 
   const txMap = new Map();
-  for (const tx of normTransactions) {
-    if (!tx?.id) continue;
+  const upsertTx = (tx) => {
+    if (!tx?.id) return;
     const tombstone = deletedTxTombstones[tx.id];
     const txTime =
-      typeof tx.updatedAt === "number"
-        ? tx.updatedAt
-        : Date.parse(tx.updatedAt) || 0;
-    if (tombstone?.deleted && tombstone.updatedAt >= txTime) continue;
-    txMap.set(tx.id, tx);
+      parseRecordTime(tx.updatedAt) || parseRecordTime(tx.createdAt);
+    if (tombstone?.deleted && tombstone.updatedAt >= txTime) return;
+    const existing = txMap.get(tx.id);
+    const exTime =
+      parseRecordTime(existing?.updatedAt) ||
+      parseRecordTime(existing?.createdAt);
+    if (!existing || txTime >= exTime) {
+      txMap.set(tx.id, tx);
+    }
+  };
+
+  for (const tx of normTransactions) {
+    upsertTx(tx);
   }
   for (const tx of extraTransactions) {
-    if (!tx?.id || txMap.has(tx.id)) continue;
-    const tombstone = deletedTxTombstones[tx.id];
-    const txTime =
-      typeof tx.updatedAt === "number"
-        ? tx.updatedAt
-        : Date.parse(tx.updatedAt) || 0;
-    if (tombstone?.deleted && tombstone.updatedAt >= txTime) continue;
-    txMap.set(tx.id, tx);
+    upsertTx(tx);
   }
-  if (normTransactions.length === 0 && !normalizedAccountData) {
-    for (const tx of rawTransactions) {
-      if (!tx?.id) continue;
-      const tombstone = deletedTxTombstones[tx.id];
-      const txTime =
-        typeof tx.updatedAt === "number"
-          ? tx.updatedAt
-          : Date.parse(tx.updatedAt) || 0;
-      if (tombstone?.deleted && tombstone.updatedAt >= txTime) continue;
-      const existing = txMap.get(tx.id);
-      const exTime =
-        typeof existing?.updatedAt === "number"
-          ? existing.updatedAt
-          : Date.parse(existing?.updatedAt) || 0;
-      if (!existing || txTime > exTime) {
-        txMap.set(tx.id, tx);
-      }
-    }
+  for (const tx of rawTransactions) {
+    upsertTx(tx);
   }
+
+  const baseSettings = preferRaw
+    ? { ...normSettings, ...rawSettings }
+    : { ...rawSettings, ...normSettings };
 
   return loadAccountData(
     {
       settings: {
-        ...rawSettings,
-        ...normSettings,
+        ...baseSettings,
         balances: mergedBalances,
-        cards: mergedCards,
+        cards: deduplicatedCards,
         cardsConfigured:
           rawSettings.cardsConfigured === true ||
           normSettings.cardsConfigured === true ||
-          mergedCards.length > 0,
+          deduplicatedCards.length > 0,
         configured:
-          rawSettings.configured === true || normSettings.configured === true,
+          rawSettings.configured === true ||
+          normSettings.configured === true ||
+          deduplicatedCards.length > 0,
+        updatedAt: Math.max(rawUpdatedAt, normUpdatedAt),
       },
       transactions: Array.from(txMap.values()),
     },
@@ -311,18 +396,37 @@ async function loadLegacyCloudData(client, userId) {
   if (settingsResult.error) throw settingsResult.error;
   if (transactionsResult.error) throw transactionsResult.error;
 
-  const hasCards =
-    Array.isArray(legacyAccounts?.settings?.cards) &&
-    legacyAccounts.settings.cards.length > 0;
+  const rawCards = Array.isArray(legacyAccounts?.settings?.cards)
+    ? legacyAccounts.settings.cards.filter(
+        (c) => !isPhantomAutoReconstructedCard(c),
+      )
+    : [];
   const legacyBalances = legacyAccounts?.settings?.balances || {};
   const baseBalances = { ...legacyBalances };
-  if (!hasCards && !legacyAccounts?.settings?.cardsConfigured && settingsResult.data) {
-    if (Number(settingsResult.data.bkash_balance) > 0)
+
+  // Only map legacy table columns onto cards that explicitly use those legacy IDs
+  if (settingsResult.data) {
+    if (
+      rawCards.some((c) => c?.id === "bkash") &&
+      baseBalances.bkash === undefined &&
+      Number(settingsResult.data.bkash_balance) > 0
+    ) {
       baseBalances.bkash = settingsResult.data.bkash_balance;
-    if (Number(settingsResult.data.bank_balance) > 0)
+    }
+    if (
+      rawCards.some((c) => c?.id === "bank") &&
+      baseBalances.bank === undefined &&
+      Number(settingsResult.data.bank_balance) > 0
+    ) {
       baseBalances.bank = settingsResult.data.bank_balance;
-    if (Number(settingsResult.data.savings_balance) > 0)
+    }
+    if (
+      rawCards.some((c) => c?.id === "savings") &&
+      baseBalances.savings === undefined &&
+      Number(settingsResult.data.savings_balance) > 0
+    ) {
       baseBalances.savings = settingsResult.data.savings_balance;
+    }
   }
 
   const normalizedAccounts = settingsResult.data
@@ -330,13 +434,10 @@ async function loadLegacyCloudData(client, userId) {
         settings: {
           startDate: settingsResult.data.start_date,
           balances: baseBalances,
-          cards: Array.isArray(legacyAccounts?.settings?.cards)
-            ? legacyAccounts.settings.cards
-            : [],
+          cards: rawCards,
           cardsConfigured:
             legacyAccounts?.settings?.cardsConfigured === true ||
-            (Array.isArray(legacyAccounts?.settings?.cards) &&
-              legacyAccounts.settings.cards.length > 0),
+            rawCards.length > 0,
           configured: settingsResult.data.configured,
           updatedAt: Math.max(
             Date.parse(settingsResult.data.updated_at) || 0,
@@ -383,27 +484,44 @@ export async function loadCloudData(userId) {
   if (!client) throw new Error("Cloud sync is not configured.");
 
   try {
-    const rpcResult = await client.rpc("load_spend_user_snapshot");
+    const [rpcResult, rawSnapshotResult] = await Promise.all([
+      client.rpc("load_spend_user_snapshot"),
+      userId
+        ? client
+            .from("spend_user_data")
+            .select("data, updated_at")
+            .eq("user_id", userId)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+    ]);
 
     if (!rpcResult.error && rpcResult.data) {
       const rpcData = rpcResult.data;
       const effectiveRpcData = rpcData.data ?? null;
-      if (effectiveRpcData) {
+      const rawSnapshotData = rawSnapshotResult?.data?.data ?? effectiveRpcData;
+      const effectiveUpdatedAt =
+        rawSnapshotResult?.data?.updated_at ?? rpcData.updated_at ?? null;
+      if (effectiveRpcData || rawSnapshotData) {
+        const baseSnapshot =
+          rawSnapshotData && typeof rawSnapshotData === "object"
+            ? rawSnapshotData
+            : effectiveRpcData;
         return {
           ...rpcData,
-          updated_at: rpcData.updated_at ?? null,
+          updated_at: effectiveUpdatedAt,
           data: {
             ...effectiveRpcData,
+            ...baseSnapshot,
             accountData: mergeAccountDataWithRawSnapshot(
-              effectiveRpcData.accountData,
-              effectiveRpcData,
+              effectiveRpcData?.accountData,
+              baseSnapshot,
             ),
           },
         };
       }
       return {
         ...rpcData,
-        updated_at: rpcData.updated_at ?? null,
+        updated_at: effectiveUpdatedAt,
         data: null,
       };
     }

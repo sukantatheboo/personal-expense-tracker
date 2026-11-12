@@ -215,11 +215,48 @@ export function writeStorage(key, value, keyMaterial = getSessionKey()) {
   return true;
 }
 
+export function isSavingsCard(card) {
+  if (!card || typeof card !== "object") return false;
+  return Boolean(
+    card.category === "savings" ||
+      card.type === "savings" ||
+      card.provider === "savings" ||
+      card.id === "savings" ||
+      String(card.number || "").startsWith("SAV-") ||
+      String(card.number || "").startsWith("VAULT-") ||
+      String(card.number || "").startsWith("DPS-"),
+  );
+}
+
+export function isPhantomAutoReconstructedCard(card) {
+  if (!card || typeof card !== "object") return false;
+  const hasNoCustomDetails =
+    !card.last4 &&
+    !card.number &&
+    !card.expiry &&
+    !card.provider &&
+    !card.category &&
+    !card.subtitle;
+  const isDefaultPlaceholderAppearance =
+    card.holderName === "Cardholder" &&
+    card.type === "debit" &&
+    card.network === "visa" &&
+    card.color === "#1e293b";
+  const isAutoNamed =
+    card.name === "Account" ||
+    card.name === card.id ||
+    ["bkash", "bank", "savings"].includes(card.id);
+  return (
+    hasNoCustomDetails && isDefaultPlaceholderAppearance && isAutoNamed
+  );
+}
+
 export function loadExpenses(
   saved = readStorage(STORAGE_KEYS.expenses, []),
   accountData = null,
   deletedRecords = null,
 ) {
+  const remappedAccounts = accountData?.remappedAccountIds || {};
   return Array.isArray(saved)
     ? saved
         .filter(
@@ -232,15 +269,20 @@ export function loadExpenses(
               (Number.isFinite(Number(item.amount)) &&
                 Number(item.amount) > 0)),
         )
-        .map((item) => ({
-          ...item,
-          category: CATEGORIES.includes(item.category)
-            ? item.category
-            : "Other",
-          account: isAccountId(item.account, accountData, deletedRecords)
-            ? item.account.trim()
-            : "",
-        }))
+        .map((item) => {
+          const rawAcct =
+            typeof item.account === "string" ? item.account.trim() : "";
+          const mappedAcct = remappedAccounts[rawAcct] || rawAcct;
+          return {
+            ...item,
+            category: CATEGORIES.includes(item.category)
+              ? item.category
+              : "Other",
+            account: isAccountId(mappedAcct, accountData, deletedRecords)
+              ? mappedAcct
+              : "",
+          };
+        })
     : [];
 }
 
@@ -273,6 +315,7 @@ export function isAccountId(value, accountData = null, deletedRecords = null) {
   )
     return true;
   if (accountData && typeof accountData === "object") {
+    if (accountData?.remappedAccountIds?.[trimmed]) return true;
     if (accountData?.settings?.cards?.some((c) => c.id === trimmed))
       return true;
     if (
@@ -319,33 +362,37 @@ export function loadRecurringSchedules(
   saved = readStorage(STORAGE_KEYS.recurring, []),
   accountData = null,
 ) {
+  const remappedAccounts = accountData?.remappedAccountIds || {};
   return Array.isArray(saved)
-    ? saved.filter(isValidRecurringSchedule).map((schedule) => ({
-        ...schedule,
-        ...(typeof schedule.createdAt === "number" &&
-        Number.isFinite(schedule.createdAt)
-          ? { createdAt: schedule.createdAt }
-          : typeof schedule.createdAt === "string" &&
-              Number.isFinite(Date.parse(schedule.createdAt))
-            ? { createdAt: Date.parse(schedule.createdAt) }
-            : {}),
-        ...(typeof schedule.updatedAt === "number" &&
-        Number.isFinite(schedule.updatedAt)
-          ? { updatedAt: schedule.updatedAt }
-          : typeof schedule.updatedAt === "string" &&
-              Number.isFinite(Date.parse(schedule.updatedAt))
-            ? { updatedAt: Date.parse(schedule.updatedAt) }
-            : {}),
-        account: isAccountId(schedule.account, accountData)
-          ? schedule.account
-          : "",
-        dayOfMonth:
-          Number.isInteger(schedule.dayOfMonth) &&
-          schedule.dayOfMonth >= 1 &&
-          schedule.dayOfMonth <= 31
-            ? schedule.dayOfMonth
-            : Number(schedule.nextDate.slice(-2)),
-      }))
+    ? saved.filter(isValidRecurringSchedule).map((schedule) => {
+        const rawAcct =
+          typeof schedule.account === "string" ? schedule.account.trim() : "";
+        const mappedAcct = remappedAccounts[rawAcct] || rawAcct;
+        return {
+          ...schedule,
+          ...(typeof schedule.createdAt === "number" &&
+          Number.isFinite(schedule.createdAt)
+            ? { createdAt: schedule.createdAt }
+            : typeof schedule.createdAt === "string" &&
+                Number.isFinite(Date.parse(schedule.createdAt))
+              ? { createdAt: Date.parse(schedule.createdAt) }
+              : {}),
+          ...(typeof schedule.updatedAt === "number" &&
+          Number.isFinite(schedule.updatedAt)
+            ? { updatedAt: schedule.updatedAt }
+            : typeof schedule.updatedAt === "string" &&
+                Number.isFinite(Date.parse(schedule.updatedAt))
+              ? { updatedAt: Date.parse(schedule.updatedAt) }
+              : {}),
+          account: isAccountId(mappedAcct, accountData) ? mappedAcct : "",
+          dayOfMonth:
+            Number.isInteger(schedule.dayOfMonth) &&
+            schedule.dayOfMonth >= 1 &&
+            schedule.dayOfMonth <= 31
+              ? schedule.dayOfMonth
+              : Number(schedule.nextDate.slice(-2)),
+        };
+      })
     : [];
 }
 
@@ -400,7 +447,10 @@ export function loadAccountData(
   if (isPureUnconfiguredDemoState(saved)) return emptyAccountData();
 
   const settings = saved.settings || {};
-  const rawBalances = settings.balances || {};
+  const rawBalances =
+    settings.balances && typeof settings.balances === "object"
+      ? settings.balances
+      : {};
   const cleanBalance = (value) => {
     const amount = Number(value);
     return Number.isFinite(amount) && amount >= 0
@@ -421,6 +471,9 @@ export function loadAccountData(
       card.id.trim()
     ) {
       const id = card.id.trim();
+      if (isPhantomAutoReconstructedCard(card)) {
+        continue;
+      }
       const tombstone = deletedCardTombstones[id];
       const createdAt =
         typeof card.createdAt === "number"
@@ -438,18 +491,11 @@ export function loadAccountData(
 
       const isMfs = Boolean(
         card?.isPhone ||
-        card?.category === "mfs" ||
-        card?.type === "mfs" ||
-        card?.network === "mfs",
+          card?.category === "mfs" ||
+          card?.type === "mfs" ||
+          card?.network === "mfs",
       );
-      const isSavings = Boolean(
-        card?.category === "savings" ||
-        card?.type === "savings" ||
-        card?.provider === "savings" ||
-        String(card?.number || "").startsWith("SAV-") ||
-        String(card?.number || "").startsWith("VAULT-") ||
-        String(card?.number || "").startsWith("DPS-"),
-      );
+      const isSavings = isSavingsCard(card);
 
       const rawNumber = String(card?.number || "").replace(/\D/g, "");
       const rawLast4 = card?.last4 || (rawNumber ? rawNumber.slice(-4) : "");
@@ -470,100 +516,79 @@ export function loadAccountData(
         storedNumber = rawLast4 ? `•••• •••• •••• ${rawLast4}` : "";
       }
 
+      const hasBalanceKey =
+        Object.hasOwn(rawBalances, id) &&
+        rawBalances[id] !== undefined &&
+        rawBalances[id] !== null &&
+        Number.isFinite(Number(rawBalances[id]));
+      const hasCardInitBal =
+        card.initialBalance !== undefined &&
+        card.initialBalance !== null &&
+        String(card.initialBalance).trim() !== "" &&
+        Number.isFinite(Number(card.initialBalance));
+
+      let resolvedBalance = 0;
+      if (hasBalanceKey && hasCardInitBal) {
+        const balVal = cleanBalance(rawBalances[id]);
+        const initVal = cleanBalance(card.initialBalance);
+        if (balVal === initVal) {
+          resolvedBalance = balVal;
+        } else if (balVal === 0 && initVal > 0) {
+          resolvedBalance = initVal;
+        } else {
+          resolvedBalance = balVal;
+        }
+      } else if (hasBalanceKey) {
+        resolvedBalance = cleanBalance(rawBalances[id]);
+      } else if (hasCardInitBal) {
+        resolvedBalance = cleanBalance(card.initialBalance);
+      }
+
       cardMap.set(id, {
         ...safeCard,
         id,
         name: card.name || id,
         holderName: card.holderName || "Cardholder",
-        type: card.type || "credit",
-        network: card.network || "visa",
+        type: isSavings ? "savings" : card.type || "credit",
+        network: isSavings ? "none" : card.network || "visa",
+        ...(isSavings ? { category: "savings" } : {}),
         last4: rawLast4,
         number: storedNumber,
-        expiry: card.expiry || "",
+        expiry: isSavings || isMfs ? "" : card.expiry || "",
         color: card.color || "#1e293b",
         gradient: card.gradient || "",
+        initialBalance: resolvedBalance,
         createdAt,
         updatedAt,
       });
     }
   }
 
-  // Self-healing recovery: reconstruct accounts referenced in active transactions or non-zero balances
-  const allReferencedAccountIds = new Set();
-  for (const [key, val] of Object.entries(rawBalances)) {
-    if (deletedCardTombstones[key]?.deleted) continue;
-    if (Number(val) > 0) {
-      allReferencedAccountIds.add(key);
-    }
-  }
-  if (Array.isArray(saved.transactions)) {
-    for (const t of saved.transactions) {
-      const acct = t?.account || t?.accountId;
-      const fromAcct = t?.fromAccount || t?.from_account || t?.fromAccountId;
-      const toAcct = t?.toAccount || t?.to_account || t?.toAccountId;
-      if (acct && !deletedCardTombstones[acct]?.deleted)
-        allReferencedAccountIds.add(acct);
-      if (fromAcct && !deletedCardTombstones[fromAcct]?.deleted)
-        allReferencedAccountIds.add(fromAcct);
-      if (toAcct && !deletedCardTombstones[toAcct]?.deleted)
-        allReferencedAccountIds.add(toAcct);
-    }
-  }
-
-  const isBrandNewAccount =
-    !settings.configured &&
-    !settings.cardsConfigured &&
-    rawCards.length === 0 &&
-    (!Array.isArray(saved.transactions) || saved.transactions.length === 0) &&
-    Object.values(rawBalances).every((v) => Number(v) === 0);
-
-  const cardsAlreadyConfigured =
-    settings.cardsConfigured === true || rawCards.length > 0;
-
-  if (!isBrandNewAccount) {
-    const stableTime = settings.updatedAt
-      ? typeof settings.updatedAt === "number"
-        ? settings.updatedAt
-        : Date.parse(settings.updatedAt) || 0
-      : 0;
-    for (const accountId of allReferencedAccountIds) {
-      if (deletedCardTombstones[accountId]?.deleted) continue;
-      if (cardsAlreadyConfigured && !(Number(rawBalances[accountId]) > 0)) {
-        continue;
-      }
-      if (!cardMap.has(accountId)) {
-        cardMap.set(accountId, {
-          id: accountId,
-          name: accountId.startsWith("card_") ? "Account" : accountId,
-          holderName: "Cardholder",
-          type: "debit",
-          network: "visa",
-          last4: "",
-          number: "",
-          expiry: "",
-          color: "#1e293b",
-          gradient:
-            "linear-gradient(135deg, #334155 0%, #1e293b 60%, #0f172a 100%)",
-          createdAt: stableTime,
-          updatedAt: stableTime,
-        });
-      }
+  // Deduplicate singleton Savings Vault if multiple savings cards exist from cross-device sync
+  const remappedAccountIds = {};
+  const savingsCards = Array.from(cardMap.values()).filter(isSavingsCard);
+  if (savingsCards.length > 1) {
+    savingsCards.sort((a, b) => {
+      const timeDiff = (b.updatedAt || 0) - (a.updatedAt || 0);
+      if (timeDiff !== 0) return timeDiff;
+      const balDiff =
+        cleanBalance(b.initialBalance) - cleanBalance(a.initialBalance);
+      if (balDiff !== 0) return balDiff;
+      return (b.createdAt || 0) - (a.createdAt || 0);
+    });
+    const winningSavings = savingsCards[0];
+    for (let i = 1; i < savingsCards.length; i += 1) {
+      const duplicate = savingsCards[i];
+      cardMap.delete(duplicate.id);
+      remappedAccountIds[duplicate.id] = winningSavings.id;
     }
   }
 
   const cards = Array.from(cardMap.values());
 
   const initialBalances = {};
-  for (const [key, val] of Object.entries(rawBalances)) {
-    if (deletedCardTombstones[key]?.deleted) continue;
-    if (cardMap.has(key)) {
-      initialBalances[key] = cleanBalance(val);
-    }
-  }
   for (const card of cards) {
-    if (initialBalances[card.id] === undefined) {
-      initialBalances[card.id] = cleanBalance(card.initialBalance);
-    }
+    initialBalances[card.id] = cleanBalance(card.initialBalance);
   }
 
   const normalizedAccountContext = {
@@ -571,14 +596,28 @@ export function loadAccountData(
       cards,
       balances: initialBalances,
     },
+    remappedAccountIds,
   };
 
   const resolvedPrimaryCardId =
     (typeof settings.primaryCardId === "string" &&
       cardMap.has(settings.primaryCardId) &&
+      !isSavingsCard(cardMap.get(settings.primaryCardId)) &&
       settings.primaryCardId) ||
-    cards.find((c) => c.isPrimary)?.id ||
+    cards.find((c) => c.isPrimary && !isSavingsCard(c))?.id ||
     "";
+
+  const syncedCards = cards.map((c) => ({
+    ...c,
+    isPrimary: Boolean(resolvedPrimaryCardId && c.id === resolvedPrimaryCardId),
+    initialBalance: initialBalances[c.id],
+  }));
+
+  const mapAcct = (id) => {
+    if (!id || typeof id !== "string") return id;
+    const trimmed = id.trim();
+    return remappedAccountIds[trimmed] || trimmed;
+  };
 
   return {
     settings: {
@@ -586,10 +625,11 @@ export function loadAccountData(
         ? settings.startDate
         : localDate(),
       balances: initialBalances,
-      cards,
+      cards: syncedCards,
       ...(resolvedPrimaryCardId ? { primaryCardId: resolvedPrimaryCardId } : {}),
-      configured: settings.configured === true || cards.length > 0,
-      cardsConfigured: settings.cardsConfigured === true || cards.length > 0,
+      configured: settings.configured === true || syncedCards.length > 0,
+      cardsConfigured:
+        settings.cardsConfigured === true || syncedCards.length > 0,
       updatedAt:
         typeof settings.updatedAt === "number" &&
         Number.isFinite(settings.updatedAt)
@@ -599,8 +639,27 @@ export function loadAccountData(
             ? Date.parse(settings.updatedAt)
             : 0,
     },
+    ...(Object.keys(remappedAccountIds).length > 0
+      ? { remappedAccountIds }
+      : {}),
     transactions: Array.isArray(saved.transactions)
       ? saved.transactions
+          .map((item) => {
+            if (!item || typeof item !== "object") return item;
+            const acct = mapAcct(item.account || item.accountId);
+            const fromAcct = mapAcct(
+              item.fromAccount || item.from_account || item.fromAccountId,
+            );
+            const toAcct = mapAcct(
+              item.toAccount || item.to_account || item.toAccountId,
+            );
+            return {
+              ...item,
+              ...(acct ? { account: acct } : {}),
+              ...(fromAcct ? { fromAccount: fromAcct } : {}),
+              ...(toAcct ? { toAccount: toAcct } : {}),
+            };
+          })
           .filter((item) =>
             isValidAccountTransaction(item, normalizedAccountContext),
           )
@@ -704,14 +763,7 @@ export function nextOccurrenceDate(dateValue, interval, dayOfMonth) {
 
 export function getSavingsAccountId(cards = []) {
   if (!Array.isArray(cards) || cards.length === 0) return "";
-  const byCategoryOrType = cards.find(
-    (c) =>
-      c?.category === "savings" ||
-      c?.type === "savings" ||
-      c?.provider === "savings",
-  );
+  const byCategoryOrType = cards.find((c) => isSavingsCard(c));
   if (byCategoryOrType) return byCategoryOrType.id;
-  const exact = cards.find((c) => c?.id === "savings");
-  if (exact) return exact.id;
   return "";
 }
