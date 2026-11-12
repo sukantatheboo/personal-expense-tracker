@@ -1368,6 +1368,8 @@ export default function App() {
   } = usePopupPresence();
   const [updateInfo, setUpdateInfo] = useState(null);
   const [updateApplying, setUpdateApplying] = useState(false);
+  const [checkingForUpdate, setCheckingForUpdate] = useState(false);
+  const [updateCheckStatus, setUpdateCheckStatus] = useState("");
   const dismissedBuildIdRef = useRef("");
   const updateModalRef = useRef(null);
 
@@ -1377,10 +1379,14 @@ export default function App() {
       const detail = event?.detail || window.__spendPendingUpdate || {};
       const candidateId = detail.buildId || "sw-pending-update";
       setUpdateInfo(detail);
+      if (detail.manual) {
+        dismissedBuildIdRef.current = "";
+        showUpdateModal();
+        return;
+      }
       if (
         dismissedBuildIdRef.current &&
-        (dismissedBuildIdRef.current === candidateId ||
-          dismissedBuildIdRef.current === "sw-pending-update")
+        dismissedBuildIdRef.current === candidateId
       ) {
         return;
       }
@@ -1394,6 +1400,60 @@ export default function App() {
       window.removeEventListener("spend:update-available", handleUpdateEvent);
     };
   }, [showUpdateModal]);
+
+  const handleCheckForUpdates = useCallback(
+    async ({ silent = false } = {}) => {
+      if (typeof window === "undefined") return false;
+      dismissedBuildIdRef.current = "";
+      setCheckingForUpdate(true);
+      if (!silent) {
+        setUpdateCheckStatus("Checking for updates…");
+      }
+      try {
+        const checkPromise =
+          typeof window.__spendCheckForUpdates === "function"
+            ? window.__spendCheckForUpdates({ force: true, manual: !silent })
+            : Promise.resolve(false);
+        const [found] = await Promise.all([
+          checkPromise,
+          new Promise((resolve) =>
+            window.setTimeout(resolve, silent ? 0 : 420),
+          ),
+        ]);
+        const pending = window.__spendPendingUpdate || updateInfo;
+        if (found || pending) {
+          if (pending) setUpdateInfo(pending);
+          setUpdateCheckStatus(
+            pending?.version
+              ? `Update available: Spend v${pending.version} is ready to install.`
+              : "A new update is ready to install.",
+          );
+          showUpdateModal();
+          return true;
+        }
+        if (!navigator.onLine) {
+          setUpdateCheckStatus(
+            "You appear to be offline. Connect to the internet to check for updates.",
+          );
+          return false;
+        }
+        const currentVer =
+          typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "2.0.0";
+        setUpdateCheckStatus(
+          `You’re up to date · Spend v${currentVer} is the latest version.`,
+        );
+        return false;
+      } catch {
+        setUpdateCheckStatus(
+          "Could not check for updates right now. Please try again.",
+        );
+        return false;
+      } finally {
+        setCheckingForUpdate(false);
+      }
+    },
+    [showUpdateModal, updateInfo],
+  );
   const pendingDueRef = useRef([]);
   const lastRecurringCheckRef = useRef("");
   const pushScheduleSyncRef = useRef(Promise.resolve());
@@ -5052,7 +5112,14 @@ export default function App() {
           authBusy={authBusy}
           onSignIn={openSignInModal}
           updateAvailable={Boolean(updateInfo)}
-          onOpenUpdateModal={showUpdateModal}
+          updateInfo={updateInfo}
+          checkingForUpdate={checkingForUpdate}
+          updateCheckStatus={updateCheckStatus}
+          onCheckForUpdates={handleCheckForUpdates}
+          onOpenUpdateModal={() => {
+            dismissedBuildIdRef.current = "";
+            showUpdateModal();
+          }}
         />
       </Suspense>
       {authModalOpen &&

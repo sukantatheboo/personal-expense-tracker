@@ -6383,14 +6383,21 @@ function SettingsSheet({
   onProfileSettings,
   onSecurity,
   updateAvailable = false,
+  updateInfo = null,
+  checkingForUpdate = false,
+  updateCheckStatus = "",
+  onCheckForUpdates,
   onOpenUpdateModal,
+  onToast,
   onClose,
 }) {
   useEffect(() => {
     if (typeof window !== "undefined") {
-      window.__spendCheckForUpdates?.({ force: true });
+      window.__spendCheckForUpdates?.();
     }
   }, []);
+  const currentVersion =
+    typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "2.0.0";
   const themeMode =
     S?.themeMode ||
     (S?.theme === "auto" || S?.theme === "light" || S?.theme === "dark"
@@ -6608,7 +6615,7 @@ function SettingsSheet({
               </i>
               <span className="nm">
                 <b>App settings</b>
-                <small>Reminders &amp; backups</small>
+                <small>Reminders, backups &amp; updates</small>
               </span>
               <span className="settings-chevron" aria-hidden="true">
                 <Icon n="r" />
@@ -6654,41 +6661,80 @@ function SettingsSheet({
               </span>
             </button>
 
-            {updateAvailable && (
-              <button
-                className="ri mfs-settings-row"
-                type="button"
-                onClick={() => {
-                  triggerHaptic("selection");
+            <button
+              className="ri mfs-settings-row"
+              type="button"
+              disabled={checkingForUpdate}
+              onClick={async () => {
+                triggerHaptic("selection");
+                if (updateAvailable) {
                   onClose?.();
                   onOpenUpdateModal?.();
-                }}
+                  return;
+                }
+                if (onCheckForUpdates) {
+                  const found = await onCheckForUpdates();
+                  if (found) {
+                    onClose?.();
+                  } else {
+                    onToast?.(
+                      navigator.onLine
+                        ? `You’re on the latest version (v${currentVersion})`
+                        : "Offline — connect to the internet to check for updates",
+                    );
+                  }
+                }
+              }}
+            >
+              <i
+                className="ic mfs-row-icon"
+                style={{ "--c": updateAvailable ? "#10b981" : "#3b82f6" }}
               >
-                <i className="ic mfs-row-icon" style={{ "--c": "#10b981" }}>
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.1"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M12 16V8" />
-                    <path d="m8.5 11.5 3.5-3.5 3.5 3.5" />
-                    <circle cx="12" cy="12" r="9" />
-                  </svg>
-                </i>
-                <span className="nm">
-                  <b>Update available</b>
-                  <small>New version ready to install</small>
-                </span>
-                <span className="mfs-row-badge is-active">Update</span>
-                <span className="settings-chevron" aria-hidden="true">
-                  <Icon n="r" />
-                </span>
-              </button>
-            )}
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.1"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M12 16V8" />
+                  <path d="m8.5 11.5 3.5-3.5 3.5 3.5" />
+                  <circle cx="12" cy="12" r="9" />
+                </svg>
+              </i>
+              <span className="nm">
+                <b>
+                  {updateAvailable
+                    ? "Update available"
+                    : checkingForUpdate
+                      ? "Checking for updates…"
+                      : "Check for updates"}
+                </b>
+                <small>
+                  {updateAvailable
+                    ? updateInfo?.version
+                      ? `Spend v${updateInfo.version} ready to install`
+                      : "New version ready to install"
+                    : checkingForUpdate
+                      ? "Looking for new releases…"
+                      : updateCheckStatus || `Current version v${currentVersion}`}
+                </small>
+              </span>
+              <span
+                className={`mfs-row-badge${updateAvailable ? " is-active" : ""}`}
+              >
+                {updateAvailable
+                  ? "Update"
+                  : checkingForUpdate
+                    ? "Checking…"
+                    : `v${currentVersion}`}
+              </span>
+              <span className="settings-chevron" aria-hidden="true">
+                <Icon n="r" />
+              </span>
+            </button>
           </div>
         </div>
       </div>
@@ -8933,7 +8979,15 @@ function AppSettingsPage({
   onExpensesCsv,
   onBackupRestore,
   backupStatus,
+  updateAvailable = false,
+  updateInfo = null,
+  checkingForUpdate = false,
+  updateCheckStatus = "",
+  onCheckForUpdates,
+  onOpenUpdateModal,
 }) {
+  const currentVersion =
+    typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "2.0.0";
   const notificationUnavailable = notificationPermission === "unsupported";
   const notificationBlocked = notificationPermission === "denied";
   const isNative = isNativePlatform();
@@ -8969,7 +9023,7 @@ function AppSettingsPage({
   return (
     <div className="mfs-app-settings-page">
       <p className="settings-page-intro">
-        Configure payment reminders and manage your backups.
+        Configure payment reminders, manage backups, and check for app updates.
       </p>
 
       <section className="card app-settings-card mfs-card-list">
@@ -9193,6 +9247,86 @@ function AppSettingsPage({
             {backupStatus}
           </p>
         )}
+      </section>
+
+      <section className="card app-settings-card mfs-card-list">
+        <h2>App updates</h2>
+        <div className="mfs-card-rows">
+          <button
+            className="ri settings-action mfs-list-row"
+            type="button"
+            disabled={checkingForUpdate}
+            onClick={() => {
+              triggerHaptic("selection");
+              if (updateAvailable) {
+                onOpenUpdateModal?.();
+                return;
+              }
+              void onCheckForUpdates?.();
+            }}
+          >
+            <i
+              className="ic mfs-row-icon"
+              style={{ "--c": updateAvailable ? "#10b981" : "#3b82f6" }}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.1"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M12 16V8" />
+                <path d="m8.5 11.5 3.5-3.5 3.5 3.5" />
+                <circle cx="12" cy="12" r="9" />
+              </svg>
+            </i>
+            <span className="nm">
+              <b>
+                {updateAvailable
+                  ? "Update available"
+                  : checkingForUpdate
+                    ? "Checking for updates…"
+                    : "Check for updates"}
+              </b>
+              <small>
+                {updateAvailable
+                  ? updateInfo?.version
+                    ? `Spend v${updateInfo.version} is ready to install`
+                    : "A new version is ready to install"
+                  : checkingForUpdate
+                    ? "Checking for new releases…"
+                    : `Installed version v${currentVersion}`}
+              </small>
+            </span>
+            <span
+              className={`settings-inline-action mfs-status-pill${updateAvailable ? " is-active" : ""}`}
+            >
+              {updateAvailable && (
+                <span className="mfs-status-pill-dot" aria-hidden="true" />
+              )}
+              {updateAvailable
+                ? "Update"
+                : checkingForUpdate
+                  ? "Checking…"
+                  : updateCheckStatus.startsWith("You’re up to date")
+                    ? "Up to date"
+                    : "Check"}
+            </span>
+          </button>
+        </div>
+        <p
+          className="settings-note mfs-card-footnote"
+          role="status"
+          aria-live="polite"
+        >
+          {updateCheckStatus ||
+            (updateAvailable
+              ? "Tap above to open the update prompt and install the latest version."
+              : `Spend v${currentVersion} · Manually check anytime if you skipped an update prompt or missed earlier releases.`)}
+        </p>
       </section>
     </div>
   );
@@ -9858,6 +9992,10 @@ export default function MobilePrototype({
   authBusy,
   onResumeSync,
   updateAvailable = false,
+  updateInfo = null,
+  checkingForUpdate = false,
+  updateCheckStatus = "",
+  onCheckForUpdates,
   onOpenUpdateModal,
 }) {
   const [tab, setTab] = useState("home");
@@ -11079,7 +11217,7 @@ export default function MobilePrototype({
             triggerHaptic("medium");
             setPtrState({ pullY: 48, phase: "refreshing" });
             if (typeof window !== "undefined") {
-              window.__spendCheckForUpdates?.({ force: true });
+              window.__spendCheckForUpdates?.();
             }
             if (profile?.connected && onResumeSync) {
               try {
@@ -11179,6 +11317,12 @@ export default function MobilePrototype({
                 onExpensesCsv={onExpensesCsv}
                 onBackupRestore={onBackupRestore}
                 backupStatus={backupStatus}
+                updateAvailable={updateAvailable}
+                updateInfo={updateInfo}
+                checkingForUpdate={checkingForUpdate}
+                updateCheckStatus={updateCheckStatus}
+                onCheckForUpdates={onCheckForUpdates}
+                onOpenUpdateModal={onOpenUpdateModal}
               />
             ) : (
               <>
@@ -11561,7 +11705,12 @@ export default function MobilePrototype({
           onProfileSettings={openProfileSettings}
           onSecurity={() => openSheet({ type: "sec" })}
           updateAvailable={updateAvailable}
+          updateInfo={updateInfo}
+          checkingForUpdate={checkingForUpdate}
+          updateCheckStatus={updateCheckStatus}
+          onCheckForUpdates={onCheckForUpdates}
           onOpenUpdateModal={onOpenUpdateModal}
+          onToast={toast}
         />
       )}
       {sheet?.type === "sec" && (

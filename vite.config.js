@@ -18,12 +18,41 @@ function resolveGitCommit() {
   }
 }
 
+function resolveGitCommitCount() {
+  try {
+    const count = Number(
+      execSync("git rev-list --count HEAD", {
+        stdio: ["ignore", "pipe", "ignore"],
+      })
+        .toString()
+        .trim(),
+    );
+    if (Number.isFinite(count) && count > 1) return count;
+    const runNumber = Number(process.env.GITHUB_RUN_NUMBER);
+    if (Number.isFinite(runNumber) && runNumber > 0) return runNumber;
+    return Number.isFinite(count) && count > 0 ? count : 0;
+  } catch {
+    const runNumber = Number(process.env.GITHUB_RUN_NUMBER);
+    return Number.isFinite(runNumber) && runNumber > 0 ? runNumber : 0;
+  }
+}
+
 function readPackageVersion() {
   try {
     const pkg = JSON.parse(
       readFileSync(resolve(process.cwd(), "package.json"), "utf8"),
     );
-    return pkg.version || "2.0.0";
+    const rawVersion = String(pkg.version || "2.0.0").trim();
+    const parts = rawVersion.split(".");
+    const commitCount = resolveGitCommitCount();
+    if (parts.length >= 2 && commitCount > 0) {
+      const major = parts[0] || "2";
+      const minor = parts[1] || "0";
+      const explicitPatch = Number(parts[2]) || 0;
+      const patch = explicitPatch > commitCount ? explicitPatch : commitCount;
+      return `${major}.${minor}.${patch}`;
+    }
+    return rawVersion || "2.0.0";
   } catch {
     return "2.0.0";
   }

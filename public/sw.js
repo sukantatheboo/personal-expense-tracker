@@ -192,6 +192,32 @@ self.addEventListener("fetch", (event) => {
 
   if (request.mode === "navigate") {
     const indexUrl = new URL("index.html", self.registration.scope).toString();
+    const isForceReload =
+      request.cache === "reload" ||
+      request.cache === "no-store" ||
+      request.cache === "no-cache" ||
+      url.searchParams.has("__update");
+
+    if (isForceReload) {
+      event.respondWith(
+        fetch(indexUrl, { cache: "no-store" })
+          .then((response) => {
+            if (response.ok) {
+              const copy = response.clone();
+              caches
+                .open(CACHE_NAME)
+                .then((cache) => cache.put(indexUrl, copy));
+            }
+            return response;
+          })
+          .catch(async () => {
+            const fallback = await caches.match(indexUrl);
+            return fallback || caches.match(request);
+          }),
+      );
+      return;
+    }
+
     event.respondWith(
       caches
         .open(CACHE_NAME)
@@ -199,7 +225,7 @@ self.addEventListener("fetch", (event) => {
         .then(
           (cachedIndex) =>
             cachedIndex ||
-            fetch(request, { cache: "no-store" })
+            fetch(indexUrl, { cache: "no-store" })
               .then((response) => {
                 if (response.ok) {
                   const copy = response.clone();
