@@ -10,21 +10,20 @@ const DONUT_CIRCUMFERENCE = 2 * Math.PI * 40;
 const DONUT_VALUES = [47, 25, 21, 5, 2];
 const DONUT_COLORS = ["#e8793a", "#b5305a", "#8b5cf6", "#64748b", "#e0334c"];
 
-export default function WelcomeFlow({ onDone, theme }) {
+export default function WelcomeFlow({ onDone, theme, exiting = false }) {
   const [slideIndex, setSlideIndex] = useState(0);
   const [splashRun, setSplashRun] = useState(true);
   const [splashGone, setSplashGone] = useState(false);
   const [slidesReady, setSlidesReady] = useState(false);
   const [amountShown, setAmountShown] = useState(false);
-
-  const [exiting, setExiting] = useState(false);
+  const [localExiting, setLocalExiting] = useState(false);
+  const isExiting = exiting || localExiting;
 
   const pointerStartXRef = useRef(null);
   const pointerIdRef = useRef(null);
   const touchStartXRef = useRef(null);
   const splashGoneRef = useRef(false);
   const finishedRef = useRef(false);
-  const exitTimerRef = useRef(null);
 
   useEffect(() => {
     splashGoneRef.current = splashGone;
@@ -63,17 +62,8 @@ export default function WelcomeFlow({ onDone, theme }) {
   const finish = useCallback(() => {
     if (finishedRef.current) return;
     finishedRef.current = true;
-    const reducedMotion =
-      typeof window !== "undefined" &&
-      Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches);
-    if (reducedMotion) {
-      onDone?.();
-      return;
-    }
-    setExiting(true);
-    exitTimerRef.current = window.setTimeout(() => {
-      onDone?.();
-    }, 180);
+    setLocalExiting(true);
+    onDone?.();
   }, [onDone]);
 
   useEffect(() => {
@@ -108,13 +98,12 @@ export default function WelcomeFlow({ onDone, theme }) {
     return () => {
       window.clearTimeout(splashTimer);
       if (slideTimer) window.clearTimeout(slideTimer);
-      if (exitTimerRef.current) window.clearTimeout(exitTimerRef.current);
     };
   }, []);
 
   useEffect(() => {
     const handleKeyDown = (event) => {
-      if (!splashGoneRef.current) return;
+      if (!splashGoneRef.current || finishedRef.current) return;
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       if (event.key === "ArrowRight") {
         event.preventDefault();
@@ -137,7 +126,7 @@ export default function WelcomeFlow({ onDone, theme }) {
       const deltaX = event.clientX - pointerStartXRef.current;
       pointerStartXRef.current = null;
       pointerIdRef.current = null;
-      if (!splashGoneRef.current) return;
+      if (!splashGoneRef.current || finishedRef.current) return;
       if (Math.abs(deltaX) > SWIPE_THRESHOLD_PX) {
         setSlideIndex((current) =>
           Math.max(0, Math.min(SLIDE_COUNT - 1, current + (deltaX < 0 ? 1 : -1))),
@@ -197,10 +186,12 @@ export default function WelcomeFlow({ onDone, theme }) {
 
   return (
     <div
-      className={`welcome-flow${exiting ? " is-exiting" : ""}`}
+      className={`welcome-flow${isExiting ? " is-exiting" : ""}`}
       data-theme={theme === "dark" || theme === "light" ? theme : undefined}
       role="region"
       aria-label="Welcome to Spend"
+      aria-hidden={isExiting ? "true" : undefined}
+      inert={isExiting ? true : undefined}
     >
       <div className="phone">
         <section

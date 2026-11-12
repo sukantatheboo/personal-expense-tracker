@@ -1088,10 +1088,13 @@ export default function App() {
   const isHydratedRef = useRef(!hasAppPin());
   const [ready, setReady] = useState(false);
   const [sessionResolving, setSessionResolving] = useState(() =>
-    Boolean(supabaseConfigured),
+    Boolean(
+      supabaseConfigured && (hasPotentialCloudSession() || loadLocalDataOwner()),
+    ),
   );
   const [sessionUser, setSessionUser] = useState(null);
   const [welcomeSeen, setWelcomeSeen] = useState(readWelcomeSeen);
+  const [welcomeExiting, setWelcomeExiting] = useState(false);
   const [devForceWelcome, setDevForceWelcome] = useState(isDevForcedWelcome);
   const [prototypeMounted, setPrototypeMounted] = useState(false);
   const handlePrototypeMounted = useCallback(() => {
@@ -4593,9 +4596,18 @@ export default function App() {
         `${window.location.pathname}${window.location.search}${window.location.hash}`,
       );
     }
+    const reducedMotion =
+      typeof window !== "undefined" &&
+      Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches);
     setWelcomeSeen(true);
     setReady(true);
     openSignInModal("sign-up");
+    if (!reducedMotion) {
+      setWelcomeExiting(true);
+      window.setTimeout(() => {
+        setWelcomeExiting(false);
+      }, 180);
+    }
   }
 
   if (sessionResolving) {
@@ -4612,6 +4624,9 @@ export default function App() {
     <>
       {!ready && (
         <SpendSplash canExit={prototypeMounted} onDone={() => setReady(true)} />
+      )}
+      {welcomeExiting && (
+        <WelcomeFlow theme={resolvedTheme} exiting onDone={handleWelcomeDone} />
       )}
       <Suspense fallback={null}>
         <PrototypeMountSignal onMounted={handlePrototypeMounted} />
