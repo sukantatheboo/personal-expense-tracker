@@ -64,7 +64,6 @@ import {
 } from "./security.js";
 import "./MobilePrototype.css";
 import {
-  AnimatedBudgetIcon,
   AnimatedRecurringIcon,
   AnimatedExpensesIcon,
   AnimatedTransactionsIcon,
@@ -628,71 +627,6 @@ const getMonthYearParts = (m) => {
     year: String(y),
   };
 };
-
-function PlansCalendarBar({ m, onShift }) {
-  const { month, year } = getMonthYearParts(m);
-  const isNextDisabled = !m || m >= ld().slice(0, 7);
-
-  return (
-    <div className="plans-calendar-bar" aria-label="Month navigation">
-      <div className="plans-calendar-title" role="heading" aria-level={2}>
-        <span className="plans-calendar-month">{month}</span>
-        <span className="plans-calendar-year">{year}</span>
-      </div>
-      <div className="plans-calendar-controls">
-        <button
-          type="button"
-          className="plans-calendar-btn"
-          aria-label="Previous month"
-          onClick={() => {
-            triggerHaptic("selection");
-            onShift(-1);
-          }}
-        >
-          <svg
-            viewBox="0 0 24 24"
-            width="17"
-            height="17"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="m15 18-6-6 6-6" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          className="plans-calendar-btn"
-          aria-label="Next month"
-          disabled={isNextDisabled}
-          aria-disabled={isNextDisabled}
-          onClick={() => {
-            if (isNextDisabled) return;
-            triggerHaptic("selection");
-            onShift(1);
-          }}
-        >
-          <svg
-            viewBox="0 0 24 24"
-            width="17"
-            height="17"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="m9 18 6-6-6-6" />
-          </svg>
-        </button>
-      </div>
-    </div>
-  );
-}
 
 function suggestedCategory(description, expenses = [], excludeId = null) {
   const title = String(description || "")
@@ -4187,26 +4121,15 @@ function Plans({
   onOpenRec,
   onToggleRec,
 }) {
+  const fmt = (value) => M(value);
   const round2 = (val) => Math.round((Number(val) || 0) * 100) / 100;
   const savingsThisMonth = round2(
     monthExp(S)
       .filter((expense) => expense.cat === "Savings" && expense.amt != null)
       .reduce((sum, expense) => sum + expense.amt, 0),
   );
-  const b = round2(S.bud[S.m] || 0),
-    t = Math.max(0, round2(round2(tot(S, S.m)) - savingsThisMonth)),
-    pc = b ? t / b : 0,
-    displayUsedPct =
-      b > 0
-        ? t <= 0
-          ? 0
-          : t < b
-            ? Math.min(99, Math.max(1, Math.round(pc * 100)))
-            : t > b
-              ? Math.max(101, Math.round(pc * 100))
-              : 100
-        : 0,
-    C = 2 * Math.PI * 62;
+  const b = round2(S.bud[S.m] || 0);
+  const t = Math.max(0, round2(round2(tot(S, S.m)) - savingsThisMonth));
   const orderedRec = useMemo(() => {
     const parseTime = (val) => {
       if (typeof val === "number" && Number.isFinite(val)) return val;
@@ -4268,23 +4191,9 @@ function Plans({
       ? Math.min(daysInMonth, Number(todayStr.split("-")[2]) || 1)
       : daysInMonth;
     const daysPassed = Math.max(1, currentDay);
-    const daysRemaining = isCurrentMonth
-      ? Math.max(1, daysInMonth - currentDay + 1)
-      : 0;
     const expectedSpent = (b / daysInMonth) * daysPassed;
     const paceDiff = round2(t - expectedSpent);
     const roundedPaceDiff = Math.round(paceDiff);
-    const remainingBudget = round2(b - t);
-    const rawDailyRemaining =
-      daysRemaining > 0 && remainingBudget > 0
-        ? remainingBudget / daysRemaining
-        : 0;
-    const dailyRemainingBudget =
-      daysRemaining > 0 && remainingBudget > 0
-        ? rawDailyRemaining < 1
-          ? Math.max(0.01, round2(rawDailyRemaining))
-          : Math.round(rawDailyRemaining)
-        : 0;
     const currentDailyBurn = Math.round(t / daysPassed);
     const dailyTarget = Math.round(b / daysInMonth);
     const budgetUsedPct = Math.min(100, Math.max(0, (t / b) * 100));
@@ -4295,244 +4204,226 @@ function Plans({
     velocity = {
       daysInMonth,
       currentDay,
-      daysRemaining,
       daysPassed,
       expectedSpent,
       paceDiff,
       roundedPaceDiff,
-      dailyRemainingBudget,
       currentDailyBurn,
       dailyTarget,
+      actualDailyBurn: currentDailyBurn,
+      targetDailyPace: dailyTarget,
       budgetUsedPct,
-      displayUsedPct,
       timeElapsedPct,
-      isOverPace: t > b || roundedPaceDiff > 0,
+      isOverPace: t > b || paceDiff > dailyTarget,
+      isNearPace:
+        t <= b &&
+        (budgetUsedPct >= 85 || (paceDiff > 0 && paceDiff <= dailyTarget)),
       isUnderPace: t <= b && roundedPaceDiff < 0,
     };
   }
 
+  const { month: monthLabel, year: yearLabel } = getMonthYearParts(S.m);
+  const isCurrentOrFutureMonth = S.m >= todayStr.slice(0, 7);
+  const overBudget = b > 0 && t > b;
+  const pctUsed = b > 0 ? (t / b) * 100 : 0;
+  const spentPct = b > 0 ? Math.min(100, pctUsed) : 0;
+  const expectedByToday = velocity ? Math.round(velocity.expectedSpent) : 0;
+  const expectedPct = b > 0 ? Math.min(100, (expectedByToday / b) * 100) : 0;
+  const paceDiffAbs = velocity ? Math.round(Math.abs(velocity.paceDiff)) : 0;
+  const ringStrokeColor = overBudget
+    ? "#e11d48"
+    : pctUsed >= 85
+      ? "#f97316"
+      : "#cff558";
+  const paceStatusTone = velocity?.isOverPace
+    ? "crimson"
+    : velocity?.isNearPace
+      ? "orange"
+      : "lime";
+
   const budget = (
     <>
-      <PlansCalendarBar m={S.m} onShift={onShift} />
-      <div className="card" style={{ marginTop: 0, textAlign: "center" }}>
-        {b ? (
-          <>
-            <div className="ring">
-              <svg
-                viewBox="0 0 150 150"
-                style={{ width: 190, height: 190, transform: "rotate(-90deg)" }}
-              >
-                <defs>
-                  <linearGradient
-                    id="budgetRingGrad"
-                    x1="0"
-                    y1="0"
-                    x2="1"
-                    y2="1"
-                  >
-                    <stop
-                      offset="0%"
-                      stopColor={
-                        pc > 1 ? "#f43f5e" : pc > 0.75 ? "#f59e0b" : "#10b981"
-                      }
-                    />
-                    <stop
-                      offset="100%"
-                      stopColor={
-                        pc > 1 ? "#e11d48" : pc > 0.75 ? "#ea580c" : "#06b6d4"
-                      }
-                    />
-                  </linearGradient>
-                </defs>
-                <circle
-                  cx="75"
-                  cy="75"
-                  r="62"
-                  stroke="var(--line)"
-                  strokeWidth="13"
-                />
-                <circle
-                  cx="75"
-                  cy="75"
-                  r="62"
-                  stroke="url(#budgetRingGrad)"
-                  strokeWidth="13"
-                  strokeLinecap="round"
-                  strokeDasharray={C}
-                  strokeDashoffset={C * (1 - Math.min(pc, 1))}
-                  style={{
-                    transition:
-                      "stroke-dashoffset 600ms cubic-bezier(0.2, 0.8, 0.2, 1)",
-                  }}
-                />
-              </svg>
-              <b>
-                {displayUsedPct}%<small>used</small>
-              </b>
-            </div>
-            <div className="two" style={{ marginTop: 8 }}>
-              <div>
-                <small className="lbl">Spent</small>
-                <div style={{ fontSize: 19, fontWeight: 800 }}>{M(t)}</div>
-              </div>
-              <div>
-                <small className="lbl">Limit</small>
-                <div style={{ fontSize: 19, fontWeight: 800 }}>{M(b)}</div>
-              </div>
-            </div>
-            <p className="hint" style={{ marginTop: 14 }}>
-              {t <= b
-                ? M(round2(b - t)) + " left — you’re within your limit."
-                : M(round2(t - b)) + " over — spending is above your limit."}
-            </p>
-          </>
-        ) : (
-          <div className="emp-illustrated">
-            <div className="emp-illustrated-icon">
-              <AnimatedBudgetIcon />
-            </div>
-            <b>No budget set for {fM(S.m)}</b>
-            <small>
-              Set a monthly spending limit to manage your budget and stay on
-              track.
-            </small>
-          </div>
-        )}
-        <button className="btn" onClick={onBudget}>
-          {b ? "Edit budget" : "Set monthly budget"}
-        </button>
-      </div>
-
-      {b > 0 && velocity && (
-        <div
-          className={`card budget-velocity-card ${velocity.isOverPace ? "is-over" : "is-good"}`}
-        >
-          <div className="budget-velocity-header">
-            <span className="budget-pace-title">Budget pace</span>
-            <span
-              className={`budget-pace-status ${velocity.isOverPace ? "is-over" : "is-good"}`}
+      <div className="plans-budget-scroll">
+        <div className="plans-month-header">
+          <h1 className="plans-month-title">
+            {monthLabel} {yearLabel}
+          </h1>
+          <div className="plans-month-nav">
+            <button
+              type="button"
+              className="icon-btn"
+              onClick={() => {
+                triggerHaptic("selection");
+                onShift(-1);
+              }}
+              aria-label="Previous month"
             >
-              {velocity.isOverPace ? (
-                <>
-                  <svg
-                    viewBox="0 0 16 16"
-                    width="13"
-                    height="13"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.3"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M8 12.5V3.5M4.5 7 8 3.5 11.5 7" />
-                  </svg>
-                  <span>Over pace</span>
-                </>
-              ) : (
-                <>
-                  <svg
-                    viewBox="0 0 16 16"
-                    width="13"
-                    height="13"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.3"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M3 8.5 6.5 12 13 4.5" />
-                  </svg>
-                  <span>{velocity.isUnderPace ? "Under pace" : "On pace"}</span>
-                </>
-              )}
-            </span>
-          </div>
-
-          <div className="budget-pace-hero">
-            <div className="budget-pace-amount">
-              {M(
-                isCurrentMonth
-                  ? velocity.dailyRemainingBudget
-                  : velocity.currentDailyBurn,
-              )}
-              <small>/day</small>
-            </div>
-            <p className="budget-pace-sub">
-              {!isCurrentMonth
-                ? t > b
-                  ? `Average daily burn · Ended ${M(round2(t - b))} over budget`
-                  : t < b
-                    ? `Average daily burn · Ended ${M(round2(b - t))} under budget`
-                    : "Average daily burn · Ended right on budget"
-                : t > b
-                  ? `Over monthly budget by ${M(round2(t - b))} · ${velocity.daysRemaining} ${velocity.daysRemaining === 1 ? "day" : "days"} left`
-                  : velocity.isOverPace
-                    ? `Safe daily spend · ${M(Math.abs(velocity.roundedPaceDiff))} over expected pace`
-                    : velocity.isUnderPace
-                      ? `Safe daily spend · ${M(Math.abs(velocity.roundedPaceDiff))} under expected pace`
-                      : `Safe daily spend · Right on track for ${velocity.daysRemaining} ${velocity.daysRemaining === 1 ? "day" : "days"} left`}
-            </p>
-          </div>
-
-          <div className="budget-pace-meter">
-            <div
-              className="budget-pace-track"
-              role="progressbar"
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={Math.min(100, velocity.displayUsedPct)}
-              aria-label="Budget pace progress"
+              ‹
+            </button>
+            <button
+              type="button"
+              className="icon-btn"
+              onClick={() => {
+                if (isCurrentOrFutureMonth) return;
+                triggerHaptic("selection");
+                onShift(1);
+              }}
+              disabled={isCurrentOrFutureMonth}
+              aria-label="Next month"
             >
-              <span
-                className="budget-pace-fill"
-                style={{
-                  width: `${t > 0 ? Math.max(3, velocity.budgetUsedPct) : 0}%`,
-                }}
-              />
-              {isCurrentMonth &&
-                velocity.timeElapsedPct > 0 &&
-                velocity.timeElapsedPct < 100 && (
-                  <span
-                    className="budget-pace-marker"
-                    style={{ left: `${velocity.timeElapsedPct}%` }}
-                    title={`Expected by today: ${M(Math.round(velocity.expectedSpent))}`}
-                    aria-hidden="true"
-                  />
-                )}
-            </div>
-            <div className="budget-pace-meta">
-              <span>
-                {velocity.displayUsedPct}% spent · Expected{" "}
-                {M(Math.round(velocity.expectedSpent))}
-              </span>
-              <span>
-                {isCurrentMonth
-                  ? `${velocity.daysRemaining} ${velocity.daysRemaining === 1 ? "day" : "days"} left`
-                  : "Month ended"}
-              </span>
-            </div>
-          </div>
-
-          <div className="budget-velocity-stats">
-            <div className="velocity-stat">
-              <span className="velocity-stat-label">Actual daily burn</span>
-              <b className="velocity-stat-value">
-                {M(velocity.currentDailyBurn)}
-                <small>/day</small>
-              </b>
-            </div>
-            <div className="velocity-stat">
-              <span className="velocity-stat-label">Target daily pace</span>
-              <b className="velocity-stat-value">
-                {M(velocity.dailyTarget)}
-                <small>/day</small>
-              </b>
-            </div>
+              ›
+            </button>
           </div>
         </div>
-      )}
+
+        <section className="hero spend-card plans-hero-card">
+          <div className="plans-hero-top">
+            <span className="plans-hero-label">Monthly budget</span>
+            <div className="plans-hero-actions">
+              <button type="button" className="hero-chip-btn" onClick={onBudget}>
+                {b ? "Edit budget" : "Set budget"}
+              </button>
+            </div>
+          </div>
+
+          {b > 0 ? (
+            <>
+              <div
+                className="plans-ring-wrap"
+              >
+                <svg
+                  className="plans-ring-svg"
+                  viewBox="0 0 180 180"
+                  aria-hidden="true"
+                >
+                  <circle
+                    className="plans-ring-track"
+                    cx="90"
+                    cy="90"
+                    r="74"
+                    fill="none"
+                    strokeWidth="14"
+                  />
+                  <circle
+                    className="plans-ring-arc"
+                    cx="90"
+                    cy="90"
+                    r="74"
+                    fill="none"
+                    stroke={ringStrokeColor}
+                    strokeWidth="14"
+                    strokeLinecap="round"
+                    strokeDasharray={2 * Math.PI * 74}
+                    strokeDashoffset={
+                      2 * Math.PI * 74 * (1 - Math.min(1, spentPct / 100))
+                    }
+                  />
+                </svg>
+                <div className="plans-ring-center">
+                  <strong className="plans-ring-amount">
+                    {overBudget
+                      ? `${fmt(t - b)} over`
+                      : `${fmt(b - t)} left`}
+                  </strong>
+                  <span className="plans-ring-sub">
+                    {Math.round(pctUsed)}% used
+                  </span>
+                </div>
+              </div>
+
+              <div className="plans-saved-style-rows">
+                <div className="plans-saved-row">
+                  <span className="plans-saved-label">Spent</span>
+                  <span className="plans-saved-val">
+                    {fmt(t)}
+                  </span>
+                </div>
+                <div className="plans-saved-row">
+                  <span className="plans-saved-label">Limit</span>
+                  <span className="plans-saved-val">
+                    {fmt(b)}
+                  </span>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="plans-no-budget">
+              <strong>No budget set for {monthLabel}</strong>
+              <span>Set a monthly spending limit to track your pace.</span>
+            </div>
+          )}
+        </section>
+
+        {b > 0 && velocity && (
+          <section className="card plans-pace-card">
+            <div className="plans-pace-header">
+              <div>
+                <h2 className="section-title">Budget pace</h2>
+                <p className="plans-pace-subtitle">
+                  Actual vs. expected spend
+                </p>
+              </div>
+              <span className={`pace-pill is-${paceStatusTone}`}>
+                {velocity.isOverPace
+                  ? "Over pace"
+                  : velocity.isUnderPace
+                    ? "✓ Under pace"
+                    : "On pace"}
+              </span>
+            </div>
+
+            <div className="plans-pace-variance">
+              <strong className="plans-pace-hero-num">
+                {fmt(paceDiffAbs)}
+              </strong>
+              <span className="plans-pace-hero-label">
+                {velocity.paceDiff > 0
+                  ? "ahead of expected spend"
+                  : velocity.paceDiff < 0
+                    ? "under expected spend by today"
+                    : "right on expected pace"}
+              </span>
+            </div>
+
+            <div className="plans-pace-bar-block">
+              <div className="plans-pace-track">
+                <div
+                  className={`plans-pace-fill is-${paceStatusTone}`}
+                  style={{ width: `${spentPct}%` }}
+                />
+                <div
+                  className="plans-pace-marker"
+                  style={{ left: `${expectedPct}%` }}
+                  title={`Expected by today: ${fmt(expectedByToday)}`}
+                />
+              </div>
+              <div className="plans-pace-captions">
+                <span>Spent {fmt(t)}</span>
+                <span>
+                  Expected by today · {fmt(expectedByToday)}
+                </span>
+              </div>
+            </div>
+
+            <div className="plans-burn-grid">
+              <div className="plans-burn-tile">
+                <span className="plans-burn-label">Actual daily burn</span>
+                <strong className="plans-burn-val">
+                  {fmt(Math.round(velocity.actualDailyBurn))}
+                  <small>/day</small>
+                </strong>
+              </div>
+              <div className="plans-burn-tile">
+                <span className="plans-burn-label">Target daily pace</span>
+                <strong className="plans-burn-val">
+                  {fmt(Math.round(velocity.targetDailyPace))}
+                  <small>/day</small>
+                </strong>
+              </div>
+            </div>
+          </section>
+        )}
+      </div>
     </>
   );
 
