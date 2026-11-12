@@ -4276,7 +4276,7 @@ function Plans({
           </div>
         </div>
 
-        <section className="hero spend-card plans-hero-card">
+        <section className="card plans-hero-card">
           <div className="plans-hero-top">
             <span className="plans-hero-label">Monthly budget</span>
             <div className="plans-hero-actions">

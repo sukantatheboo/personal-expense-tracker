@@ -10688,6 +10688,12 @@ html[data-theme="dark"]
 }
 
 /* Plans budget overview */
+/* Bottom clearance sized for bottom nav bar + floating + button */
+.mobile-prototype .plans-budget-scroll {
+  padding-bottom: calc(var(--nav-h, 68px) + 76px + env(safe-area-inset-bottom, 0px));
+}
+
+/* Header: Single unified color matching Home ("November 2026") */
 .mobile-prototype .plans-month-header {
   display: flex;
   align-items: center;
@@ -10696,11 +10702,298 @@ html[data-theme="dark"]
 }
 
 .mobile-prototype .plans-month-title {
-  margin: 0;
-  color: var(--ink, #0f172a);
   font-size: 22px;
   font-weight: 800;
   letter-spacing: -0.02em;
+  color: var(--ink, #0f172a);
+  margin: 0;
+}
+
+/* Both Plans cards share Home's minimal matte card surface */
+.mobile-prototype .plans-hero-card,
+.mobile-prototype .plans-pace-card {
+  background: var(--card, #121417);
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  border-radius: 24px;
+  padding: 20px;
+  color: var(--ink, #ffffff);
+  box-shadow: none;
+}
+
+.mobile-prototype .plans-hero-card {
+  margin-bottom: 14px;
+}
+
+.mobile-prototype .plans-hero-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.mobile-prototype .plans-hero-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted, #8e95a2);
+}
+
+.mobile-prototype .plans-hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Minimal translucent chip matching Home's top nav buttons */
+.mobile-prototype .hero-chip-btn {
+  appearance: none;
+  background: color-mix(in srgb, var(--ink, #ffffff) 6%, transparent);
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+  color: var(--ink, #ffffff);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.mobile-prototype .hero-chip-btn:active {
+  transform: scale(0.96);
+  background: color-mix(in srgb, var(--ink, #ffffff) 12%, transparent);
+}
+
+/* Ring: Lime arc on subtle neutral track */
+.mobile-prototype .plans-ring-wrap {
+  position: relative;
+  width: 172px;
+  height: 172px;
+  margin: 16px auto 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.mobile-prototype .plans-ring-svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+  fill: none;
+}
+
+.mobile-prototype .plans-ring-track {
+  fill: none;
+  stroke: color-mix(in srgb, var(--ink, #ffffff) 9%, transparent);
+  stroke-width: 14px;
+}
+
+.mobile-prototype .plans-ring-arc {
+  fill: none;
+  stroke-width: 14px;
+  transition: stroke-dashoffset 0.35s ease, stroke 0.25s ease;
+}
+
+.mobile-prototype .plans-ring-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0 16px;
+}
+
+.mobile-prototype .plans-ring-amount {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--ink, #ffffff);
+  font-variant-numeric: tabular-nums;
+}
+
+.mobile-prototype .plans-ring-sub {
+  margin-top: 3px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted, #8e95a2);
+}
+
+/* Spent & Limit footer row */
+.mobile-prototype .plans-saved-style-rows {
+  border-top: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  padding-top: 12px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.mobile-prototype .plans-saved-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 6px;
+}
+
+.mobile-prototype .plans-saved-row:first-child {
+  border-right: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  padding-right: 14px;
+}
+
+.mobile-prototype .plans-saved-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted, #8e95a2);
+}
+
+.mobile-prototype .plans-saved-val {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink, #ffffff);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Budget Pace Header & Status Pill */
+.mobile-prototype .plans-pace-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mobile-prototype .pace-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.mobile-prototype .pace-pill.is-lime {
+  background: #cff558;
+  color: #0b0e09;
+}
+
+.mobile-prototype .pace-pill.is-orange {
+  background: rgba(249, 115, 22, 0.16);
+  color: #fb923c;
+}
+
+.mobile-prototype .pace-pill.is-crimson {
+  background: rgba(225, 29, 72, 0.16);
+  color: #fb7185;
+}
+
+/* Expected-pace comparison readout */
+.mobile-prototype .plans-pace-variance {
+  margin-top: 14px;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.mobile-prototype .plans-pace-hero-num {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--ink, #ffffff);
+  font-variant-numeric: tabular-nums;
+}
+
+.mobile-prototype .plans-pace-hero-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted, #8e95a2);
+}
+
+/* Minimal dark track + signature lime fill + crisp expected-pace marker */
+.mobile-prototype .plans-pace-bar-block {
+  margin-top: 14px;
+}
+
+.mobile-prototype .plans-pace-track {
+  position: relative;
+  height: 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink, #ffffff) 9%, transparent);
+  overflow: visible;
+}
+
+.mobile-prototype .plans-pace-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: #cff558;
+  transition: width 0.3s ease;
+}
+
+.mobile-prototype .plans-pace-fill.is-orange {
+  background: #f97316;
+}
+
+.mobile-prototype .plans-pace-fill.is-crimson {
+  background: #e11d48;
+}
+
+.mobile-prototype .plans-pace-marker {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2.5px;
+  border-radius: 999px;
+  background: var(--ink, #ffffff);
+  box-shadow: 0 0 0 2px var(--card, #121417);
+  transform: translateX(-50%);
+}
+
+.mobile-prototype .plans-pace-captions {
+  margin-top: 8px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted, #8e95a2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Burn vs Target Tiles: Subtle dark inset surface instead of #f5f4f0 white */
+.mobile-prototype .plans-burn-grid {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.mobile-prototype .plans-burn-tile {
+  background: color-mix(in srgb, var(--ink, #ffffff) 4.5%, transparent);
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.06));
+  border-radius: 16px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mobile-prototype .plans-burn-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted, #8e95a2);
+}
+
+.mobile-prototype .plans-burn-val {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--ink, #ffffff);
+  font-variant-numeric: tabular-nums;
+}
+
+.mobile-prototype .plans-burn-val small {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted, #8e95a2);
+  margin-left: 2px;
 }
 
 .mobile-prototype .plans-month-nav {
@@ -10729,138 +11022,6 @@ html[data-theme="dark"]
   opacity: 0.38;
 }
 
-.mobile-prototype .hero.spend-card.plans-hero-card {
-  margin-bottom: 14px;
-  padding: 20px;
-  border: 0;
-  border-radius: 24px;
-  background: linear-gradient(165deg, #162038 0%, #0d1424 100%);
-  color: #ffffff;
-}
-
-.mobile-prototype .plans-hero-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.mobile-prototype .plans-hero-label {
-  color: rgba(255, 255, 255, 0.64);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.mobile-prototype .plans-hero-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.mobile-prototype .hero-chip-btn {
-  appearance: none;
-  padding: 6px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.1);
-  color: #ffffff;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: transform 0.15s ease, background 0.15s ease;
-}
-
-.mobile-prototype .hero-chip-btn:active {
-  transform: scale(0.96);
-  background: rgba(255, 255, 255, 0.16);
-}
-
-.mobile-prototype .plans-ring-wrap {
-  position: relative;
-  display: flex;
-  width: 176px;
-  height: 176px;
-  margin: 16px auto 18px;
-  align-items: center;
-  justify-content: center;
-}
-
-.mobile-prototype .plans-ring-svg {
-  width: 100%;
-  height: 100%;
-  transform: rotate(-90deg);
-}
-
-.mobile-prototype .plans-ring-track {
-  stroke: rgba(255, 255, 255, 0.12);
-}
-
-.mobile-prototype .plans-ring-arc {
-  transition: stroke-dashoffset 0.35s ease, stroke 0.25s ease;
-}
-
-.mobile-prototype .plans-ring-center {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  padding: 0 16px;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  pointer-events: none;
-}
-
-.mobile-prototype .plans-ring-amount {
-  color: #ffffff;
-  font-size: 20px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  font-variant-numeric: tabular-nums;
-}
-
-.mobile-prototype .plans-ring-sub {
-  margin-top: 3px;
-  color: rgba(255, 255, 255, 0.58);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.mobile-prototype .plans-saved-style-rows {
-  display: grid;
-  padding-top: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.mobile-prototype .plans-saved-row {
-  display: flex;
-  padding: 4px 6px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-}
-
-.mobile-prototype .plans-saved-row:first-child {
-  padding-right: 14px;
-  border-right: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.mobile-prototype .plans-saved-label {
-  color: rgba(255, 255, 255, 0.64);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.mobile-prototype .plans-saved-val {
-  color: #ffffff;
-  font-size: 14px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
 .mobile-prototype .plans-no-budget {
   display: flex;
   min-height: 130px;
@@ -10870,28 +11031,15 @@ html[data-theme="dark"]
 }
 
 .mobile-prototype .plans-no-budget strong {
-  color: #ffffff;
+  color: var(--ink, #ffffff);
   font-size: 17px;
   font-weight: 750;
 }
 
 .mobile-prototype .plans-no-budget span {
-  color: rgba(255, 255, 255, 0.64);
+  color: var(--muted, #8e95a2);
   font-size: 13px;
   line-height: 1.4;
-}
-
-.mobile-prototype .plans-pace-card {
-  padding: 20px;
-  border-radius: 24px;
-  background: var(--card, #ffffff);
-}
-
-.mobile-prototype .plans-pace-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
 }
 
 .mobile-prototype .plans-pace-card .section-title {
@@ -10902,149 +11050,8 @@ html[data-theme="dark"]
 
 .mobile-prototype .plans-pace-subtitle {
   margin: 4px 0 0;
-  color: var(--muted, #64748b);
+  color: var(--muted, #8e95a2);
   font-size: 13px;
   font-weight: 600;
   line-height: 1.35;
-}
-
-.mobile-prototype .pace-pill {
-  display: inline-flex;
-  padding: 5px 11px;
-  align-items: center;
-  gap: 4px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.mobile-prototype .pace-pill.is-lime {
-  background: #cff558;
-  color: #0b0e09;
-}
-
-.mobile-prototype .pace-pill.is-orange {
-  background: rgba(249, 115, 22, 0.14);
-  color: #ea580c;
-}
-
-.mobile-prototype .pace-pill.is-crimson {
-  background: rgba(225, 29, 72, 0.14);
-  color: #e11d48;
-}
-
-.mobile-prototype .plans-pace-variance {
-  display: flex;
-  margin-top: 14px;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.mobile-prototype .plans-pace-hero-num {
-  color: var(--ink, #0f172a);
-  font-size: 26px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  font-variant-numeric: tabular-nums;
-}
-
-.mobile-prototype .plans-pace-hero-label {
-  color: var(--muted, #64748b);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.mobile-prototype .plans-pace-bar-block {
-  margin-top: 14px;
-}
-
-.mobile-prototype .plans-pace-track {
-  position: relative;
-  height: 10px;
-  border-radius: 999px;
-  background: #eef0f4;
-  overflow: visible;
-}
-
-.mobile-prototype .plans-pace-fill {
-  height: 100%;
-  border-radius: 999px;
-  background: #131b2e;
-  transition: width 0.3s ease;
-}
-
-.mobile-prototype .plans-pace-fill.is-orange {
-  background: #f97316;
-}
-
-.mobile-prototype .plans-pace-fill.is-crimson {
-  background: #e11d48;
-}
-
-.mobile-prototype .plans-pace-marker {
-  position: absolute;
-  top: -3px;
-  bottom: -3px;
-  width: 2.5px;
-  border-radius: 999px;
-  background: #0f172a;
-  box-shadow: 0 0 0 2px #ffffff;
-  transform: translateX(-50%);
-}
-
-.mobile-prototype .plans-pace-captions {
-  display: flex;
-  margin-top: 8px;
-  justify-content: space-between;
-  gap: 8px;
-  color: var(--muted, #64748b);
-  font-size: 12px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-.mobile-prototype .plans-burn-grid {
-  display: grid;
-  margin-top: 14px;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-.mobile-prototype .plans-burn-tile {
-  display: flex;
-  padding: 12px 14px;
-  flex-direction: column;
-  gap: 4px;
-  border-radius: 16px;
-  background: var(--surface-subtle, #f5f4f0);
-}
-
-.mobile-prototype .plans-burn-label {
-  color: var(--muted, #64748b);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.mobile-prototype .plans-burn-val {
-  color: var(--ink, #0f172a);
-  font-size: 17px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.mobile-prototype .plans-burn-val small {
-  margin-left: 2px;
-  color: var(--muted, #64748b);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-:root[data-theme="dark"] .mobile-prototype .hero.spend-card.plans-hero-card,
-.mobile-prototype[data-theme="dark"] .hero.spend-card.plans-hero-card {
-  border-color: transparent;
-  background: linear-gradient(165deg, #162038 0%, #0d1424 100%);
-  color: #ffffff;
 }
