@@ -12,9 +12,9 @@ const DONUT_COLORS = ["#e8793a", "#b5305a", "#8b5cf6", "#64748b", "#e0334c"];
 
 export default function WelcomeFlow({ onDone, theme, exiting = false }) {
   const [slideIndex, setSlideIndex] = useState(0);
-  const [splashRun, setSplashRun] = useState(true);
-  const [splashGone, setSplashGone] = useState(false);
-  const [slidesReady, setSlidesReady] = useState(false);
+  const [splashRun, setSplashRun] = useState(!exiting);
+  const [splashGone, setSplashGone] = useState(exiting);
+  const [slidesReady, setSlidesReady] = useState(exiting);
   const [amountShown, setAmountShown] = useState(false);
   const [localExiting, setLocalExiting] = useState(false);
   const isExiting = exiting || localExiting;
@@ -22,7 +22,7 @@ export default function WelcomeFlow({ onDone, theme, exiting = false }) {
   const pointerStartXRef = useRef(null);
   const pointerIdRef = useRef(null);
   const touchStartXRef = useRef(null);
-  const splashGoneRef = useRef(false);
+  const splashGoneRef = useRef(exiting);
   const finishedRef = useRef(false);
 
   useEffect(() => {
@@ -59,12 +59,15 @@ export default function WelcomeFlow({ onDone, theme, exiting = false }) {
     setSlidesReady(true);
   }, []);
 
-  const finish = useCallback(() => {
-    if (finishedRef.current) return;
-    finishedRef.current = true;
-    setLocalExiting(true);
-    onDone?.();
-  }, [onDone]);
+  const finish = useCallback(
+    (mode = "sign-in") => {
+      if (finishedRef.current) return;
+      finishedRef.current = true;
+      setLocalExiting(true);
+      onDone?.(mode);
+    },
+    [onDone],
+  );
 
   useEffect(() => {
     if (typeof document !== "undefined") {
@@ -72,6 +75,7 @@ export default function WelcomeFlow({ onDone, theme, exiting = false }) {
       document.documentElement.style.backgroundColor = "";
       document.body.style.backgroundColor = "";
     }
+    if (exiting || finishedRef.current) return undefined;
     const reducedMotion =
       typeof window !== "undefined" &&
       Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches);
@@ -99,7 +103,7 @@ export default function WelcomeFlow({ onDone, theme, exiting = false }) {
       window.clearTimeout(splashTimer);
       if (slideTimer) window.clearTimeout(slideTimer);
     };
-  }, []);
+  }, [exiting]);
 
   useEffect(() => {
     const handleKeyDown = (event) => {
@@ -360,14 +364,49 @@ export default function WelcomeFlow({ onDone, theme, exiting = false }) {
                 <span className="pill">in 3 days</span>
               </div>
               <div className="card bill rise" style={{ "--d": 140 }}>
-                <span className="ic" />
+                <span className="ic">
+                  <svg
+                    width="22"
+                    height="22"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M5 12.55a11 11 0 0 1 14.08 0" />
+                    <path d="M1.42 9a16 16 0 0 1 21.16 0" />
+                    <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
+                    <line x1="12" y1="20" x2="12.01" y2="20" />
+                  </svg>
+                </span>
                 <div>
                   Internet<small>Due 20 Nov</small>
                 </div>
                 <span className="pill">in 8 days</span>
               </div>
               <div className="card bill rise" style={{ "--d": 280 }}>
-                <span className="ic" />
+                <span className="ic">
+                  <svg
+                    width="22"
+                    height="22"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="m6.5 6.5 11 11" />
+                    <path d="m21 21-1-1" />
+                    <path d="m3 3 1 1" />
+                    <path d="m18 22 4-4" />
+                    <path d="m2 6 4-4" />
+                    <path d="m3 10 7-7" />
+                    <path d="m14 21 7-7" />
+                  </svg>
+                </span>
                 <div>
                   Gym<small>Due 1 Dec</small>
                 </div>
@@ -436,7 +475,9 @@ export default function WelcomeFlow({ onDone, theme, exiting = false }) {
             className="next"
             id="next"
             disabled={!splashGone}
-            onClick={() => (isLastSlide ? finish() : go(slideIndex + 1))}
+            onClick={() =>
+              isLastSlide ? finish("sign-in") : go(slideIndex + 1)
+            }
           >
             {isLastSlide ? "Get started" : "Next"}
           </button>
@@ -444,13 +485,10 @@ export default function WelcomeFlow({ onDone, theme, exiting = false }) {
             type="button"
             className="skip"
             id="skip"
-            hidden={isLastSlide}
-            disabled={!splashGone || isLastSlide}
-            aria-hidden={isLastSlide ? "true" : undefined}
-            tabIndex={!splashGone || isLastSlide ? -1 : 0}
-            onClick={finish}
+            disabled={!splashGone}
+            onClick={() => (isLastSlide ? finish("skip") : finish("sign-in"))}
           >
-            Skip
+            {isLastSlide ? "Continue without account" : "Skip"}
           </button>
         </div>
       </div>

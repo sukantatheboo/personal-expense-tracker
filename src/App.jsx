@@ -2216,7 +2216,10 @@ export default function App() {
       preferredInput?.focus();
     }
     const closeOnEscape = (event) => {
-      if (event.key === "Escape" && !authBusy) hideAuthModal();
+      if (event.key === "Escape" && !authBusy) {
+        hideAuthModal();
+        setShowAuthPassword(false);
+      }
     };
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
@@ -4026,41 +4029,89 @@ export default function App() {
         if (error) throw error;
         setAuthStatus("Password updated. You can continue using Spend.");
         setAuthPassword("");
+        setShowAuthPassword(false);
         setAuthMode("sign-in");
+        hideAuthModal();
         return;
       }
 
-      const result =
-        authMode === "sign-up"
-          ? await client.auth.signUp({
-              email: authEmail.trim(),
-              password: authPassword,
-              options: {
-                emailRedirectTo: new URL(
-                  import.meta.env.BASE_URL,
-                  window.location.origin,
-                ).href,
-              },
-            })
-          : await client.auth.signInWithPassword({
-              email: authEmail.trim(),
-              password: authPassword,
-            });
+      let result;
+      let effectiveMode = authMode;
+
+      if (authMode === "sign-up") {
+        result = await client.auth.signUp({
+          email: authEmail.trim(),
+          password: authPassword,
+          options: {
+            emailRedirectTo: new URL(
+              import.meta.env.BASE_URL,
+              window.location.origin,
+            ).href,
+          },
+        });
+
+        const existingEmailError =
+          result.error &&
+          /already registered|already exists|user_already_exists/i.test(
+            result.error.message || "",
+          );
+        const existingObfuscatedUser =
+          !result.error &&
+          !result.data?.session &&
+          Array.isArray(result.data?.user?.identities) &&
+          result.data.user.identities.length === 0;
+
+        if (
+          existingEmailError ||
+          existingObfuscatedUser ||
+          (!result.error && !result.data?.session)
+        ) {
+          const signInAttempt = await client.auth.signInWithPassword({
+            email: authEmail.trim(),
+            password: authPassword,
+          });
+          if (!signInAttempt.error && signInAttempt.data?.session) {
+            result = signInAttempt;
+            effectiveMode = "sign-in";
+          } else if (existingEmailError || existingObfuscatedUser) {
+            setAuthMode("sign-in");
+            setAuthPassword("");
+            setAuthStatus(
+              "An account with this email already exists. Please enter your password to sign in.",
+            );
+            return;
+          }
+        }
+      } else {
+        result = await client.auth.signInWithPassword({
+          email: authEmail.trim(),
+          password: authPassword,
+        });
+      }
+
       if (result.error) throw result.error;
-      if (authMode === "sign-up" && !result.data.session) {
+      if (effectiveMode === "sign-up" && !result.data.session) {
+        setAuthMode("sign-in");
         setAuthStatus(
           "Check your email to confirm your account, then sign in.",
         );
       } else {
         const signedInUser = result.data?.session?.user || result.data?.user;
         if (signedInUser) {
+          initSupabaseAuth();
+          if (localDataOwnerRef.current !== signedInUser.id) {
+            selectLocalDataForUser(signedInUser.id);
+          }
+          authUserIdRef.current = signedInUser.id;
           setSessionUser(signedInUser);
+          setPushUser(signedInUser);
+          setCloudSyncEnabled(true);
           markWelcomeSeen();
           setWelcomeSeen(true);
           notifyNewUserSignedIn(signedInUser);
         }
         setAuthStatus(
-          authMode === "sign-up"
+          effectiveMode === "sign-up"
             ? "Account created. You can now enable background reminders."
             : backgroundPushEnabled
               ? "Signed in. Your recurring reminder schedule is syncing."
@@ -4111,6 +4162,7 @@ export default function App() {
   }
 
   function showAuthDialog() {
+    initSupabaseAuth();
     const activeElement = document.activeElement;
     if (
       activeElement instanceof HTMLElement &&
@@ -4341,7 +4393,7 @@ export default function App() {
     }
     if (!pushUser) {
       setNotificationStatus("Sign in first to enable background reminders.");
-      showAuthDialog();
+      openSignInModal("sign-in");
       return;
     }
     const isIos =
@@ -4574,8 +4626,9 @@ export default function App() {
   const hasActiveSession = Boolean(sessionUser || pushUser);
   const shouldShowWelcome =
     !sessionResolving && !hasActiveSession && (!welcomeSeen || devForceWelcome);
+  const showWelcomeOverlay = shouldShowWelcome || welcomeExiting;
 
-  function handleWelcomeDone() {
+  function handleWelcomeDone(preferredAuthMode = "sign-in") {
     markWelcomeSeen();
     if (import.meta.env.DEV && typeof window !== "undefined") {
       const url = new URL(window.location.href);
@@ -4601,7 +4654,11 @@ export default function App() {
       Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches);
     setWelcomeSeen(true);
     setReady(true);
-    openSignInModal("sign-up");
+    if (preferredAuthMode !== "skip") {
+      openSignInModal(
+        preferredAuthMode === "sign-up" ? "sign-up" : "sign-in",
+      );
+    }
     if (!reducedMotion) {
       setWelcomeExiting(true);
       window.setTimeout(() => {
@@ -4614,19 +4671,19 @@ export default function App() {
     return <SpendSplash canExit={false} onDone={() => setReady(true)} />;
   }
 
-  if (shouldShowWelcome) {
-    return <WelcomeFlow theme={resolvedTheme} onDone={handleWelcomeDone} />;
-  }
-
   const ActivePrototype = resolvedMobilePrototype || MobilePrototype;
 
   return (
     <>
-      {!ready && (
+      {!ready && !showWelcomeOverlay && (
         <SpendSplash canExit={prototypeMounted} onDone={() => setReady(true)} />
       )}
-      {welcomeExiting && (
-        <WelcomeFlow theme={resolvedTheme} exiting onDone={handleWelcomeDone} />
+      {showWelcomeOverlay && (
+        <WelcomeFlow
+          theme={resolvedTheme}
+          exiting={welcomeExiting}
+          onDone={handleWelcomeDone}
+        />
       )}
       <Suspense fallback={null}>
         <PrototypeMountSignal onMounted={handlePrototypeMounted} />
@@ -4904,7 +4961,12 @@ export default function App() {
 
                   {authStatus && (
                     <p
-                      className="auth-modal-status"
+                      className={`auth-modal-status${
+                        authStatus.startsWith("Could not") ||
+                        authStatus.startsWith("An account with this email")
+                          ? " is-error"
+                          : ""
+                      }`}
                       role="status"
                       aria-live="polite"
                     >
