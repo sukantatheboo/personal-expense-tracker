@@ -1612,13 +1612,12 @@ export default function App() {
         for (let attempt = 0; attempt < 3; attempt += 1) {
           let savedVersion = null;
           try {
-            const expectedVersion = forceOverwrite
-              ? null
-              : cloudVersionRef.current;
+            const expectedVersion = cloudVersionRef.current;
             savedVersion = await saveCloudData(
               userId,
               snapshot,
               expectedVersion,
+              { forceOverwrite },
             );
           } catch (error) {
             if (error.code !== "23505") throw error;

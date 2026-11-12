@@ -596,6 +596,7 @@ export function loadAccountData(
       cards,
       balances: initialBalances,
     },
+    deletedCards: deletedCardTombstones,
     remappedAccountIds,
   };
 
@@ -618,6 +619,8 @@ export function loadAccountData(
     const trimmed = id.trim();
     return remappedAccountIds[trimmed] || trimmed;
   };
+
+  const deletedTxTombstones = deletedRecords?.accountTransactions || {};
 
   return {
     settings: {
@@ -644,6 +647,18 @@ export function loadAccountData(
       : {}),
     transactions: Array.isArray(saved.transactions)
       ? saved.transactions
+          .filter((item) => {
+            if (!item || typeof item !== "object" || !item.id) return false;
+            const tombstone = deletedTxTombstones[item.id];
+            const txTime =
+              typeof item.updatedAt === "number"
+                ? item.updatedAt
+                : Date.parse(item.updatedAt) ||
+                  (typeof item.createdAt === "number"
+                    ? item.createdAt
+                    : Date.parse(item.createdAt) || 0);
+            return !(tombstone?.deleted && tombstone.updatedAt >= txTime);
+          })
           .map((item) => {
             if (!item || typeof item !== "object") return item;
             const acct = mapAcct(item.account || item.accountId);

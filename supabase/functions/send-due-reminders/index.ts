@@ -144,7 +144,9 @@ function zoneOffsetMs(at: Date, timeZone: string) {
 function zonedTimeToUtc(date: string, time: string, timeZone: string) {
   const safeTime = /^([01]\d|2[0-3]):[0-5]\d$/.test(time) ? time : "09:00";
   const guess = new Date(`${date}T${safeTime}:00Z`);
-  return new Date(guess.getTime() - zoneOffsetMs(guess, timeZone));
+  const firstPass = new Date(guess.getTime() - zoneOffsetMs(guess, timeZone));
+  // Second pass ensures exact local wall-clock time across DST transitions
+  return new Date(guess.getTime() - zoneOffsetMs(firstPass, timeZone));
 }
 
 Deno.serve(async (req) => {
@@ -162,25 +164,30 @@ Deno.serve(async (req) => {
   }
 
   const now = new Date();
-  const { data: due, error } = await supabase
-    .from("push_reminders")
-    .select("user_id, device_id, schedule_id, description, interval, day_of_month, next_date, next_notify_at, timezone, reminder_time")
-    .eq("active", true)
-    .lte("next_notify_at", now.toISOString())
-    .or(`claim_until.is.null,claim_until.lte.${now.toISOString()}`)
-    .order("next_notify_at", { ascending: true })
-    .limit(200);
+  // Atomic claim (needs migration 20261113020000): one SQL statement picks the due
+  // rows, locks them with SKIP LOCKED and writes a 5-minute lease, so two
+  // overlapping cron runs can never send the same reminder twice.
+  const { data: due, error } = await supabase.rpc("claim_due_push_reminders", {
+    p_limit: 200,
+    p_lease_seconds: 5 * 60,
+  });
 
   if (error) return new Response(error.message, { status: 500 });
   if (!due?.length) return Response.json({ due: 0, sent: 0 });
 
   const dueUserIds = [...new Set(due.map((r) => r.user_id))];
   const dueDeviceIds = [...new Set(due.map((r) => r.device_id))];
-  const { data: devices } = await supabase
+  const { data: devices, error: devicesError } = await supabase
     .from("push_devices")
     .select("user_id, device_id, subscription")
     .in("user_id", dueUserIds)
     .in("device_id", dueDeviceIds);
+  if (devicesError) {
+    // Do NOT treat a failed lookup as "device missing" - that would delete every
+    // due reminder. The leases expire on their own and the next run retries.
+    console.error("device lookup failed", devicesError.message);
+    return new Response(devicesError.message, { status: 500 });
+  }
   const byDevice = new Map((devices ?? []).map((d) => [`${d.user_id}:${d.device_id}`, d]));
 
   let sent = 0;
@@ -196,20 +203,7 @@ Deno.serve(async (req) => {
       continue;
     }
 
-    // Acquire atomic 5-minute lease so overlapping runs never double-send
-    const leaseUntil = new Date(now.getTime() + 5 * 60 * 1000).toISOString();
-    const { data: claimed } = await supabase
-      .from("push_reminders")
-      .update({
-        claim_until: leaseUntil,
-        pending_notification: true,
-      })
-      .eq("user_id", r.user_id)
-      .eq("device_id", r.device_id)
-      .eq("schedule_id", r.schedule_id)
-      .eq("next_notify_at", r.next_notify_at)
-      .select("schedule_id");
-    if (!claimed?.length) continue;
+    // (lease already acquired atomically by claim_due_push_reminders)
 
     // Calculate next FUTURE occurrence date
     let date: string = r.next_date;

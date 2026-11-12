@@ -522,7 +522,9 @@ function bal(S, id) {
   for (const e of S.exp) {
     if (e.amt == null) continue;
     if (e.cat === "Savings" && savingsId) {
-      if (id === savingsId && e.acct !== savingsId) b += e.amt;
+      const hasValidFundingCard =
+        Boolean(e.acct) && e.acct !== "cash" && e.acct !== savingsId;
+      if (id === savingsId && hasValidFundingCard) b += e.amt;
       else if (e.acct === id && id !== savingsId) b -= e.amt;
     } else if (e.acct === id) b -= e.amt;
   }
@@ -10613,7 +10615,11 @@ export default function MobilePrototype({
   const recDetail =
     sheet?.type === "recDet" ? S.rec.find((x) => x.id === sheet.id) : null;
 
+  const lastSubmitAtRef = useRef(0);
+
   const saveExpense = (f) => {
+    const nowMs = Date.now();
+    if (nowMs - lastSubmitAtRef.current < 400) return;
     const resolvedCat = f.cat || "Other";
     const isSavingsTransfer =
       resolvedCat === "Savings" && Boolean(getSavingsAccountId(cards));
@@ -10679,6 +10685,7 @@ export default function MobilePrototype({
         );
       return toast("Check the expense details and try again.");
     }
+    lastSubmitAtRef.current = nowMs;
     if (typeof saved === "object" && saved.expenseId) {
       clearTimeout(highlightTimer.current);
       setHighlightedTransactionId(null);
@@ -10876,8 +10883,11 @@ export default function MobilePrototype({
     toast("Budget cleared", undo);
   };
   const saveTransaction = (value) => {
+    const nowMs = Date.now();
+    if (nowMs - lastSubmitAtRef.current < 400) return;
     const saved = onTransactionSave(value);
     if (!saved) return toast("Enter a valid amount.");
+    lastSubmitAtRef.current = nowMs;
     if (typeof saved === "object" && saved.transactionId) {
       clearTimeout(highlightTimer.current);
       setHighlightedExpenseId(null);

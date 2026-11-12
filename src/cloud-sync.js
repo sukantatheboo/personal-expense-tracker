@@ -484,37 +484,21 @@ export async function loadCloudData(userId) {
   if (!client) throw new Error("Cloud sync is not configured.");
 
   try {
-    const [rpcResult, rawSnapshotResult] = await Promise.all([
-      client.rpc("load_spend_user_snapshot"),
-      userId
-        ? client
-            .from("spend_user_data")
-            .select("data, updated_at")
-            .eq("user_id", userId)
-            .maybeSingle()
-        : Promise.resolve({ data: null, error: null }),
-    ]);
+    const rpcResult = await client.rpc("load_spend_user_snapshot");
 
     if (!rpcResult.error && rpcResult.data) {
       const rpcData = rpcResult.data;
       const effectiveRpcData = rpcData.data ?? null;
-      const rawSnapshotData = rawSnapshotResult?.data?.data ?? effectiveRpcData;
-      const effectiveUpdatedAt =
-        rawSnapshotResult?.data?.updated_at ?? rpcData.updated_at ?? null;
-      if (effectiveRpcData || rawSnapshotData) {
-        const baseSnapshot =
-          rawSnapshotData && typeof rawSnapshotData === "object"
-            ? rawSnapshotData
-            : effectiveRpcData;
+      const effectiveUpdatedAt = rpcData.updated_at ?? null;
+      if (effectiveRpcData) {
         return {
           ...rpcData,
           updated_at: effectiveUpdatedAt,
           data: {
             ...effectiveRpcData,
-            ...baseSnapshot,
-            accountData: mergeAccountDataWithRawSnapshot(
-              effectiveRpcData?.accountData,
-              baseSnapshot,
+            accountData: loadAccountData(
+              effectiveRpcData.accountData ?? emptyAccountData(),
+              effectiveRpcData.deletedRecords,
             ),
           },
         };
@@ -653,22 +637,42 @@ async function executeSaveQuery(client, userId, payload, expectedUpdatedAt) {
     .single();
 }
 
-export async function saveCloudData(userId, data, expectedUpdatedAt = null) {
+export async function saveCloudData(
+  userId,
+  data,
+  expectedUpdatedAt = null,
+  { forceOverwrite = false } = {},
+) {
   const client = await getSupabase();
   if (!client) throw new Error("Cloud sync is not configured.");
 
   const sanitized = sanitizeCloudPayload(data);
 
-  try {
-    const rpcRes = await client.rpc("save_spend_user_snapshot", {
+  let rpcRes = await client.rpc("save_spend_user_snapshot", {
+    p_data: sanitized,
+    p_expected_updated_at: expectedUpdatedAt || null,
+    p_force_overwrite: Boolean(forceOverwrite),
+  });
+
+  if (
+    rpcRes.error &&
+    (rpcRes.error.code === "PGRST202" ||
+      rpcRes.error.message?.includes("p_force_overwrite"))
+  ) {
+    rpcRes = await client.rpc("save_spend_user_snapshot", {
       p_data: sanitized,
       p_expected_updated_at: expectedUpdatedAt || null,
     });
-    if (!rpcRes.error && rpcRes.data !== undefined) {
-      return rpcRes.data ?? null;
-    }
-  } catch {
-    // Fall back to direct query if RPC is unavailable
+  }
+
+  if (!rpcRes.error) {
+    return rpcRes.data ?? null;
+  }
+
+  const isRpcMissing =
+    rpcRes.error.code === "42883" || rpcRes.error.code === "PGRST202";
+  if (!isRpcMissing) {
+    throw rpcRes.error;
   }
 
   const { data: saved, error } = await executeSaveQuery(
@@ -723,7 +727,7 @@ export function subscribeToCloudChanges(
   userId,
   onChange,
   onStatus,
-  includeNormalizedAccounts = false,
+  _includeNormalizedAccounts = false,
 ) {
   if (!supabase) return () => {};
 
@@ -737,30 +741,6 @@ export function subscribeToCloudChanges(
     },
     (payload) => onChange?.(payload),
   );
-
-  if (includeNormalizedAccounts) {
-    channel
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "spend_account_settings",
-          filter: `user_id=eq.${userId}`,
-        },
-        (payload) => onChange?.(payload),
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "spend_account_transactions",
-          filter: `user_id=eq.${userId}`,
-        },
-        (payload) => onChange?.(payload),
-      );
-  }
 
   channel.subscribe(onStatus);
 

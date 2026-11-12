@@ -203,6 +203,7 @@ export async function syncBackgroundSchedules(
 
   // Ensure push_devices row is always present and synced for this (user_id, device_id)
   // so send-due-reminders never deletes push_reminders as orphaned
+  let deviceSynced = false;
   if ("serviceWorker" in navigator && "PushManager" in window) {
     try {
       const registration = await getActiveServiceWorkerRegistration();
@@ -230,20 +231,38 @@ export async function syncBackgroundSchedules(
             .delete()
             .eq("endpoint", serialized.endpoint)
             .neq("user_id", userId);
-          await client.from("push_devices").upsert(
-            {
-              user_id: userId,
-              device_id: deviceId,
-              endpoint: serialized.endpoint,
-              subscription: serialized,
-            },
-            { onConflict: "user_id,device_id" },
-          );
+          const { error: upsertDevError } = await client
+            .from("push_devices")
+            .upsert(
+              {
+                user_id: userId,
+                device_id: deviceId,
+                endpoint: serialized.endpoint,
+                subscription: serialized,
+              },
+              { onConflict: "user_id,device_id" },
+            );
+          if (!upsertDevError) {
+            deviceSynced = true;
+          }
         }
       }
     } catch {
-      // Continue syncing reminders even if subscription check fails
+      // Check existing push_devices row below if subscription check fails
     }
+  }
+
+  if (!deviceSynced) {
+    const { data: existingDevice, error: devCheckErr } = await client
+      .from("push_devices")
+      .select("device_id")
+      .eq("user_id", userId)
+      .eq("device_id", deviceId)
+      .maybeSingle();
+    if (devCheckErr || !existingDevice) {
+      return;
+    }
+    deviceSynced = true;
   }
 
   const now = new Date();
