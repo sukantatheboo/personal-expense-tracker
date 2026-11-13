@@ -4235,10 +4235,15 @@ function RecurringRow({
   });
   const paused = isRecurringPaused(item);
   const daysUntil = getDaysUntilDue(item.next);
+  const isOverdue = !paused && daysUntil !== null && daysUntil < 0;
   const showUrgentPill =
-    !paused && daysUntil !== null && daysUntil >= 0 && daysUntil <= 7;
+    !paused && daysUntil !== null && daysUntil <= 7;
   const title = item.desc || item.cat || "Recurring";
   const freqSuffix = getFreqSuffix(item.iv || "monthly");
+  const iconColor =
+    getCategoryColor(item.cat, item.desc) ||
+    CAT[item.cat]?.[1] ||
+    "#64748b";
 
   const handlePointerDown = (event) => {
     if (event.button !== undefined && event.button !== 0) return;
@@ -4268,7 +4273,9 @@ function RecurringRow({
       setSwipeOffset(0);
       return;
     }
-    setSwipeOffset((current) => (current < -42 ? -80 : 0));
+    const shouldOpen = swipeOffset < -42;
+    if (shouldOpen) triggerHaptic("light");
+    setSwipeOffset(shouldOpen ? -80 : 0);
   };
 
   const handleRowClick = () => {
@@ -4317,7 +4324,8 @@ function RecurringRow({
         aria-label={`${title}, ${fmt(item.amt)} ${freqSuffix}, next ${formatDueShortDate(item.next)}. ${paused ? "Paused" : "Active"}.`}
       >
         <i
-          className={`cat-ic rec-badge is-${getRecurringBadgeTone(item)}`}
+          className="ic rec-badge"
+          style={{ "--c": iconColor }}
           aria-hidden="true"
         >
           <CategorySymbol category={item.cat} description={item.desc} />
@@ -4328,6 +4336,11 @@ function RecurringRow({
             {paused && <span className="rec-paused-tag">Paused</span>}
           </div>
           <span className="rec-row-sub">
+            {item.iv && item.iv !== "monthly" && (
+              <span className="rec-cadence-tag">
+                {item.iv === "yearly" ? "Yearly" : item.iv === "weekly" ? "Weekly" : item.iv === "biweekly" ? "Bi-weekly" : item.iv} ·{" "}
+              </span>
+            )}
             Next {formatDueShortDate(item.next)} · {accountLabel}
           </span>
         </div>
@@ -4339,7 +4352,11 @@ function RecurringRow({
             <span className="rec-row-unit">{freqSuffix}</span>
           </div>
           {showUrgentPill && (
-            <span className="rec-due-pill">{formatRelativeDueLabel(daysUntil)}</span>
+            <span
+              className={`rec-due-pill${isOverdue ? " is-overdue" : ""}`}
+            >
+              {formatRelativeDueLabel(daysUntil)}
+            </span>
           )}
         </div>
       </div>
@@ -4417,7 +4434,8 @@ function RecurringPlansView({
         </div>
         <section className="card rec-empty-card">
           <div
-            className="cat-ic rec-badge is-bills rec-empty-ic"
+            className="ic rec-badge rec-empty-ic"
+            style={{ "--c": "#4f46e5" }}
             aria-hidden="true"
           >
             ↻

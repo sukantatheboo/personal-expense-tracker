@@ -2132,9 +2132,9 @@ a:active,
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
-  flex: 0 0 24px;
+  width: 27px;
+  height: 27px;
+  flex: 0 0 27px;
   margin: 0;
   padding: 0;
   background: transparent;
@@ -2144,8 +2144,8 @@ a:active,
 }
 .mobile-prototype .mini-icon-badge .category-symbol-img {
   display: block;
-  width: 24px;
-  height: 24px;
+  width: 27px;
+  height: 27px;
   object-fit: contain;
   object-position: center;
 }
@@ -2720,6 +2720,7 @@ a:active,
   background: color-mix(in srgb, var(--c) 18%, transparent);
 }
 .mobile-prototype .expense-row .ic,
+.mobile-prototype .rec-row .ic,
 .mobile-prototype .ri .ic {
   width: 40px;
   height: 40px;
@@ -2730,8 +2731,8 @@ a:active,
 }
 .mobile-prototype .ic svg {
   display: block;
-  width: 21px;
-  height: 21px;
+  width: 27px;
+  height: 27px;
   flex: none;
 }
 .mobile-prototype .category-symbol,
@@ -2763,19 +2764,20 @@ a:active,
 }
 .mobile-prototype .ic .category-symbol,
 .mobile-prototype .ic .transaction-symbol {
-  width: 24px;
-  height: 24px;
-  flex: 0 0 24px;
+  width: 27px;
+  height: 27px;
+  flex: 0 0 27px;
   display: flex;
   align-items: center;
   justify-content: center;
   vertical-align: 0;
 }
 .mobile-prototype .expense-day-card .expense-row .ic .category-symbol,
-.mobile-prototype .expense-day-card .expense-row .ic .transaction-symbol {
-  width: 24px;
-  height: 24px;
-  flex: 0 0 24px;
+.mobile-prototype .expense-day-card .expense-row .ic .transaction-symbol,
+.mobile-prototype .rec-row .ic .category-symbol {
+  width: 27px;
+  height: 27px;
+  flex: 0 0 27px;
 }
 .mobile-prototype .nm {
   flex: 1 1 0%;
@@ -6909,9 +6911,9 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
 }
 .mobile-prototype .accounts-tx-icon-circle .category-symbol,
 .mobile-prototype .accounts-tx-icon-circle .transaction-symbol {
-  width: 26px;
-  height: 26px;
-  flex: 0 0 26px;
+  width: 27px;
+  height: 27px;
+  flex: 0 0 27px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -10529,7 +10531,9 @@ html[data-theme="dark"]
 }
 
 :root[data-theme="dark"] .mobile-prototype .ic,
-.mobile-prototype[data-theme="dark"] .ic {
+:root[data-theme="dark"] .mobile-prototype .rec-badge,
+.mobile-prototype[data-theme="dark"] .ic,
+.mobile-prototype[data-theme="dark"] .rec-badge {
   background: color-mix(in srgb, var(--c, #64748b) 22%, #191b25);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c, #64748b) 34%, rgba(255, 255, 255, 0.08));
   color: color-mix(in srgb, var(--c, #94a3b8) 72%, #ffffff);
@@ -11416,49 +11420,52 @@ html[data-theme="dark"]
   min-height: 60px; /* Guarantees >= 44pt tap target */
   padding: 10px 0;
   cursor: pointer;
-  transition: transform 0.18s ease, opacity 0.18s ease, background 0.15s ease;
+  transition: transform 0.18s ease, opacity 0.18s ease, background 0.15s ease, scale 0.14s ease;
   user-select: none;
 }
 
 .mobile-prototype .rec-row:active {
   background: var(--rec-row-active-bg);
+  scale: 0.985;
 }
 
 .mobile-prototype .rec-row.is-paused {
   opacity: 0.5;
 }
 
-/* Borderless Circular Tinted Icon Badge */
+/* Sized and styled identically to app-wide category icons (.ic) */
 .mobile-prototype .rec-badge {
-  width: 42px;
-  height: 42px;
-  min-width: 42px;
-  border-radius: 999px;
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  flex: 0 0 40px;
+  border-radius: 12px;
   border: none;
+  display: grid;
+  place-items: center;
+  font-style: normal;
+  font-size: 18px;
+  line-height: 1;
+  text-align: center;
+  background: color-mix(in srgb, var(--c, #64748b) 18%, transparent);
+}
+
+.mobile-prototype .rec-badge .category-symbol {
+  width: 27px;
+  height: 27px;
+  flex: 0 0 27px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 17px;
+  vertical-align: 0;
 }
 
-.mobile-prototype .rec-badge.is-bills {
-  background: var(--badge-bills-bg);
-  color: var(--badge-bills-fg);
-}
-
-.mobile-prototype .rec-badge.is-rent {
-  background: var(--badge-rent-bg);
-  color: var(--badge-rent-fg);
-}
-
-.mobile-prototype .rec-badge.is-savings {
-  background: var(--badge-savings-bg);
-  color: var(--badge-savings-fg);
-}
-
-.mobile-prototype .rec-badge.is-default {
-  background: var(--badge-default-bg);
-  color: var(--badge-default-fg);
+.mobile-prototype .rec-badge .category-symbol-img,
+.mobile-prototype .rec-badge svg {
+  display: block;
+  width: 27px;
+  height: 27px;
+  flex: none;
 }
 
 /* Middle Column: Title + "Next 15 Nov · Cash" */
@@ -11547,6 +11554,22 @@ html[data-theme="dark"]
   white-space: nowrap;
 }
 
+.mobile-prototype .rec-due-pill.is-overdue {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+:root[data-theme="dark"] .mobile-prototype .rec-due-pill.is-overdue,
+.mobile-prototype[data-theme="dark"] .rec-due-pill.is-overdue {
+  background: rgba(239, 68, 68, 0.22);
+  color: #fca5a5;
+}
+
+.mobile-prototype .rec-cadence-tag {
+  font-weight: 700;
+  color: var(--ink);
+}
+
 /* 5. EMPTY STATE */
 .mobile-prototype .rec-empty-card {
   background: var(--rec-card-bg);
@@ -11563,8 +11586,19 @@ html[data-theme="dark"]
 .mobile-prototype .rec-empty-ic {
   width: 52px;
   height: 52px;
+  min-width: 52px;
+  flex: 0 0 52px;
   font-size: 22px;
   margin-bottom: 12px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--c, #4f46e5) 18%, transparent);
+  color: #4f46e5;
+}
+
+:root[data-theme="dark"] .mobile-prototype .rec-empty-ic,
+.mobile-prototype[data-theme="dark"] .rec-empty-ic {
+  background: color-mix(in srgb, var(--c, #6366f1) 22%, #191b25);
+  color: #a5b4fc;
 }
 
 .mobile-prototype .rec-empty-title {
