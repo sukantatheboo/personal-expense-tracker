@@ -52,7 +52,6 @@ html {
   overscroll-behavior: none;
 }
 body {
-  min-height: 100vh;
   min-height: 100dvh;
   background: var(--page-bg);
   color: var(--ink);
@@ -67,7 +66,6 @@ body {
   -webkit-touch-callout: none;
 }
 #root {
-  min-height: 100vh;
   min-height: 100dvh;
   background: var(--page-bg);
 }
@@ -310,7 +308,6 @@ a:active,
   position: relative;
   width: 100%;
   max-width: 388px;
-  max-height: calc(100vh - 32px);
   max-height: calc(100dvh - 32px);
   overflow-y: auto;
   padding: 24px 24px 26px;
@@ -686,7 +683,7 @@ a:active,
 
 .profile-editor {
   width: min(100%, 440px);
-  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
   overflow-y: auto;
   padding: 22px;
   border: 1px solid var(--line);
@@ -836,6 +833,13 @@ a:active,
     max-height: calc(100dvh - 32px);
   }
 }
+/* Register --collapse so scroll-driven animations can interpolate it off-main-thread */
+@property --collapse {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
 .mobile-prototype {
   position: fixed;
   inset: 0;
@@ -845,19 +849,30 @@ a:active,
   width: min(100%, 480px);
   top: var(--mobile-visible-top, 0px);
   bottom: auto;
-  height: 100vh;
   height: 100dvh;
+  max-height: 100dvh;
   height: var(--mobile-visible-height, 100dvh);
   max-width: 480px;
   min-height: 0;
   margin: 0;
   padding: 0;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   overscroll-behavior: none;
   background: var(--bg);
   color: var(--ink);
 }
 .mobile-prototype {
+  --collapse: 0;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --bar-h: 52px;
+  --header-bar-h: var(--bar-h);
+  --header-base-top-pad: 12px;
+  --header-top-pad: calc(var(--safe-top) + var(--header-base-top-pad));
+  --header-total-h: calc(var(--bar-h) + var(--header-top-pad));
+  --activity-sticky-top: 0px;
   --bg: #f4f3ee;
   --card: #fff;
   --elevated: #ffffff;
@@ -1020,91 +1035,204 @@ a:active,
   -webkit-user-select: text;
   user-select: text;
 }
-.mobile-prototype #app {
-  width: 100%;
-  min-width: 0;
+/* 1. 100dvh Shell & Overscroll Containment on Tab Scrollers */
+.mobile-prototype .prototype-tabs-stage {
+  flex: 1;
   min-height: 0;
+  position: relative;
+  width: 100%;
+}
+
+.mobile-prototype .prototype-tab-panel {
   height: 100%;
-  margin: 0;
-  /* Full-bleed scroll: content glides smoothly under the frosted glass header */
-  padding: calc(64px + env(safe-area-inset-top, 0px) + 12px) 18px calc(112px + env(safe-area-inset-bottom, 0px));
-  overflow-x: hidden;
   overflow-y: auto;
-  overscroll-behavior-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
+  padding: 0 18px calc(var(--nav-h, 68px) + 76px + var(--safe-bottom));
   scrollbar-width: none;
 }
-.mobile-prototype[data-sheet-open="true"] #app {
-  overflow: hidden;
-  overscroll-behavior: none;
-}
-.mobile-prototype #app::-webkit-scrollbar {
+.mobile-prototype .prototype-tab-panel::-webkit-scrollbar {
   display: none;
 }
+
+/* Sticky compact header shell — no layout transitions, floats over scroll content */
 .mobile-prototype .prototype-header {
-  position: absolute;
+  position: sticky;
   top: 0;
-  left: 0;
-  right: 0;
-  z-index: 10;
+  z-index: 30;
+  height: var(--header-total-h);
+  min-height: var(--header-total-h);
+  margin-bottom: calc(-1 * var(--header-total-h));
+  padding: var(--header-top-pad) 18px 0;
   display: flex;
-  min-width: 0;
-  height: calc(66px + env(safe-area-inset-top, 0px));
-  min-height: calc(66px + env(safe-area-inset-top, 0px));
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: env(safe-area-inset-top, 0px) 18px 10px;
-  background: color-mix(in srgb, var(--bg) 84%, transparent);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border-bottom: 1px solid transparent;
-  transition:
-    min-height 180ms ease,
-    padding 180ms ease,
-    background-color 180ms ease,
-    border-color 180ms ease;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  box-sizing: border-box;
   pointer-events: none;
 }
-.mobile-prototype .prototype-header-main,
-.mobile-prototype .prototype-header-actions,
-.mobile-prototype .prototype-header-back,
-.mobile-prototype .prototype-header-action,
-.mobile-prototype .prototype-header-avatar {
+
+.mobile-prototype .prototype-header.is-settings-route {
+  margin-bottom: 0;
   pointer-events: auto;
 }
-.mobile-prototype .prototype-header.is-scrolled {
-  background: color-mix(in srgb, var(--bg) 76%, transparent);
-  border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+
+.mobile-prototype .prototype-header > * {
+  pointer-events: auto;
+}
+
+/* Static backdrop-filter on ::before — only opacity changes with --collapse */
+.mobile-prototype .prototype-header::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+  opacity: var(--collapse, 0);
+  will-change: opacity;
+  pointer-events: none;
 }
-.mobile-prototype .prototype-header-main {
+.mobile-prototype .prototype-header.is-settings-route::before {
+  opacity: 1 !important;
+}
+
+/* Compact sticky title (18px equivalent, driven strictly by opacity + transform) */
+.mobile-prototype .prototype-header-compact-wrap {
   display: flex;
-  min-width: 0;
   align-items: center;
-  gap: 10px;
-}
-.mobile-prototype .prototype-header-title {
   min-width: 0;
-  margin: 0;
-  overflow: hidden;
-  color: var(--ink);
-  font-size: 25px;
-  font-weight: 800;
-  letter-spacing: -0.035em;
-  line-height: 1.1;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  transition: font-size 180ms ease;
+  flex: 1;
+  pointer-events: none;
 }
-.mobile-prototype .prototype-header.is-scrolled .prototype-header-title {
+
+.mobile-prototype .prototype-header-compact-title {
   font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: var(--collapse, 0);
+  transform: translate3d(0, calc((1 - var(--collapse, 0)) * 6px), 0);
+  will-change: opacity, transform;
+  pointer-events: auto;
 }
+
+/* Right-side actions remain interactive and centered in both states */
 .mobile-prototype .prototype-header-actions {
+  position: relative;
+  z-index: 2;
   display: flex;
-  flex: 0 0 auto;
   align-items: center;
-  justify-content: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+  pointer-events: auto;
+}
+
+/* In-flow large title inside scroll content — sits at top and aligns with floating header actions */
+.mobile-prototype .prototype-large-title-row {
+  height: var(--header-total-h);
+  min-height: var(--header-total-h);
+  padding-top: var(--header-top-pad);
+  padding-bottom: 0;
+  padding-left: 0;
+  padding-right: calc(18px + 44px);
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  margin: 0;
+  margin-bottom: 6px;
+  pointer-events: none;
+}
+
+.mobile-prototype .prototype-tab-panel[data-tab="activity"] .prototype-large-title-row,
+.mobile-prototype .prototype-large-title-row.is-activity {
+  padding-right: 144px;
+}
+
+.mobile-prototype .prototype-large-title {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.12;
+  color: var(--ink);
+  opacity: calc(1 - var(--collapse, 0));
+  transform: translateZ(0);
+  will-change: opacity;
+}
+
+/* Respect prefers-reduced-motion: disable title slide, keep opacity crossfade */
+@media (prefers-reduced-motion: reduce) {
+  .mobile-prototype .prototype-header-compact-title {
+    transform: none !important;
+    animation: none !important;
+  }
+}
+
+/* Progressive enhancement: off-main-thread scroll-driven animation (8px -> 60px) */
+@supports (animation-timeline: scroll(nearest block)) and (timeline-scope: --active-tab-scroll) {
+  .mobile-prototype {
+    timeline-scope: --active-tab-scroll;
+  }
+
+  .mobile-prototype .prototype-tab-panel.is-active {
+    scroll-timeline-name: --active-tab-scroll;
+    scroll-timeline-axis: block;
+  }
+
+  .mobile-prototype .prototype-header::before {
+    animation: header-surface-collapse linear both;
+    animation-timeline: --active-tab-scroll;
+    animation-range: 8px 60px;
+  }
+
+  .mobile-prototype .prototype-header-compact-title {
+    animation: compact-title-collapse linear both;
+    animation-timeline: --active-tab-scroll;
+    animation-range: 8px 60px;
+  }
+
+  .mobile-prototype .prototype-tab-panel.is-active .prototype-large-title {
+    animation: large-title-collapse linear both;
+    animation-timeline: scroll(nearest block);
+    animation-range: 8px 60px;
+  }
+
+  @keyframes header-surface-collapse {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes compact-title-collapse {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 6px, 0);
+    }
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+  }
+
+  @keyframes large-title-collapse {
+    from { opacity: 1; }
+    to { opacity: 0; }
+  }
 }
 .mobile-prototype .prototype-header .mon {
   gap: 2px;
@@ -2893,13 +3021,24 @@ a:active,
   font-weight: 600;
   text-align: center;
 }
+.mobile-prototype .activity-day-header,
+.mobile-prototype .day-group-header,
+.mobile-prototype .tx-group-header,
 .mobile-prototype .day {
+  position: sticky;
+  top: var(--activity-sticky-top, 0px);
+  z-index: 10;
   display: flex;
+  align-items: center;
   justify-content: space-between;
   color: var(--mut);
   font-size: 13px;
   font-weight: 700;
-  margin: 14px 4px 2px;
+  margin: 0;
+  padding: 8px 4px;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
 }
 .mobile-prototype .activity-filter-summary {
   display: flex;
@@ -9586,14 +9725,8 @@ html[data-theme="dark"]
 }
 
 /* ───────────── Native UX Upgrade 2: Stacked Sheet 3D Depth Scaling (scale(0.94)), Detents & Blurred Sticky Header ───────────── */
-.mobile-prototype .prototype-header.is-scrolled {
-  background: color-mix(in srgb, var(--bg) 78%, transparent);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border-bottom: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
-}
-
 .mobile-prototype .prototype-header,
+.mobile-prototype .prototype-tabs-stage,
 .mobile-prototype #app {
   transition:
     transform 320ms cubic-bezier(0.2, 0.9, 0.28, 1),
@@ -9604,6 +9737,8 @@ html[data-theme="dark"]
 
 .mobile-prototype[data-sheet-open="true"]:not([data-sheet-closing="true"])
   .prototype-header,
+.mobile-prototype[data-sheet-open="true"]:not([data-sheet-closing="true"])
+  .prototype-tabs-stage,
 .mobile-prototype[data-sheet-open="true"]:not([data-sheet-closing="true"])
   #app {
   transform: scale(calc(0.94 + var(--sheet-drag-progress, 0) * 0.06))
@@ -11053,5 +11188,71 @@ html[data-theme="dark"]
 
 .mobile-prototype .rec-swipe-action:focus-visible {
   z-index: 2;
+}
+
+/* ───────────── Native iOS Polish (Touch, Containment & Overrides) ───────────── */
+/* Bottom Tab Bar Safe Area Inset */
+.mobile-prototype .bottom-nav,
+.mobile-prototype .prototype-bottom-nav {
+  padding-bottom: var(--safe-bottom);
+  height: calc(var(--nav-h, 68px) + var(--safe-bottom));
+}
+
+/* 3. Touch Polish & UI Chrome Selection Lock */
+.mobile-prototype button,
+.mobile-prototype [role="button"],
+.mobile-prototype .bottom-nav,
+.mobile-prototype .prototype-bottom-nav,
+.mobile-prototype .pace-pill,
+.mobile-prototype .month-pill,
+.mobile-prototype .seg-btn,
+.mobile-prototype .icon-btn {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Tactile Press States (:active scale(.97)) */
+@media (prefers-reduced-motion: no-preference) {
+  .mobile-prototype button:active:not(:disabled),
+  .mobile-prototype [role="button"]:active,
+  .mobile-prototype .card.is-tappable:active,
+  .mobile-prototype .bento-card:active,
+  .mobile-prototype .leg:active,
+  .mobile-prototype .expense-row:not(.is-swipe-dragging):active,
+  .mobile-prototype .rec-row:not(.is-swipe-dragging):active {
+    transform: scale(0.97);
+  }
+}
+
+/* Guard all :hover styles so touch devices don't stick on tap */
+@media (hover: hover) and (pointer: fine) {
+  .mobile-prototype .icon-btn:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--ink) 8%, transparent);
+  }
+  .mobile-prototype .leg:hover,
+  .mobile-prototype .expense-row:hover {
+    background: color-mix(in srgb, var(--ink) 4%, transparent);
+  }
+}
+
+/* 4. Paint/Layout Containment on Cards & Content-Visibility on Transaction Rows */
+.mobile-prototype .card,
+.mobile-prototype .hero,
+.mobile-prototype .bento-card,
+.mobile-prototype .plans-hero-card,
+.mobile-prototype .plans-pace-card,
+.mobile-prototype .rec-hero-card,
+.mobile-prototype .rec-section-card {
+  contain: layout paint;
+}
+
+.mobile-prototype .expense-row,
+.mobile-prototype .tx-row,
+.mobile-prototype .rec-row-swipe-wrap,
+.mobile-prototype .leg {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 64px;
 }
 

@@ -1,4 +1,4 @@
-import {
+import React, {
   Fragment,
   lazy,
   memo,
@@ -3070,6 +3070,64 @@ function Activity({
   });
   const sortedDates = Object.keys(g).sort((a, b) => b.localeCompare(a));
 
+  const activityListRef = useRef(null);
+  const lastHapticDayRef = useRef(null);
+  const isScrollingRef = useRef(false);
+  const scrollTimeoutRef = useRef(null);
+
+  useEffect(() => {
+    const listEl = activityListRef.current;
+    if (!listEl) return;
+    const scroller =
+      listEl.closest(".prototype-tab-panel") || listEl.closest("#app");
+    if (!scroller) return;
+
+    const onScroll = () => {
+      isScrollingRef.current = true;
+      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+      scrollTimeoutRef.current = setTimeout(() => {
+        isScrollingRef.current = false;
+      }, 150);
+    };
+
+    scroller.addEventListener("scroll", onScroll, { passive: true });
+
+    let lastTickTime = 0;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!isScrollingRef.current) return;
+        const now = Date.now();
+        if (now - lastTickTime < 130) return;
+
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            const dayKey = entry.target.getAttribute("data-day-header");
+            if (dayKey && dayKey !== lastHapticDayRef.current) {
+              lastHapticDayRef.current = dayKey;
+              lastTickTime = now;
+              triggerHaptic("selection");
+              break;
+            }
+          }
+        }
+      },
+      {
+        root: scroller,
+        rootMargin: "0px 0px -75% 0px",
+        threshold: 0,
+      },
+    );
+
+    const headers = listEl.querySelectorAll("[data-day-header]");
+    headers.forEach((h) => observer.observe(h));
+
+    return () => {
+      scroller.removeEventListener("scroll", onScroll);
+      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+      observer.disconnect();
+    };
+  }, [sortedDates]);
+
   // Totals for filter summary
   const totalExpenses = round2(
     filteredItems
@@ -3460,7 +3518,7 @@ function Activity({
       )}
 
       {/* 4. Activity List */}
-      <div>
+      <div ref={activityListRef}>
         {!filteredItems.length ? (
           <div className="emp-illustrated">
             <div className="emp-illustrated-icon">
@@ -3529,7 +3587,10 @@ function Activity({
 
             return (
               <Fragment key={d || "undated"}>
-                <div className="day">
+                <div
+                  className="day activity-day-header"
+                  data-day-header={d || "undated"}
+                >
                   <span>{dayLabel}</span>
                   {dayExpenses.length >= 2 && hasAmount && (
                     <span>
@@ -10067,6 +10128,230 @@ function SecuritySheet({ onClose, onBack, onLockNow }) {
   );
 }
 
+const COLLAPSE_START_PX = 8;
+const COLLAPSE_RANGE_PX = 52; // 8px -> 60px (0 -> 1)
+
+function computeCollapse(scrollTop) {
+  return Math.min(
+    1,
+    Math.max(0, (scrollTop - COLLAPSE_START_PX) / COLLAPSE_RANGE_PX),
+  );
+}
+
+function useCollapsingHeader({ activeTab, enableSnap = true }) {
+  const screenRootRef = React.useRef(null);
+  const scrollerMapRef = React.useRef(new Map());
+  const tabScrollerRefs = React.useRef({});
+  const tabScrollTopRef = React.useRef({
+    home: 0,
+    activity: 0,
+    accounts: 0,
+    plans: 0,
+  });
+  const rafIdRef = React.useRef(0);
+  const isSnappingRef = React.useRef(false);
+
+  const applyCollapseFromScrollTop = React.useCallback((scrollTop) => {
+    const rootEl = screenRootRef.current;
+    if (!rootEl) return;
+    const progress = computeCollapse(scrollTop);
+    rootEl.style.setProperty("--collapse", progress.toFixed(4));
+  }, []);
+
+  const getActiveScroller = React.useCallback(() => {
+    return scrollerMapRef.current.get(activeTab) || null;
+  }, [activeTab]);
+
+  // Register each persistent tab panel's scroll container with stable ref callback per tab
+  const registerTabScroller = React.useCallback(
+    (tabKey) => {
+      if (!tabScrollerRefs.current[tabKey]) {
+        tabScrollerRefs.current[tabKey] = (node) => {
+          if (node) {
+            scrollerMapRef.current.set(tabKey, node);
+          } else {
+            scrollerMapRef.current.delete(tabKey);
+          }
+        };
+      }
+      return tabScrollerRefs.current[tabKey];
+    },
+    [],
+  );
+
+  // Smooth scroll-to-top for header tap & re-tapping active tab
+  const scrollToTop = React.useCallback(() => {
+    const scroller = getActiveScroller();
+    if (!scroller) return;
+    tabScrollTopRef.current[activeTab] = 0;
+    scroller.scrollTo({ top: 0, behavior: "smooth" });
+  }, [activeTab, getActiveScroller]);
+
+  // Restore saved scrollTop & sync --collapse before paint when switching tabs
+  React.useLayoutEffect(() => {
+    const scroller = getActiveScroller();
+    if (!scroller) return;
+    const savedTop = tabScrollTopRef.current[activeTab] ?? 0;
+    if (Math.abs(scroller.scrollTop - savedTop) > 1) {
+      void scroller.offsetHeight;
+      scroller.scrollTop = savedTop;
+    }
+    applyCollapseFromScrollTop(scroller.scrollTop);
+  }, [activeTab, getActiveScroller, applyCollapseFromScrollTop]);
+
+  // Bind passive rAF-throttled scroll listener + optional scrollend snap to active tab
+  React.useEffect(() => {
+    const scroller = getActiveScroller();
+    if (!scroller) return undefined;
+
+    let ticking = false;
+
+    const update = () => {
+      ticking = false;
+      // If the scroller is detached or hidden, ignore artificial scroll-to-0 events
+      if (!scroller.offsetParent && scroller.scrollTop === 0) return;
+      const top = scroller.scrollTop;
+      tabScrollTopRef.current[activeTab] = top;
+      applyCollapseFromScrollTop(top);
+    };
+
+    const onScroll = () => {
+      if (!ticking) {
+        ticking = true;
+        rafIdRef.current = window.requestAnimationFrame(update);
+      }
+    };
+
+    // Optional native iOS mid-collapse snap on scrollend (feature-detected)
+    const supportsScrollEnd = "onscrollend" in window;
+    const onScrollEnd = () => {
+      if (!enableSnap || isSnappingRef.current) {
+        isSnappingRef.current = false;
+        return;
+      }
+      const top = scroller.scrollTop;
+      if (
+        top > COLLAPSE_START_PX &&
+        top < COLLAPSE_START_PX + COLLAPSE_RANGE_PX
+      ) {
+        const progress = computeCollapse(top);
+        const targetTop =
+          progress < 0.5 ? 0 : COLLAPSE_START_PX + COLLAPSE_RANGE_PX;
+        isSnappingRef.current = true;
+        scroller.scrollTo({ top: targetTop, behavior: "smooth" });
+      }
+    };
+
+    // Sync initial state on bind
+    applyCollapseFromScrollTop(scroller.scrollTop);
+
+    scroller.addEventListener("scroll", onScroll, { passive: true });
+    if (supportsScrollEnd) {
+      scroller.addEventListener("scrollend", onScrollEnd, { passive: true });
+    }
+
+    return () => {
+      if (rafIdRef.current) {
+        window.cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = 0;
+      }
+      scroller.removeEventListener("scroll", onScroll);
+      if (supportsScrollEnd) {
+        scroller.removeEventListener("scrollend", onScrollEnd);
+      }
+    };
+  }, [activeTab, enableSnap, getActiveScroller, applyCollapseFromScrollTop]);
+
+  return {
+    screenRootRef,
+    registerTabScroller,
+    scrollToTop,
+    tabScrollTopRef,
+    getActiveScroller,
+  };
+}
+
+const CollapsibleTopBar = React.memo(function CollapsibleTopBar({
+  activeTab,
+  monthLabel,
+  onScrollToTop,
+  rightActions,
+  settingsRoute,
+  onBack,
+  settingsTitle,
+}) {
+  // Compact title shows the active month on Home, and screen name on other tabs
+  const compactTitle = settingsRoute
+    ? settingsTitle
+    : activeTab === "home"
+      ? monthLabel
+      : activeTab === "activity"
+        ? "Activity"
+        : activeTab === "accounts"
+          ? "Accounts"
+          : "Plans";
+
+  const handleHeaderClick = (e) => {
+    // Ignore clicks originating inside interactive right-side controls
+    if (e.target.closest("button, a, input, select, [role='button']")) {
+      return;
+    }
+    onScrollToTop?.();
+  };
+
+  return (
+    <header
+      className={`prototype-header${settingsRoute ? " is-settings-route" : ""}`}
+      onClick={handleHeaderClick}
+      aria-label="Top navigation bar, tap to scroll to top"
+    >
+      <div className="prototype-header-compact-wrap">
+        {settingsRoute && (
+          <button
+            className="prototype-header-back"
+            type="button"
+            aria-label="Back to settings"
+            onClick={onBack}
+            style={{ marginRight: 8 }}
+          >
+            <Icon n="l" />
+          </button>
+        )}
+        <span
+          className="prototype-header-compact-title"
+          onClick={onScrollToTop}
+          style={settingsRoute ? { opacity: 1, transform: "none" } : undefined}
+        >
+          {compactTitle}
+        </span>
+      </div>
+      {!settingsRoute && (
+        <div
+          className="prototype-header-actions"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {rightActions}
+        </div>
+      )}
+    </header>
+  );
+});
+
+const ScreenLargeTitle = React.memo(function ScreenLargeTitle({
+  title,
+  subtitle,
+  className = "",
+}) {
+  return (
+    <div
+      className={`prototype-large-title-row${className ? ` ${className}` : ""}`}
+    >
+      <h1 className="prototype-large-title">{title}</h1>
+      {subtitle ? <p className="prototype-large-subtitle">{subtitle}</p> : null}
+    </div>
+  );
+});
+
 /* These screens stay presentational. App supplies shared expense data,
    persistence, account actions, and sync state. */
 export default function MobilePrototype({
@@ -10364,7 +10649,20 @@ export default function MobilePrototype({
       window.removeEventListener("pagehide", handlePageHide);
     };
   }, []);
-  const [isScrolled, setIsScrolled] = useState(false);
+  const {
+    screenRootRef,
+    registerTabScroller,
+    scrollToTop,
+    tabScrollTopRef,
+    getActiveScroller,
+  } = useCollapsingHeader({
+    activeTab: profileSettingsOpen
+      ? "profile-settings"
+      : appSettingsOpen
+        ? "app-settings"
+        : tab,
+    enableSnap: true,
+  });
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [slideDirection, setSlideDirection] = useState("forward");
   const [animateScreen, setAnimateScreen] = useState(false);
@@ -10372,7 +10670,6 @@ export default function MobilePrototype({
   const sheetCloseTimer = useRef();
   const highlightTimer = useRef();
   const mobileRootRef = useRef(null);
-  const screenScrollRef = useRef(null);
   const sheetTriggerCandidateRef = useRef(null);
   const sheetReturnFocusRef = useRef(null);
   const activitySearchRef = useRef(null);
@@ -10502,23 +10799,7 @@ export default function MobilePrototype({
     };
   }, []);
 
-  const resetScreenScroll = () => {
-    if (screenScrollRef.current) screenScrollRef.current.scrollTop = 0;
-    setIsScrolled(false);
-  };
-  const onScreenScroll = (event) => {
-    // Ignore scroll events from nested scrollers (for example, the category chips).
-    if (event.target !== event.currentTarget) return;
-    const scroller = event.currentTarget;
-    const maxScrollTop = Math.max(
-      0,
-      scroller.scrollHeight - scroller.clientHeight,
-    );
-    const rawScrollTop = scroller.scrollTop;
-    if (rawScrollTop < 0 || rawScrollTop > maxScrollTop) return;
-    const top = Math.min(maxScrollTop, Math.max(0, rawScrollTop));
-    setIsScrolled(top > 60);
-  };
+  const resetScreenScroll = scrollToTop;
 
   const toast = (msg, undo) => {
     clearTimeout(timer.current);
@@ -10705,29 +10986,31 @@ export default function MobilePrototype({
     setSheetExitFromOpacity("1");
     setSheet(nextSheet);
   };
-  const nav = (t) => {
-    if (t === tab && !appSettingsOpen && !profileSettingsOpen) {
-      screenScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
-      return;
-    }
-    if (
-      document.activeElement instanceof HTMLElement &&
-      screenScrollRef.current?.contains(document.activeElement)
-    ) {
-      document.activeElement.blur();
-    }
-    if (t !== tab || appSettingsOpen || profileSettingsOpen) {
-      triggerHaptic("selection");
-    }
-    const currentIndex = TABS.findIndex(([key]) => key === tab);
-    const nextIndex = TABS.findIndex(([key]) => key === t);
-    setSlideDirection(nextIndex >= currentIndex ? "forward" : "backward");
-    setAnimateScreen(true);
-    setAppSettingsOpen(false);
-    setProfileSettingsOpen(false);
-    setTab(t);
-    resetScreenScroll();
-  };
+  const nav = useCallback(
+    (t) => {
+      if (t === tab && !appSettingsOpen && !profileSettingsOpen) {
+        scrollToTop();
+        return;
+      }
+      if (
+        document.activeElement instanceof HTMLElement &&
+        getActiveScroller()?.contains(document.activeElement)
+      ) {
+        document.activeElement.blur();
+      }
+      if (t !== tab || appSettingsOpen || profileSettingsOpen) {
+        triggerHaptic("selection");
+      }
+      const currentIndex = TABS.findIndex(([key]) => key === tab);
+      const nextIndex = TABS.findIndex(([key]) => key === t);
+      setSlideDirection(nextIndex >= currentIndex ? "forward" : "backward");
+      setAnimateScreen(true);
+      setAppSettingsOpen(false);
+      setProfileSettingsOpen(false);
+      setTab(t);
+    },
+    [tab, appSettingsOpen, profileSettingsOpen, scrollToTop, getActiveScroller],
+  );
   const openExpense = (id) => openSheet({ type: "det", id });
   const openTransaction = (id) => openSheet({ type: "txDet", id });
   const openRecurring = (id) => openSheet({ type: "recDet", id });
@@ -11134,29 +11417,83 @@ export default function MobilePrototype({
   const signIn = () => onSignIn?.();
 
   const settingsRoute = appSettingsOpen || profileSettingsOpen;
-  const routeTitle = profileSettingsOpen
-    ? "Profile"
-    : appSettingsOpen
-      ? "App settings"
-      : tab === "home"
-        ? "Spend"
-        : tab === "activity"
-          ? "Activity"
-          : tab === "accounts"
-            ? "Cards"
-            : "Plans";
-  const headerTitle =
-    !settingsRoute && tab === "home" && isScrolled ? fM(S.m) : routeTitle;
+  const activeMonthLabel = fM(S.m);
   const screenKey = profileSettingsOpen
     ? "profile-settings"
     : appSettingsOpen
       ? "app-settings"
       : tab;
 
+  const headerRightActions = !settingsRoute ? (
+    <>
+      {tab === "home" ? (
+        <button
+          className={`prototype-header-avatar${profile?.avatar ? " has-photo" : ""}`}
+          type="button"
+          aria-label="Profile and settings"
+          onClick={() => openSheet({ type: "set" })}
+        >
+          {profile?.avatar ? (
+            <img
+              src={profile.avatar}
+              alt=""
+              className="mfs-avatar-img"
+              draggable="false"
+            />
+          ) : (
+            profile?.initial || "A"
+          )}
+        </button>
+      ) : tab === "activity" ? (
+        <MonthSwitch m={S.m} onShift={onShift} />
+      ) : tab === "accounts" ? (
+        <button
+          className="prototype-header-action"
+          type="button"
+          aria-label="Add new card"
+          title="Add Card"
+          onClick={() => {
+            triggerHaptic("light");
+            openSheet({ type: "addCard" });
+          }}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            width="20"
+            height="20"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <rect x="2" y="5" width="20" height="14" rx="3" />
+            <line x1="2" y1="10" x2="22" y2="10" />
+            <circle cx="7" cy="15" r="1.5" fill="currentColor" />
+          </svg>
+        </button>
+      ) : plan === "budget" ? (
+        <button
+          className="prototype-header-action"
+          type="button"
+          aria-label="Set monthly budget"
+          title="Set monthly budget"
+          onClick={openBudget}
+        >
+          <Icon n="plans" />
+        </button>
+      ) : null}
+    </>
+  ) : null;
+
   if (isAppLocked) {
     return (
       <div
-        ref={mobileRootRef}
+        ref={(node) => {
+          mobileRootRef.current = node;
+          screenRootRef.current = node;
+        }}
         className="mobile-prototype is-locked-screen"
         data-theme={resolvedTheme}
       >
@@ -11184,8 +11521,11 @@ export default function MobilePrototype({
 
   return (
     <div
-      ref={mobileRootRef}
-      className="mobile-prototype"
+      ref={(node) => {
+        screenRootRef.current = node;
+        mobileRootRef.current = node;
+      }}
+      className={`mobile-prototype ${resolvedTheme === "dark" ? "dark" : ""}`}
       onClickCapture={captureSheetTrigger}
       data-theme={resolvedTheme}
       data-sheet-open={sheet ? "true" : undefined}
@@ -11197,103 +11537,20 @@ export default function MobilePrototype({
         "--sheet-exit-from-opacity": sheetExitFromOpacity,
       }}
     >
-      {/* All notifications delivered via native built-in notifications on iOS and Android */}
-      <header
-        className={`prototype-header${isScrolled ? " is-scrolled" : ""}${settingsRoute ? " is-settings-route" : ""}`}
-      >
-        <div className="prototype-header-main">
-          {settingsRoute && (
-            <button
-              className="prototype-header-back"
-              type="button"
-              aria-label="Back to settings"
-              onClick={backToSettings}
-            >
-              <Icon n="l" />
-            </button>
-          )}
-          <h1
-            className="prototype-header-title"
-            onClick={() => {
-              screenScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
-            }}
-            style={{ cursor: "pointer" }}
-          >
-            {headerTitle}
-          </h1>
-        </div>
-        {!settingsRoute && (
-          <div
-            className={`prototype-header-actions${animateScreen ? " animate-in" : ""}`}
-            key={screenKey}
-          >
-            {tab === "home" ? (
-              <button
-                className={`prototype-header-avatar${profile?.avatar ? " has-photo" : ""}`}
-                type="button"
-                aria-label="Profile and settings"
-                onClick={() => openSheet({ type: "set" })}
-              >
-                {profile?.avatar ? (
-                  <img
-                    src={profile.avatar}
-                    alt=""
-                    className="mfs-avatar-img"
-                    draggable="false"
-                  />
-                ) : (
-                  profile?.initial || "A"
-                )}
-              </button>
-            ) : tab === "activity" ? (
-              <MonthSwitch m={S.m} onShift={onShift} />
-            ) : tab === "accounts" ? (
-              <button
-                className="prototype-header-action"
-                type="button"
-                aria-label="Add new card"
-                title="Add Card"
-                onClick={() => {
-                  triggerHaptic("light");
-                  openSheet({ type: "addCard" });
-                }}
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  width="20"
-                  height="20"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <rect x="2" y="5" width="20" height="14" rx="3" />
-                  <line x1="2" y1="10" x2="22" y2="10" />
-                  <circle cx="7" cy="15" r="1.5" fill="currentColor" />
-                </svg>
-              </button>
-            ) : plan === "budget" ? (
-              <button
-                className="prototype-header-action"
-                type="button"
-                aria-label="Set monthly budget"
-                title="Set monthly budget"
-                onClick={openBudget}
-              >
-                <Icon n="plans" />
-              </button>
-            ) : null}
-          </div>
-        )}
-      </header>
+      <CollapsibleTopBar
+        activeTab={tab}
+        monthLabel={activeMonthLabel}
+        onScrollToTop={scrollToTop}
+        rightActions={headerRightActions}
+        settingsRoute={settingsRoute}
+        onBack={backToSettings}
+        settingsTitle={profileSettingsOpen ? "Profile" : "App settings"}
+      />
 
-      <main
+      <div
         id="app"
-        ref={screenScrollRef}
-        className="prototype-screen-scroll"
-        onScroll={onScreenScroll}
+        className="prototype-tabs-stage"
+        key={settingsRoute ? screenKey : "main-tabs"}
         onTouchStart={(e) => {
           if (
             sheet ||
@@ -11301,7 +11558,7 @@ export default function MobilePrototype({
             e.touches.length !== 1
           )
             return;
-          const scroller = screenScrollRef.current;
+          const scroller = getActiveScroller();
           if (!scroller || scroller.scrollTop > 2) return;
           if (
             e.target.closest?.(
@@ -11320,7 +11577,7 @@ export default function MobilePrototype({
         onTouchMove={(e) => {
           const g = ptrGestureRef.current;
           if (!g.active || sheet || e.touches.length !== 1) return;
-          const scroller = screenScrollRef.current;
+          const scroller = getActiveScroller();
           if (!scroller || scroller.scrollTop > 2) {
             g.active = false;
             if (ptrState.pullY > 0) setPtrState({ pullY: 0, phase: "idle" });
@@ -11419,168 +11676,184 @@ export default function MobilePrototype({
             </div>
           </div>
         )}
-        <div
-          key={settingsRoute ? screenKey : "main-tabs"}
-          className={`prototype-screen-enter${settingsRoute && animateScreen ? ` ${slideDirection === "forward" ? "slides-from-right" : "slides-from-left"}` : ""}`}
-        >
-          <div className="prototype-screen-content">
-            {profileSettingsOpen ? (
-              <ProfileSettingsPage
-                S={S}
-                profile={profile}
-                cloudSyncEnabled={cloudSyncEnabled}
-                cloudSyncReady={cloudSyncReady}
-                normalizedAccountSync={normalizedAccountSync}
-                cloudRealtimeStatus={cloudRealtimeStatus}
-                cloudSyncActivity={cloudSyncActivity}
-                accountStatus={accountStatus}
-                profileStatus={profileStatus}
-                authBusy={authBusy}
-                onEditProfile={onEditProfile}
-                onAvatarChange={onAvatarChange}
-                onManageCards={() => nav("accounts")}
-                onSignIn={signIn}
-                onSignOut={onSignOut}
-                onResumeSync={onResumeSync}
-              />
-            ) : appSettingsOpen ? (
-              <AppSettingsPage
-                S={S}
-                profile={profile}
-                pushBackendConfigured={pushBackendConfigured}
-                notificationPermission={notificationPermission}
-                notificationStatus={notificationStatus}
-                backgroundPushEnabled={backgroundPushEnabled}
-                onReminder={onReminder}
-                onToggleNotifications={onToggleNotifications}
-                onTestNotification={onTestNotification}
-                onBackupDownload={onBackupDownload}
-                onEncryptedBackupDownload={onEncryptedBackupDownload}
-                onExpensesCsv={onExpensesCsv}
-                onBackupRestore={onBackupRestore}
-                backupStatus={backupStatus}
-                updateAvailable={updateAvailable}
-                updateInfo={updateInfo}
-                checkingForUpdate={checkingForUpdate}
-                updateCheckStatus={updateCheckStatus}
-                onCheckForUpdates={onCheckForUpdates}
-                onOpenUpdateModal={onOpenUpdateModal}
-              />
-            ) : (
-              <>
-                <div
-                  className={`prototype-tab-panel${tab === "home" ? ` is-active${animateScreen ? ` ${slideDirection === "forward" ? "slides-from-right" : "slides-from-left"}` : ""}` : " is-inactive"}`}
-                  inert={tab !== "home" ? true : undefined}
-                  hidden={tab !== "home"}
-                >
-                  <Home
-                    S={S}
-                    profile={profile}
-                    onShift={onShift}
-                    onTab={(nextTab) => {
-                      if (nextTab === "activity") {
-                        setCf("");
-                        setQ("");
-                      }
-                      nav(nextTab);
-                    }}
-                    onCategory={(category) => {
-                      setCf(category);
-                      setQ("");
-                      nav("activity");
-                    }}
-                    onBudget={openBudget}
-                    onOpen={openExpense}
-                    onDelete={deleteExpenseDirectly}
-                    onSkip={skipRecurringExpense}
-                    onDuplicate={duplicateExpense}
-                    highlightedExpenseId={highlightedExpenseId}
-                  />
-                </div>
-                <div
-                  className={`prototype-tab-panel${tab === "activity" ? ` is-active${animateScreen ? ` ${slideDirection === "forward" ? "slides-from-right" : "slides-from-left"}` : ""}` : " is-inactive"}`}
-                  inert={tab !== "activity" ? true : undefined}
-                  hidden={tab !== "activity"}
-                >
-                  <Activity
-                    S={S}
-                    q={q}
-                    setQ={setQ}
-                    cf={cf}
-                    setCf={setCf}
-                    onOpen={openExpense}
-                    onDelete={deleteExpenseDirectly}
-                    onSkip={skipRecurringExpense}
-                    onDuplicate={duplicateExpense}
-                    onOpenTransaction={openTransaction}
-                    onDeleteTransaction={deleteTransaction}
-                    searchRef={activitySearchRef}
-                    highlightedExpenseId={highlightedExpenseId}
-                    highlightedTransactionId={highlightedTransactionId}
-                  />
-                </div>
-                <div
-                  className={`prototype-tab-panel${tab === "accounts" ? ` is-active${animateScreen ? ` ${slideDirection === "forward" ? "slides-from-right" : "slides-from-left"}` : ""}` : " is-inactive"}`}
-                  inert={tab !== "accounts" ? true : undefined}
-                  hidden={tab !== "accounts"}
-                >
-                  <Accounts
-                    S={S}
-                    onTx={(t, acct) => openSheet({ type: "tx", t, acct })}
-                    onAddCardClick={() => openSheet({ type: "addCard" })}
-                    onOpenCardOptions={(cardId) =>
-                      openSheet({ type: "cardOptions", cardId })
-                    }
-                    highlightedExpenseId={highlightedExpenseId}
-                    highlightedTransactionId={highlightedTransactionId}
-                    onTab={nav}
-                    onOpenExpense={openExpense}
-                    onOpenTransaction={openTransaction}
-                    onDeleteExpense={deleteExpenseDirectly}
-                    onDeleteTransaction={deleteTransaction}
-                    onDuplicateExpense={duplicateExpense}
-                    onLockedCardNotice={(cardName) =>
-                      toast(
-                        `${cardName || "This card"} is locked. Unlock it in Card Options first.`,
-                      )
-                    }
-                    onAddExpense={(acct) => openSheet({ type: "add", acct })}
-                    initialSelectedAccount={
-                      activeAccountId || activeAccountRef.current
-                    }
-                    onActiveAccountChange={syncActiveAccount}
-                  />
-                </div>
-                <div
-                  className={`prototype-tab-panel${tab === "plans" ? ` is-active${animateScreen ? ` ${slideDirection === "forward" ? "slides-from-right" : "slides-from-left"}` : ""}` : " is-inactive"}`}
-                  inert={tab !== "plans" ? true : undefined}
-                  hidden={tab !== "plans"}
-                >
-                  <Plans
-                    S={S}
-                    plan={plan}
-                    setPlan={setPlan}
-                    onShift={onShift}
-                    onBudget={openBudget}
-                    onAddRec={() => openSheet({ type: "add", iv: "monthly" })}
-                    onOpenRec={openRecurring}
-                    onToggleRec={onToggleRec}
-                  />
-                </div>
-              </>
-            )}
+
+        {profileSettingsOpen ? (
+          <div
+            ref={registerTabScroller("profile-settings")}
+            className="prototype-tab-panel is-active"
+          >
+            <ProfileSettingsPage
+              S={S}
+              profile={profile}
+              cloudSyncEnabled={cloudSyncEnabled}
+              cloudSyncReady={cloudSyncReady}
+              normalizedAccountSync={normalizedAccountSync}
+              cloudRealtimeStatus={cloudRealtimeStatus}
+              cloudSyncActivity={cloudSyncActivity}
+              accountStatus={accountStatus}
+              profileStatus={profileStatus}
+              authBusy={authBusy}
+              onEditProfile={onEditProfile}
+              onAvatarChange={onAvatarChange}
+              onManageCards={() => nav("accounts")}
+              onSignIn={signIn}
+              onSignOut={onSignOut}
+              onResumeSync={onResumeSync}
+            />
           </div>
-        </div>
-      </main>
+        ) : appSettingsOpen ? (
+          <div
+            ref={registerTabScroller("app-settings")}
+            className="prototype-tab-panel is-active"
+          >
+            <AppSettingsPage
+              S={S}
+              profile={profile}
+              pushBackendConfigured={pushBackendConfigured}
+              notificationPermission={notificationPermission}
+              notificationStatus={notificationStatus}
+              backgroundPushEnabled={backgroundPushEnabled}
+              onReminder={onReminder}
+              onToggleNotifications={onToggleNotifications}
+              onTestNotification={onTestNotification}
+              onBackupDownload={onBackupDownload}
+              onEncryptedBackupDownload={onEncryptedBackupDownload}
+              onExpensesCsv={onExpensesCsv}
+              onBackupRestore={onBackupRestore}
+              backupStatus={backupStatus}
+              updateAvailable={updateAvailable}
+              updateInfo={updateInfo}
+              checkingForUpdate={checkingForUpdate}
+              updateCheckStatus={updateCheckStatus}
+              onCheckForUpdates={onCheckForUpdates}
+              onOpenUpdateModal={onOpenUpdateModal}
+            />
+          </div>
+        ) : (
+          <>
+            <div
+              ref={registerTabScroller("home")}
+              data-tab="home"
+              className={`prototype-tab-panel ${tab === "home" ? `is-active${animateScreen ? ` ${slideDirection === "forward" ? "slides-from-right" : "slides-from-left"}` : ""}` : "is-inactive"}`}
+              inert={tab !== "home" ? true : undefined}
+              hidden={tab !== "home"}
+            >
+              <ScreenLargeTitle title="Spend" />
+              <Home
+                S={S}
+                profile={profile}
+                onShift={onShift}
+                onTab={(nextTab) => {
+                  if (nextTab === "activity") {
+                    setCf("");
+                    setQ("");
+                  }
+                  nav(nextTab);
+                }}
+                onCategory={(category) => {
+                  setCf(category);
+                  setQ("");
+                  nav("activity");
+                }}
+                onBudget={openBudget}
+                onOpen={openExpense}
+                onDelete={deleteExpenseDirectly}
+                onSkip={skipRecurringExpense}
+                onDuplicate={duplicateExpense}
+                highlightedExpenseId={highlightedExpenseId}
+              />
+            </div>
+
+            <div
+              ref={registerTabScroller("activity")}
+              data-tab="activity"
+              className={`prototype-tab-panel ${tab === "activity" ? `is-active${animateScreen ? ` ${slideDirection === "forward" ? "slides-from-right" : "slides-from-left"}` : ""}` : "is-inactive"}`}
+              inert={tab !== "activity" ? true : undefined}
+              hidden={tab !== "activity"}
+            >
+              <ScreenLargeTitle title="Activity" className="is-activity" />
+              <Activity
+                S={S}
+                q={q}
+                setQ={setQ}
+                cf={cf}
+                setCf={setCf}
+                onOpen={openExpense}
+                onDelete={deleteExpenseDirectly}
+                onSkip={skipRecurringExpense}
+                onDuplicate={duplicateExpense}
+                onOpenTransaction={openTransaction}
+                onDeleteTransaction={deleteTransaction}
+                searchRef={activitySearchRef}
+                highlightedExpenseId={highlightedExpenseId}
+                highlightedTransactionId={highlightedTransactionId}
+              />
+            </div>
+
+            <div
+              ref={registerTabScroller("accounts")}
+              data-tab="accounts"
+              className={`prototype-tab-panel ${tab === "accounts" ? `is-active${animateScreen ? ` ${slideDirection === "forward" ? "slides-from-right" : "slides-from-left"}` : ""}` : "is-inactive"}`}
+              inert={tab !== "accounts" ? true : undefined}
+              hidden={tab !== "accounts"}
+            >
+              <ScreenLargeTitle title="Accounts" />
+              <Accounts
+                S={S}
+                onTx={(t, acct) => openSheet({ type: "tx", t, acct })}
+                onAddCardClick={() => openSheet({ type: "addCard" })}
+                onOpenCardOptions={(cardId) =>
+                  openSheet({ type: "cardOptions", cardId })
+                }
+                highlightedExpenseId={highlightedExpenseId}
+                highlightedTransactionId={highlightedTransactionId}
+                onTab={nav}
+                onOpenExpense={openExpense}
+                onOpenTransaction={openTransaction}
+                onDeleteExpense={deleteExpenseDirectly}
+                onDeleteTransaction={deleteTransaction}
+                onDuplicateExpense={duplicateExpense}
+                onLockedCardNotice={(cardName) =>
+                  toast(
+                    `${cardName || "This card"} is locked. Unlock it in Card Options first.`,
+                  )
+                }
+                onAddExpense={(acct) => openSheet({ type: "add", acct })}
+                initialSelectedAccount={
+                  activeAccountId || activeAccountRef.current
+                }
+                onActiveAccountChange={syncActiveAccount}
+              />
+            </div>
+
+            <div
+              ref={registerTabScroller("plans")}
+              data-tab="plans"
+              className={`prototype-tab-panel ${tab === "plans" ? `is-active${animateScreen ? ` ${slideDirection === "forward" ? "slides-from-right" : "slides-from-left"}` : ""}` : "is-inactive"}`}
+              inert={tab !== "plans" ? true : undefined}
+              hidden={tab !== "plans"}
+            >
+              <ScreenLargeTitle title="Plans" />
+              <Plans
+                S={S}
+                plan={plan}
+                setPlan={setPlan}
+                onShift={onShift}
+                onBudget={openBudget}
+                onAddRec={() => openSheet({ type: "add", iv: "monthly" })}
+                onOpenRec={openRecurring}
+                onToggleRec={onToggleRec}
+              />
+            </div>
+          </>
+        )}
+      </div>
 
       <nav
         className="dock"
         aria-label="Main"
         data-keyboard-open={keyboardOpen ? "true" : undefined}
         data-hidden={keyboardOpen || settingsRoute ? "true" : undefined}
-        onClickCapture={() =>
-          setIsScrolled((screenScrollRef.current?.scrollTop ?? 0) > 60)
-        }
       >
         {/* Surface with notch */}
         <div className="dock__surface" aria-hidden="true">
