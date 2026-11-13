@@ -11212,7 +11212,15 @@ export default function MobilePrototype({
               <Icon n="l" />
             </button>
           )}
-          <h1 className="prototype-header-title">{headerTitle}</h1>
+          <h1
+            className="prototype-header-title"
+            onClick={() => {
+              screenScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+            style={{ cursor: "pointer" }}
+          >
+            {headerTitle}
+          </h1>
         </div>
         {!settingsRoute && (
           <div

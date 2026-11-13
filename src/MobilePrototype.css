@@ -837,13 +837,11 @@ a:active,
   }
 }
 .mobile-prototype {
-  display: grid;
   position: fixed;
   inset: 0;
   left: 50%;
   right: auto;
   transform: translateX(-50%);
-  grid-template-rows: auto minmax(0, 1fr);
   width: min(100%, 480px);
   top: var(--mobile-visible-top, 0px);
   bottom: auto;
@@ -853,8 +851,7 @@ a:active,
   max-width: 480px;
   min-height: 0;
   margin: 0;
-  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
-    env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  padding: 0;
   overflow: hidden;
   overscroll-behavior: none;
   background: var(--bg);
@@ -1024,17 +1021,16 @@ a:active,
   user-select: text;
 }
 .mobile-prototype #app {
-  grid-row: 2;
   width: 100%;
   min-width: 0;
   min-height: 0;
   height: 100%;
   margin: 0;
-  /* One shared tail space clears the raised + button and bottom dock. */
-  padding: 12px 18px calc(112px + env(safe-area-inset-bottom, 0px));
+  /* Full-bleed scroll: content glides smoothly under the frosted glass header */
+  padding: calc(64px + env(safe-area-inset-top, 0px) + 12px) 18px calc(112px + env(safe-area-inset-bottom, 0px));
   overflow-x: hidden;
   overflow-y: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior-y: auto;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
 }
@@ -1046,20 +1042,41 @@ a:active,
   display: none;
 }
 .mobile-prototype .prototype-header {
-  grid-row: 1;
-  position: relative;
-  z-index: 4;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
   display: flex;
   min-width: 0;
-  min-height: 66px;
-  align-items: center;
+  height: calc(66px + env(safe-area-inset-top, 0px));
+  min-height: calc(66px + env(safe-area-inset-top, 0px));
+  align-items: flex-end;
   justify-content: space-between;
   gap: 12px;
-  padding: 9px 18px 10px;
-  background: var(--bg);
+  padding: env(safe-area-inset-top, 0px) 18px 10px;
+  background: color-mix(in srgb, var(--bg) 84%, transparent);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-bottom: 1px solid transparent;
   transition:
     min-height 180ms ease,
-    padding 180ms ease;
+    padding 180ms ease,
+    background-color 180ms ease,
+    border-color 180ms ease;
+  pointer-events: none;
+}
+.mobile-prototype .prototype-header-main,
+.mobile-prototype .prototype-header-actions,
+.mobile-prototype .prototype-header-back,
+.mobile-prototype .prototype-header-action,
+.mobile-prototype .prototype-header-avatar {
+  pointer-events: auto;
+}
+.mobile-prototype .prototype-header.is-scrolled {
+  background: color-mix(in srgb, var(--bg) 76%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
 }
 .mobile-prototype .prototype-header-main {
   display: flex;
@@ -9973,7 +9990,26 @@ html[data-theme="dark"]
   color: #f4f5f8;
 }
 
+/* Page background for Plans in light mode */
+:root:not([data-theme="dark"]) .mobile-prototype.screen-plans,
+.mobile-prototype.screen-plans:not([data-theme="dark"]) {
+  --bg: #f2f1ec;
+}
+
+/* Floating + button in Plans screen (light mode) */
+:root:not([data-theme="dark"]) .mobile-prototype.screen-plans .dock .dock__fab,
+.mobile-prototype.screen-plans:not([data-theme="dark"]) .dock .dock__fab {
+  background: #131419;
+  color: #d9f56b;
+  box-shadow: 0 10px 24px rgba(19, 20, 25, 0.35);
+}
+
 /* Plans budget overview */
+/* Bottom clearance sized so Budget pace card sits behind the floating + button */
+.mobile-prototype .plans-budget-scroll {
+  padding-bottom: 24px;
+}
+
 /* Header: Single unified color matching Home ("November 2026") */
 .mobile-prototype .plans-month-header {
   display: flex;
@@ -9990,18 +10026,14 @@ html[data-theme="dark"]
   margin: 0;
 }
 
-/* Both Plans cards share Home's minimal matte card surface */
-.mobile-prototype .plans-hero-card,
-.mobile-prototype .plans-pace-card {
-  background: var(--card, #121417);
-  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+/* Monthly budget card: Near-black card (#141519), 24px radius, 20px padding */
+.mobile-prototype .plans-hero-card {
+  background: #141519;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 24px;
   padding: 20px;
-  color: var(--ink, #ffffff);
+  color: #ffffff;
   box-shadow: none;
-}
-
-.mobile-prototype .plans-hero-card {
   margin-bottom: 14px;
 }
 
@@ -10012,9 +10044,9 @@ html[data-theme="dark"]
 }
 
 .mobile-prototype .plans-hero-label {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
-  color: var(--muted, #8e95a2);
+  color: #9a9ba0;
 }
 
 .mobile-prototype .plans-hero-actions {
@@ -10023,15 +10055,15 @@ html[data-theme="dark"]
   gap: 8px;
 }
 
-/* Minimal translucent chip matching Home's top nav buttons */
+/* Edit budget: dark-gray pill (#2C2D31, subtle 1px border #3D3E44), white semibold text */
 .mobile-prototype .hero-chip-btn {
   appearance: none;
-  background: color-mix(in srgb, var(--ink, #ffffff) 6%, transparent);
-  border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
-  color: var(--ink, #ffffff);
-  font-size: 12px;
+  background: #2c2d31;
+  border: 1px solid #3d3e44;
+  color: #ffffff;
+  font-size: 13px;
   font-weight: 600;
-  padding: 6px 12px;
+  padding: 7px 14px;
   border-radius: 999px;
   cursor: pointer;
   transition: transform 0.15s ease, background 0.15s ease;
@@ -10039,15 +10071,15 @@ html[data-theme="dark"]
 
 .mobile-prototype .hero-chip-btn:active {
   transform: scale(0.96);
-  background: color-mix(in srgb, var(--ink, #ffffff) 12%, transparent);
+  background: #37383e;
 }
 
-/* Ring: Lime arc on subtle neutral track */
+/* Ring: 180px outer diameter, 12px stroke width, dark track #2B2C30, lime arc #D9F56B */
 .mobile-prototype .plans-ring-wrap {
   position: relative;
-  width: 172px;
-  height: 172px;
-  margin: 16px auto 18px;
+  width: 180px;
+  height: 180px;
+  margin: 18px auto 20px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -10063,77 +10095,160 @@ html[data-theme="dark"]
 
 .mobile-prototype .plans-ring-track {
   fill: none;
-  stroke: color-mix(in srgb, var(--ink, #ffffff) 9%, transparent);
-  stroke-width: 14px;
+  stroke: #2b2c30;
+  stroke-width: 12px;
 }
 
 .mobile-prototype .plans-ring-arc {
   fill: none;
-  stroke-width: 14px;
+  stroke-width: 12px;
   transition: stroke-dashoffset 0.35s ease, stroke 0.25s ease;
 }
 
+/* Center text group: fixed-width container centered both ways (max-width 106px, ~68% of inner diameter 156px), >=16px clear space on both sides */
 .mobile-prototype .plans-ring-center {
   position: absolute;
-  inset: 0;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 106px;
+  max-width: 106px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: 0 16px;
+  padding: 0;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.mobile-prototype .plans-ring-val-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  max-width: 100%;
 }
 
 .mobile-prototype .plans-ring-amount {
-  font-size: 20px;
+  font-size: 24px;
   font-weight: 800;
-  letter-spacing: -0.02em;
-  color: var(--ink, #ffffff);
+  letter-spacing: -0.3px;
+  color: #ffffff;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  line-height: 1.15;
+}
+
+.mobile-prototype .plans-ring-amount.is-compact {
+  font-size: 20px;
+}
+
+.mobile-prototype .plans-ring-amount.is-extra-compact {
+  font-size: 17px;
+}
+
+.mobile-prototype .plans-ring-unit {
+  font-size: 14px;
+  font-weight: 600;
+  color: #9a9ba0;
+  white-space: nowrap;
+  line-height: 1.15;
 }
 
 .mobile-prototype .plans-ring-sub {
-  margin-top: 3px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--muted, #8e95a2);
+  margin-top: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #9a9ba0;
+  white-space: nowrap;
+  letter-spacing: -0.01em;
 }
 
-/* Spent & Limit footer row */
+/* Spent & Limit columns: horizontal divider (white @ 10%), vertical divider (white @ 10%), left-aligned labels and values */
 .mobile-prototype .plans-saved-style-rows {
-  border-top: 1px solid var(--border, rgba(255, 255, 255, 0.08));
-  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 16px;
+  margin-top: 16px;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: 0;
 }
 
 .mobile-prototype .plans-saved-row {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 4px 6px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 0 4px;
 }
 
 .mobile-prototype .plans-saved-row:first-child {
-  border-right: 1px solid var(--border, rgba(255, 255, 255, 0.08));
-  padding-right: 14px;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  padding-right: 18px;
+}
+
+.mobile-prototype .plans-saved-row:last-child {
+  padding-left: 18px;
 }
 
 .mobile-prototype .plans-saved-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--muted, #8e95a2);
+  font-size: 14px;
+  font-weight: 500;
+  color: #9a9ba0;
 }
 
 .mobile-prototype .plans-saved-val {
-  font-size: 14px;
+  font-size: 20px;
   font-weight: 700;
-  color: var(--ink, #ffffff);
+  color: #ffffff;
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
 }
 
-/* Budget Pace Header & Status Pill */
+/* Budget pace card: White card, ~24px radius, ~20px padding */
+.mobile-prototype .plans-pace-card {
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 24px;
+  padding: 20px;
+  color: #131419;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+:root[data-theme="dark"] .mobile-prototype .plans-pace-card,
+.mobile-prototype[data-theme="dark"] .plans-pace-card {
+  background: #12131a;
+  border-color: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  box-shadow: none;
+}
+
+.mobile-prototype .plans-pace-card .section-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.25;
+  color: #131419;
+  letter-spacing: -0.02em;
+}
+
+:root[data-theme="dark"] .mobile-prototype .plans-pace-card .section-title,
+.mobile-prototype[data-theme="dark"] .plans-pace-card .section-title {
+  color: #ffffff;
+}
+
+.mobile-prototype .plans-pace-subtitle {
+  margin: 4px 0 0;
+  color: #8e95a2;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+/* Status Pill */
 .mobile-prototype .plans-pace-header {
   display: flex;
   align-items: flex-start;
@@ -10145,68 +10260,74 @@ html[data-theme="dark"]
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 5px 11px;
+  padding: 6px 12px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   white-space: nowrap;
 }
 
 .mobile-prototype .pace-pill.is-lime {
-  background: #cff558;
-  color: #0b0e09;
+  background: #d9f36b;
+  color: #131419;
 }
 
 .mobile-prototype .pace-pill.is-orange {
   background: rgba(249, 115, 22, 0.16);
-  color: #fb923c;
+  color: #ea580c;
 }
 
 .mobile-prototype .pace-pill.is-crimson {
   background: rgba(225, 29, 72, 0.16);
-  color: #fb7185;
+  color: #e11d48;
 }
 
 /* Expected-pace comparison readout */
 .mobile-prototype .plans-pace-variance {
-  margin-top: 14px;
+  margin-top: 16px;
   display: flex;
   align-items: baseline;
-  gap: 6px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
 .mobile-prototype .plans-pace-hero-num {
-  font-size: 26px;
+  font-size: 29px;
   font-weight: 800;
-  letter-spacing: -0.02em;
-  color: var(--ink, #ffffff);
+  letter-spacing: -0.025em;
+  color: #131419;
   font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+
+:root[data-theme="dark"] .mobile-prototype .plans-pace-hero-num,
+.mobile-prototype[data-theme="dark"] .plans-pace-hero-num {
+  color: #ffffff;
 }
 
 .mobile-prototype .plans-pace-hero-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--muted, #8e95a2);
+  font-size: 14px;
+  font-weight: 500;
+  color: #8e95a2;
 }
 
-/* Minimal dark track + signature lime fill + crisp expected-pace marker */
+/* Progress bar: 12px thick, fully rounded, dark track #131419, lime fill #D9F36B, 6x22px white pill marker */
 .mobile-prototype .plans-pace-bar-block {
-  margin-top: 14px;
+  margin-top: 16px;
 }
 
 .mobile-prototype .plans-pace-track {
   position: relative;
-  height: 8px;
+  height: 12px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--ink, #ffffff) 9%, transparent);
+  background: #131419;
   overflow: visible;
 }
 
 .mobile-prototype .plans-pace-fill {
   height: 100%;
   border-radius: 999px;
-  background: #cff558;
+  background: #d9f36b;
   transition: width 0.3s ease;
 }
 
@@ -10220,60 +10341,74 @@ html[data-theme="dark"]
 
 .mobile-prototype .plans-pace-marker {
   position: absolute;
-  top: -4px;
-  bottom: -4px;
-  width: 2.5px;
+  top: 50%;
+  width: 6px;
+  height: 22px;
   border-radius: 999px;
-  background: var(--ink, #ffffff);
-  box-shadow: 0 0 0 2px var(--card, #121417);
-  transform: translateX(-50%);
+  background: #ffffff;
+  outline: 2px solid #131419;
+  transform: translate(-50%, -50%);
+  box-sizing: border-box;
+  z-index: 2;
 }
 
 .mobile-prototype .plans-pace-captions {
   margin-top: 8px;
   display: flex;
   justify-content: space-between;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--muted, #8e95a2);
+  font-size: 13px;
+  font-weight: 500;
+  color: #8e95a2;
   font-variant-numeric: tabular-nums;
 }
 
-/* Burn vs Target Tiles: Subtle dark inset surface instead of #f5f4f0 white */
+/* Burn vs Target Tiles: Light off-white fill (#F6F5F1), 1px border (#E5E4DF), 16px radius */
 .mobile-prototype .plans-burn-grid {
-  margin-top: 14px;
+  margin-top: 16px;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 12px;
 }
 
 .mobile-prototype .plans-burn-tile {
-  background: color-mix(in srgb, var(--ink, #ffffff) 4.5%, transparent);
-  border: 1px solid var(--border, rgba(255, 255, 255, 0.06));
+  background: #f6f5f1;
+  border: 1px solid #e5e4df;
   border-radius: 16px;
-  padding: 12px 14px;
+  padding: 14px 16px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
+}
+
+:root[data-theme="dark"] .mobile-prototype .plans-burn-tile,
+.mobile-prototype[data-theme="dark"] .plans-burn-tile {
+  background: color-mix(in srgb, #ffffff 4.5%, transparent);
+  border-color: rgba(255, 255, 255, 0.06);
 }
 
 .mobile-prototype .plans-burn-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--muted, #8e95a2);
+  font-size: 14px;
+  font-weight: 500;
+  color: #8e95a2;
 }
 
 .mobile-prototype .plans-burn-val {
-  font-size: 17px;
+  font-size: 22px;
   font-weight: 800;
-  color: var(--ink, #ffffff);
+  color: #131419;
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+:root[data-theme="dark"] .mobile-prototype .plans-burn-val,
+.mobile-prototype[data-theme="dark"] .plans-burn-val {
+  color: #ffffff;
 }
 
 .mobile-prototype .plans-burn-val small {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--muted, #8e95a2);
+  font-size: 13px;
+  font-weight: 500;
+  color: #8e95a2;
   margin-left: 2px;
 }
 
@@ -10321,20 +10456,6 @@ html[data-theme="dark"]
   color: var(--muted, #8e95a2);
   font-size: 13px;
   line-height: 1.4;
-}
-
-.mobile-prototype .plans-pace-card .section-title {
-  margin: 0;
-  font-size: 20px;
-  line-height: 1.25;
-}
-
-.mobile-prototype .plans-pace-subtitle {
-  margin: 4px 0 0;
-  color: var(--muted, #8e95a2);
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.35;
 }
 
 /* ==========================================================================
