@@ -4111,6 +4111,436 @@ function Accounts({
   );
 }
 
+const RECURRING_FREQUENCIES = {
+  weekly: { factor: 52 / 12, suffix: "/wk" },
+  biweekly: { factor: 26 / 12, suffix: "/2wk" },
+  monthly: { factor: 1, suffix: "/mo" },
+  yearly: { factor: 1 / 12, suffix: "/yr" },
+};
+
+export function normalizeToMonthly(amount, frequency = "monthly") {
+  const parsedAmount = Number(amount);
+  const value = Number.isFinite(parsedAmount) ? parsedAmount : 0;
+  const key = String(frequency || "monthly").toLowerCase();
+  return value * (RECURRING_FREQUENCIES[key]?.factor ?? 1);
+}
+
+export function getFreqSuffix(frequency = "monthly") {
+  const key = String(frequency || "monthly").toLowerCase();
+  return RECURRING_FREQUENCIES[key]?.suffix ?? "/mo";
+}
+
+function parseRecurringDate(value) {
+  if (!value) return null;
+  const raw = String(value);
+  const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+  if (parts) {
+    const [, year, month, day] = parts;
+    const date = new Date(Number(year), Number(month) - 1, Number(day));
+    if (
+      date.getFullYear() !== Number(year) ||
+      date.getMonth() !== Number(month) - 1 ||
+      date.getDate() !== Number(day)
+    ) {
+      return null;
+    }
+    return date;
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function getDaysUntilDue(nextDate, now = new Date()) {
+  const due = parseRecurringDate(nextDate);
+  if (!due) return null;
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const dueStart = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+  return Math.round((dueStart - todayStart) / 86400000);
+}
+
+function formatDueShortDate(nextDate) {
+  const date = parseRecurringDate(nextDate);
+  if (!date) return nextDate ? String(nextDate) : "Unscheduled";
+  return date.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
+function formatRelativeDueLabel(days) {
+  if (days == null) return "";
+  if (days < 0) return `${Math.abs(days)}d overdue`;
+  if (days === 0) return "today";
+  if (days === 1) return "in 1 day";
+  return `in ${days} days`;
+}
+
+function isRecurringPaused(item) {
+  return (
+    item.on === false ||
+    item.on === 0 ||
+    item.active === false ||
+    Boolean(item.paused)
+  );
+}
+
+function sortRecurringSection(items) {
+  return [...items].sort((a, b) => {
+    const aPaused = isRecurringPaused(a);
+    const bPaused = isRecurringPaused(b);
+    if (aPaused !== bPaused) return aPaused ? 1 : -1;
+
+    const aDate =
+      parseRecurringDate(a.next)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+    const bDate =
+      parseRecurringDate(b.next)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+    if (aDate !== bDate) return aDate - bDate;
+
+    const aCreated =
+      typeof a.createdAt === "number"
+        ? a.createdAt
+        : Date.parse(a.createdAt || "") || 0;
+    const bCreated =
+      typeof b.createdAt === "number"
+        ? b.createdAt
+        : Date.parse(b.createdAt || "") || 0;
+    return bCreated - aCreated;
+  });
+}
+
+function getRecurringBadgeTone(item) {
+  if (item.cat === "Savings") return "savings";
+  const description = String(item.desc || "").toLowerCase();
+  if (
+    description.includes("rent") ||
+    description.includes("house") ||
+    item.cat === "Home"
+  ) {
+    return "rent";
+  }
+  if (["Bills", "Subscriptions", "Utilities"].includes(item.cat)) return "bills";
+  return "default";
+}
+
+function RecurringRow({
+  item,
+  fmt,
+  accountLabel,
+  onSelect,
+  onTogglePause,
+}) {
+  const [swipeOffset, setSwipeOffset] = useState(0);
+  const pointerRef = useRef({
+    startX: 0,
+    startY: 0,
+    dragging: false,
+    swiped: false,
+  });
+  const paused = isRecurringPaused(item);
+  const daysUntil = getDaysUntilDue(item.next);
+  const showUrgentPill =
+    !paused && daysUntil !== null && daysUntil >= 0 && daysUntil <= 7;
+  const title = item.desc || item.cat || "Recurring";
+  const freqSuffix = getFreqSuffix(item.iv || "monthly");
+
+  const handlePointerDown = (event) => {
+    if (event.button !== undefined && event.button !== 0) return;
+    pointerRef.current = {
+      startX: event.clientX,
+      startY: event.clientY,
+      dragging: true,
+      swiped: false,
+    };
+  };
+
+  const handlePointerMove = (event) => {
+    if (!pointerRef.current.dragging) return;
+    const dx = event.clientX - pointerRef.current.startX;
+    const dy = event.clientY - pointerRef.current.startY;
+    if (Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy) * 1.4) {
+      pointerRef.current.swiped = true;
+      setSwipeOffset(Math.max(-88, Math.min(0, dx)));
+    }
+  };
+
+  const handlePointerUp = (cancelled = false) => {
+    if (!pointerRef.current.dragging) return;
+    pointerRef.current.dragging = false;
+    if (cancelled) {
+      pointerRef.current.swiped = false;
+      setSwipeOffset(0);
+      return;
+    }
+    setSwipeOffset((current) => (current < -42 ? -80 : 0));
+  };
+
+  const handleRowClick = () => {
+    if (pointerRef.current.swiped) {
+      pointerRef.current.swiped = false;
+      return;
+    }
+    if (swipeOffset !== 0) {
+      setSwipeOffset(0);
+      return;
+    }
+    onSelect(item);
+  };
+
+  return (
+    <div className="rec-row-swipe-wrap">
+      <button
+        type="button"
+        className="rec-swipe-action"
+        onClick={(event) => {
+          event.stopPropagation();
+          pointerRef.current.swiped = false;
+          setSwipeOffset(0);
+          onTogglePause(item);
+        }}
+        aria-label={`${paused ? "Resume" : "Pause"} ${title}`}
+      >
+        {paused ? "Resume" : "Pause"}
+      </button>
+      <div
+        role="button"
+        tabIndex={0}
+        className={`rec-row${paused ? " is-paused" : ""}`}
+        style={{ transform: `translateX(${swipeOffset}px)` }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={() => handlePointerUp()}
+        onPointerCancel={() => handlePointerUp(true)}
+        onClick={handleRowClick}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            onSelect(item);
+          }
+        }}
+        aria-label={`${title}, ${fmt(item.amt)} ${freqSuffix}, next ${formatDueShortDate(item.next)}. ${paused ? "Paused" : "Active"}.`}
+      >
+        <i
+          className={`cat-ic rec-badge is-${getRecurringBadgeTone(item)}`}
+          aria-hidden="true"
+        >
+          <CategorySymbol category={item.cat} description={item.desc} />
+        </i>
+        <div className="rec-row-main">
+          <div className="rec-row-title-line">
+            <span className="rec-row-title">{title}</span>
+            {paused && <span className="rec-paused-tag">Paused</span>}
+          </div>
+          <span className="rec-row-sub">
+            Next {formatDueShortDate(item.next)} · {accountLabel}
+          </span>
+        </div>
+        <div className="rec-row-right">
+          <div className="rec-row-amt-line">
+            <strong className="rec-row-amt">
+              {fmt(Math.round(Number(item.amt) || 0))}
+            </strong>
+            <span className="rec-row-unit">{freqSuffix}</span>
+          </div>
+          {showUrgentPill && (
+            <span className="rec-due-pill">{formatRelativeDueLabel(daysUntil)}</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RecurringPlansView({
+  schedules = [],
+  cards = [],
+  deletedCards = {},
+  onAdd,
+  onOpen,
+  onToggle,
+}) {
+  const billsAll = useMemo(
+    () => sortRecurringSection(schedules.filter((item) => item.cat !== "Savings")),
+    [schedules],
+  );
+  const savingsAll = useMemo(
+    () => sortRecurringSection(schedules.filter((item) => item.cat === "Savings")),
+    [schedules],
+  );
+  const activeBills = useMemo(
+    () => billsAll.filter((item) => !isRecurringPaused(item)),
+    [billsAll],
+  );
+  const activeSavings = useMemo(
+    () => savingsAll.filter((item) => !isRecurringPaused(item)),
+    [savingsAll],
+  );
+  const billsMonthly = Math.round(
+    activeBills.reduce(
+      (sum, item) => sum + normalizeToMonthly(item.amt, item.iv),
+      0,
+    ),
+  );
+  const savingsMonthly = Math.round(
+    activeSavings.reduce(
+      (sum, item) => sum + normalizeToMonthly(item.amt, item.iv),
+      0,
+    ),
+  );
+  const totalMonthly = billsMonthly + savingsMonthly;
+  const billsShare = totalMonthly > 0 ? (billsMonthly / totalMonthly) * 100 : 0;
+  const savingsShare = totalMonthly > 0 ? (savingsMonthly / totalMonthly) * 100 : 0;
+  const activeItems = [...activeBills, ...activeSavings];
+  const nextItem = sortRecurringSection(activeItems)[0];
+  const nextDays = nextItem ? getDaysUntilDue(nextItem.next) : null;
+  const nextLabel = nextItem
+    ? nextDays !== null && nextDays <= 14
+      ? formatRelativeDueLabel(nextDays)
+      : `on ${formatDueShortDate(nextItem.next)}`
+    : "";
+  const sections = [
+    {
+      id: "bills",
+      title: "Bills & Others",
+      items: billsAll,
+      monthly: billsMonthly,
+    },
+    {
+      id: "savings",
+      title: "Savings",
+      items: savingsAll,
+      monthly: savingsMonthly,
+    },
+  ].filter((section) => section.items.length > 0);
+
+  if (schedules.length === 0) {
+    return (
+      <div className="plans-recurring-scroll">
+        <div className="rec-screen-bar">
+          <span className="rec-screen-subtitle">Automated bills &amp; savings</span>
+        </div>
+        <section className="card rec-empty-card">
+          <div
+            className="cat-ic rec-badge is-bills rec-empty-ic"
+            aria-hidden="true"
+          >
+            ↻
+          </div>
+          <h2 className="rec-empty-title">No recurring plans yet</h2>
+          <p className="rec-empty-sub">
+            Track rent, subscriptions, and recurring savings transfers in one place.
+          </p>
+          <button type="button" className="rec-empty-cta" onClick={onAdd}>
+            + Add recurring
+          </button>
+        </section>
+      </div>
+    );
+  }
+
+  return (
+    <div className="plans-recurring-scroll">
+      <div className="rec-screen-bar">
+        <span className="rec-screen-subtitle">Scheduled commitments</span>
+        <button
+          type="button"
+          className="rec-new-pill-btn"
+          onClick={onAdd}
+        >
+          + New
+        </button>
+      </div>
+
+      <section className="rec-hero-card">
+        <div className="rec-hero-top">
+          <div className="rec-hero-label-group">
+            <span className="rec-hero-label">Monthly commitment</span>
+            <span className="rec-active-count-chip">{activeItems.length} active</span>
+          </div>
+        </div>
+        <div className="rec-hero-total-row">
+          <strong className="rec-hero-total">
+            {`৳${new Intl.NumberFormat("en-IN").format(totalMonthly)}`}
+          </strong>
+          <span className="rec-hero-total-unit">/mo</span>
+        </div>
+        <div className="rec-seg-block">
+          <div className="rec-seg-track" aria-hidden="true">
+            {billsShare > 0 && (
+              <div
+                className="rec-seg-fill is-bills"
+                style={{ width: `${billsShare}%` }}
+              />
+            )}
+            {savingsShare > 0 && (
+              <div
+                className="rec-seg-fill is-savings"
+                style={{ width: `${savingsShare}%` }}
+              />
+            )}
+          </div>
+          <div className="rec-seg-legend">
+            <div className="rec-seg-legend-item">
+              <span className="rec-legend-dot is-bills" />
+              <span className="rec-legend-name">Bills</span>
+              <strong className="rec-legend-val">
+                {`৳${new Intl.NumberFormat("en-IN").format(billsMonthly)}`}
+              </strong>
+            </div>
+            <div className="rec-seg-legend-item">
+              <span className="rec-legend-dot is-savings" />
+              <span className="rec-legend-name">Savings</span>
+              <strong className="rec-legend-val">
+                {`৳${new Intl.NumberFormat("en-IN").format(savingsMonthly)}`}
+              </strong>
+            </div>
+          </div>
+        </div>
+        <div className="rec-hero-footer">
+          {nextItem ? (
+            <span className="pace-pill is-lime rec-next-pill">
+              Next: {nextItem.desc || nextItem.cat || "Payment"} · {nextLabel}
+            </span>
+          ) : (
+            <span className="rec-all-paused-pill">All recurring items paused</span>
+          )}
+        </div>
+      </section>
+
+      {sections.map((section) => (
+        <section key={section.id} className="card rec-section-card">
+          <header className="rec-section-header">
+            <div className="rec-section-title-group">
+              <h2 className="section-title rec-section-title">{section.title}</h2>
+              <span className="rec-section-count">{section.items.length}</span>
+            </div>
+            <div className="rec-section-sum">
+              <strong>
+                {`৳${new Intl.NumberFormat("en-IN").format(section.monthly)}`}
+              </strong>
+              <span>/mo</span>
+            </div>
+          </header>
+          <div className="rec-rows-list">
+            {section.items.map((item) => (
+              <RecurringRow
+                key={item.id}
+                item={item}
+                fmt={M}
+                accountLabel={getAccountDisplay(item.acct, cards, deletedCards)[0]}
+                onSelect={(selected) => {
+                  triggerHaptic("selection");
+                  onOpen(selected.id);
+                }}
+                onTogglePause={(selected) => {
+                  triggerHaptic("selection");
+                  onToggle(selected.id);
+                }}
+              />
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
 function Plans({
   S,
   plan,
@@ -4130,57 +4560,6 @@ function Plans({
   );
   const b = round2(S.bud[S.m] || 0);
   const t = Math.max(0, round2(round2(tot(S, S.m)) - savingsThisMonth));
-  const orderedRec = useMemo(() => {
-    const parseTime = (val) => {
-      if (typeof val === "number" && Number.isFinite(val)) return val;
-      if (typeof val === "string") {
-        const parsed = Date.parse(val);
-        return Number.isFinite(parsed) ? parsed : 0;
-      }
-      return 0;
-    };
-    return [...(S.rec || [])]
-      .map((r, index) => ({ r, index, createdTime: parseTime(r?.createdAt) }))
-      .sort((a, bItem) => {
-        if (
-          a.createdTime > 0 &&
-          bItem.createdTime > 0 &&
-          a.createdTime !== bItem.createdTime
-        ) {
-          return bItem.createdTime - a.createdTime;
-        }
-        if (a.createdTime > 0 && bItem.createdTime === 0) return -1;
-        if (bItem.createdTime > 0 && a.createdTime === 0) return 1;
-        return bItem.index - a.index;
-      })
-      .map(({ r }) => r);
-  }, [S.rec]);
-  const billsAndOthersRec = useMemo(
-    () => orderedRec.filter((r) => r.cat !== "Savings"),
-    [orderedRec],
-  );
-  const savingsRec = useMemo(
-    () => orderedRec.filter((r) => r.cat === "Savings"),
-    [orderedRec],
-  );
-  const act = orderedRec.filter((r) => r.on);
-  const activeBillsAndOthersCount = act.filter(
-    (schedule) => schedule.cat !== "Savings",
-  ).length;
-  const activeSavingsCount = act.filter(
-    (schedule) => schedule.cat === "Savings",
-  ).length;
-  const est = round2(
-    act
-      .filter((schedule) => schedule.cat !== "Savings")
-      .reduce((a, r) => a + r.amt * (r.iv === "weekly" ? 4 : 1), 0),
-  );
-  const savingsMonthlyEst = round2(
-    act
-      .filter((schedule) => schedule.cat === "Savings")
-      .reduce((a, r) => a + r.amt * (r.iv === "weekly" ? 4 : 1), 0),
-  );
-
   const todayStr = ld();
   const isCurrentMonth = S.m === todayStr.slice(0, 7);
   let velocity = null;
@@ -4427,151 +4806,15 @@ function Plans({
     </>
   );
 
-  const renderRecurringRow = (r) => {
-    const acctName =
-      S?.cards?.length > 0
-        ? getAccountDisplay(r.acct, S.cards, S?.deletedCards)[0]
-        : r.acct && r.acct !== "cash"
-          ? getAccountDisplay(r.acct, S?.cards, S?.deletedCards)[0]
-          : "";
-    return (
-      <div
-        className="ri recurring-item-row"
-        key={r.id}
-        role="button"
-        tabIndex={0}
-        aria-label={`Edit ${r.desc}, ${M(r.amt)}`}
-        style={{ opacity: r.on ? 1 : 0.55 }}
-        onClick={() => {
-          triggerHaptic("selection");
-          onOpenRec?.(r.id);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === " ") {
-            if (event.target !== event.currentTarget) return;
-            event.preventDefault();
-            triggerHaptic("selection");
-            onOpenRec?.(r.id);
-          }
-        }}
-      >
-        <i
-          className="ic"
-          style={{
-            "--c":
-              getCategoryColor(r.cat, r.desc) || CAT[r.cat]?.[1] || "#64748b",
-          }}
-        >
-          <CategorySymbol category={r.cat} description={r.desc} />
-        </i>
-        <span className="nm">
-          <b>{r.desc}</b>
-          <small>
-            {r.on
-              ? (r.iv === "weekly" ? "Weekly" : "Monthly") +
-                " · next " +
-                dayMonth(r.next)
-              : "Paused"}
-            {acctName ? ` · ${acctName}` : ""} · {M(r.amt)}
-          </small>
-        </span>
-        <button
-          className={"sw " + (r.on ? "on" : "")}
-          type="button"
-          aria-label={`${r.on ? "Pause" : "Resume"} ${r.desc}`}
-          aria-pressed={Boolean(r.on)}
-          onClick={(event) => {
-            event.stopPropagation();
-            triggerHaptic("selection");
-            onToggleRec(r.id);
-          }}
-        />
-      </div>
-    );
-  };
-
   const recurring = (
-    <>
-      <div className="two">
-        <div className="card" style={{ margin: 0 }}>
-          <small className="lbl">Active</small>
-          <div className="big" style={{ fontSize: 30, margin: "2px 0 0" }}>
-            {act.length}
-          </div>
-        </div>
-        <div className="card" style={{ margin: 0 }}>
-          <small className="lbl">Monthly est.</small>
-          <div className="big" style={{ fontSize: 26, margin: "6px 0 0" }}>
-            {M(est)}
-          </div>
-        </div>
-      </div>
-      {orderedRec.length ? (
-        <div className="recurring-sections">
-          <div className="recurring-section-block">
-            <div className="day recurring-section-header">
-              <span>Bills &amp; Others</span>
-              <span>
-                {billsAndOthersRec.length
-                  ? `${M(est)}/mo · ${activeBillsAndOthersCount}`
-                  : "None"}
-              </span>
-            </div>
-            <div
-              className="card recurring-section-card"
-              style={{ padding: "6px 14px", margin: 0 }}
-            >
-              {billsAndOthersRec.length ? (
-                billsAndOthersRec.map(renderRecurringRow)
-              ) : (
-                <div className="recurring-section-empty">
-                  <span>No recurring bills or other expenses yet</span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="recurring-section-block">
-            <div className="day recurring-section-header">
-              <span>Savings</span>
-              <span>
-                {savingsRec.length
-                  ? `${M(savingsMonthlyEst)}/mo · ${activeSavingsCount}`
-                  : "None"}
-              </span>
-            </div>
-            <div
-              className="card recurring-section-card"
-              style={{ padding: "6px 14px", margin: 0 }}
-            >
-              {savingsRec.length ? (
-                savingsRec.map(renderRecurringRow)
-              ) : (
-                <div className="recurring-section-empty">
-                  <span>No recurring savings scheduled yet</span>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="card" style={{ padding: "6px 14px" }}>
-          <div className="emp-illustrated">
-            <div className="emp-illustrated-icon">
-              <AnimatedRecurringIcon />
-            </div>
-            <b>No recurring expenses</b>
-            <small>
-              Schedule subscriptions, utilities, or rent payments to track
-              automatically.
-            </small>
-          </div>
-        </div>
-      )}
-      <button className="btn" onClick={onAddRec}>
-        Add recurring expense
-      </button>
-    </>
+    <RecurringPlansView
+      schedules={S.rec || []}
+      cards={S.cards || []}
+      deletedCards={S.deletedCards || {}}
+      onAdd={onAddRec}
+      onOpen={onOpenRec}
+      onToggle={onToggleRec}
+    />
   );
 
   return (
@@ -11051,7 +11294,7 @@ export default function MobilePrototype({
       <main
         id="app"
         ref={screenScrollRef}
-        className={`prototype-screen-scroll${tab === "activity" ? " is-activity" : ""}${tab === "accounts" ? " is-accounts" : ""}`}
+        className="prototype-screen-scroll"
         onScroll={onScreenScroll}
         onTouchStart={(e) => {
           if (
@@ -11393,9 +11636,15 @@ export default function MobilePrototype({
         <button
           className="dock__fab"
           type="button"
-          aria-label="Add"
+          aria-label={
+            tab === "plans" && plan === "rec" ? "Add recurring" : "Add"
+          }
           onClick={() => {
             triggerHaptic("light");
+            if (tab === "plans" && plan === "rec") {
+              openSheet({ type: "add", iv: "monthly" });
+              return;
+            }
             const activeAcct =
               tab === "accounts" && activeAccountRef.current !== undefined
                 ? activeAccountRef.current

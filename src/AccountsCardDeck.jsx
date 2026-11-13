@@ -917,7 +917,15 @@ export function StackedCardDeck({
   const p = dragProgress;
 
   return (
-    <div className="cards-deck-container" onWheel={onWheel}>
+    <div
+      className="cards-deck-container"
+      onWheel={onWheel}
+      style={{
+        "--cards-deck-top-padding": `${Math.ceil(
+          14 + Math.min(totalCards - 1, 2) * SLIVER_OFFSET,
+        )}px`,
+      }}
+    >
       {/* 3D Stack Stage (perspective: 900px) */}
       <div
         className={`cards-deck-stage phase-${phase} ${phase === "dragging" ? "is-dragging" : ""}`}

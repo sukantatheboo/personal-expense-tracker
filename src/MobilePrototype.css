@@ -1030,7 +1030,8 @@ a:active,
   min-height: 0;
   height: 100%;
   margin: 0;
-  padding: 0 18px calc(120px + env(safe-area-inset-bottom, 0px));
+  /* One shared tail space clears the raised + button and bottom dock. */
+  padding: 12px 18px calc(112px + env(safe-area-inset-bottom, 0px));
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -1043,12 +1044,6 @@ a:active,
 }
 .mobile-prototype #app::-webkit-scrollbar {
   display: none;
-}
-.mobile-prototype #app.is-activity {
-  padding-bottom: calc(136px + env(safe-area-inset-bottom, 0px));
-}
-.mobile-prototype #app.is-accounts {
-  padding-bottom: calc(160px + env(safe-area-inset-bottom, 0px));
 }
 .mobile-prototype .prototype-header {
   grid-row: 1;
@@ -5956,7 +5951,7 @@ html[data-theme="dark"] .mobile-prototype .account-picker-dot {
   position: relative;
   width: 100%;
   margin: 2px 0 0;
-  padding: 82px 0 6px;
+  padding: var(--cards-deck-top-padding, 62px) 0 6px;
   touch-action: pan-y;
 }
 .mobile-prototype .cards-deck-stage {
@@ -10688,11 +10683,6 @@ html[data-theme="dark"]
 }
 
 /* Plans budget overview */
-/* Bottom clearance sized for bottom nav bar + floating + button */
-.mobile-prototype .plans-budget-scroll {
-  padding-bottom: calc(var(--nav-h, 68px) + 76px + env(safe-area-inset-bottom, 0px));
-}
-
 /* Header: Single unified color matching Home ("November 2026") */
 .mobile-prototype .plans-month-header {
   display: flex;
@@ -11055,3 +11045,571 @@ html[data-theme="dark"]
   font-weight: 600;
   line-height: 1.35;
 }
+
+/* ==========================================================================
+   RECURRING SCREEN THEME TOKENS (Light & Dark Mode)
+   ========================================================================== */
+.mobile-prototype {
+  --rec-hero-bg: linear-gradient(165deg, #162038 0%, #0d1424 100%);
+  --rec-hero-shadow: 0 12px 28px -10px rgba(13, 20, 36, 0.32);
+  --rec-hero-border: transparent;
+  --rec-hero-ink: #ffffff;
+  --rec-hero-muted: rgba(255, 255, 255, 0.68);
+  --rec-hero-chip-bg: rgba(255, 255, 255, 0.12);
+  --rec-hero-track: rgba(255, 255, 255, 0.14);
+  --rec-seg-bills: #cff558;
+  --rec-seg-savings: #38bdf8;
+
+  --rec-card-bg: var(--card, #ffffff);
+  --rec-card-shadow: 0 4px 20px -4px rgba(15, 23, 42, 0.05);
+  --rec-row-divider: rgba(15, 23, 42, 0.05);
+  --rec-row-active-bg: rgba(15, 23, 42, 0.03);
+  --rec-muted-aa: #526071; /* 6.1:1 contrast on #ffffff */
+  --rec-count-bg: rgba(15, 23, 42, 0.06);
+
+  --pill-lime-bg: #cff558;
+  --pill-lime-ink: #0b0e09;
+  --pill-paused-bg: #e2e8f0;
+  --pill-paused-ink: #475569;
+  --pill-new-bg: #0f172a;
+  --pill-new-ink: #ffffff;
+
+  /* Circular Borderless Category Icon Tints (Light Mode) */
+  --badge-bills-bg: #eef2ff;
+  --badge-bills-fg: #4f46e5;
+  --badge-rent-bg: #fff7ed;
+  --badge-rent-fg: #ea580c;
+  --badge-savings-bg: #ecfdf5;
+  --badge-savings-fg: #059669;
+  --badge-default-bg: #f1f5f9;
+  --badge-default-fg: #334155;
+
+  --rec-swipe-bg: #334155;
+  --rec-swipe-ink: #ffffff;
+}
+
+.mobile-prototype[data-theme="dark"] {
+  /* Tonal elevation above dark canvas (#0b0d10) & standard cards (#14171c) */
+  --rec-hero-bg: linear-gradient(165deg, #1b2230 0%, #131822 100%);
+  --rec-hero-shadow: 0 14px 32px -12px rgba(0, 0, 0, 0.65);
+  --rec-hero-border: rgba(255, 255, 255, 0.07);
+  --rec-hero-ink: #f8fafc;
+  --rec-hero-muted: #94a3b8; /* 5.8:1 contrast on #161c26 */
+  --rec-hero-chip-bg: rgba(255, 255, 255, 0.09);
+  --rec-hero-track: rgba(255, 255, 255, 0.10);
+  --rec-seg-bills: #cff558;
+  --rec-seg-savings: #38bdf8;
+
+  /* Borderless tonal elevation matching Home dark cards */
+  --rec-card-bg: var(--card, #14171c);
+  --rec-card-shadow: none;
+  --rec-row-divider: rgba(255, 255, 255, 0.05);
+  --rec-row-active-bg: rgba(255, 255, 255, 0.04);
+  --rec-muted-aa: #94a3b8; /* 6.4:1 contrast on #14171c (WCAG AA >= 4.5:1) */
+  --rec-count-bg: rgba(255, 255, 255, 0.08);
+
+  --pill-lime-bg: #cff558;
+  --pill-lime-ink: #0b0e09;
+  --pill-paused-bg: rgba(148, 163, 184, 0.16);
+  --pill-paused-ink: #cbd5e1;
+  --pill-new-bg: rgba(255, 255, 255, 0.10);
+  --pill-new-ink: #f8fafc;
+
+  /* Circular Borderless Category Icon Tints (Tuned for Dark Mode) */
+  --badge-bills-bg: rgba(99, 102, 241, 0.18);
+  --badge-bills-fg: #a5b4fc;
+  --badge-rent-bg: rgba(249, 115, 22, 0.18);
+  --badge-rent-fg: #fdba74;
+  --badge-savings-bg: rgba(16, 185, 129, 0.18);
+  --badge-savings-fg: #6ee7b7;
+  --badge-default-bg: rgba(148, 163, 184, 0.16);
+  --badge-default-fg: #cbd5e1;
+
+  --rec-swipe-bg: #334155;
+  --rec-swipe-ink: #f8fafc;
+}
+
+/* ==========================================================================
+   RECURRING LAYOUT & COMPONENTS
+   ========================================================================== */
+.mobile-prototype .rec-screen-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  min-height: 44px;
+}
+
+.mobile-prototype .rec-screen-subtitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--rec-muted-aa);
+}
+
+.mobile-prototype .rec-new-pill-btn {
+  appearance: none;
+  border: none;
+  background: var(--pill-new-bg);
+  color: var(--pill-new-ink);
+  font-size: 13px;
+  font-weight: 700;
+  min-height: 36px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.mobile-prototype .rec-new-pill-btn:active {
+  transform: scale(0.96);
+}
+
+/* 1. HERO CARD */
+.mobile-prototype .rec-hero-card {
+  background: var(--rec-hero-bg);
+  border: 1px solid var(--rec-hero-border);
+  border-radius: 24px;
+  padding: 20px;
+  color: var(--rec-hero-ink);
+  box-shadow: var(--rec-hero-shadow);
+  margin-bottom: 14px;
+}
+
+.mobile-prototype .rec-hero-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mobile-prototype .rec-hero-label-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mobile-prototype .rec-hero-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--rec-hero-muted);
+}
+
+.mobile-prototype .rec-active-count-chip {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--rec-hero-chip-bg);
+  color: var(--rec-hero-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.mobile-prototype .rec-hero-total-row {
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.mobile-prototype .rec-hero-total {
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--rec-hero-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.mobile-prototype .rec-hero-total-unit {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--rec-hero-muted);
+}
+
+/* Segmented Bar & Legend */
+.mobile-prototype .rec-seg-block {
+  margin-top: 16px;
+}
+
+.mobile-prototype .rec-seg-track {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--rec-hero-track);
+  display: flex;
+  overflow: hidden;
+  gap: 3px;
+}
+
+.mobile-prototype .rec-seg-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.mobile-prototype .rec-seg-fill.is-bills {
+  background: var(--rec-seg-bills);
+}
+
+.mobile-prototype .rec-seg-fill.is-savings {
+  background: var(--rec-seg-savings);
+}
+
+.mobile-prototype .rec-seg-legend {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.mobile-prototype .rec-seg-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.mobile-prototype .rec-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+
+.mobile-prototype .rec-legend-dot.is-bills {
+  background: var(--rec-seg-bills);
+}
+
+.mobile-prototype .rec-legend-dot.is-savings {
+  background: var(--rec-seg-savings);
+}
+
+.mobile-prototype .rec-legend-name {
+  color: var(--rec-hero-muted);
+  font-weight: 600;
+}
+
+.mobile-prototype .rec-legend-val {
+  color: var(--rec-hero-ink);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.mobile-prototype .rec-hero-footer {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--rec-hero-track);
+  display: flex;
+  align-items: center;
+}
+
+.mobile-prototype .rec-next-pill {
+  background: var(--pill-lime-bg);
+  color: var(--pill-lime-ink);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: 999px;
+}
+
+.mobile-prototype .rec-all-paused-pill {
+  background: var(--rec-hero-chip-bg);
+  color: var(--rec-hero-muted);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 999px;
+}
+
+/* 3. SECTION CARDS (Borderless Tonal Elevation) */
+.mobile-prototype .rec-section-card {
+  background: var(--rec-card-bg);
+  border: none;
+  border-radius: 24px;
+  padding: 16px 18px;
+  box-shadow: var(--rec-card-shadow);
+  margin-bottom: 14px;
+}
+
+.mobile-prototype .rec-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 10px;
+}
+
+.mobile-prototype .rec-section-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mobile-prototype .rec-section-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--ink);
+  margin: 0;
+}
+
+.mobile-prototype .rec-section-count {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--rec-count-bg);
+  color: var(--rec-muted-aa);
+  font-variant-numeric: tabular-nums;
+}
+
+.mobile-prototype .rec-section-sum {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.mobile-prototype .rec-section-sum span {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--rec-muted-aa);
+  margin-left: 1px;
+}
+
+/* 4. RECURRING ROWS (Min 44pt Tap Target, Tabular Numerals, Truncation) */
+.mobile-prototype .rec-rows-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.mobile-prototype .rec-row-swipe-wrap {
+  position: relative;
+  overflow: hidden;
+  border-top: 1px solid var(--rec-row-divider);
+}
+
+.mobile-prototype .rec-row-swipe-wrap:first-child {
+  border-top: none;
+}
+
+.mobile-prototype .rec-swipe-action {
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  right: 0;
+  width: 74px;
+  border: none;
+  border-radius: 14px;
+  background: var(--rec-swipe-bg);
+  color: var(--rec-swipe-ink);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.mobile-prototype .rec-row {
+  position: relative;
+  z-index: 1;
+  background: var(--rec-card-bg);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 60px; /* Guarantees >= 44pt tap target */
+  padding: 10px 0;
+  cursor: pointer;
+  transition: transform 0.18s ease, opacity 0.18s ease, background 0.15s ease;
+  user-select: none;
+}
+
+.mobile-prototype .rec-row:active {
+  background: var(--rec-row-active-bg);
+}
+
+.mobile-prototype .rec-row.is-paused {
+  opacity: 0.5;
+}
+
+/* Borderless Circular Tinted Icon Badge */
+.mobile-prototype .rec-badge {
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+  border-radius: 999px;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+}
+
+.mobile-prototype .rec-badge.is-bills {
+  background: var(--badge-bills-bg);
+  color: var(--badge-bills-fg);
+}
+
+.mobile-prototype .rec-badge.is-rent {
+  background: var(--badge-rent-bg);
+  color: var(--badge-rent-fg);
+}
+
+.mobile-prototype .rec-badge.is-savings {
+  background: var(--badge-savings-bg);
+  color: var(--badge-savings-fg);
+}
+
+.mobile-prototype .rec-badge.is-default {
+  background: var(--badge-default-bg);
+  color: var(--badge-default-fg);
+}
+
+/* Middle Column: Title + "Next 15 Nov · Cash" */
+.mobile-prototype .rec-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.mobile-prototype .rec-row-title-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mobile-prototype .rec-row-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mobile-prototype .rec-paused-tag {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--pill-paused-bg);
+  color: var(--pill-paused-ink);
+}
+
+.mobile-prototype .rec-row-sub {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--rec-muted-aa);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Right Column: Native Amount + Conditional <=7d Lime Pill */
+.mobile-prototype .rec-row-right {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  text-align: right;
+}
+
+.mobile-prototype .rec-row-amt-line {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mobile-prototype .rec-row-amt {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.mobile-prototype .rec-row-unit {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--rec-muted-aa);
+}
+
+.mobile-prototype .rec-due-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--pill-lime-bg);
+  color: var(--pill-lime-ink);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* 5. EMPTY STATE */
+.mobile-prototype .rec-empty-card {
+  background: var(--rec-card-bg);
+  border: none;
+  border-radius: 24px;
+  padding: 32px 20px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: var(--rec-card-shadow);
+}
+
+.mobile-prototype .rec-empty-ic {
+  width: 52px;
+  height: 52px;
+  font-size: 22px;
+  margin-bottom: 12px;
+}
+
+.mobile-prototype .rec-empty-title {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--ink);
+  margin: 0 0 6px;
+}
+
+.mobile-prototype .rec-empty-sub {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--rec-muted-aa);
+  max-width: 260px;
+  line-height: 1.45;
+  margin: 0 0 18px;
+}
+
+.mobile-prototype .rec-empty-cta {
+  appearance: none;
+  border: none;
+  border-radius: 999px;
+  background: var(--pill-lime-bg);
+  color: var(--pill-lime-ink);
+  font-size: 13px;
+  font-weight: 800;
+  min-height: 44px;
+  padding: 10px 20px;
+  cursor: pointer;
+}
+
+
+.mobile-prototype .rec-row {
+  touch-action: pan-y;
+}
+
+.mobile-prototype .rec-row:focus-visible,
+.mobile-prototype .rec-swipe-action:focus-visible,
+.mobile-prototype .rec-new-pill-btn:focus-visible,
+.mobile-prototype .rec-empty-cta:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ink) 55%, transparent);
+  outline-offset: 2px;
+}
+
+.mobile-prototype .rec-swipe-action:focus-visible {
+  z-index: 2;
+}
+

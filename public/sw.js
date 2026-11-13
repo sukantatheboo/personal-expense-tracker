@@ -1,4 +1,4 @@
-const CACHE_NAME = "spend-shell-v12";
+const CACHE_NAME = "spend-shell-v13";
 
 const STATIC_PATHS = [
   "",
