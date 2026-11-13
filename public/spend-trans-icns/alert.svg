@@ -1,9 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
-  <!-- Offset Lilac Fill (Hugs left/bottom, leaves transparent crescent on right) -->
-  <circle cx="47.5" cy="51.5" r="25" fill="#CA9BF7"/>
-  <!-- Variable-Width Outer Circle (Thick left/bottom, thin right with break) -->
-  <path d="M73.2 44.0 C70.2 30.8 57.2 22.8 43.8 25.5 C29.8 28.2 21.2 41.8 23.8 55.8 C26.2 69.5 39.8 78.2 53.5 75.5 C63.8 73.5 71.5 65.5 73.5 55.2 A1.5 1.5 0 0 1 76.5 55.8 C74.2 67.8 65.2 77.2 53.2 79.8 C37.0 83.2 21.2 72.8 18.5 56.5 C15.8 40.0 26.5 24.2 43.0 21.5 C58.2 18.8 73.0 28.0 76.0 43.2 A1.4 1.4 0 0 1 73.2 44.0 Z" fill="#27305E"/>
-  <!-- Tapered Exclamation Bar & Dot -->
-  <path d="M51.2 35.5 L50.8 53.5 A2.2 2.2 0 0 1 46.4 53.5 L46.0 35.5 A2.6 2.6 0 0 1 51.2 35.5 Z" fill="#27305E"/>
-  <circle cx="48.6" cy="63.5" r="3.4" fill="#27305E"/>
-</svg>

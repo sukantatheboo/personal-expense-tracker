@@ -565,26 +565,6 @@ const Seg = ({ value, options, onPick }) => (
   </div>
 );
 
-function AccountPicker({
-  value,
-  options,
-  onPick,
-  cards = [],
-  lockFrozen = true,
-  ariaLabel = "Select account",
-}) {
-  return (
-    <TxAccountCardGrid
-      value={value}
-      options={options}
-      cards={cards}
-      onPick={onPick}
-      lockFrozen={lockFrozen}
-      ariaLabel={ariaLabel}
-    />
-  );
-}
-
 const MonthSwitch = ({ m, onShift }) => (
   <div className="mon">
     <button
@@ -4198,20 +4178,6 @@ function sortRecurringSection(items) {
   });
 }
 
-function getRecurringBadgeTone(item) {
-  if (item.cat === "Savings") return "savings";
-  const description = String(item.desc || "").toLowerCase();
-  if (
-    description.includes("rent") ||
-    description.includes("house") ||
-    item.cat === "Home"
-  ) {
-    return "rent";
-  }
-  if (["Bills", "Subscriptions", "Utilities"].includes(item.cat)) return "bills";
-  return "default";
-}
-
 function RecurringRow({
   item,
   fmt,
@@ -4624,7 +4590,7 @@ function Plans({
     ? "#e11d48"
     : pctUsed >= 85
       ? "#f97316"
-      : "#cff558";
+      : "#d9f56b";
   const paceStatusTone = velocity?.isOverPace
     ? "crimson"
     : velocity?.isNearPace
@@ -4690,31 +4656,44 @@ function Plans({
                     className="plans-ring-track"
                     cx="90"
                     cy="90"
-                    r="74"
+                    r="84"
                     fill="none"
-                    strokeWidth="14"
+                    strokeWidth="12"
                   />
                   <circle
                     className="plans-ring-arc"
                     cx="90"
                     cy="90"
-                    r="74"
+                    r="84"
                     fill="none"
                     stroke={ringStrokeColor}
-                    strokeWidth="14"
+                    strokeWidth="12"
                     strokeLinecap="round"
-                    strokeDasharray={2 * Math.PI * 74}
+                    strokeDasharray={2 * Math.PI * 84}
                     strokeDashoffset={
-                      2 * Math.PI * 74 * (1 - Math.min(1, spentPct / 100))
+                      2 * Math.PI * 84 * (1 - Math.min(1, spentPct / 100))
                     }
                   />
                 </svg>
                 <div className="plans-ring-center">
-                  <strong className="plans-ring-amount">
-                    {overBudget
-                      ? `${fmt(t - b)} over`
-                      : `${fmt(b - t)} left`}
-                  </strong>
+                  <div className="plans-ring-val-row">
+                    <strong
+                      className={`plans-ring-amount${
+                        (overBudget ? fmt(t - b) : fmt(b - t)).length > 8
+                          ? " is-extra-compact"
+                          : (overBudget ? fmt(t - b) : fmt(b - t)).length > 6
+                            ? " is-compact"
+                            : ""
+                      }`}
+                    >
+                      {overBudget
+                        ? fmt(t - b)
+                        : fmt(b - t)}
+                    </strong>
+                    <span className="plans-ring-unit">
+                      {overBudget ? "over" : "left"}
+                    </span>
+                  </div>
                   <span className="plans-ring-sub">
                     {Math.round(pctUsed)}% used
                   </span>

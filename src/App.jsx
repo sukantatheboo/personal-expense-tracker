@@ -278,10 +278,6 @@ function PasswordVisibilityIcon({ visible }) {
   );
 }
 
-function userInitial(user) {
-  return profileInitial(userDisplayName(user));
-}
-
 function shiftMonth(monthValue, offset) {
   const [year, month] = (monthValue || currentMonth()).split("-").map(Number);
   const shifted = new Date(year, month - 1 + offset, 1);
@@ -1052,14 +1048,6 @@ function mergeCloudSnapshots(
         : "09:00",
     ...mergedProfile,
   };
-}
-
-function loadBudgetUpdatedAt() {
-  try {
-    return normalizeBudgetUpdatedAt(readStorage(BUDGET_UPDATED_AT_KEY, {}));
-  } catch {
-    return {};
-  }
 }
 
 function loadLocalDataOwner() {
