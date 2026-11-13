@@ -2624,41 +2624,34 @@ function Home({
             </div>
             {homeVelocity && (
               <div className="hero-velocity-row">
-                <span
+                <div
                   className={`hero-velocity-badge ${homeVelocity.isOverPace ? "is-over" : "is-good"}`}
                 >
                   <span className="hero-velocity-dot" aria-hidden="true" />
-                  {homeVelocity.isOverPace ? (
-                    <>
-                      ৳
-                      <Amount
-                        value={amountFormatter.format(
-                          Math.max(
-                            1,
-                            Math.round(
-                              Math.max(homeVelocity.paceDiff, t - b),
-                            ),
-                          ),
-                        )}
-                        mask={3}
-                        shown={shown}
-                      />{" "}
-                      over pace
-                    </>
-                  ) : (
-                    <>
-                      ৳
-                      <Amount
-                        value={amountFormatter.format(
-                          homeVelocity.dailyRemainingBudget,
-                        )}
-                        mask={3}
-                        shown={shown}
-                      />
-                      /day safe pace
-                    </>
-                  )}
-                </span>
+                  <span className="hero-velocity-metric">
+                    <span className="hero-velocity-curr">৳</span>
+                    <Amount
+                      value={amountFormatter.format(
+                        homeVelocity.isOverPace
+                          ? Math.max(
+                              1,
+                              Math.round(
+                                Math.max(homeVelocity.paceDiff, t - b),
+                              ),
+                            )
+                          : homeVelocity.dailyRemainingBudget,
+                      )}
+                      mask={3}
+                      shown={shown}
+                    />
+                    {!homeVelocity.isOverPace && (
+                      <span className="hero-velocity-unit">/day</span>
+                    )}
+                  </span>
+                  <span className="hero-velocity-label">
+                    {homeVelocity.isOverPace ? "over pace" : "safe pace"}
+                  </span>
+                </div>
                 <span className="hero-velocity-sub">
                   {homeVelocity.daysRemaining}{" "}
                   {homeVelocity.daysRemaining === 1 ? "day" : "days"} left

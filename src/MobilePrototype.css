@@ -1445,10 +1445,10 @@ a:active,
   --spend-tick-empty: rgba(255, 255, 255, 0.18);
   --spend-tick-fill: #cff558;
   --spend-tick-over: #f97316;
-  --spend-velocity-bg: rgba(8, 10, 15, 0.56);
-  --spend-velocity-border: rgba(255, 255, 255, 0.08);
+  --spend-velocity-bg: rgba(255, 255, 255, 0.08);
+  --spend-velocity-border: rgba(255, 255, 255, 0.1);
   --spend-velocity-ink: #ffffff;
-  --spend-velocity-sub: rgba(255, 255, 255, 0.68);
+  --spend-velocity-sub: rgba(255, 255, 255, 0.65);
   --spend-velocity-dot: #cff558;
   color: var(--spend-card-ink);
   border-radius: 30px;
@@ -1468,10 +1468,10 @@ a:active,
     --spend-tick-empty: rgba(11, 14, 9, 0.22);
     --spend-tick-fill: #0b0e09;
     --spend-tick-over: #dc2626;
-    --spend-velocity-bg: #0d100b;
-    --spend-velocity-border: transparent;
+    --spend-velocity-bg: rgba(13, 16, 11, 0.92);
+    --spend-velocity-border: rgba(13, 16, 11, 0.08);
     --spend-velocity-ink: #ffffff;
-    --spend-velocity-sub: rgba(255, 255, 255, 0.72);
+    --spend-velocity-sub: rgba(255, 255, 255, 0.65);
     --spend-velocity-dot: #cff558;
     background: linear-gradient(145deg, #d1f659 0%, #c6ee4a 100%);
     border-color: rgba(255, 255, 255, 0.24);
@@ -1491,10 +1491,10 @@ a:active,
   --spend-tick-empty: rgba(11, 14, 9, 0.22);
   --spend-tick-fill: #0b0e09;
   --spend-tick-over: #dc2626;
-  --spend-velocity-bg: #0d100b;
-  --spend-velocity-border: transparent;
+  --spend-velocity-bg: rgba(13, 16, 11, 0.92);
+  --spend-velocity-border: rgba(13, 16, 11, 0.08);
   --spend-velocity-ink: #ffffff;
-  --spend-velocity-sub: rgba(255, 255, 255, 0.72);
+  --spend-velocity-sub: rgba(255, 255, 255, 0.65);
   --spend-velocity-dot: #cff558;
   background: linear-gradient(145deg, #d1f659 0%, #c6ee4a 100%);
   border-color: rgba(255, 255, 255, 0.24);
@@ -9802,23 +9802,25 @@ html[data-theme="dark"]
   justify-content: space-between;
   align-items: center;
   gap: 10px;
-  margin-top: 14px;
-  padding: 13px 18px;
+  margin-top: 12px;
+  padding: 7px 14px 7px 12px;
+  min-height: 35px;
+  box-sizing: border-box;
   border-radius: 999px;
-  background: var(--spend-velocity-bg, #0d100b);
-  border: 1px solid var(--spend-velocity-border, transparent);
+  background: var(--spend-velocity-bg, rgba(255, 255, 255, 0.08));
+  border: 1px solid var(--spend-velocity-border, rgba(255, 255, 255, 0.1));
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 .mobile-prototype .hero-velocity-badge {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-size: 13.5px;
-  font-weight: 800;
-  letter-spacing: -0.015em;
+  gap: 6.5px;
   padding: 0;
   border-radius: 0;
   background: transparent;
   color: var(--spend-velocity-ink, #ffffff);
+  min-width: 0;
 }
 .mobile-prototype .hero-velocity-badge.is-good {
   background: transparent;
@@ -9826,25 +9828,64 @@ html[data-theme="dark"]
 }
 .mobile-prototype .hero-velocity-badge.is-over {
   background: transparent;
-  color: #fb7185;
+  color: var(--spend-velocity-ink, #ffffff);
 }
 .mobile-prototype .hero-velocity-dot {
-  width: 9px;
-  height: 9px;
+  width: 6.5px;
+  height: 6.5px;
   border-radius: 50%;
   background: var(--spend-velocity-dot, #cff558);
-  box-shadow: 0 0 8px rgba(207, 245, 88, 0.45);
+  box-shadow: 0 0 5px rgba(207, 245, 88, 0.55);
   flex-shrink: 0;
 }
 .mobile-prototype .hero-velocity-badge.is-over .hero-velocity-dot {
   background: #fb7185;
-  box-shadow: 0 0 8px rgba(251, 113, 133, 0.45);
+  box-shadow: 0 0 5px rgba(251, 113, 133, 0.55);
+}
+.mobile-prototype .hero-velocity-metric {
+  display: inline-flex;
+  align-items: baseline;
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: -0.015em;
+  color: var(--spend-velocity-ink, #ffffff);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.mobile-prototype .hero-velocity-curr {
+  font-size: 11.5px;
+  font-weight: 700;
+  margin-right: 1px;
+  opacity: 0.9;
+}
+.mobile-prototype .hero-velocity-unit {
+  font-size: 11px;
+  font-weight: 550;
+  opacity: 0.65;
+  margin-left: 1.5px;
+  letter-spacing: -0.01em;
+}
+.mobile-prototype .hero-velocity-label {
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  opacity: 0.62;
+  margin-left: 3.5px;
+  line-height: 1;
+}
+.mobile-prototype .hero-velocity-badge.is-over .hero-velocity-label {
+  color: #fb7185;
+  opacity: 0.95;
+  font-weight: 600;
 }
 .mobile-prototype .hero-velocity-sub {
-  font-size: 13.5px;
-  font-weight: 650;
+  font-size: 11.5px;
+  font-weight: 550;
   letter-spacing: -0.01em;
-  color: var(--spend-velocity-sub, rgba(255, 255, 255, 0.72));
+  color: var(--spend-velocity-sub, rgba(255, 255, 255, 0.65));
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 /* ───────────── Plans Section Calendar Bar Redesign ───────────── */
