@@ -1,4 +1,4 @@
-const CACHE_NAME = "spend-shell-v11";
+const CACHE_NAME = "spend-shell-v12";
 
 const STATIC_PATHS = [
   "",
@@ -24,6 +24,16 @@ function clearScheduledTimers() {
 function getScopeUrls() {
   const scope = self.registration.scope;
   return STATIC_PATHS.map((path) => new URL(path, scope).toString());
+}
+
+function cacheCompleteResponse(request, response) {
+  if (response?.status !== 200 || response.type !== "basic") {
+    return Promise.resolve();
+  }
+  return caches
+    .open(CACHE_NAME)
+    .then((cache) => cache.put(request, response.clone()))
+    .catch(() => {});
 }
 
 self.addEventListener("install", (event) => {
@@ -157,6 +167,9 @@ self.addEventListener("message", (event) => {
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET") return;
+  // Let the browser handle byte-range requests directly. Partial (206)
+  // responses are not valid Cache Storage entries.
+  if (request.headers.has("range")) return;
 
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
@@ -201,13 +214,8 @@ self.addEventListener("fetch", (event) => {
     if (isForceReload) {
       event.respondWith(
         fetch(indexUrl, { cache: "no-store" })
-          .then((response) => {
-            if (response.ok) {
-              const copy = response.clone();
-              caches
-                .open(CACHE_NAME)
-                .then((cache) => cache.put(indexUrl, copy));
-            }
+          .then(async (response) => {
+            await cacheCompleteResponse(indexUrl, response);
             return response;
           })
           .catch(async () => {
@@ -226,13 +234,8 @@ self.addEventListener("fetch", (event) => {
           (cachedIndex) =>
             cachedIndex ||
             fetch(indexUrl, { cache: "no-store" })
-              .then((response) => {
-                if (response.ok) {
-                  const copy = response.clone();
-                  caches
-                    .open(CACHE_NAME)
-                    .then((cache) => cache.put(indexUrl, copy));
-                }
+              .then(async (response) => {
+                await cacheCompleteResponse(indexUrl, response);
                 return response;
               })
               .catch(async () => {
@@ -251,10 +254,7 @@ self.addEventListener("fetch", (event) => {
         (cached) =>
           cached ||
           fetch(request).then((response) => {
-            if (response.ok && response.type === "basic") {
-              const copy = response.clone();
-              caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-            }
+            void cacheCompleteResponse(request, response);
             return response;
           }),
       ),
@@ -265,10 +265,7 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(
     fetch(request)
       .then((response) => {
-        if (response.ok && response.type === "basic") {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-        }
+        void cacheCompleteResponse(request, response);
         return response;
       })
       .catch(() => caches.match(request, { ignoreSearch: true })),
