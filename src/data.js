@@ -257,18 +257,34 @@ export function loadExpenses(
   deletedRecords = null,
 ) {
   const remappedAccounts = accountData?.remappedAccountIds || {};
+  const deletedExpenseTombstones = deletedRecords?.expenses || {};
   return Array.isArray(saved)
     ? saved
-        .filter(
-          (item) =>
-            item &&
-            typeof item.id === "string" &&
-            typeof item.description === "string" &&
-            isValidDateString(item.date) &&
-            (item.amount === null ||
-              (Number.isFinite(Number(item.amount)) &&
-                Number(item.amount) > 0)),
-        )
+        .filter((item) => {
+          if (
+            !item ||
+            typeof item.id !== "string" ||
+            typeof item.description !== "string" ||
+            !isValidDateString(item.date) ||
+            !(
+              item.amount === null ||
+              (Number.isFinite(Number(item.amount)) && Number(item.amount) > 0)
+            )
+          ) {
+            return false;
+          }
+          if (deletedExpenseTombstones[item.id]?.deleted === true) {
+            return false;
+          }
+          if (
+            item.recurringId &&
+            deletedExpenseTombstones[`recurring:${item.recurringId}:${item.date}`]
+              ?.deleted === true
+          ) {
+            return false;
+          }
+          return true;
+        })
         .map((item) => {
           const rawAcct =
             typeof item.account === "string" ? item.account.trim() : "";
@@ -1015,14 +1031,9 @@ export function loadAccountData(
         .filter((item) => {
           if (!item || typeof item !== "object" || !item.id) return false;
           const tombstone = deletedTxTombstones[item.id];
-          const txTime =
-            typeof item.updatedAt === "number"
-              ? item.updatedAt
-              : Date.parse(item.updatedAt) ||
-                (typeof item.createdAt === "number"
-                  ? item.createdAt
-                  : Date.parse(item.createdAt) || 0);
-          return !(tombstone?.deleted && tombstone.updatedAt >= txTime);
+          // Transaction IDs are unique makeId() values; once deleted:true (and not undone via deleted:false),
+          // strictly exclude it even if a legacy DB trigger bumped updated_at on spend_account_transactions.
+          return tombstone?.deleted !== true;
         })
         .map((item) => {
           if (!item || typeof item !== "object") return item;

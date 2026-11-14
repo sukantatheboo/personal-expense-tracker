@@ -548,6 +548,65 @@ export async function restoreBackupCheckpoint(
     });
   }
 
+  // Build rollback tombstones for any records present in currentData but absent in target checkpoint
+  // so other connected devices immediately drop rolled-back transactions/expenses instead of resurrecting them.
+  const buildRollbackDeletedRecords = (baseDeleted, targetData, beforeData) => {
+    const nowMs = Date.now();
+    const mergedDel = {
+      expenses: { ...(baseDeleted?.expenses || {}) },
+      budgets: { ...(baseDeleted?.budgets || {}) },
+      recurringSchedules: { ...(baseDeleted?.recurringSchedules || {}) },
+      accountTransactions: { ...(baseDeleted?.accountTransactions || {}) },
+      cards: { ...(baseDeleted?.cards || {}) },
+    };
+    if (!beforeData || typeof beforeData !== "object") return mergedDel;
+
+    const targetTxIds = new Set(
+      (targetData?.accountData?.transactions || [])
+        .map((t) => t?.id)
+        .filter(Boolean),
+    );
+    for (const tx of beforeData?.accountData?.transactions || []) {
+      if (tx?.id && !targetTxIds.has(tx.id)) {
+        const txTime =
+          parseRecordTime(tx.updatedAt) || parseRecordTime(tx.createdAt) || 0;
+        mergedDel.accountTransactions[tx.id] = {
+          deleted: true,
+          updatedAt: Math.max(nowMs, txTime + 1),
+        };
+      }
+    }
+
+    const targetExpIds = new Set(
+      (targetData?.expenses || []).map((e) => e?.id).filter(Boolean),
+    );
+    for (const exp of beforeData?.expenses || []) {
+      if (exp?.id && !targetExpIds.has(exp.id)) {
+        const expTime =
+          parseRecordTime(exp.updatedAt) || parseRecordTime(exp.createdAt) || 0;
+        mergedDel.expenses[exp.id] = {
+          deleted: true,
+          updatedAt: Math.max(nowMs, expTime + 1),
+        };
+      }
+    }
+
+    const targetRecIds = new Set(
+      (targetData?.recurringSchedules || []).map((r) => r?.id).filter(Boolean),
+    );
+    for (const rec of beforeData?.recurringSchedules || []) {
+      if (rec?.id && !targetRecIds.has(rec.id)) {
+        const recTime =
+          parseRecordTime(rec.updatedAt) || parseRecordTime(rec.createdAt) || 0;
+        mergedDel.recurringSchedules[rec.id] = {
+          deleted: true,
+          updatedAt: Math.max(nowMs, recTime + 1),
+        };
+      }
+    }
+    return mergedDel;
+  };
+
   const isLocalId = String(checkpointId).startsWith("local-");
   if (userId && !isLocalId) {
     const client = await getSupabase();
@@ -557,6 +616,11 @@ export async function restoreBackupCheckpoint(
       });
       if (!rpcRes.error && rpcRes.data?.data) {
         const restoredData = rpcRes.data.data;
+        const effectiveDeleted = buildRollbackDeletedRecords(
+          restoredData.deletedRecords,
+          restoredData,
+          currentData,
+        );
         return {
           status: "restored",
           source: "cloud",
@@ -564,9 +628,10 @@ export async function restoreBackupCheckpoint(
           reconciliation: rpcRes.data.reconciliation || null,
           data: {
             ...restoredData,
+            deletedRecords: effectiveDeleted,
             accountData: loadAccountData(
               restoredData.accountData ?? emptyAccountData(),
-              restoredData.deletedRecords,
+              effectiveDeleted,
               restoredData.expenses,
             ),
           },
@@ -588,8 +653,14 @@ export async function restoreBackupCheckpoint(
     );
   }
 
+  const effectiveLocalDeleted = buildRollbackDeletedRecords(
+    localMatch.data.deletedRecords,
+    localMatch.data,
+    currentData,
+  );
   const restoredLocal = {
     ...localMatch.data,
+    deletedRecords: effectiveLocalDeleted,
     ...(localMatch.data.profile &&
     !localMatch.data.profile.avatar &&
     currentData?.profile?.avatar
@@ -602,7 +673,7 @@ export async function restoreBackupCheckpoint(
       : {}),
     accountData: loadAccountData(
       localMatch.data.accountData ?? emptyAccountData(),
-      localMatch.data.deletedRecords,
+      effectiveLocalDeleted,
       localMatch.data.expenses,
     ),
   };
@@ -641,6 +712,58 @@ export async function verifyCloudLedgerReconciliation() {
     return null;
   }
   return null;
+}
+
+export async function checkSupabaseSqlHealth() {
+  const client = await getSupabase();
+  if (!client) {
+    return {
+      installed: false,
+      allPassed: false,
+      schemaVersion: null,
+      checks: [],
+      cloudReconciliation: null,
+    };
+  }
+  try {
+    const [installRes, reconcileRes] = await Promise.all([
+      client.rpc("verify_spend_sql_installation"),
+      client.rpc("verify_spend_ledger_reconciliation"),
+    ]);
+    const checks = Array.isArray(installRes?.data) ? installRes.data : [];
+    const cloudReconciliation =
+      !reconcileRes?.error && reconcileRes?.data ? reconcileRes.data : null;
+    if (checks.length > 0) {
+      const allPassed = checks.every((c) =>
+        String(c?.status || "").includes("INSTALLED"),
+      );
+      return {
+        installed: true,
+        allPassed,
+        schemaVersion: cloudReconciliation?.schemaVersion || "2026.11.17",
+        checks,
+        cloudReconciliation,
+      };
+    }
+    if (cloudReconciliation) {
+      return {
+        installed: true,
+        allPassed: Boolean(cloudReconciliation.schemaVersion === "2026.11.17"),
+        schemaVersion: cloudReconciliation.schemaVersion || "2026.11.16",
+        checks: [],
+        cloudReconciliation,
+      };
+    }
+  } catch {
+    // Fall through
+  }
+  return {
+    installed: false,
+    allPassed: false,
+    schemaVersion: null,
+    checks: [],
+    cloudReconciliation: null,
+  };
 }
 
 export function hasPotentialCloudSession() {
@@ -946,9 +1069,9 @@ function mergeAccountDataWithRawSnapshot(
     const txType = tx.type === "adjust" ? "adjustment" : tx.type;
     if (!["income", "adjustment", "transfer"].includes(txType)) return;
     const tombstone = deletedTxTombstones[tx.id];
+    if (tombstone?.deleted === true) return;
     const txTime =
       parseRecordTime(tx.updatedAt) || parseRecordTime(tx.createdAt);
-    if (tombstone?.deleted && tombstone.updatedAt >= txTime) return;
     const existing = txMap.get(tx.id);
     const exTime =
       parseRecordTime(existing?.updatedAt) ||

@@ -429,6 +429,9 @@ end;
 $$;
 
 -- 5. Upgrade save_spend_user_snapshot to automatically capture daily + pre-restore checkpoints
+drop function if exists public.save_spend_user_snapshot(jsonb, text);
+drop function if exists public.save_spend_user_snapshot(jsonb, text, boolean);
+
 create or replace function public.save_spend_user_snapshot(
   p_data jsonb,
   p_expected_updated_at text default null,
@@ -551,8 +554,8 @@ begin
     );
   end if;
 
-  perform public.sync_spend_accounts_from_snapshot(v_uid, v_effective_data);
-
+  -- Note: BEFORE INSERT OR UPDATE trigger sync_spend_accounts_from_snapshot on public.spend_user_data
+  -- automatically normalizes cards, balances, and unified ledger transactions.
   v_reconciliation := public.verify_spend_ledger_reconciliation(v_uid);
 
   return jsonb_build_object(
@@ -739,8 +742,8 @@ begin
     set data = excluded.data,
         updated_at = excluded.updated_at;
 
-  perform public.sync_spend_accounts_from_snapshot(v_uid, v_target.data);
-
+  -- Note: BEFORE INSERT OR UPDATE trigger sync_spend_accounts_from_snapshot on public.spend_user_data
+  -- automatically normalizes cards, balances, and unified ledger transactions.
   v_reconciliation := public.verify_spend_ledger_reconciliation(v_uid);
 
   return jsonb_build_object(
@@ -758,12 +761,14 @@ $$;
 revoke all on function public.summarize_spend_snapshot(jsonb) from public;
 revoke all on function public.verify_spend_ledger_reconciliation(uuid) from public;
 revoke all on function public.capture_spend_backup_checkpoint_internal(uuid, jsonb, text, text, timestamptz) from public;
+revoke all on function public.save_spend_user_snapshot(jsonb, text, boolean) from public, anon;
 revoke all on function public.list_spend_backup_checkpoints(integer) from public;
 revoke all on function public.create_spend_backup_checkpoint(text, text, jsonb) from public;
 revoke all on function public.restore_spend_backup_checkpoint(uuid) from public;
 
 grant execute on function public.summarize_spend_snapshot(jsonb) to authenticated;
 grant execute on function public.verify_spend_ledger_reconciliation(uuid) to authenticated;
+grant execute on function public.save_spend_user_snapshot(jsonb, text, boolean) to authenticated;
 grant execute on function public.list_spend_backup_checkpoints(integer) to authenticated;
 grant execute on function public.create_spend_backup_checkpoint(text, text, jsonb) to authenticated;
 grant execute on function public.restore_spend_backup_checkpoint(uuid) to authenticated;

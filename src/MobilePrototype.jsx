@@ -9434,6 +9434,9 @@ function AppSettingsPage({
   onCreateCheckpoint,
   onRestoreCheckpoint,
   onRefreshCheckpoints,
+  sqlHealth = null,
+  sqlHealthChecking = false,
+  onVerifySqlAndSync,
   updateAvailable = false,
   updateInfo = null,
   checkingForUpdate = false,
@@ -9720,7 +9723,11 @@ function AppSettingsPage({
             aria-expanded={reconcileExpanded}
             onClick={() => {
               triggerHaptic("selection");
-              setReconcileExpanded((prev) => !prev);
+              const next = !reconcileExpanded;
+              setReconcileExpanded(next);
+              if (next && profile?.connected) {
+                onVerifySqlAndSync?.();
+              }
             }}
           >
             <i
@@ -9804,6 +9811,48 @@ function AppSettingsPage({
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+            {profile?.connected && (
+              <div className="mfs-reconcile-accounts" style={{ marginTop: "8px", borderTop: "1px solid var(--line, rgba(128,128,128,0.14))", paddingTop: "10px" }}>
+                <div className="mfs-reconcile-acct-row">
+                  <div className="mfs-reconcile-acct-meta">
+                    <b>Supabase SQL &amp; Cloud Sync</b>
+                    <small>
+                      {sqlHealthChecking
+                        ? "Syncing & verifying Supabase SQL schema…"
+                        : sqlHealth?.allPassed
+                          ? `SQL v${sqlHealth.schemaVersion || "2026.11.17"} active · Cloud current ${money(sqlHealth?.cloudReconciliation?.totalCurrentBalance ?? reconciliation.totalCurrentBalance ?? 0)}`
+                          : sqlHealth?.installed
+                            ? "Partial SQL schema detected — run 20261117 migration in Supabase"
+                            : "Tap Verify to check Supabase SQL installation & sync"}
+                    </small>
+                  </div>
+                  <div className="mfs-reconcile-acct-bal">
+                    <button
+                      type="button"
+                      className={`mfs-reconcile-badge ${sqlHealth?.allPassed && Math.abs((sqlHealth?.cloudReconciliation?.totalCurrentBalance ?? reconciliation.totalCurrentBalance ?? 0) - (reconciliation.totalCurrentBalance || 0)) < 0.01 ? "is-ok" : "is-warn"}`}
+                      style={{ border: "none", cursor: "pointer", font: "inherit" }}
+                      disabled={sqlHealthChecking}
+                      onClick={() => {
+                        triggerHaptic("light");
+                        onVerifySqlAndSync?.();
+                      }}
+                    >
+                      {sqlHealthChecking
+                        ? "Checking…"
+                        : sqlHealth?.allPassed &&
+                            Math.abs(
+                              (sqlHealth?.cloudReconciliation?.totalCurrentBalance ??
+                                reconciliation.totalCurrentBalance ??
+                                0) -
+                                (reconciliation.totalCurrentBalance || 0),
+                            ) < 0.01
+                          ? "✓ SQL & Cloud OK"
+                          : "Sync & Verify"}
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -10988,6 +11037,9 @@ export default function MobilePrototype({
   onCreateCheckpoint,
   onRestoreCheckpoint,
   onRefreshCheckpoints,
+  sqlHealth = null,
+  sqlHealthChecking = false,
+  onVerifySqlAndSync,
   accountStatus,
   authBusy,
   onResumeSync,
@@ -12331,6 +12383,9 @@ export default function MobilePrototype({
               onCreateCheckpoint={onCreateCheckpoint}
               onRestoreCheckpoint={onRestoreCheckpoint}
               onRefreshCheckpoints={onRefreshCheckpoints}
+              sqlHealth={sqlHealth}
+              sqlHealthChecking={sqlHealthChecking}
+              onVerifySqlAndSync={onVerifySqlAndSync}
               updateAvailable={updateAvailable}
               updateInfo={updateInfo}
               checkingForUpdate={checkingForUpdate}

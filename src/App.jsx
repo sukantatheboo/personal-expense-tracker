@@ -48,6 +48,7 @@ import {
 } from "./push.js";
 import {
   CLOUD_SYNC_USER_KEY,
+  checkSupabaseSqlHealth,
   clearCloudSyncOutbox,
   createBackupCheckpoint,
   ensureDailyBackupCheckpoint,
@@ -464,16 +465,61 @@ function mergeRecords(
   const records = new Map(cloudRecords.map((record) => [record.id, record]));
   for (const record of localRecords) {
     const cloudRecord = records.get(record.id);
-    if (
-      !cloudRecord ||
-      preferLocalRecord(record, cloudRecord, preferLocalOnTie)
-    ) {
+    if (!cloudRecord) {
+      if (preferLocalOnTie) {
+        records.set(record.id, record);
+      }
+    } else if (preferLocalRecord(record, cloudRecord, preferLocalOnTie)) {
       records.set(record.id, record);
     }
   }
   return [...records.values()].filter(
     (record) => !isRecordDeleted(deletedChanges, record.id),
   );
+}
+
+function stripCloudRemovedRecordsFromLocal(local, previousCloud, remoteData) {
+  if (!local || !previousCloud || !remoteData) return local;
+  const prevTxMap = new Map(
+    (previousCloud?.accountData?.transactions || [])
+      .filter((t) => t?.id)
+      .map((t) => [t.id, t]),
+  );
+  const remoteTxIds = new Set(
+    (remoteData?.accountData?.transactions || [])
+      .map((t) => t?.id)
+      .filter(Boolean),
+  );
+  const prevExpMap = new Map(
+    (previousCloud?.expenses || [])
+      .filter((e) => e?.id)
+      .map((e) => [e.id, e]),
+  );
+  const remoteExpIds = new Set(
+    (remoteData?.expenses || []).map((e) => e?.id).filter(Boolean),
+  );
+  const filteredLocalTx = (local?.accountData?.transactions || []).filter(
+    (tx) => {
+      if (!tx?.id || remoteTxIds.has(tx.id)) return true;
+      const prevTx = prevTxMap.get(tx.id);
+      if (!prevTx) return true;
+      return recordUpdatedAt(tx) > recordUpdatedAt(prevTx);
+    },
+  );
+  const filteredLocalExp = (local?.expenses || []).filter((exp) => {
+    if (!exp?.id || remoteExpIds.has(exp.id)) return true;
+    const prevExp = prevExpMap.get(exp.id);
+    if (!prevExp) return true;
+    return recordUpdatedAt(exp) > recordUpdatedAt(prevExp);
+  });
+  return {
+    ...local,
+    expenses: filteredLocalExp,
+    accountData: {
+      ...local.accountData,
+      transactions: filteredLocalTx,
+    },
+  };
 }
 
 function expenseOccurrenceKey(expense) {
@@ -1782,15 +1828,18 @@ export default function App() {
           return;
         }
         setCloudSyncActivity("syncing");
+        let bypassVersionMismatch = false;
         for (let attempt = 0; attempt < 3; attempt += 1) {
           let savedVersion = null;
+          const attemptedVersion = bypassVersionMismatch
+            ? null
+            : cloudVersionRef.current;
           try {
-            const expectedVersion = cloudVersionRef.current;
             savedVersion = await saveCloudData(
               userId,
               snapshot,
-              expectedVersion,
-              { forceOverwrite },
+              attemptedVersion,
+              { forceOverwrite: forceOverwrite || bypassVersionMismatch },
             );
           } catch (error) {
             if (error.code !== "23505") throw error;
@@ -1808,6 +1857,7 @@ export default function App() {
               ensureDailyBackupCheckpoint(userId, snapshot, savedVersion);
               if (!areCloudSnapshotsEqual(cloudSnapshotRef.current, snapshot)) {
                 snapshot = cloudSnapshotRef.current;
+                bypassVersionMismatch = false;
                 continue;
               }
               clearCloudSyncOutbox(userId, savedVersion);
@@ -1828,9 +1878,15 @@ export default function App() {
           }
           if (forceOverwrite) {
             cloudVersionRef.current = remote?.updated_at ?? null;
+            bypassVersionMismatch = true;
             continue;
           }
-          snapshot = cloudSnapshotRef.current;
+          const previousCloud = lastSyncedSnapshotRef.current;
+          snapshot = stripCloudRemovedRecordsFromLocal(
+            cloudSnapshotRef.current,
+            previousCloud,
+            remote?.data,
+          );
           if (remote?.data) {
             const remoteSnapshot = mergeCloudSnapshots(
               createEmptyCloudSnapshot(snapshot),
@@ -1852,6 +1908,14 @@ export default function App() {
             cloudAccountSettingsRef.current =
               remoteSnapshot.accountData.settings;
             applyCloudSnapshot(snapshot);
+          }
+          if (
+            attemptedVersion &&
+            remote?.updated_at &&
+            remote.updated_at === attemptedVersion
+          ) {
+            // Heal legacy DB updated_at mismatch where load_spend_user_snapshot returned GREATEST(...)
+            bypassVersionMismatch = true;
           }
           cloudVersionRef.current = remote?.updated_at ?? null;
         }
@@ -1883,28 +1947,31 @@ export default function App() {
         if (!remote?.data) return null;
 
         const isSameVersion =
-          cloudVersionRef.current &&
-          (remote.updated_at === cloudVersionRef.current ||
-            Math.abs(
-              (Date.parse(remote.updated_at) || 0) -
-                (Date.parse(cloudVersionRef.current) || 0),
-            ) < 1000);
+          Boolean(cloudVersionRef.current) &&
+          remote.updated_at === cloudVersionRef.current;
 
         if (
           source === "live" &&
           lastSyncedSnapshotRef.current &&
-          (areCloudSnapshotsEqual(remote.data, lastSyncedSnapshotRef.current) ||
-            isSameVersion)
+          isSameVersion &&
+          areCloudSnapshotsEqual(remote.data, lastSyncedSnapshotRef.current)
         ) {
           if (remote.updated_at) cloudVersionRef.current = remote.updated_at;
           setCloudSyncActivity("synced");
           return lastSyncedSnapshotRef.current;
         }
 
-        const local = cloudSnapshotRef.current;
+        const rawLocal = cloudSnapshotRef.current;
         const previousCloud = lastSyncedSnapshotRef.current;
         const hasPendingChanges =
-          previousCloud && !areCloudSnapshotsEqual(local, previousCloud);
+          previousCloud && !areCloudSnapshotsEqual(rawLocal, previousCloud);
+        const local = hasPendingChanges
+          ? stripCloudRemovedRecordsFromLocal(
+              rawLocal,
+              previousCloud,
+              remote.data,
+            )
+          : rawLocal;
         const accountSettingsChanged =
           previousCloud &&
           !areAccountSettingsEqual(
@@ -1917,12 +1984,14 @@ export default function App() {
           false,
           false,
         );
-        const refreshed = mergeCloudSnapshots(
-          local,
-          remote.data,
-          Boolean(hasPendingChanges),
-          Boolean(accountSettingsChanged),
-        );
+        const refreshed = hasPendingChanges
+          ? mergeCloudSnapshots(
+              local,
+              remote.data,
+              true,
+              Boolean(accountSettingsChanged),
+            )
+          : remoteSnapshot;
 
         setNormalizedAccountSync(remote.normalizedAccountSync !== false);
         cloudVersionRef.current = remote.updated_at ?? cloudVersionRef.current;
@@ -2506,12 +2575,19 @@ export default function App() {
           if (active && hasCloudData) {
             applyCloudSnapshot(merged);
           }
+          const attemptedVersion = remote?.updated_at ?? null;
           try {
-            const expectedVersion = remote?.updated_at ?? null;
             savedVersion = await saveCloudData(
               pushUser.id,
               merged,
-              expectedVersion,
+              attempt >= 1 && remote?._bypassVersionMismatch
+                ? null
+                : attemptedVersion,
+              {
+                forceOverwrite: Boolean(
+                  attempt >= 1 && remote?._bypassVersionMismatch,
+                ),
+              },
             );
           } catch (error) {
             if (error.code !== "23505" || remote?.data) throw error;
@@ -2535,7 +2611,15 @@ export default function App() {
             );
             break;
           }
-          remote = await loadCloudData(pushUser.id);
+          const nextRemote = await loadCloudData(pushUser.id);
+          if (
+            attemptedVersion &&
+            nextRemote?.updated_at &&
+            nextRemote.updated_at === attemptedVersion
+          ) {
+            nextRemote._bypassVersionMismatch = true;
+          }
+          remote = nextRemote;
           setNormalizedAccountSync(remote?.normalizedAccountSync !== false);
         }
         if (!savedVersion || !merged) {
@@ -2602,11 +2686,7 @@ export default function App() {
         payload?.table === "spend_user_data" &&
         incomingUpdatedAt &&
         cloudVersionRef.current &&
-        (incomingUpdatedAt === cloudVersionRef.current ||
-          Math.abs(
-            (Date.parse(incomingUpdatedAt) || 0) -
-              (Date.parse(cloudVersionRef.current) || 0),
-          ) < 1000)
+        incomingUpdatedAt === cloudVersionRef.current
       ) {
         return;
       }
@@ -2725,8 +2805,28 @@ export default function App() {
         // Ignore Capacitor listener setup errors
       }
     }
+    const handleWindowFocus = () => {
+      if (document.visibilityState === "visible" && navigator.onLine) {
+        if (hasPendingCloudOutbox(pushUser.id)) {
+          void queueCloudSnapshotSave(pushUser.id).catch(() => {});
+        }
+        handleCloudChange();
+      }
+    };
+    const periodicSyncTimer = window.setInterval(() => {
+      if (
+        active &&
+        document.visibilityState === "visible" &&
+        navigator.onLine &&
+        Date.now() - lastLocalSaveTimeRef.current >= 4000
+      ) {
+        void queueCloudSnapshotRefresh(pushUser.id, "live").catch(() => {});
+      }
+    }, 10000);
+
     window.addEventListener("offline", handleOffline);
     window.addEventListener("online", handleOnline);
+    window.addEventListener("focus", handleWindowFocus);
     window.addEventListener("pagehide", handlePageHide);
     window.addEventListener("beforeunload", handlePageHide);
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -2735,9 +2835,11 @@ export default function App() {
     return () => {
       active = false;
       window.clearTimeout(liveChangeTimerRef.current);
+      window.clearInterval(periodicSyncTimer);
       capAppListener?.then?.((h) => h?.remove?.())?.catch?.(() => {});
       window.removeEventListener("offline", handleOffline);
       window.removeEventListener("online", handleOnline);
+      window.removeEventListener("focus", handleWindowFocus);
       window.removeEventListener("pagehide", handlePageHide);
       window.removeEventListener("beforeunload", handlePageHide);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
@@ -3608,7 +3710,9 @@ export default function App() {
       },
       transactions: current.transactions.filter((item) => item.id !== txId),
     }));
-    setRecordDeleted("accountTransactions", txId, true);
+    setRecordDeleted("accountTransactions", txId, true, {
+      minUpdatedAt: recordUpdatedAt(existingTx),
+    });
     return () => {
       setRecordDeleted("accountTransactions", txId, false);
       setAccountData((current) =>
@@ -3779,6 +3883,7 @@ export default function App() {
     setRecordDeleted("cards", cardId, true, {
       name: existingCard?.name,
       color: existingCard?.color,
+      minUpdatedAt: recordUpdatedAt(existingCard),
     });
 
     if (existingCard) {
@@ -4194,7 +4299,9 @@ export default function App() {
     setRecurringSchedules((current) =>
       current.filter((item) => item.id !== scheduleId),
     );
-    setRecordDeleted("recurringSchedules", scheduleId, true);
+    setRecordDeleted("recurringSchedules", scheduleId, true, {
+      minUpdatedAt: recordUpdatedAt(schedule),
+    });
     return () => {
       lastRecurringCheckRef.current = "";
       setRecordDeleted("recurringSchedules", scheduleId, false);
@@ -4208,20 +4315,24 @@ export default function App() {
   }
 
   function setRecordDeleted(collection, id, isDeleted, metadata = {}) {
+    const { minUpdatedAt = 0, ...restMetadata } = metadata || {};
     setDeletedRecords((current) => {
       const normalized = normalizeDeletedRecords(current);
       const existing = normalized[collection][id];
       if (!isDeleted && !existing?.deleted && collection !== "budgets")
         return current;
       const previous = existing?.updatedAt ?? 0;
+      const minFloor = Number.isFinite(Number(minUpdatedAt))
+        ? Number(minUpdatedAt) + 1
+        : 0;
       return {
         ...normalized,
         [collection]: {
           ...normalized[collection],
           [id]: {
             deleted: isDeleted,
-            updatedAt: Math.max(Date.now(), previous + 1),
-            ...metadata,
+            updatedAt: Math.max(Date.now(), previous + 1, minFloor),
+            ...restMetadata,
           },
         },
       };
@@ -4229,12 +4340,14 @@ export default function App() {
   }
 
   function setExpenseDeleted(expense, isDeleted) {
-    setRecordDeleted("expenses", expense.id, isDeleted);
+    const minUpdatedAt = recordUpdatedAt(expense);
+    setRecordDeleted("expenses", expense.id, isDeleted, { minUpdatedAt });
     if (expense.recurringId)
       setRecordDeleted(
         "expenses",
         `recurring:${expense.recurringId}:${expense.date}`,
         isDeleted,
+        { minUpdatedAt },
       );
   }
 
@@ -4449,6 +4562,26 @@ export default function App() {
     setBackupStatus("Unified ledger & expenses exported as CSV.");
   }
 
+  const [sqlHealth, setSqlHealth] = useState(null);
+  const [sqlHealthChecking, setSqlHealthChecking] = useState(false);
+
+  const handleVerifySqlAndSync = useCallback(async () => {
+    setSqlHealthChecking(true);
+    try {
+      if (pushUser?.id && cloudSyncEnabled) {
+        await queueCloudSnapshotSave(pushUser.id).catch(() => {});
+        await queueCloudSnapshotRefresh(pushUser.id, "manual").catch(() => {});
+      }
+      const health = await checkSupabaseSqlHealth();
+      setSqlHealth(health);
+      return health;
+    } catch {
+      return null;
+    } finally {
+      setSqlHealthChecking(false);
+    }
+  }, [pushUser?.id, cloudSyncEnabled]);
+
   const refreshBackupCheckpoints = useCallback(
     async (uid = pushUser?.id) => {
       setCheckpointsLoading(true);
@@ -4470,6 +4603,9 @@ export default function App() {
   useEffect(() => {
     if (!isHydrated) return;
     void refreshBackupCheckpoints(pushUser?.id);
+    if (pushUser?.id && cloudSyncReady) {
+      void checkSupabaseSqlHealth().then(setSqlHealth).catch(() => {});
+    }
   }, [isHydrated, pushUser?.id, cloudSyncReady, refreshBackupCheckpoints]);
 
   const handleCreateBackupCheckpoint = useCallback(async () => {
@@ -5580,6 +5716,9 @@ export default function App() {
           onCreateCheckpoint={handleCreateBackupCheckpoint}
           onRestoreCheckpoint={handleRestoreBackupCheckpoint}
           onRefreshCheckpoints={() => refreshBackupCheckpoints(pushUser?.id)}
+          sqlHealth={sqlHealth}
+          sqlHealthChecking={sqlHealthChecking}
+          onVerifySqlAndSync={handleVerifySqlAndSync}
           onSignOut={signOutOfPush}
           onResumeSync={handleResumeSync}
           accountStatus={cloudSyncStatus || authStatus}

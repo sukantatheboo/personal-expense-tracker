@@ -749,8 +749,17 @@ begin
         )
       ) as item
     from public.spend_account_transactions t
+    left join raw_snapshot r on true
     where t.user_id = v_user_id
       and t.deleted_at is null
+      and coalesce(
+            r.data #>> array['deletedRecords', 'accountTransactions', t.id, 'deleted'],
+            ''
+          ) <> 'true'
+      and coalesce(
+            r.data #>> array['deletedRecords', 'expenses', t.id, 'deleted'],
+            ''
+          ) <> 'true'
   ),
   table_deleted as (
     select t.id as tx_id,
