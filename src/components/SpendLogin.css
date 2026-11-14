@@ -15,7 +15,7 @@
   --key-active: #E4E3DA;
   --key: 64px;
   --shift: 72px;
-  --top: 88px;
+  --top: max(88px, calc(env(safe-area-inset-top, 0px) + 36px));
   position: relative;
   width: 100%;
   height: 100dvh;
@@ -366,7 +366,7 @@ html[data-theme="dark"] .sl,
   .sl {
     --key: 52px;
     --shift: 20px;
-    --top: 24px;
+    --top: max(24px, env(safe-area-inset-top, 0px));
   }
   .sl__title {
     margin: 18px 0 6px;

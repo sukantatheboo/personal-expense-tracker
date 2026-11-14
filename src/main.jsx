@@ -1,3 +1,20 @@
+// Early theme boot to synchronize background and status bar chrome before render
+try {
+  const savedTheme = localStorage.getItem("spend-theme-v1");
+  const isDark =
+    savedTheme === "dark" ||
+    (savedTheme !== "light" &&
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-color-scheme: dark)").matches);
+  document.documentElement.dataset.theme = isDark ? "dark" : "light";
+  const themeColor = isDark ? "#08080c" : "#f4f3ee";
+  document
+    .querySelectorAll('meta[name="theme-color"]')
+    .forEach((meta) => meta.setAttribute("content", themeColor));
+} catch {
+  // ignore
+}
+
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App.jsx";

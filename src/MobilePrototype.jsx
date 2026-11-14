@@ -11,6 +11,7 @@ import React, {
   useState,
 } from "react";
 import {
+  computeAccountBalances,
   flushStorageWriteQueues,
   getSavingsAccountId,
   isHapticsEnabled,
@@ -518,36 +519,21 @@ const monthExp = (S) =>
     })
     .map(({ e }) => e);
 function bal(S, id) {
+  if (!id) return 0;
+  const computed = computeAccountBalances(
+    S?.cards,
+    S?.start,
+    S?.exp,
+    S?.tx,
+  );
+  if (Object.hasOwn(computed.currentBalances, id)) {
+    return computed.currentBalances[id];
+  }
   const cardObj = Array.isArray(S?.cards)
     ? S.cards.find((c) => c.id === id)
     : null;
-  let b = Number(S?.start?.[id] ?? cardObj?.initialBalance) || 0;
-  const savingsId = getSavingsAccountId(S?.cards);
-  for (const e of S.exp) {
-    if (e.amt == null) continue;
-    if (e.cat === "Savings" && savingsId) {
-      const hasValidFundingCard =
-        Boolean(e.acct) && e.acct !== "cash" && e.acct !== savingsId;
-      if (id === savingsId && hasValidFundingCard) b += e.amt;
-      else if (e.acct === id && id !== savingsId) b -= e.amt;
-    } else if (e.acct === id) b -= e.amt;
-  }
-  for (const t of S.tx) {
-    if (t.type === "income" && t.acct === id) b += t.amt;
-    if ((t.type === "adjust" || t.type === "adjustment") && t.acct === id) {
-      const isUp =
-        t.dir === "up" ||
-        t.dir === "increase" ||
-        t.direction === "increase" ||
-        t.direction === "up";
-      b += isUp ? t.amt : -t.amt;
-    }
-    if (t.type === "transfer") {
-      if (t.acct === id) b -= t.amt;
-      if (t.to === id) b += t.amt;
-    }
-  }
-  return Math.round(b * 100) / 100;
+  const fallback = Number(S?.start?.[id] ?? cardObj?.initialBalance) || 0;
+  return Math.round(fallback * 100) / 100;
 }
 
 /* ───────────── small shared pieces ───────────── */
@@ -8983,7 +8969,7 @@ function CardOptionsSheet({
 
             {/* Starting Balance Field */}
             <div className="card-options-field">
-              <label>Starting Balance</label>
+              <label>Opening Balance (Starting Balance)</label>
               <div className="add-card-balance-input-wrap">
                 <span className="add-card-curr-prefix">৳</span>
                 <input
@@ -9406,7 +9392,9 @@ function ProfileSettingsPage({
               <b>Cloud backup &amp; sync</b>
               <small>
                 {profile?.connected
-                  ? "Expenses, cards, budgets & profile photo"
+                  ? S?.outboxPending
+                    ? "Offline outbox queued · Auto-flushes on reconnect"
+                    : "Expenses, cards, budgets & profile photo"
                   : "Sign in to back up & sync across devices"}
               </small>
             </span>
@@ -9425,6 +9413,47 @@ function ProfileSettingsPage({
               <span className="profile-sync-indicator" aria-hidden="true" />
               <span className="profile-sync-copy">{syncLabel}</span>
             </div>
+          </div>
+
+          <div className="ri mfs-list-row">
+            <i
+              className="ic mfs-row-icon"
+              style={{
+                "--c":
+                  S?.reconciliation?.isBalanced !== false
+                    ? "#10b981"
+                    : "#f59e0b",
+              }}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.1"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                <path d="m9 12 2 2 4-4" />
+              </svg>
+            </i>
+            <span className="nm">
+              <b>Ledger reconciliation</b>
+              <small>
+                {S?.reconciliation?.isBalanced !== false
+                  ? `Opening + Credits − Debits = ${money(S?.reconciliation?.totalCurrentBalance || 0)}`
+                  : `${S?.reconciliation?.discrepancyCount || 1} account discrepancy detected`}
+              </small>
+            </span>
+            <span
+              className={`settings-inline-action mfs-status-pill${S?.reconciliation?.isBalanced !== false ? " is-active" : ""}`}
+            >
+              {S?.reconciliation?.isBalanced !== false && (
+                <span className="mfs-status-pill-dot" aria-hidden="true" />
+              )}
+              {S?.reconciliation?.isBalanced !== false ? "Verified" : "Check"}
+            </span>
           </div>
         </div>
 
@@ -9482,6 +9511,12 @@ function AppSettingsPage({
   onExpensesCsv,
   onBackupRestore,
   backupStatus,
+  backupCheckpoints = [],
+  checkpointsLoading = false,
+  checkpointBusyId = "",
+  onCreateCheckpoint,
+  onRestoreCheckpoint,
+  onRefreshCheckpoints,
   updateAvailable = false,
   updateInfo = null,
   checkingForUpdate = false,
@@ -9489,6 +9524,20 @@ function AppSettingsPage({
   onCheckForUpdates,
   onOpenUpdateModal,
 }) {
+  const [reconcileExpanded, setReconcileExpanded] = useState(false);
+  const [checkpointsExpanded, setCheckpointsExpanded] = useState(false);
+  const reconciliation = S?.reconciliation || {
+    isBalanced: true,
+    accountCount: 0,
+    discrepancyCount: 0,
+    totalOpening: 0,
+    totalCredits: 0,
+    totalDebits: 0,
+    totalExpectedBalance: 0,
+    totalCurrentBalance: 0,
+    accounts: {},
+  };
+  const reconcileAccounts = Object.values(reconciliation.accounts || {});
   const currentVersion =
     typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "2.0.0";
   const notificationUnavailable = notificationPermission === "unsupported";
@@ -9740,7 +9789,102 @@ function AppSettingsPage({
               <Icon n="r" />
             </span>
           </button>
+
+          <button
+            className="ri settings-action app-settings-minimal-item mfs-list-row"
+            type="button"
+            aria-expanded={reconcileExpanded}
+            onClick={() => {
+              triggerHaptic("selection");
+              setReconcileExpanded((prev) => !prev);
+            }}
+          >
+            <i
+              className="ic is-minimal mfs-row-icon"
+              style={{
+                "--c": reconciliation.isBalanced ? "#10b981" : "#f59e0b",
+              }}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                width="17"
+                height="17"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                <path d="m9 12 2 2 4-4" />
+              </svg>
+            </i>
+            <span className="nm">
+              <b>Ledger reconciliation check</b>
+              <small>
+                {reconciliation.isBalanced
+                  ? `Opening + Credits − Debits = ${money(reconciliation.totalCurrentBalance || 0)}`
+                  : `${reconciliation.discrepancyCount} account discrepancy detected`}
+              </small>
+            </span>
+            <span
+              className={`settings-inline-action mfs-status-pill${reconciliation.isBalanced ? " is-active" : ""}`}
+            >
+              {reconciliation.isBalanced && (
+                <span className="mfs-status-pill-dot" aria-hidden="true" />
+              )}
+              {reconciliation.isBalanced ? "Balanced" : "Mismatch"}
+            </span>
+          </button>
         </div>
+
+        {reconcileExpanded && (
+          <div className="mfs-reconcile-panel" role="region" aria-label="Ledger reconciliation details">
+            <div className="mfs-reconcile-formula">
+              <div>
+                <span>Opening</span>
+                <b>{money(reconciliation.totalOpening || 0)}</b>
+              </div>
+              <span className="mfs-reconcile-op">+</span>
+              <div>
+                <span>Credits</span>
+                <b className="is-credit">{money(reconciliation.totalCredits || 0)}</b>
+              </div>
+              <span className="mfs-reconcile-op">−</span>
+              <div>
+                <span>Debits</span>
+                <b className="is-debit">{money(reconciliation.totalDebits || 0)}</b>
+              </div>
+              <span className="mfs-reconcile-op">=</span>
+              <div>
+                <span>Current</span>
+                <b>{money(reconciliation.totalCurrentBalance || 0)}</b>
+              </div>
+            </div>
+            {reconcileAccounts.length > 0 && (
+              <div className="mfs-reconcile-accounts">
+                {reconcileAccounts.map((acc) => (
+                  <div key={acc.id} className="mfs-reconcile-acct-row">
+                    <div className="mfs-reconcile-acct-meta">
+                      <b>{acc.name}</b>
+                      <small>
+                        {money(acc.opening)} + {money(acc.credits)} − {money(acc.debits)}
+                      </small>
+                    </div>
+                    <div className="mfs-reconcile-acct-bal">
+                      <b>{money(acc.currentBalance)}</b>
+                      <span className={`mfs-reconcile-badge${acc.isBalanced ? " is-ok" : " is-warn"}`}>
+                        {acc.isBalanced ? "✓ OK" : `Δ ${money(acc.discrepancy)}`}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {backupStatus && (
           <p
             className="settings-status mfs-card-footnote"
@@ -9749,6 +9893,170 @@ function AppSettingsPage({
           >
             {backupStatus}
           </p>
+        )}
+      </section>
+
+      <section className="card app-settings-card mfs-card-list">
+        <h2>Cloud backup checkpoints</h2>
+        <div className="mfs-card-rows">
+          <button
+            className="ri settings-action app-settings-minimal-item mfs-list-row"
+            type="button"
+            disabled={checkpointBusyId === "creating"}
+            onClick={() => {
+              triggerHaptic("light");
+              onCreateCheckpoint?.();
+            }}
+          >
+            <i
+              className="ic is-minimal mfs-row-icon"
+              style={{ "--c": "#10b981" }}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                width="17"
+                height="17"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                <polyline points="17 21 17 13 7 13 7 21" />
+                <polyline points="7 3 7 8 15 8" />
+              </svg>
+            </i>
+            <span className="nm">
+              <b>
+                {checkpointBusyId === "creating"
+                  ? "Saving checkpoint…"
+                  : "Save checkpoint now"}
+              </b>
+              <small>
+                {profile?.connected
+                  ? "Automatic daily + pre-restore cloud snapshots active"
+                  : "Automatic daily + pre-restore device snapshots active"}
+              </small>
+            </span>
+            <span className="settings-inline-action mfs-status-pill is-active">
+              <span className="mfs-status-pill-dot" aria-hidden="true" />
+              Snapshot
+            </span>
+          </button>
+
+          <button
+            className="ri settings-action app-settings-minimal-item mfs-list-row"
+            type="button"
+            aria-expanded={checkpointsExpanded}
+            onClick={() => {
+              triggerHaptic("selection");
+              const next = !checkpointsExpanded;
+              setCheckpointsExpanded(next);
+              if (next) {
+                onRefreshCheckpoints?.();
+              }
+            }}
+          >
+            <i
+              className="ic is-minimal mfs-row-icon"
+              style={{ "--c": "#6366f1" }}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                width="17"
+                height="17"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <polyline points="1 4 1 10 7 10" />
+                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+                <polyline points="12 7 12 12 15 15" />
+              </svg>
+            </i>
+            <span className="nm">
+              <b>Recovery checkpoints ({backupCheckpoints.length})</b>
+              <small>
+                {checkpointsLoading
+                  ? "Loading saved snapshots…"
+                  : backupCheckpoints.length > 0
+                    ? "Roll back balances & transactions to any date in one tap"
+                    : "No snapshots yet · Tap above to create your first checkpoint"}
+              </small>
+            </span>
+            <span className="settings-chevron" aria-hidden="true">
+              <Icon n="r" />
+            </span>
+          </button>
+        </div>
+
+        {checkpointsExpanded && (
+          <div className="mfs-checkpoints-list" role="region" aria-label="Saved backup checkpoints">
+            {backupCheckpoints.length === 0 ? (
+              <p className="mfs-checkpoints-empty">
+                {checkpointsLoading
+                  ? "Fetching checkpoints…"
+                  : "No checkpoints recorded yet. Spend automatically saves a daily snapshot and a safety snapshot before every restore."}
+              </p>
+            ) : (
+              backupCheckpoints.slice(0, 12).map((cp) => {
+                const cpType = cp.checkpointType || "daily";
+                const typeBadge =
+                  cpType === "pre_restore" || cpType === "pre_overwrite"
+                    ? "Pre-Restore"
+                    : cpType === "manual"
+                      ? "Manual"
+                      : "Daily";
+                const dateLabel = cp.createdAt
+                  ? new Date(cp.createdAt).toLocaleString(undefined, {
+                      month: "short",
+                      day: "numeric",
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })
+                  : cp.checkpointDate || "Snapshot";
+                const summary = cp.ledgerSummary || {};
+                const totalBal =
+                  summary.totalCurrentBalance !== undefined
+                    ? summary.totalCurrentBalance
+                    : null;
+                const isRestoring = checkpointBusyId === String(cp.id);
+                return (
+                  <div key={cp.id} className="mfs-checkpoint-item">
+                    <div className="mfs-checkpoint-meta">
+                      <div className="mfs-checkpoint-title-row">
+                        <b>{dateLabel}</b>
+                        <span className={`mfs-checkpoint-badge is-${cpType}`}>
+                          {typeBadge}
+                        </span>
+                      </div>
+                      <small>
+                        {cp.cardCount ?? summary.cardCount ?? 0} cards ·{" "}
+                        {cp.expenseCount ?? summary.expenseCount ?? 0} expenses
+                        {totalBal !== null ? ` · ${money(totalBal)}` : ""}
+                      </small>
+                    </div>
+                    <button
+                      type="button"
+                      className="mfs-checkpoint-restore-btn"
+                      disabled={Boolean(checkpointBusyId)}
+                      onClick={() => {
+                        triggerHaptic("selection");
+                        onRestoreCheckpoint?.(cp);
+                      }}
+                    >
+                      {isRestoring ? "Restoring…" : "Restore"}
+                    </button>
+                  </div>
+                );
+              })
+            )}
+          </div>
         )}
       </section>
 
@@ -10723,6 +11031,12 @@ export default function MobilePrototype({
   onEncryptedBackupDownload,
   onExpensesCsv,
   onBackupRestore,
+  backupCheckpoints = [],
+  checkpointsLoading = false,
+  checkpointBusyId = "",
+  onCreateCheckpoint,
+  onRestoreCheckpoint,
+  onRefreshCheckpoints,
   accountStatus,
   authBusy,
   onResumeSync,
@@ -11050,12 +11364,10 @@ export default function MobilePrototype({
 
   useLayoutEffect(() => {
     document.documentElement.dataset.theme = resolvedTheme;
-    if (!document.querySelector(".sp-root:not([hidden])")) {
-      const themeColor = resolvedTheme === "dark" ? "#08080c" : "#f4f3ee";
-      document
-        .querySelectorAll('meta[name="theme-color"]')
-        .forEach((meta) => meta.setAttribute("content", themeColor));
-    }
+    const themeColor = resolvedTheme === "dark" ? "#08080c" : "#f4f3ee";
+    document
+      .querySelectorAll('meta[name="theme-color"]')
+      .forEach((meta) => meta.setAttribute("content", themeColor));
   }, [resolvedTheme]);
 
   useEffect(() => {
@@ -11189,12 +11501,16 @@ export default function MobilePrototype({
         ),
       );
       const keyboardHeight = documentHeight - (visibleHeight + visibleTop);
+      const isKeyboardOpen = textEntryFocused && keyboardHeight > 120;
 
       if (root) {
         root.style.setProperty("--mobile-visible-height", `${visibleHeight}px`);
-        root.style.setProperty("--mobile-visible-top", `${visibleTop}px`);
+        root.style.setProperty(
+          "--mobile-visible-top",
+          isKeyboardOpen ? `${visibleTop}px` : "0px",
+        );
       }
-      setKeyboardOpen(textEntryFocused && keyboardHeight > 120);
+      setKeyboardOpen(isKeyboardOpen);
       if (!textEntryFocused || keyboardHeight <= 120) {
         baseViewportHeightRef.current = Math.max(
           window.innerHeight,
@@ -12045,6 +12361,12 @@ export default function MobilePrototype({
               onExpensesCsv={onExpensesCsv}
               onBackupRestore={onBackupRestore}
               backupStatus={backupStatus}
+              backupCheckpoints={backupCheckpoints}
+              checkpointsLoading={checkpointsLoading}
+              checkpointBusyId={checkpointBusyId}
+              onCreateCheckpoint={onCreateCheckpoint}
+              onRestoreCheckpoint={onRestoreCheckpoint}
+              onRefreshCheckpoints={onRefreshCheckpoints}
               updateAvailable={updateAvailable}
               updateInfo={updateInfo}
               checkingForUpdate={checkingForUpdate}

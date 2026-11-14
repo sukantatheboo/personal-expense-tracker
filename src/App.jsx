@@ -12,6 +12,7 @@ import { createPortal } from "react-dom";
 import SpendSplash from "./components/SpendSplash.jsx";
 import WelcomeFlow from "./components/WelcomeFlow.jsx";
 import {
+  computeAccountBalances,
   emptyAccountData,
   STORAGE_KEYS,
   currentMonth,
@@ -47,8 +48,17 @@ import {
 } from "./push.js";
 import {
   CLOUD_SYNC_USER_KEY,
+  clearCloudSyncOutbox,
+  createBackupCheckpoint,
+  ensureDailyBackupCheckpoint,
+  flushCloudSyncKeepalive,
+  hasPendingCloudOutbox,
   hasPotentialCloudSession,
+  listBackupCheckpoints,
   loadCloudData,
+  persistCloudSyncOutbox,
+  readCloudSyncOutbox,
+  restoreBackupCheckpoint,
   saveCloudData,
   subscribeToCloudChanges,
 } from "./cloud-sync.js";
@@ -540,8 +550,14 @@ function areAccountSettingsEqual(left, right) {
     Boolean(left.configured) === Boolean(right.configured) &&
     Boolean(left.cardsConfigured) === Boolean(right.cardsConfigured) &&
     (left.primaryCardId || "") === (right.primaryCardId || "") &&
-    JSON.stringify(stableSnapshotValue(left.balances || {})) ===
-      JSON.stringify(stableSnapshotValue(right.balances || {})) &&
+    JSON.stringify(
+      stableSnapshotValue(left.openingBalances || left.balances || {}),
+    ) ===
+      JSON.stringify(
+        stableSnapshotValue(right.openingBalances || right.balances || {}),
+      ) &&
+    JSON.stringify(stableSnapshotValue(left.currentBalances || {})) ===
+      JSON.stringify(stableSnapshotValue(right.currentBalances || {})) &&
     JSON.stringify(stableSnapshotValue(left.cards || [])) ===
       JSON.stringify(stableSnapshotValue(right.cards || []))
   );
@@ -617,6 +633,7 @@ function mergeAccountSettings(
     if (tombstone?.deleted && tombstone.updatedAt >= cardTime) continue;
     cardMap.set(card.id, card);
   }
+  const cloudSettingsTime = recordUpdatedAt(cloudSettings);
   for (const card of localCards) {
     if (!card?.id) continue;
     if (remappedAccountIds[card.id]) continue;
@@ -625,8 +642,12 @@ function mergeAccountSettings(
     if (tombstone?.deleted && tombstone.updatedAt >= cardTime) continue;
     const cloudCard = cardMap.get(card.id);
     if (!cloudCard) {
-      // Only add local-only cards when local changes are preferred or cloud has no configured cards yet
-      if (preferLocal || !cloudHasConfiguredCards) {
+      // Keep local-only cards when local changes are preferred, cloud has no cards yet, or card was created newer than cloud settings
+      if (
+        preferLocal ||
+        !cloudHasConfiguredCards ||
+        (cardTime > 0 && cardTime > cloudSettingsTime)
+      ) {
         cardMap.set(card.id, card);
       }
     } else if (preferLocalRecord(card, cloudCard, preferLocal)) {
@@ -635,13 +656,21 @@ function mergeAccountSettings(
   }
 
   const localBalances =
-    localSettings.balances && typeof localSettings.balances === "object"
-      ? localSettings.balances
-      : {};
+    localSettings.openingBalances &&
+    typeof localSettings.openingBalances === "object" &&
+    Object.keys(localSettings.openingBalances).length > 0
+      ? localSettings.openingBalances
+      : localSettings.balances && typeof localSettings.balances === "object"
+        ? localSettings.balances
+        : {};
   const cloudBalances =
-    cloudSettings.balances && typeof cloudSettings.balances === "object"
-      ? cloudSettings.balances
-      : {};
+    cloudSettings.openingBalances &&
+    typeof cloudSettings.openingBalances === "object" &&
+    Object.keys(cloudSettings.openingBalances).length > 0
+      ? cloudSettings.openingBalances
+      : cloudSettings.balances && typeof cloudSettings.balances === "object"
+        ? cloudSettings.balances
+        : {};
 
   const resolveCardBalance = (cardId, cardObj, balancesObj) => {
     const hasBalKey =
@@ -774,6 +803,7 @@ function mergeAccountSettings(
           : cloudSettings.startDate
         : localSettings.startDate || cloudSettings.startDate || localDate(),
     balances: mergedBalances,
+    openingBalances: mergedBalances,
     cards: mergedCards,
     ...(resolvedPrimaryCardId ? { primaryCardId: resolvedPrimaryCardId } : {}),
     configured: Boolean(
@@ -927,6 +957,7 @@ function mergeCloudSnapshots(
   const cloudAccounts = loadAccountData(
     cloud.accountData ?? emptyAccountData(),
     deletedRecords,
+    cloud.expenses,
   );
   const rawMergedSettings = mergeAccountSettings(
     local.accountData.settings,
@@ -998,6 +1029,52 @@ function mergeCloudSnapshots(
     combinedRemappedIds,
   );
 
+  const computedMergedLedger = computeAccountBalances(
+    mergedAccountSettingsResult.cards,
+    mergedAccountSettingsResult.openingBalances ||
+      mergedAccountSettingsResult.balances,
+    remappedRecords.expenses,
+    remappedRecords.transactions,
+  );
+  const enrichedMergedCards = (mergedAccountSettingsResult.cards || []).map(
+    (c) => ({
+      ...c,
+      initialBalance:
+        computedMergedLedger.openingBalances[c.id] ??
+        roundMoney(Number(c.initialBalance) || 0),
+      currentBalance:
+        computedMergedLedger.currentBalances[c.id] ??
+        computedMergedLedger.openingBalances[c.id] ??
+        0,
+    }),
+  );
+  const enrichedMergedSettings = {
+    ...mergedAccountSettingsResult,
+    balances: computedMergedLedger.openingBalances,
+    openingBalances: computedMergedLedger.openingBalances,
+    currentBalances: computedMergedLedger.currentBalances,
+    cards: enrichedMergedCards,
+  };
+  const enrichedMergedTransactions = remappedRecords.transactions.map((tx) => {
+    const ledgerEntry = computedMergedLedger.ledgerById.get(tx.id);
+    if (!ledgerEntry) return tx;
+    return {
+      ...tx,
+      ...(ledgerEntry.balanceBefore !== null
+        ? { balanceBefore: ledgerEntry.balanceBefore }
+        : {}),
+      ...(ledgerEntry.balanceAfter !== null
+        ? { balanceAfter: ledgerEntry.balanceAfter }
+        : {}),
+      ...(ledgerEntry.fromBalanceAfter !== null
+        ? { fromBalanceAfter: ledgerEntry.fromBalanceAfter }
+        : {}),
+      ...(ledgerEntry.toBalanceAfter !== null
+        ? { toBalanceAfter: ledgerEntry.toBalanceAfter }
+        : {}),
+    };
+  });
+
   if (!preferLocal) {
     return {
       expenses: remappedRecords.expenses,
@@ -1005,8 +1082,8 @@ function mergeCloudSnapshots(
       budgetUpdatedAt: budgetData.updatedAt,
       recurringSchedules: remappedRecords.recurringSchedules,
       accountData: {
-        settings: mergedAccountSettingsResult,
-        transactions: remappedRecords.transactions,
+        settings: enrichedMergedSettings,
+        transactions: enrichedMergedTransactions,
       },
       deletedRecords,
       theme:
@@ -1035,8 +1112,8 @@ function mergeCloudSnapshots(
     budgetUpdatedAt: budgetData.updatedAt,
     recurringSchedules: remappedRecords.recurringSchedules,
     accountData: {
-      settings: mergedAccountSettingsResult,
-      transactions: remappedRecords.transactions,
+      settings: enrichedMergedSettings,
+      transactions: enrichedMergedTransactions,
     },
     deletedRecords,
     theme: local.theme,
@@ -1125,6 +1202,7 @@ function loadLocalUserSnapshot(userId) {
   const loadedAccounts = loadAccountData(
     snapshot.accountData ?? emptyAccountData(),
     deletedRecords,
+    snapshot.expenses,
   );
   return {
     expenses: loadExpenses(
@@ -1343,6 +1421,9 @@ export default function App() {
   const [normalizedAccountSync, setNormalizedAccountSync] = useState(false);
   const [cloudSyncRetry, setCloudSyncRetry] = useState(0);
   const [backupStatus, setBackupStatus] = useState("");
+  const [backupCheckpoints, setBackupCheckpoints] = useState([]);
+  const [checkpointsLoading, setCheckpointsLoading] = useState(false);
+  const [checkpointBusyId, setCheckpointBusyId] = useState("");
   const authModalRef = useRef(null);
   const authTriggerRef = useRef(null);
   const authReturnFocusRef = useRef(null);
@@ -1454,13 +1535,77 @@ export default function App() {
   const authUserIdRef = useRef(null);
   const localDataOwnerRef = useRef(loadLocalDataOwner());
   const localDataWasUnownedRef = useRef(!loadLocalDataOwner());
+
+  const liveBalanceState = useMemo(
+    () =>
+      computeAccountBalances(
+        accountData.settings?.cards,
+        accountData.settings?.openingBalances || accountData.settings?.balances,
+        expenses,
+        accountData.transactions,
+      ),
+    [
+      accountData.settings?.cards,
+      accountData.settings?.openingBalances,
+      accountData.settings?.balances,
+      expenses,
+      accountData.transactions,
+    ],
+  );
+
+  const syncedAccountData = useMemo(() => {
+    const rawCards = Array.isArray(accountData.settings?.cards)
+      ? accountData.settings.cards
+      : [];
+    const enrichedCards = rawCards.map((card) => ({
+      ...card,
+      initialBalance:
+        liveBalanceState.openingBalances[card.id] ??
+        roundMoney(Number(card.initialBalance) || 0),
+      currentBalance:
+        liveBalanceState.currentBalances[card.id] ??
+        liveBalanceState.openingBalances[card.id] ??
+        0,
+    }));
+    const enrichedTransactions = (accountData.transactions || []).map((tx) => {
+      const entry = liveBalanceState.ledgerById.get(tx.id);
+      if (!entry) return tx;
+      return {
+        ...tx,
+        ...(entry.balanceBefore !== null
+          ? { balanceBefore: entry.balanceBefore }
+          : {}),
+        ...(entry.balanceAfter !== null
+          ? { balanceAfter: entry.balanceAfter }
+          : {}),
+        ...(entry.fromBalanceAfter !== null
+          ? { fromBalanceAfter: entry.fromBalanceAfter }
+          : {}),
+        ...(entry.toBalanceAfter !== null
+          ? { toBalanceAfter: entry.toBalanceAfter }
+          : {}),
+      };
+    });
+    return {
+      ...accountData,
+      settings: {
+        ...accountData.settings,
+        balances: liveBalanceState.openingBalances,
+        openingBalances: liveBalanceState.openingBalances,
+        currentBalances: liveBalanceState.currentBalances,
+        cards: enrichedCards,
+      },
+      transactions: enrichedTransactions,
+    };
+  }, [accountData, liveBalanceState]);
+
   cloudSnapshotRef.current = useMemo(
     () => ({
       expenses,
       budgets,
       budgetUpdatedAt,
       recurringSchedules,
-      accountData,
+      accountData: syncedAccountData,
       deletedRecords,
       theme,
       targetCurrency,
@@ -1474,7 +1619,7 @@ export default function App() {
       budgets,
       budgetUpdatedAt,
       recurringSchedules,
-      accountData,
+      syncedAccountData,
       deletedRecords,
       theme,
       targetCurrency,
@@ -1620,6 +1765,12 @@ export default function App() {
               cloudVersionRef.current = savedVersion;
               cloudAccountSettingsRef.current = snapshot.accountData.settings;
               lastSyncedSnapshotRef.current = snapshot;
+              ensureDailyBackupCheckpoint(userId, snapshot, savedVersion);
+              if (!areCloudSnapshotsEqual(cloudSnapshotRef.current, snapshot)) {
+                snapshot = cloudSnapshotRef.current;
+                continue;
+              }
+              clearCloudSyncOutbox(userId, savedVersion);
               setCloudSyncActivity("synced");
               setCloudSyncStatus(
                 "Cloud sync is on. Your data is saved to Supabase.",
@@ -1776,19 +1927,17 @@ export default function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = resolvedTheme;
     document.documentElement.dataset.themeMode = theme;
-    if (ready) {
-      const browserChromeColor =
-        resolvedTheme === "dark" ? "#08080c" : "#f4f3ee";
-      document
-        .querySelectorAll('meta[name="theme-color"]')
-        .forEach((meta) => meta.setAttribute("content", browserChromeColor));
-    }
+    const browserChromeColor =
+      resolvedTheme === "dark" ? "#08080c" : "#f4f3ee";
+    document
+      .querySelectorAll('meta[name="theme-color"]')
+      .forEach((meta) => meta.setAttribute("content", browserChromeColor));
     try {
       localStorage.setItem(STORAGE_KEYS.theme, theme);
     } catch {
       // Keep the selected theme for this visit when storage is unavailable.
     }
-  }, [theme, resolvedTheme, ready]);
+  }, [theme, resolvedTheme]);
 
   useEffect(() => {
     if (!isHydratedRef.current) return;
@@ -1808,8 +1957,8 @@ export default function App() {
   }, [recurringSchedules]);
   useEffect(() => {
     if (!isHydratedRef.current) return;
-    writeStorage(STORAGE_KEYS.accounts, accountData);
-  }, [accountData]);
+    writeStorage(STORAGE_KEYS.accounts, syncedAccountData);
+  }, [syncedAccountData]);
   useEffect(() => {
     if (!isHydratedRef.current) return;
     writeStorage(STORAGE_KEYS.deletedRecords, deletedRecords);
@@ -1824,7 +1973,7 @@ export default function App() {
     budgets,
     budgetUpdatedAt,
     recurringSchedules,
-    accountData,
+    syncedAccountData,
     deletedRecords,
     theme,
     targetCurrency,
@@ -1837,6 +1986,7 @@ export default function App() {
 
   const handleResetForgottenPin = useCallback(() => {
     clearSharedFinancialData({ clearUserSnapshots: true });
+    clearCloudSyncOutbox();
     localDataOwnerRef.current = null;
     clearLocalDataOwner();
     resetDataForNewUser();
@@ -2112,6 +2262,7 @@ export default function App() {
         }
         if (!user && previousUserId) {
           saveLocalUserSnapshot(previousUserId, cloudSnapshotRef.current);
+          clearCloudSyncOutbox(previousUserId);
           clearSharedFinancialData();
           localDataOwnerRef.current = null;
           clearLocalDataOwner();
@@ -2238,6 +2389,8 @@ export default function App() {
       try {
         let remote = await loadCloudData(pushUser.id);
         setNormalizedAccountSync(remote?.normalizedAccountSync !== false);
+        const pendingOutbox = readCloudSyncOutbox(pushUser.id);
+        const hasPendingOutboxMutations = Boolean(pendingOutbox?.dirty);
         let merged;
         let savedVersion = null;
         let lastSuccessfulSnapshot = null;
@@ -2246,7 +2399,9 @@ export default function App() {
           const rawLocal = cloudSnapshotRef.current;
           const wasUnownedLocal = Boolean(localDataWasUnownedRef.current);
           const localBelongsToUser =
-            localDataOwnerRef.current === pushUser.id && !wasUnownedLocal;
+            (localDataOwnerRef.current === pushUser.id ||
+              hasPendingOutboxMutations) &&
+            !wasUnownedLocal;
           const hasSavedUserSnapshot = Boolean(
             loadLocalUserSnapshot(pushUser.id),
           );
@@ -2257,28 +2412,52 @@ export default function App() {
                 remote.data.accountData.settings.cards.length > 0)),
           );
           // Never pollute an existing cloud account with unowned pre-login local device data
-          const local =
+          let local =
             hasCloudData && wasUnownedLocal
               ? createEmptyCloudSnapshot(rawLocal)
               : rawLocal;
-          const preferLocal =
-            !hasCloudData &&
-            (localBelongsToUser || !hasSavedUserSnapshot) &&
-            hasMeaningfulLocalData(local);
+          if (
+            hasPendingOutboxMutations &&
+            pendingOutbox?.snapshot &&
+            localBelongsToUser
+          ) {
+            local = mergeCloudSnapshots(
+              local,
+              pendingOutbox.snapshot,
+              true,
+              true,
+            );
+          }
           const cloudAccountSettings = loadAccountData(
             remote?.data?.accountData ?? emptyAccountData(),
             remote?.data?.deletedRecords,
+            remote?.data?.expenses,
           ).settings;
+          const localSettingsNewer =
+            localBelongsToUser &&
+            recordUpdatedAt(local.accountData?.settings) >
+              recordUpdatedAt(cloudAccountSettings);
+          const preferLocal =
+            Boolean(localBelongsToUser && hasPendingOutboxMutations) ||
+            (!hasCloudData &&
+              (localBelongsToUser || !hasSavedUserSnapshot) &&
+              hasMeaningfulLocalData(local)) ||
+            Boolean(localBelongsToUser && localSettingsNewer);
           const preferLocalAccountSettings =
             preferLocal &&
             hasMeaningfulLocalAccountSettings(local) &&
-            !hasMeaningfulAccountSettings(cloudAccountSettings);
+            (hasPendingOutboxMutations ||
+              !hasMeaningfulAccountSettings(cloudAccountSettings) ||
+              localSettingsNewer);
           merged = mergeCloudSnapshots(
             local,
             remote?.data,
             preferLocal,
             preferLocalAccountSettings,
           );
+          if (active && hasCloudData) {
+            applyCloudSnapshot(merged);
+          }
           try {
             const expectedVersion = remote?.updated_at ?? null;
             savedVersion = await saveCloudData(
@@ -2320,6 +2499,8 @@ export default function App() {
         lastSyncedSnapshotRef.current = lastSuccessfulSnapshot ?? merged;
         cloudAccountSettingsRef.current =
           lastSyncedSnapshotRef.current.accountData.settings;
+        clearCloudSyncOutbox(pushUser.id, savedVersion);
+        ensureDailyBackupCheckpoint(pushUser.id, merged, savedVersion);
         adoptLocalDataForUser(pushUser.id);
         applyCloudSnapshot(merged);
         setCloudSyncReady(true);
@@ -2430,37 +2611,118 @@ export default function App() {
       setCloudRealtimeStatus("connecting");
       handleCloudChange();
     };
+    const flushOutboxOnClose = () => {
+      if (hasAppPin() && !isSessionUnlocked()) return;
+      const currentSnap = cloudSnapshotRef.current;
+      const hasUnsynced =
+        !lastSyncedSnapshotRef.current ||
+        !areCloudSnapshotsEqual(currentSnap, lastSyncedSnapshotRef.current) ||
+        hasPendingCloudOutbox(pushUser.id);
+      if (hasUnsynced && currentSnap) {
+        const sentKeepalive = flushCloudSyncKeepalive(
+          pushUser.id,
+          currentSnap,
+          cloudVersionRef.current,
+          {
+            onSaved: (savedVer, flushedSnap) => {
+              if (
+                authUserIdRef.current === pushUser.id &&
+                localDataOwnerRef.current === pushUser.id
+              ) {
+                lastLocalSaveTimeRef.current = Date.now();
+                if (savedVer) cloudVersionRef.current = savedVer;
+                cloudAccountSettingsRef.current =
+                  flushedSnap.accountData.settings;
+                lastSyncedSnapshotRef.current = flushedSnap;
+                setCloudSyncActivity("synced");
+              }
+            },
+            onConflict: () => {
+              void queueCloudSnapshotSave(pushUser.id).catch(() => {});
+            },
+          },
+        );
+        if (!sentKeepalive) {
+          void queueCloudSnapshotSave(pushUser.id).catch(() => {});
+        }
+      }
+    };
     const handleVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
-        void queueCloudSnapshotSave(pushUser.id).catch(() => {});
+        flushOutboxOnClose();
       } else if (document.visibilityState === "visible") {
+        if (hasPendingCloudOutbox(pushUser.id)) {
+          void queueCloudSnapshotSave(pushUser.id).catch(() => {});
+        }
         handleCloudChange();
       }
     };
     const handlePageHide = () => {
-      void queueCloudSnapshotSave(pushUser.id).catch(() => {});
+      flushOutboxOnClose();
     };
+    let capAppListener = null;
+    if (window.Capacitor?.Plugins?.App?.addListener) {
+      try {
+        capAppListener = window.Capacitor.Plugins.App.addListener(
+          "appStateChange",
+          ({ isActive }) => {
+            if (!isActive) {
+              flushOutboxOnClose();
+            } else if (hasPendingCloudOutbox(pushUser.id)) {
+              void queueCloudSnapshotSave(pushUser.id).catch(() => {});
+            }
+          },
+        );
+      } catch {
+        // Ignore Capacitor listener setup errors
+      }
+    }
     window.addEventListener("offline", handleOffline);
     window.addEventListener("online", handleOnline);
     window.addEventListener("pagehide", handlePageHide);
+    window.addEventListener("beforeunload", handlePageHide);
     document.addEventListener("visibilitychange", handleVisibilityChange);
     if (!navigator.onLine) handleOffline();
 
     return () => {
       active = false;
       window.clearTimeout(liveChangeTimerRef.current);
+      capAppListener?.then?.((h) => h?.remove?.())?.catch?.(() => {});
       window.removeEventListener("offline", handleOffline);
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("pagehide", handlePageHide);
+      window.removeEventListener("beforeunload", handlePageHide);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       unsubscribe();
     };
   }, [cloudSyncEnabled, cloudSyncReady, normalizedAccountSync, pushUser?.id]);
 
   useEffect(() => {
-    if (!supabase || !pushUser || !cloudSyncEnabled || !cloudSyncReady)
-      return undefined;
+    if (!isHydratedRef.current) return undefined;
     if (hasAppPin() && !isSessionUnlocked()) return undefined;
+    // Always ensure daily local checkpoint exists when records are present
+    ensureDailyBackupCheckpoint(
+      pushUser?.id || localDataOwnerRef.current,
+      cloudSnapshotRef.current,
+      cloudVersionRef.current,
+    );
+    if (!supabase || !pushUser || !cloudSyncEnabled) return undefined;
+    const isDirty =
+      !lastSyncedSnapshotRef.current ||
+      !areCloudSnapshotsEqual(
+        cloudSnapshotRef.current,
+        lastSyncedSnapshotRef.current,
+      );
+    if (isDirty) {
+      // #3 Immediately persist pending sync state to localStorage outbox
+      // BEFORE the 150ms debounce so swipe-closing the app never loses mutations.
+      persistCloudSyncOutbox({
+        userId: pushUser.id,
+        snapshot: cloudSnapshotRef.current,
+        expectedUpdatedAt: cloudVersionRef.current,
+      });
+    }
+    if (!cloudSyncReady) return undefined;
     const timeout = window.setTimeout(async () => {
       try {
         await queueCloudSnapshotSave(pushUser.id);
@@ -2469,7 +2731,7 @@ export default function App() {
           setCloudSyncStatus(`Could not sync your data: ${error.message}`);
         }
       }
-    }, 500);
+    }, 150);
     return () => window.clearTimeout(timeout);
   }, [
     accountData,
@@ -2692,14 +2954,19 @@ export default function App() {
       acct: schedule.account,
     })),
     start: {
-      ...accountData.settings.balances,
-      date: accountData.settings.startDate,
+      ...syncedAccountData.settings.openingBalances,
+      date: syncedAccountData.settings.startDate,
     },
-    cards: Array.isArray(accountData.settings.cards)
-      ? accountData.settings.cards
+    currentBalances: syncedAccountData.settings.currentBalances,
+    reconciliation: liveBalanceState.reconciliation,
+    outboxPending: Boolean(
+      pushUser?.id && hasPendingCloudOutbox(pushUser.id),
+    ),
+    cards: Array.isArray(syncedAccountData.settings.cards)
+      ? syncedAccountData.settings.cards
       : [],
     deletedCards: deletedRecords?.cards || {},
-    tx: accountData.transactions.map((transaction) => ({
+    tx: syncedAccountData.transactions.map((transaction) => ({
       id: transaction.id,
       createdAt: transaction.createdAt,
       updatedAt: transaction.updatedAt,
@@ -2710,6 +2977,8 @@ export default function App() {
       amt: transaction.amount,
       note: transaction.description,
       date: transaction.date,
+      balanceBefore: transaction.balanceBefore,
+      balanceAfter: transaction.balanceAfter,
     })),
   };
 
@@ -3982,7 +4251,13 @@ export default function App() {
         budgets,
         budgetUpdatedAt,
         recurringSchedules,
-        accountData,
+        accountData: syncedAccountData,
+        ledgerSummary: {
+          computedAt: exportedAt,
+          openingBalances: liveBalanceState.openingBalances,
+          currentBalances: liveBalanceState.currentBalances,
+          ...liveBalanceState.summary,
+        },
         deletedRecords,
         theme,
         targetCurrency,
@@ -4026,7 +4301,13 @@ export default function App() {
         budgets,
         budgetUpdatedAt,
         recurringSchedules,
-        accountData,
+        accountData: syncedAccountData,
+        ledgerSummary: {
+          computedAt: exportedAt,
+          openingBalances: liveBalanceState.openingBalances,
+          currentBalances: liveBalanceState.currentBalances,
+          ...liveBalanceState.summary,
+        },
         deletedRecords,
         theme,
         targetCurrency,
@@ -4058,6 +4339,39 @@ export default function App() {
   }
 
   function exportAllExpensesCsv() {
+    const cardsList = syncedAccountData.settings.cards || [];
+    const ledgerRows = [...liveBalanceState.ledgerEvents]
+      .reverse()
+      .map((entry) => {
+        const acctLabel =
+          entry.type === "transfer" || entry.type === "savings"
+            ? `${accountName(entry.fromAccount || entry.account, cardsList)} -> ${accountName(entry.toAccount, cardsList)}`
+            : isAccountId(entry.account, syncedAccountData)
+              ? accountName(entry.account, cardsList)
+              : "Cash / Other";
+        const typeLabel =
+          entry.type === "expense"
+            ? entry.recurringId
+              ? "Recurring Expense"
+              : "Expense"
+            : entry.type === "savings"
+              ? "Savings Transfer"
+              : entry.type === "income"
+                ? "Income"
+                : entry.type === "transfer"
+                  ? "Account Transfer"
+                  : `Balance Adjustment (${entry.direction || "adjust"})`;
+        return [
+          entry.date,
+          entry.description,
+          entry.category,
+          entry.amount ?? "",
+          acctLabel,
+          typeLabel,
+          entry.balanceBefore ?? "",
+          entry.balanceAfter ?? "",
+        ];
+      });
     const data = [
       [
         "Date",
@@ -4066,19 +4380,10 @@ export default function App() {
         "Amount (BDT)",
         "Payment account",
         "Type",
+        "Balance Before (BDT)",
+        "Balance After (BDT)",
       ],
-      ...[...expenses]
-        .sort((left, right) => right.date.localeCompare(left.date))
-        .map((expense) => [
-          expense.date,
-          expense.description,
-          expense.category,
-          expense.amount === null ? "" : expense.amount,
-          isAccountId(expense.account, accountData)
-            ? accountName(expense.account, accountData.settings.cards)
-            : "Cash / Other",
-          expense.recurringId ? "Recurring" : "One-time",
-        ]),
+      ...ledgerRows,
     ];
     const csv = `\uFEFF${data
       .map((row) => row.map(csvCell).join(","))
@@ -4093,8 +4398,106 @@ export default function App() {
     link.click();
     link.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    setBackupStatus("Expenses exported as CSV.");
+    setBackupStatus("Unified ledger & expenses exported as CSV.");
   }
+
+  const refreshBackupCheckpoints = useCallback(
+    async (uid = pushUser?.id) => {
+      setCheckpointsLoading(true);
+      try {
+        const items = await listBackupCheckpoints(
+          uid || localDataOwnerRef.current || null,
+          { limit: 25 },
+        );
+        setBackupCheckpoints(Array.isArray(items) ? items : []);
+      } catch {
+        // Keep existing list on transient error
+      } finally {
+        setCheckpointsLoading(false);
+      }
+    },
+    [pushUser?.id],
+  );
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    void refreshBackupCheckpoints(pushUser?.id);
+  }, [isHydrated, pushUser?.id, cloudSyncReady, refreshBackupCheckpoints]);
+
+  const handleCreateBackupCheckpoint = useCallback(async () => {
+    setCheckpointBusyId("creating");
+    try {
+      const created = await createBackupCheckpoint(
+        pushUser?.id || localDataOwnerRef.current,
+        {
+          type: "manual",
+          label: "Manual backup checkpoint",
+          data: cloudSnapshotRef.current,
+        },
+      );
+      await refreshBackupCheckpoints(pushUser?.id);
+      if (created) {
+        setBackupStatus(
+          pushUser
+            ? "Cloud checkpoint saved. You can roll back to this exact state in one tap."
+            : "Checkpoint saved on this device.",
+        );
+      } else {
+        setBackupStatus("Could not create checkpoint right now.");
+      }
+    } catch (error) {
+      setBackupStatus(`Could not create checkpoint: ${error.message}`);
+    } finally {
+      setCheckpointBusyId("");
+    }
+  }, [pushUser, refreshBackupCheckpoints]);
+
+  const handleRestoreBackupCheckpoint = useCallback(
+    async (checkpoint) => {
+      if (!checkpoint?.id) return;
+      const dateText = checkpoint.createdAt
+        ? new Date(checkpoint.createdAt).toLocaleString(undefined, {
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+          })
+        : checkpoint.checkpointDate || "this date";
+      if (
+        !window.confirm(
+          `Roll back to checkpoint from ${dateText}? Your current balances and transactions will be automatically snapshotted first so you can undo if needed.`,
+        )
+      ) {
+        return;
+      }
+      setCheckpointBusyId(String(checkpoint.id));
+      try {
+        const restored = await restoreBackupCheckpoint(
+          pushUser?.id || localDataOwnerRef.current,
+          checkpoint.id,
+          cloudSnapshotRef.current,
+        );
+        if (restored?.data) {
+          applyCloudSnapshot(restored.data);
+          cloudSnapshotRef.current = restored.data;
+          if (restored.updated_at) {
+            cloudVersionRef.current = restored.updated_at;
+            lastSyncedSnapshotRef.current = restored.data;
+            if (pushUser?.id) {
+              clearCloudSyncOutbox(pushUser.id, restored.updated_at);
+            }
+          }
+          await refreshBackupCheckpoints(pushUser?.id);
+          setBackupStatus(`Restored checkpoint from ${dateText}.`);
+        }
+      } catch (error) {
+        setBackupStatus(`Could not restore checkpoint: ${error.message}`);
+      } finally {
+        setCheckpointBusyId("");
+      }
+    },
+    [pushUser?.id, refreshBackupCheckpoints],
+  );
 
   async function restoreBackup(event) {
     const input = event.currentTarget;
@@ -4152,12 +4555,27 @@ export default function App() {
       }
       if (
         !window.confirm(
-          "Restoring this backup will replace all current app data. Continue?",
+          "Restoring this backup will replace all current app data. A safety checkpoint of your current data will be saved automatically first. Continue?",
         )
       ) {
         setBackupStatus("Restore canceled.");
         return;
       }
+
+      // #1 Automatically snapshot current state before restoring a backup file
+      try {
+        await createBackupCheckpoint(
+          pushUser?.id || localDataOwnerRef.current,
+          {
+            type: "pre_restore",
+            label: "Safety snapshot before file restore",
+            data: cloudSnapshotRef.current,
+          },
+        );
+      } catch {
+        // Continue restore even if offline
+      }
+
       const restoreTimestamp = Date.now();
       const restoredDeletedRecords = normalizeDeletedRecords(
         data.deletedRecords,
@@ -4165,6 +4583,7 @@ export default function App() {
       const restoredAccounts = loadAccountData(
         data.accountData,
         restoredDeletedRecords,
+        data.expenses,
       );
       const restoredExpenses = loadExpenses(
         data.expenses,
@@ -4175,6 +4594,11 @@ export default function App() {
         createdAt: expense.createdAt ?? restoreTimestamp,
         updatedAt: expense.updatedAt ?? restoreTimestamp,
       }));
+      const recomputedRestoredAccounts = loadAccountData(
+        restoredAccounts,
+        restoredDeletedRecords,
+        restoredExpenses,
+      );
       setExpenses(restoredExpenses);
       const restoredBudgets = loadBudgets(data.budgets);
       setBudgets(restoredBudgets);
@@ -4187,7 +4611,7 @@ export default function App() {
       setBudgetUpdatedAt(restoredBudgetUpdatedAt);
       const restoredSchedules = loadRecurringSchedules(
         data.recurringSchedules,
-        restoredAccounts,
+        recomputedRestoredAccounts,
       ).map((schedule) => ({
         ...schedule,
         createdAt: schedule.createdAt ?? restoreTimestamp,
@@ -4196,14 +4620,17 @@ export default function App() {
       setRecurringSchedules(restoredSchedules);
       const restoredAccountData = {
         settings: {
-          ...restoredAccounts.settings,
-          updatedAt: restoredAccounts.settings.updatedAt || restoreTimestamp,
+          ...recomputedRestoredAccounts.settings,
+          updatedAt:
+            recomputedRestoredAccounts.settings.updatedAt || restoreTimestamp,
         },
-        transactions: restoredAccounts.transactions.map((transaction) => ({
-          ...transaction,
-          createdAt: transaction.createdAt ?? restoreTimestamp,
-          updatedAt: transaction.updatedAt ?? restoreTimestamp,
-        })),
+        transactions: recomputedRestoredAccounts.transactions.map(
+          (transaction) => ({
+            ...transaction,
+            createdAt: transaction.createdAt ?? restoreTimestamp,
+            updatedAt: transaction.updatedAt ?? restoreTimestamp,
+          }),
+        ),
       };
       setAccountData(restoredAccountData);
       setDeletedRecords(restoredDeletedRecords);
@@ -4254,10 +4681,16 @@ export default function App() {
             : profileAvatar,
         };
         cloudSnapshotRef.current = restoredSnapshot;
+        persistCloudSyncOutbox({
+          userId: pushUser.id,
+          snapshot: restoredSnapshot,
+          expectedUpdatedAt: cloudVersionRef.current,
+          forceOverwrite: true,
+        });
         void queueCloudSnapshotSave(pushUser.id, { forceOverwrite: true });
       }
-
-      setBackupStatus("Backup restored.");
+      void refreshBackupCheckpoints(pushUser?.id);
+      setBackupStatus("Backup restored (previous state saved to checkpoints).");
     } catch (error) {
       setBackupStatus(`Could not restore backup: ${error.message}`);
     } finally {
@@ -5093,6 +5526,12 @@ export default function App() {
           onEncryptedBackupDownload={downloadEncryptedBackup}
           onExpensesCsv={exportAllExpensesCsv}
           onBackupRestore={() => backupFileInputRef.current?.click()}
+          backupCheckpoints={backupCheckpoints}
+          checkpointsLoading={checkpointsLoading}
+          checkpointBusyId={checkpointBusyId}
+          onCreateCheckpoint={handleCreateBackupCheckpoint}
+          onRestoreCheckpoint={handleRestoreBackupCheckpoint}
+          onRefreshCheckpoints={() => refreshBackupCheckpoints(pushUser?.id)}
           onSignOut={signOutOfPush}
           onResumeSync={handleResumeSync}
           accountStatus={cloudSyncStatus || authStatus}

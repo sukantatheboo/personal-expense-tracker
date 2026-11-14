@@ -1,12 +1,625 @@
 import { getSupabase, supabase } from "./push.js";
 import {
+  computeAccountBalances,
   emptyAccountData,
   isPhantomAutoReconstructedCard,
   isSavingsCard,
   loadAccountData,
+  localDate,
+  makeId,
 } from "./data.js";
+import { hasAppPin } from "./security.js";
 
 export const CLOUD_SYNC_USER_KEY = "spend-cloud-sync-user-v1";
+export const CLOUD_SYNC_OUTBOX_KEY = "spend-cloud-sync-outbox-v1";
+export const LOCAL_CHECKPOINTS_KEY = "spend-backup-checkpoints-v1";
+
+const MAX_LOCAL_DAILY_CHECKPOINTS = 14;
+const MAX_LOCAL_EVENT_CHECKPOINTS = 10;
+const KEEPALIVE_MAX_BYTES = 58_000;
+
+function cleanEnvValue(value) {
+  return typeof value === "string"
+    ? value.trim().replace(/^['"]|['"]$/g, "")
+    : "";
+}
+
+function getSupabaseRestConfig() {
+  const url = cleanEnvValue(import.meta.env.VITE_SUPABASE_URL).replace(
+    /\/+$/,
+    "",
+  );
+  const anonKey = cleanEnvValue(import.meta.env.VITE_SUPABASE_ANON_KEY);
+  return { url, anonKey };
+}
+
+function readSupabaseAccessTokenFromStorage() {
+  if (typeof window === "undefined") return "";
+  try {
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i);
+      if (!key || !key.startsWith("sb-") || !key.endsWith("-auth-token")) {
+        continue;
+      }
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+      const token =
+        parsed?.access_token ||
+        parsed?.currentSession?.access_token ||
+        parsed?.session?.access_token ||
+        "";
+      if (typeof token === "string" && token.trim()) {
+        return token.trim();
+      }
+    }
+  } catch {
+    return "";
+  }
+  return "";
+}
+
+export function readCloudSyncOutbox(userId = null) {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(CLOUD_SYNC_OUTBOX_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return null;
+    if (userId && parsed.userId && parsed.userId !== userId) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function hasPendingCloudOutbox(userId = null) {
+  const outbox = readCloudSyncOutbox(userId);
+  return Boolean(outbox && outbox.dirty === true);
+}
+
+export function persistCloudSyncOutbox({
+  userId,
+  snapshot = null,
+  serializedSnapshot = "",
+  expectedUpdatedAt = null,
+  forceOverwrite = false,
+} = {}) {
+  if (typeof window === "undefined" || !userId) return false;
+  try {
+    const existing = readCloudSyncOutbox(userId);
+    const now = Date.now();
+    const pinProtected = hasAppPin();
+    const entry = {
+      userId,
+      dirty: true,
+      queuedAt: existing?.dirty ? existing.queuedAt || now : now,
+      updatedAt: now,
+      mutationCount: (Number(existing?.mutationCount) || 0) + 1,
+      expectedUpdatedAt:
+        expectedUpdatedAt ?? existing?.expectedUpdatedAt ?? null,
+      forceOverwrite: Boolean(forceOverwrite || existing?.forceOverwrite),
+      snapshotLength: serializedSnapshot
+        ? serializedSnapshot.length
+        : existing?.snapshotLength || 0,
+      // Store full snapshot in outbox only when PIN encryption is not active
+      ...(!pinProtected && snapshot && typeof snapshot === "object"
+        ? { snapshot: sanitizeCloudPayload(snapshot) }
+        : {}),
+    };
+    localStorage.setItem(CLOUD_SYNC_OUTBOX_KEY, JSON.stringify(entry));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function clearCloudSyncOutbox(
+  userId = null,
+  syncedUpdatedAt = null,
+  syncedSnapshotLength = 0,
+) {
+  if (typeof window === "undefined") return false;
+  try {
+    const existing = readCloudSyncOutbox(userId);
+    if (!existing) return true;
+    if (userId && existing.userId && existing.userId !== userId) return false;
+    const cleared = {
+      userId: userId || existing.userId || "",
+      dirty: false,
+      queuedAt: 0,
+      updatedAt: Date.now(),
+      mutationCount: 0,
+      expectedUpdatedAt: syncedUpdatedAt || existing.expectedUpdatedAt || null,
+      lastSyncedUpdatedAt:
+        syncedUpdatedAt ||
+        existing.lastSyncedUpdatedAt ||
+        new Date().toISOString(),
+      lastSyncedLength: syncedSnapshotLength || existing.snapshotLength || 0,
+      forceOverwrite: false,
+    };
+    localStorage.setItem(CLOUD_SYNC_OUTBOX_KEY, JSON.stringify(cleared));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * #3 — Flushes pending cloud snapshot using fetch(..., { keepalive: true })
+ * so mobile OS / browser swipe-close or pagehide does not abort in-flight syncs.
+ */
+export function flushCloudSyncKeepalive(
+  userId,
+  data,
+  expectedUpdatedAt = null,
+  { forceOverwrite = false, onSaved = null, onConflict = null } = {},
+) {
+  if (typeof window === "undefined" || typeof fetch !== "function" || !userId) {
+    return false;
+  }
+  const snapshotToFlush =
+    data && typeof data === "object"
+      ? data
+      : readCloudSyncOutbox(userId)?.snapshot || null;
+  if (!snapshotToFlush) return false;
+
+  // Ensure outbox is marked dirty before firing keepalive request
+  persistCloudSyncOutbox({
+    userId,
+    snapshot: snapshotToFlush,
+    expectedUpdatedAt,
+    forceOverwrite,
+  });
+
+  const { url, anonKey } = getSupabaseRestConfig();
+  const accessToken = readSupabaseAccessTokenFromStorage();
+  if (!url || !anonKey || !accessToken) {
+    return false;
+  }
+
+  const sanitized = sanitizeCloudPayload(snapshotToFlush);
+  let rpcPayload = {
+    p_data: sanitized,
+    p_expected_updated_at: expectedUpdatedAt || null,
+    p_force_overwrite: Boolean(forceOverwrite),
+  };
+  let body = JSON.stringify(rpcPayload);
+
+  // Browser keepalive requests have a 64 KiB body limit.
+  // Use sentinel token __KEEP_EXISTING_AVATAR__ so the server preserves the existing cloud avatar
+  // instead of wiping it if an inline base64 photo pushes the payload over 58 KB.
+  if (
+    body.length > KEEPALIVE_MAX_BYTES &&
+    sanitized?.profileAvatar &&
+    String(sanitized.profileAvatar).length > 4096
+  ) {
+    const compactData = {
+      ...sanitized,
+      profileAvatar: "__KEEP_EXISTING_AVATAR__",
+    };
+    rpcPayload = {
+      p_data: compactData,
+      p_expected_updated_at: expectedUpdatedAt || null,
+      p_force_overwrite: Boolean(forceOverwrite),
+    };
+    body = JSON.stringify(rpcPayload);
+  }
+
+  if (body.length > KEEPALIVE_MAX_BYTES) {
+    // Payload exceeds browser keepalive limit; outbox remains dirty in localStorage
+    // and will be drained automatically by standard fetch or on next app open.
+    return false;
+  }
+
+  try {
+    void fetch(`${url}/rest/v1/rpc/save_spend_user_snapshot`, {
+      method: "POST",
+      headers: {
+        apikey: anonKey,
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body,
+      keepalive: true,
+    })
+      .then(async (res) => {
+        if (!res.ok) return;
+        const result = await res.json().catch(() => null);
+        if (result && result.status === "saved") {
+          clearCloudSyncOutbox(userId, result.updated_at || null, body.length);
+          onSaved?.(result.updated_at || null, snapshotToFlush);
+        } else if (result && result.status === "conflict") {
+          onConflict?.(result);
+        }
+      })
+      .catch(() => {
+        // Keep outbox dirty so next launch retries cleanly
+      });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function summarizeCheckpointSnapshot(data) {
+  if (!data || typeof data !== "object") {
+    return {
+      cardCount: 0,
+      expenseCount: 0,
+      txCount: 0,
+      totalOpeningBalance: 0,
+      totalCurrentBalance: 0,
+      isBalanced: true,
+    };
+  }
+  const settings = data?.accountData?.settings || {};
+  const cards = Array.isArray(settings.cards) ? settings.cards : [];
+  const opening = settings.openingBalances || settings.balances || {};
+  const expenses = Array.isArray(data?.expenses) ? data.expenses : [];
+  const txs = Array.isArray(data?.accountData?.transactions)
+    ? data.accountData.transactions
+    : Array.isArray(data?.accountTransactions)
+      ? data.accountTransactions
+      : [];
+
+  const computed = computeAccountBalances(
+    cards,
+    opening,
+    expenses,
+    txs,
+    settings.currentBalances || null,
+  );
+
+  return {
+    cardCount: cards.length,
+    expenseCount: expenses.length,
+    txCount: txs.length,
+    totalOpeningBalance: computed.reconciliation.totalOpening,
+    totalCurrentBalance: computed.reconciliation.totalCurrentBalance,
+    totalCredits: computed.reconciliation.totalCredits,
+    totalDebits: computed.reconciliation.totalDebits,
+    isBalanced: computed.reconciliation.isBalanced,
+  };
+}
+
+function snapshotHasMeaningfulRecords(data) {
+  const summary = summarizeCheckpointSnapshot(data);
+  return (
+    summary.cardCount > 0 || summary.expenseCount > 0 || summary.txCount > 0
+  );
+}
+
+function readLocalCheckpointsRaw() {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(LOCAL_CHECKPOINTS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalCheckpointsRaw(items) {
+  if (typeof window === "undefined") return false;
+  try {
+    localStorage.setItem(LOCAL_CHECKPOINTS_KEY, JSON.stringify(items));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function captureLocalBackupCheckpoint(
+  userId,
+  data,
+  {
+    type = "daily",
+    label = "",
+    sourceUpdatedAt = null,
+    id = "",
+    createdAt = null,
+  } = {},
+) {
+  if (!data || typeof data !== "object") return null;
+  if (hasAppPin()) {
+    // Do not write unencrypted financial snapshots to local checkpoint buffer when PIN is active
+    return null;
+  }
+  const normalizedType = ["daily", "pre_restore", "pre_overwrite", "manual"].includes(
+    type,
+  )
+    ? type
+    : "daily";
+  if (normalizedType !== "manual" && !snapshotHasMeaningfulRecords(data)) {
+    return null;
+  }
+
+  const sanitized = sanitizeCloudPayload(data);
+  const summary = summarizeCheckpointSnapshot(sanitized);
+  const today = localDate();
+  const nowIso = createdAt || new Date().toISOString();
+  const effectiveUser = userId || "local";
+  const all = readLocalCheckpointsRaw();
+
+  if (normalizedType === "daily") {
+    const existingDaily = all.find(
+      (item) =>
+        (item.userId || "local") === effectiveUser &&
+        item.checkpointType === "daily" &&
+        item.checkpointDate === today,
+    );
+    if (existingDaily) {
+      return existingDaily;
+    }
+  }
+
+  const resolvedLabel =
+    (typeof label === "string" && label.trim()) ||
+    (normalizedType === "daily"
+      ? "Daily automatic snapshot"
+      : normalizedType === "pre_restore"
+        ? "Safety snapshot before restore"
+        : normalizedType === "pre_overwrite"
+          ? "Safety snapshot before overwrite"
+          : "Manual backup checkpoint");
+
+  const entry = {
+    id: id || `local-${makeId()}`,
+    userId: effectiveUser,
+    checkpointType: normalizedType,
+    checkpointDate: today,
+    label: resolvedLabel,
+    ledgerSummary: summary,
+    cardCount: summary.cardCount,
+    expenseCount: summary.expenseCount,
+    txCount: summary.txCount,
+    sourceUpdatedAt: sourceUpdatedAt || nowIso,
+    createdAt: nowIso,
+    isLocalOnly: !id || String(id).startsWith("local-"),
+    data: sanitized,
+  };
+
+  const next = [entry, ...all.filter((item) => item?.id !== entry.id)];
+  let dailyCount = 0;
+  let eventCount = 0;
+  const pruned = next.filter((item) => {
+    if ((item?.userId || "local") !== effectiveUser) return true;
+    if (item.checkpointType === "daily") {
+      dailyCount += 1;
+      return dailyCount <= MAX_LOCAL_DAILY_CHECKPOINTS;
+    }
+    eventCount += 1;
+    return eventCount <= MAX_LOCAL_EVENT_CHECKPOINTS;
+  });
+
+  writeLocalCheckpointsRaw(pruned);
+  return entry;
+}
+
+export function ensureDailyBackupCheckpoint(
+  userId,
+  data,
+  sourceUpdatedAt = null,
+) {
+  return captureLocalBackupCheckpoint(userId, data, {
+    type: "daily",
+    label: "Daily automatic snapshot",
+    sourceUpdatedAt,
+  });
+}
+
+export async function listBackupCheckpoints(
+  userId = null,
+  { limit = 25 } = {},
+) {
+  const effectiveUser = userId || "local";
+  const localItems = readLocalCheckpointsRaw()
+    .filter(
+      (item) =>
+        item &&
+        ((item.userId || "local") === effectiveUser ||
+          item.userId === "local"),
+    )
+    .map(({ data: _data, ...meta }) => ({
+      ...meta,
+      source: meta.isLocalOnly ? "device" : "cloud",
+    }));
+
+  if (!userId) {
+    return localItems.slice(0, limit);
+  }
+
+  try {
+    const client = await getSupabase();
+    if (client) {
+      const rpcRes = await client.rpc("list_spend_backup_checkpoints", {
+        p_limit: limit,
+      });
+      if (!rpcRes.error && Array.isArray(rpcRes.data?.checkpoints)) {
+        const cloudCheckpoints = rpcRes.data.checkpoints.map((cp) => ({
+          ...cp,
+          source: "cloud",
+        }));
+        const seenIds = new Set(cloudCheckpoints.map((cp) => String(cp.id)));
+        const seenDailyDates = new Set(
+          cloudCheckpoints
+            .filter((cp) => cp.checkpointType === "daily")
+            .map((cp) => String(cp.checkpointDate)),
+        );
+        const merged = [...cloudCheckpoints];
+        for (const loc of localItems) {
+          if (seenIds.has(String(loc.id))) continue;
+          if (
+            loc.checkpointType === "daily" &&
+            seenDailyDates.has(String(loc.checkpointDate))
+          ) {
+            continue;
+          }
+          merged.push(loc);
+        }
+        merged.sort(
+          (a, b) =>
+            (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0),
+        );
+        return merged.slice(0, limit);
+      }
+    }
+  } catch {
+    // Fallback to local checkpoints when offline or before migration is applied
+  }
+
+  return localItems.slice(0, limit);
+}
+
+export async function createBackupCheckpoint(
+  userId,
+  { type = "manual", label = "", data = null } = {},
+) {
+  const sanitized = data ? sanitizeCloudPayload(data) : null;
+  const localEntry = sanitized
+    ? captureLocalBackupCheckpoint(userId, sanitized, { type, label })
+    : null;
+
+  if (!userId) {
+    return localEntry;
+  }
+
+  try {
+    const client = await getSupabase();
+    if (client) {
+      const rpcRes = await client.rpc("create_spend_backup_checkpoint", {
+        p_checkpoint_type: type,
+        p_label: label || null,
+        p_data: sanitized,
+      });
+      if (!rpcRes.error && rpcRes.data?.checkpoint) {
+        const cloudCheckpoint = {
+          ...rpcRes.data.checkpoint,
+          source: "cloud",
+        };
+        if (sanitized) {
+          captureLocalBackupCheckpoint(userId, sanitized, {
+            type: cloudCheckpoint.checkpointType || type,
+            label: cloudCheckpoint.label || label,
+            id: cloudCheckpoint.id,
+            createdAt: cloudCheckpoint.createdAt,
+            sourceUpdatedAt: cloudCheckpoint.sourceUpdatedAt,
+          });
+        }
+        return cloudCheckpoint;
+      }
+    }
+  } catch {
+    // Return local checkpoint fallback if offline or RPC not yet deployed
+  }
+
+  return localEntry;
+}
+
+export async function restoreBackupCheckpoint(
+  userId,
+  checkpointId,
+  currentData = null,
+) {
+  if (!checkpointId) {
+    throw new Error("Please select a backup checkpoint to restore.");
+  }
+
+  // Always preserve a pre_restore checkpoint of the current state before rolling back
+  if (currentData && snapshotHasMeaningfulRecords(currentData)) {
+    captureLocalBackupCheckpoint(userId, currentData, {
+      type: "pre_restore",
+      label: "Safety snapshot before checkpoint rollback",
+    });
+  }
+
+  const isLocalId = String(checkpointId).startsWith("local-");
+  if (userId && !isLocalId) {
+    const client = await getSupabase();
+    if (client) {
+      const rpcRes = await client.rpc("restore_spend_backup_checkpoint", {
+        p_checkpoint_id: checkpointId,
+      });
+      if (!rpcRes.error && rpcRes.data?.data) {
+        const restoredData = rpcRes.data.data;
+        return {
+          status: "restored",
+          source: "cloud",
+          updated_at: rpcRes.data.updated_at || new Date().toISOString(),
+          reconciliation: rpcRes.data.reconciliation || null,
+          data: {
+            ...restoredData,
+            accountData: loadAccountData(
+              restoredData.accountData ?? emptyAccountData(),
+              restoredData.deletedRecords,
+              restoredData.expenses,
+            ),
+          },
+        };
+      }
+      if (rpcRes.error && rpcRes.error.code !== "42883" && rpcRes.error.code !== "PGRST202") {
+        throw rpcRes.error;
+      }
+    }
+  }
+
+  // Fallback to local checkpoint store
+  const localMatch = readLocalCheckpointsRaw().find(
+    (item) => String(item?.id) === String(checkpointId),
+  );
+  if (!localMatch || !localMatch.data) {
+    throw new Error(
+      "Checkpoint payload not found on this device. Connect to the internet to restore from cloud.",
+    );
+  }
+
+  const restoredLocal = {
+    ...localMatch.data,
+    accountData: loadAccountData(
+      localMatch.data.accountData ?? emptyAccountData(),
+      localMatch.data.deletedRecords,
+      localMatch.data.expenses,
+    ),
+  };
+
+  let savedCloudResult = null;
+  if (userId) {
+    try {
+      savedCloudResult = await saveCloudData(userId, restoredLocal, null, {
+        forceOverwrite: true,
+      });
+    } catch {
+      // Offline during local checkpoint restore: outbox will sync when back online
+    }
+  }
+
+  return {
+    status: "restored",
+    source: "device",
+    updated_at:
+      (typeof savedCloudResult === "object"
+        ? savedCloudResult?.updated_at
+        : savedCloudResult) || new Date().toISOString(),
+    data: restoredLocal,
+  };
+}
+
+export async function verifyCloudLedgerReconciliation() {
+  const client = await getSupabase();
+  if (!client) return null;
+  try {
+    const rpcRes = await client.rpc("verify_spend_ledger_reconciliation");
+    if (!rpcRes.error && rpcRes.data) {
+      return rpcRes.data;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
 
 export function hasPotentialCloudSession() {
   if (typeof window === "undefined") return false;
@@ -149,15 +762,36 @@ function mergeAccountDataWithRawSnapshot(
   }
 
   const rawBalances =
-    rawSettings.balances && typeof rawSettings.balances === "object"
-      ? rawSettings.balances
-      : {};
+    rawSettings.openingBalances &&
+    typeof rawSettings.openingBalances === "object" &&
+    Object.keys(rawSettings.openingBalances).length > 0
+      ? rawSettings.openingBalances
+      : rawSettings.balances && typeof rawSettings.balances === "object"
+        ? rawSettings.balances
+        : {};
   const normBalances =
-    normSettings.balances && typeof normSettings.balances === "object"
-      ? normSettings.balances
+    normSettings.openingBalances &&
+    typeof normSettings.openingBalances === "object" &&
+    Object.keys(normSettings.openingBalances).length > 0
+      ? normSettings.openingBalances
+      : normSettings.balances && typeof normSettings.balances === "object"
+        ? normSettings.balances
+        : {};
+  const rawCurrentBalances =
+    rawSettings.currentBalances && typeof rawSettings.currentBalances === "object"
+      ? rawSettings.currentBalances
+      : {};
+  const normCurrentBalances =
+    normSettings.currentBalances &&
+    typeof normSettings.currentBalances === "object"
+      ? normSettings.currentBalances
       : {};
 
   const mergedBalances = {};
+  const mergedCurrentBalances = {
+    ...normCurrentBalances,
+    ...(preferRaw ? rawCurrentBalances : {}),
+  };
   const mergedCards = orderedCardIds.map((id) => {
     const card = cardMap.get(id);
     const rawCard = rawCards.find((c) => c?.id === id);
@@ -220,9 +854,25 @@ function mergeAccountDataWithRawSnapshot(
         ? Math.round(resolvedBal * 100) / 100
         : 0;
     mergedBalances[id] = cleanBal;
+
+    const currentBalCandidate = useRawForCard
+      ? rawCurrentBalances[id] ?? card?.currentBalance ?? normCurrentBalances[id]
+      : normCurrentBalances[id] ?? card?.currentBalance ?? rawCurrentBalances[id];
+    if (
+      currentBalCandidate !== undefined &&
+      currentBalCandidate !== null &&
+      Number.isFinite(Number(currentBalCandidate))
+    ) {
+      mergedCurrentBalances[id] =
+        Math.round(Number(currentBalCandidate) * 100) / 100;
+    }
+
     return {
       ...card,
       initialBalance: cleanBal,
+      ...(mergedCurrentBalances[id] !== undefined
+        ? { currentBalance: mergedCurrentBalances[id] }
+        : {}),
     };
   });
 
@@ -242,6 +892,7 @@ function mergeAccountDataWithRawSnapshot(
       const loser = savingsInMerged[i];
       remappedSavingsIds[loser.id] = winner.id;
       delete mergedBalances[loser.id];
+      delete mergedCurrentBalances[loser.id];
     }
   }
   const deduplicatedCards = mergedCards.filter(
@@ -251,6 +902,7 @@ function mergeAccountDataWithRawSnapshot(
   for (const [id, tombstone] of Object.entries(deletedCardTombstones)) {
     if (tombstone?.deleted && !cardMap.has(id)) {
       delete mergedBalances[id];
+      delete mergedCurrentBalances[id];
     }
   }
 
@@ -269,6 +921,8 @@ function mergeAccountDataWithRawSnapshot(
   const txMap = new Map();
   const upsertTx = (tx) => {
     if (!tx?.id) return;
+    const txType = tx.type === "adjust" ? "adjustment" : tx.type;
+    if (!["income", "adjustment", "transfer"].includes(txType)) return;
     const tombstone = deletedTxTombstones[tx.id];
     const txTime =
       parseRecordTime(tx.updatedAt) || parseRecordTime(tx.createdAt);
@@ -301,6 +955,8 @@ function mergeAccountDataWithRawSnapshot(
       settings: {
         ...baseSettings,
         balances: mergedBalances,
+        openingBalances: mergedBalances,
+        currentBalances: mergedCurrentBalances,
         cards: deduplicatedCards,
         cardsConfigured:
           rawSettings.cardsConfigured === true ||
@@ -315,6 +971,7 @@ function mergeAccountDataWithRawSnapshot(
       transactions: Array.from(txMap.values()),
     },
     deletedRecords,
+    rawSnapshotData?.expenses,
   );
 }
 
@@ -322,12 +979,12 @@ async function loadLegacyCloudData(client, userId) {
   let settingsQuery = client
     .from("spend_account_settings")
     .select(
-      "start_date, bkash_balance, bank_balance, savings_balance, configured, updated_at",
+      "start_date, bkash_balance, bank_balance, savings_balance, cards, balances, opening_balances, current_balances, configured, updated_at",
     )
     .eq("user_id", userId)
     .maybeSingle();
 
-  const [snapshotResult, initialSettingsResult, transactionsResult] =
+  const [snapshotResult, initialSettingsResult, initialTransactionsResult] =
     await Promise.all([
       client
         .from("spend_user_data")
@@ -338,7 +995,7 @@ async function loadLegacyCloudData(client, userId) {
       client
         .from("spend_account_transactions")
         .select(
-          "id, type, amount, transaction_date, description, account, direction, from_account, to_account, created_at, updated_at",
+          "id, type, amount, transaction_date, description, category, recurring_id, account, direction, from_account, to_account, balance_before, balance_after, from_balance_after, to_balance_after, created_at, updated_at",
         )
         .eq("user_id", userId)
         .is("deleted_at", null)
@@ -350,6 +1007,8 @@ async function loadLegacyCloudData(client, userId) {
     settingsResult.error &&
     (settingsResult.error.code === "PGRST204" ||
       settingsResult.error.code === "42703" ||
+      settingsResult.error.message?.includes("opening_balances") ||
+      settingsResult.error.message?.includes("cards") ||
       settingsResult.error.message?.includes("savings_balance"))
   ) {
     settingsResult = await client
@@ -357,6 +1016,24 @@ async function loadLegacyCloudData(client, userId) {
       .select("start_date, bkash_balance, bank_balance, configured, updated_at")
       .eq("user_id", userId)
       .maybeSingle();
+  }
+
+  let transactionsResult = initialTransactionsResult;
+  if (
+    transactionsResult.error &&
+    (transactionsResult.error.code === "PGRST204" ||
+      transactionsResult.error.code === "42703" ||
+      transactionsResult.error.message?.includes("balance_after") ||
+      transactionsResult.error.message?.includes("category"))
+  ) {
+    transactionsResult = await client
+      .from("spend_account_transactions")
+      .select(
+        "id, type, amount, transaction_date, description, account, direction, from_account, to_account, created_at, updated_at",
+      )
+      .eq("user_id", userId)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: true });
   }
 
   if (snapshotResult.error) throw snapshotResult.error;
@@ -396,13 +1073,38 @@ async function loadLegacyCloudData(client, userId) {
   if (settingsResult.error) throw settingsResult.error;
   if (transactionsResult.error) throw transactionsResult.error;
 
-  const rawCards = Array.isArray(legacyAccounts?.settings?.cards)
-    ? legacyAccounts.settings.cards.filter(
-        (c) => !isPhantomAutoReconstructedCard(c),
-      )
+  const tableCards = Array.isArray(settingsResult.data?.cards)
+    ? settingsResult.data.cards.filter((c) => !isPhantomAutoReconstructedCard(c))
     : [];
-  const legacyBalances = legacyAccounts?.settings?.balances || {};
-  const baseBalances = { ...legacyBalances };
+  const rawCards =
+    tableCards.length > 0
+      ? tableCards
+      : Array.isArray(legacyAccounts?.settings?.cards)
+        ? legacyAccounts.settings.cards.filter(
+            (c) => !isPhantomAutoReconstructedCard(c),
+          )
+        : [];
+  const legacyBalances =
+    legacyAccounts?.settings?.openingBalances ||
+    legacyAccounts?.settings?.balances ||
+    {};
+  const tableOpeningBalances =
+    settingsResult.data?.opening_balances &&
+    typeof settingsResult.data.opening_balances === "object" &&
+    Object.keys(settingsResult.data.opening_balances).length > 0
+      ? settingsResult.data.opening_balances
+      : settingsResult.data?.balances &&
+          typeof settingsResult.data.balances === "object"
+        ? settingsResult.data.balances
+        : {};
+  const baseBalances = { ...legacyBalances, ...tableOpeningBalances };
+  const baseCurrentBalances = {
+    ...(legacyAccounts?.settings?.currentBalances || {}),
+    ...(settingsResult.data?.current_balances &&
+    typeof settingsResult.data.current_balances === "object"
+      ? settingsResult.data.current_balances
+      : {}),
+  };
 
   // Only map legacy table columns onto cards that explicitly use those legacy IDs
   if (settingsResult.data) {
@@ -434,6 +1136,8 @@ async function loadLegacyCloudData(client, userId) {
         settings: {
           startDate: settingsResult.data.start_date,
           balances: baseBalances,
+          openingBalances: baseBalances,
+          currentBalances: baseCurrentBalances,
           cards: rawCards,
           cardsConfigured:
             legacyAccounts?.settings?.cardsConfigured === true ||
@@ -444,25 +1148,41 @@ async function loadLegacyCloudData(client, userId) {
             Number(legacyAccounts?.settings?.updatedAt) || 0,
           ),
         },
-        transactions: transactionsResult.data.map((transaction) => ({
-          id: transaction.id,
-          createdAt: Date.parse(transaction.created_at) || 0,
-          updatedAt: Date.parse(transaction.updated_at) || 0,
-          type: transaction.type,
-          amount: transaction.amount,
-          date: transaction.transaction_date,
-          description: transaction.description,
-          ...(transaction.account ? { account: transaction.account } : {}),
-          ...(transaction.direction
-            ? { direction: transaction.direction }
-            : {}),
-          ...(transaction.from_account
-            ? { fromAccount: transaction.from_account }
-            : {}),
-          ...(transaction.to_account
-            ? { toAccount: transaction.to_account }
-            : {}),
-        })),
+        transactions: transactionsResult.data
+          .filter((transaction) =>
+            ["income", "adjustment", "transfer"].includes(transaction.type),
+          )
+          .map((transaction) => ({
+            id: transaction.id,
+            createdAt: Date.parse(transaction.created_at) || 0,
+            updatedAt: Date.parse(transaction.updated_at) || 0,
+            type: transaction.type,
+            amount: transaction.amount,
+            date: transaction.transaction_date,
+            description: transaction.description,
+            ...(transaction.account ? { account: transaction.account } : {}),
+            ...(transaction.direction
+              ? { direction: transaction.direction }
+              : {}),
+            ...(transaction.from_account
+              ? { fromAccount: transaction.from_account }
+              : {}),
+            ...(transaction.to_account
+              ? { toAccount: transaction.to_account }
+              : {}),
+            ...(transaction.balance_before != null
+              ? { balanceBefore: Number(transaction.balance_before) }
+              : {}),
+            ...(transaction.balance_after != null
+              ? { balanceAfter: Number(transaction.balance_after) }
+              : {}),
+            ...(transaction.from_balance_after != null
+              ? { fromBalanceAfter: Number(transaction.from_balance_after) }
+              : {}),
+            ...(transaction.to_balance_after != null
+              ? { toBalanceAfter: Number(transaction.to_balance_after) }
+              : {}),
+          })),
       }
     : legacyAccounts;
 
@@ -499,6 +1219,7 @@ export async function loadCloudData(userId) {
             accountData: loadAccountData(
               effectiveRpcData.accountData ?? emptyAccountData(),
               effectiveRpcData.deletedRecords,
+              effectiveRpcData.expenses,
             ),
           },
         };
@@ -666,6 +1387,12 @@ export async function saveCloudData(
   }
 
   if (!rpcRes.error) {
+    if (rpcRes.data && typeof rpcRes.data === "object") {
+      if (rpcRes.data.status === "conflict") {
+        return null;
+      }
+      return rpcRes.data.updated_at ?? null;
+    }
     return rpcRes.data ?? null;
   }
 
@@ -727,11 +1454,11 @@ export function subscribeToCloudChanges(
   userId,
   onChange,
   onStatus,
-  _includeNormalizedAccounts = false,
+  includeNormalizedAccounts = false,
 ) {
   if (!supabase) return () => {};
 
-  const channel = supabase.channel(`spend-live-${userId}`).on(
+  let channel = supabase.channel(`spend-live-${userId}`).on(
     "postgres_changes",
     {
       event: "*",
@@ -741,6 +1468,30 @@ export function subscribeToCloudChanges(
     },
     (payload) => onChange?.(payload),
   );
+
+  if (includeNormalizedAccounts) {
+    channel = channel
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "spend_account_settings",
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => onChange?.(payload),
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "spend_account_transactions",
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => onChange?.(payload),
+      );
+  }
 
   channel.subscribe(onStatus);
 
