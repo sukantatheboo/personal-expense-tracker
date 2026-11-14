@@ -64,6 +64,11 @@ import {
 } from "./security.js";
 import "./MobilePrototype.css";
 import {
+  QuickActionsRow,
+  QuickAction,
+  FallbackIcons,
+} from "./AccountsCardDeck.jsx";
+import {
   AnimatedRecurringIcon,
   AnimatedExpensesIcon,
   AnimatedTransactionsIcon,
@@ -2133,11 +2138,7 @@ const WhereItWentCard = memo(
           r.classList.toggle("is-highlighted", active);
         });
         centerRef.current?.classList.toggle("is-interactive", i >= 0);
-        if (i >= 0 && typeof navigator !== "undefined" && navigator.vibrate) {
-          try {
-            navigator.vibrate(8);
-          } catch {}
-        }
+        if (i >= 0) triggerHaptic("selection");
         kick();
       },
       [kick],
@@ -2763,6 +2764,8 @@ function Home({
 
 function Activity({
   S,
+  onShift,
+  onScrollToTop,
   q,
   setQ,
   cf,
@@ -3079,7 +3082,7 @@ function Activity({
     const listEl = activityListRef.current;
     if (!listEl) return;
     const scroller =
-      listEl.closest(".prototype-tab-panel") || listEl.closest("#app");
+      listEl.closest(".activity-scroll-feed") || listEl.closest(".prototype-tab-panel") || listEl.closest("#app");
     if (!scroller) return;
 
     const onScroll = () => {
@@ -3185,8 +3188,25 @@ function Activity({
       : false;
 
   return (
-    <>
-      <div className="activity-controls">
+    <div className="activity-screen-shell">
+      {/* 2ND SCREENSHOT: Locked Top Header (Title + Search + Filter Tabs) */}
+      <header className="activity-sticky-header">
+        {/* Row 1: Title + Month Switcher */}
+        <div
+          className="activity-header-top"
+          onClick={(e) => {
+            if (!e.target.closest("button, a, input, select, [role='button']")) {
+              onScrollToTop?.();
+            }
+          }}
+        >
+          <h1 className="activity-title">Activity</h1>
+          <div className="activity-month-pill">
+            <MonthSwitch m={S?.m} onShift={onShift} />
+          </div>
+        </div>
+
+        {/* Row 2: Search Input + Filter Button */}
         <div className="activity-search-row">
           <label className="srch">
             <Icon n="s" />
@@ -3273,9 +3293,9 @@ function Activity({
           </button>
         </div>
 
-        {/* 1. Feed Tabs Bar */}
+        {/* Row 3: All / Expenses / Income / Transfers Tabs */}
         <div
-          className="activity-tabs-bar"
+          className="activity-tabs-bar activity-filter-tabs"
           role="tablist"
           aria-label="Activity filter"
         >
@@ -3346,179 +3366,179 @@ function Activity({
             <span className="activity-tab-count">{countTransfers}</span>
           </button>
         </div>
-      </div>
 
-      {/* 2. Quick Filter Pills Bar */}
-      {(showFilterTray || cf || quickFilter) && (
-        <div
-          className="chips"
-          role="toolbar"
-          aria-label="Activity filter chips"
-        >
-          <button
-            type="button"
-            className={!cf && !quickFilter ? "on" : ""}
-            aria-pressed={!cf && !quickFilter}
-            onClick={() => {
-              triggerHaptic("selection");
-              setQuickFilter("");
-              setCf("");
-            }}
+        {/* Quick Filter Pills Bar */}
+        {(showFilterTray || cf || quickFilter) && (
+          <div
+            className="chips"
+            role="toolbar"
+            aria-label="Activity filter chips"
           >
-            All
-          </button>
+            <button
+              type="button"
+              className={!cf && !quickFilter ? "on" : ""}
+              aria-pressed={!cf && !quickFilter}
+              onClick={() => {
+                triggerHaptic("selection");
+                setQuickFilter("");
+                setCf("");
+              }}
+            >
+              All
+            </button>
 
-          {(feedType === "all" || feedType === "expenses") && (
-            <>
-              <button
-                type="button"
-                className={quickFilter === "needs-amount" ? "on" : ""}
-                aria-pressed={quickFilter === "needs-amount"}
-                onClick={() => {
-                  triggerHaptic("selection");
-                  setQuickFilter(
-                    quickFilter === "needs-amount" ? "" : "needs-amount",
-                  );
-                  setCf("");
-                }}
-              >
-                <UtilitySymbol name="alert" />
-                <span>Needs amt</span>
-                {needsAmountCount > 0 && (
-                  <span className="chip-badge">{needsAmountCount}</span>
-                )}
-              </button>
-
-              <button
-                type="button"
-                className={quickFilter === "recurring" ? "on" : ""}
-                aria-pressed={quickFilter === "recurring"}
-                onClick={() => {
-                  triggerHaptic("selection");
-                  setQuickFilter(
-                    quickFilter === "recurring" ? "" : "recurring",
-                  );
-                  setCf("");
-                }}
-              >
-                <UtilitySymbol name="refresh" />
-                <span>Repeat</span>
-                {recurringCount > 0 && (
-                  <span className="chip-badge">{recurringCount}</span>
-                )}
-              </button>
-            </>
-          )}
-
-          <button
-            type="button"
-            className={quickFilter === "cash" ? "on" : ""}
-            aria-pressed={quickFilter === "cash"}
-            onClick={() => {
-              triggerHaptic("selection");
-              setQuickFilter(quickFilter === "cash" ? "" : "cash");
-              setCf("");
-            }}
-          >
-            <UtilitySymbol name="cash" />
-            <span>Cash</span>
-            {cashCount > 0 && <span className="chip-badge">{cashCount}</span>}
-          </button>
-
-          <button
-            type="button"
-            className={quickFilter === "high-value" ? "on" : ""}
-            aria-pressed={quickFilter === "high-value"}
-            onClick={() => {
-              triggerHaptic("selection");
-              setQuickFilter(quickFilter === "high-value" ? "" : "high-value");
-              setCf("");
-            }}
-          >
-            <UtilitySymbol name="star" />
-            <span>≥ ৳1k</span>
-            {highValueCount > 0 && (
-              <span className="chip-badge">{highValueCount}</span>
-            )}
-          </button>
-
-          {(feedType === "all" || feedType === "expenses") && (
-            <>
-              <span className="chips-divider" aria-hidden="true" />
-              {Object.keys(CAT).map((c) => (
+            {(feedType === "all" || feedType === "expenses") && (
+              <>
                 <button
-                  key={c}
                   type="button"
-                  className={cf === c ? "on" : ""}
-                  aria-pressed={cf === c}
+                  className={quickFilter === "needs-amount" ? "on" : ""}
+                  aria-pressed={quickFilter === "needs-amount"}
                   onClick={() => {
                     triggerHaptic("selection");
-                    setCf(cf === c ? "" : c);
-                    setQuickFilter("");
+                    setQuickFilter(
+                      quickFilter === "needs-amount" ? "" : "needs-amount",
+                    );
+                    setCf("");
                   }}
                 >
-                  <CategorySymbol category={c} />
-                  <span>{c}</span>
+                  <UtilitySymbol name="alert" />
+                  <span>Needs amt</span>
+                  {needsAmountCount > 0 && (
+                    <span className="chip-badge">{needsAmountCount}</span>
+                  )}
                 </button>
-              ))}
-            </>
-          )}
-        </div>
-      )}
 
-      {/* 3. Filter Summary Banner */}
-      {hasFilter && (
-        <div className="activity-filter-summary" role="status">
-          {feedType !== "all" && (
-            <b>{feedType.charAt(0).toUpperCase() + feedType.slice(1)}</b>
-          )}
-          {feedType !== "all" && (quickFilter || cf || query) && <span>·</span>}
-          {quickFilter === "needs-amount" && <b>Needs amt</b>}
-          {quickFilter === "recurring" && <b>Repeat</b>}
-          {quickFilter === "cash" && <b>Cash</b>}
-          {quickFilter === "high-value" && <b>≥ ৳1k</b>}
-          {quickFilter && (cf || query) && <span>·</span>}
-          {cf && <b>{cf}</b>}
-          {cf && query && <span>·</span>}
-          {query && <span>&ldquo;{query}&rdquo;</span>}
-          <span>·</span>
-          {feedType === "income" ? (
-            <strong className="is-positive">+{M(totalIncome)}</strong>
-          ) : feedType === "transfers" ? (
-            <strong>{M(totalTransfers)}</strong>
-          ) : totalIncome > 0 && totalExpenses > 0 ? (
-            <>
-              <strong>{M(totalExpenses)}</strong>
-              <span>·</span>
+                <button
+                  type="button"
+                  className={quickFilter === "recurring" ? "on" : ""}
+                  aria-pressed={quickFilter === "recurring"}
+                  onClick={() => {
+                    triggerHaptic("selection");
+                    setQuickFilter(
+                      quickFilter === "recurring" ? "" : "recurring",
+                    );
+                    setCf("");
+                  }}
+                >
+                  <UtilitySymbol name="refresh" />
+                  <span>Repeat</span>
+                  {recurringCount > 0 && (
+                    <span className="chip-badge">{recurringCount}</span>
+                  )}
+                </button>
+              </>
+            )}
+
+            <button
+              type="button"
+              className={quickFilter === "cash" ? "on" : ""}
+              aria-pressed={quickFilter === "cash"}
+              onClick={() => {
+                triggerHaptic("selection");
+                setQuickFilter(quickFilter === "cash" ? "" : "cash");
+                setCf("");
+              }}
+            >
+              <UtilitySymbol name="cash" />
+              <span>Cash</span>
+              {cashCount > 0 && <span className="chip-badge">{cashCount}</span>}
+            </button>
+
+            <button
+              type="button"
+              className={quickFilter === "high-value" ? "on" : ""}
+              aria-pressed={quickFilter === "high-value"}
+              onClick={() => {
+                triggerHaptic("selection");
+                setQuickFilter(quickFilter === "high-value" ? "" : "high-value");
+                setCf("");
+              }}
+            >
+              <UtilitySymbol name="star" />
+              <span>≥ ৳1k</span>
+              {highValueCount > 0 && (
+                <span className="chip-badge">{highValueCount}</span>
+              )}
+            </button>
+
+            {(feedType === "all" || feedType === "expenses") && (
+              <>
+                <span className="chips-divider" aria-hidden="true" />
+                {Object.keys(CAT).map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    className={cf === c ? "on" : ""}
+                    aria-pressed={cf === c}
+                    onClick={() => {
+                      triggerHaptic("selection");
+                      setCf(cf === c ? "" : c);
+                      setQuickFilter("");
+                    }}
+                  >
+                    <CategorySymbol category={c} />
+                    <span>{c}</span>
+                  </button>
+                ))}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Filter Summary Banner */}
+        {hasFilter && (
+          <div className="activity-filter-summary" role="status">
+            {feedType !== "all" && (
+              <b>{feedType.charAt(0).toUpperCase() + feedType.slice(1)}</b>
+            )}
+            {feedType !== "all" && (quickFilter || cf || query) && <span>·</span>}
+            {quickFilter === "needs-amount" && <b>Needs amt</b>}
+            {quickFilter === "recurring" && <b>Repeat</b>}
+            {quickFilter === "cash" && <b>Cash</b>}
+            {quickFilter === "high-value" && <b>≥ ৳1k</b>}
+            {quickFilter && (cf || query) && <span>·</span>}
+            {cf && <b>{cf}</b>}
+            {cf && query && <span>·</span>}
+            {query && <span>&ldquo;{query}&rdquo;</span>}
+            <span>·</span>
+            {feedType === "income" ? (
               <strong className="is-positive">+{M(totalIncome)}</strong>
-            </>
-          ) : totalIncome > 0 && totalExpenses === 0 ? (
-            <strong className="is-positive">+{M(totalIncome)}</strong>
-          ) : totalExpenses > 0 ? (
-            <strong>{M(totalExpenses)}</strong>
-          ) : totalTransfers > 0 ? (
-            <strong>{M(totalTransfers)}</strong>
-          ) : (
-            <strong>{M(0)}</strong>
-          )}
-          <span>·</span>
-          <span>
-            {filteredItems.length}{" "}
-            {filteredItems.length === 1 ? "item" : "items"}
-          </span>
-          <button
-            type="button"
-            className="activity-filter-clear-link"
-            onClick={clearAllFilters}
-            aria-label="Clear all filters"
-          >
-            Clear
-          </button>
-        </div>
-      )}
+            ) : feedType === "transfers" ? (
+              <strong>{M(totalTransfers)}</strong>
+            ) : totalIncome > 0 && totalExpenses > 0 ? (
+              <>
+                <strong>{M(totalExpenses)}</strong>
+                <span>·</span>
+                <strong className="is-positive">+{M(totalIncome)}</strong>
+              </>
+            ) : totalIncome > 0 && totalExpenses === 0 ? (
+              <strong className="is-positive">+{M(totalIncome)}</strong>
+            ) : totalExpenses > 0 ? (
+              <strong>{M(totalExpenses)}</strong>
+            ) : totalTransfers > 0 ? (
+              <strong>{M(totalTransfers)}</strong>
+            ) : (
+              <strong>{M(0)}</strong>
+            )}
+            <span>·</span>
+            <span>
+              {filteredItems.length}{" "}
+              {filteredItems.length === 1 ? "item" : "items"}
+            </span>
+            <button
+              type="button"
+              className="activity-filter-clear-link"
+              onClick={clearAllFilters}
+              aria-label="Clear all filters"
+            >
+              Clear
+            </button>
+          </div>
+        )}
+      </header>
 
-      {/* 4. Activity List */}
-      <div ref={activityListRef}>
+      {/* 3RD SCREENSHOT: Only This Transaction List Scrolls */}
+      <div className="activity-scroll-feed" ref={activityListRef}>
         {!filteredItems.length ? (
           <div className="emp-illustrated">
             <div className="emp-illustrated-icon">
@@ -3586,14 +3606,15 @@ function Activity({
                   : fD(d);
 
             return (
-              <Fragment key={d || "undated"}>
+              <section key={d || "undated"} className="activity-day-group">
+                {/* Sticky day bar ("Yesterday -৳610") pins right under the header while scrolling */}
                 <div
                   className="day activity-day-header"
                   data-day-header={d || "undated"}
                 >
-                  <span>{dayLabel}</span>
+                  <span className="activity-day-label">{dayLabel}</span>
                   {dayExpenses.length >= 2 && hasAmount && (
-                    <span>
+                    <span className="activity-day-total">
                       {feedType === "income" ? (
                         <span className="is-positive">+{M(dayIncomeSum)}</span>
                       ) : feedType === "transfers" ? (
@@ -3615,7 +3636,8 @@ function Activity({
                     </span>
                   )}
                 </div>
-                <div className="card expense-day-card">
+                {/* Flat transaction rows directly on canvas (white card styling removed via CSS) */}
+                <div className="card expense-day-card activity-group-card">
                   {dayExpenses.map((e) => (
                     <ExpenseRow
                       key={`${e.sourceType || "exp"}-${e.id}`}
@@ -3640,12 +3662,12 @@ function Activity({
                     />
                   ))}
                 </div>
-              </Fragment>
+              </section>
             );
           })
         )}
       </div>
-    </>
+    </div>
   );
 }
 
@@ -3893,6 +3915,49 @@ function Accounts({
     return { value: event.amount, signed: false };
   };
 
+  const activeCardIndex = cards.findIndex(
+    (c) => c.id === (selectedAccount || activeCard?.id),
+  );
+  const resolvedActiveIndex = activeCardIndex >= 0 ? activeCardIndex : 0;
+
+  const handleQuickAction = (actionType) => {
+    if (actionType === "income") {
+      triggerHaptic("light");
+      if (!cards.length) {
+        onAddCardClick?.();
+        return;
+      }
+      onTx("income", selectedAccount);
+    } else if (actionType === "transfer") {
+      triggerHaptic("light");
+      if (!cards.length) {
+        onAddCardClick?.();
+        return;
+      }
+      if (activeCard?.frozen) {
+        onLockedCardNotice?.(activeCard.name);
+        return;
+      }
+      onTx("transfer", selectedAccount);
+    } else if (actionType === "adjust") {
+      triggerHaptic("light");
+      if (!cards.length) {
+        onAddCardClick?.();
+        return;
+      }
+      onTx("adjust", selectedAccount);
+    } else if (actionType === "card-options") {
+      triggerHaptic("selection");
+      if (!cards.length) {
+        onAddCardClick?.();
+        return;
+      }
+      onOpenCardOptions?.(
+        selectedAccount || activeCard?.id || cards[0]?.id,
+      );
+    }
+  };
+
   return (
     <>
       {/* 3D Stacked Cards Wallet Deck */}
@@ -3904,6 +3969,7 @@ function Accounts({
         onAddCardClick={onAddCardClick}
         onOpenCardDetails={(card) => card && onOpenCardOptions?.(card.id)}
         onDragOffsetChange={setDeckDragY}
+        showDots={false}
       />
 
       {/* Reactive Layout Reflow: Quick Actions & Transactions translate in tandem with card gesture */}
@@ -3917,90 +3983,15 @@ function Accounts({
             : undefined
         }
       >
-        {/* 2×2 Quick Action Buttons Grid (Income, Transfer, Adjust, Card Options - Preserving Whole App Functionality) */}
-        <div className="accounts-actions-grid">
-          <button
-            type="button"
-            className="accounts-action-card"
-            onClick={() => {
-              triggerHaptic("light");
-              if (!cards.length) {
-                onAddCardClick?.();
-                return;
-              }
-              onTx("income", selectedAccount);
-            }}
-            aria-label="Add income to this account"
-          >
-            <div className="action-icon-badge is-income">
-              <TransactionSymbol type="income" />
-            </div>
-            <span className="action-label">Income</span>
-          </button>
-
-          <button
-            type="button"
-            className="accounts-action-card"
-            onClick={() => {
-              triggerHaptic("light");
-              if (!cards.length) {
-                onAddCardClick?.();
-                return;
-              }
-              if (activeCard?.frozen) {
-                onLockedCardNotice?.(activeCard.name);
-                return;
-              }
-              onTx("transfer", selectedAccount);
-            }}
-            aria-label="Transfer between accounts"
-          >
-            <div className="action-icon-badge is-transfer">
-              <TransactionSymbol type="transfer" />
-            </div>
-            <span className="action-label">Transfer</span>
-          </button>
-
-          <button
-            type="button"
-            className="accounts-action-card"
-            onClick={() => {
-              triggerHaptic("light");
-              if (!cards.length) {
-                onAddCardClick?.();
-                return;
-              }
-              onTx("adjust", selectedAccount);
-            }}
-            aria-label="Adjust balance"
-          >
-            <div className="action-icon-badge is-adjust">
-              <TransactionSymbol type="adjust" />
-            </div>
-            <span className="action-label">Adjust</span>
-          </button>
-
-          <button
-            type="button"
-            className="accounts-action-card is-card-options-card"
-            onClick={() => {
-              triggerHaptic("selection");
-              if (!cards.length) {
-                onAddCardClick?.();
-                return;
-              }
-              onOpenCardOptions?.(
-                selectedAccount || activeCard?.id || cards[0]?.id,
-              );
-            }}
-            aria-label="Manage cards and view card options"
-          >
-            <div className="action-icon-badge is-card-options">
-              <TransactionSymbol type="card-options" />
-            </div>
-            <span className="action-label">Card Options</span>
-          </button>
-        </div>
+        <QuickActionsRow
+          activeDotIndex={resolvedActiveIndex}
+          dotCount={cards.length > 0 ? cards.length : 4}
+          highlightSend={false} // Set to true for a solid brand "Send" button
+          onAddMoney={() => handleQuickAction("income")}
+          onSend={() => handleQuickAction("transfer")}
+          onAdjust={() => handleQuickAction("adjust")}
+          onCardOptions={() => handleQuickAction("card-options")}
+        />
 
         {/* Transactions Section matching Video Header & List */}
         <div className="accounts-transactions-header">
@@ -4164,6 +4155,8 @@ export function getFreqSuffix(frequency = "monthly") {
   return RECURRING_FREQUENCIES[key]?.suffix ?? "/mo";
 }
 
+export { QuickActionsRow, QuickAction, FallbackIcons };
+
 function parseRecurringDate(value) {
   if (!value) return null;
   const raw = String(value);
@@ -4239,6 +4232,8 @@ function sortRecurringSection(items) {
   });
 }
 
+const RECURRING_SWIPE_WIDTH = 84;
+
 function RecurringRow({
   item,
   fmt,
@@ -4246,13 +4241,72 @@ function RecurringRow({
   onSelect,
   onTogglePause,
 }) {
-  const [swipeOffset, setSwipeOffset] = useState(0);
-  const pointerRef = useRef({
-    startX: 0,
-    startY: 0,
-    dragging: false,
-    swiped: false,
-  });
+  const pointerRef = useRef(null);
+  const rowRef = useRef(null);
+  const shellRef = useRef(null);
+  const suppressClickTimerRef = useRef();
+  const suppressClickRef = useRef(false);
+  const dragFrameRef = useRef(null);
+  const pendingOffsetRef = useRef(0);
+  const [swipe, setSwipe] = useState({ offset: 0, phase: "idle" });
+  const swipeRef = useRef(swipe);
+
+  const updateSwipe = (next) => {
+    swipeRef.current = next;
+    setSwipe(next);
+  };
+
+  const suppressNextClick = () => {
+    suppressClickRef.current = true;
+    clearTimeout(suppressClickTimerRef.current);
+    suppressClickTimerRef.current = setTimeout(() => {
+      suppressClickRef.current = false;
+    }, 500);
+  };
+
+  const springRowClosed = useCallback(() => {
+    updateSwipe({ offset: 0, phase: "idle" });
+    shellRef.current?.removeAttribute("data-swipe-dir");
+    shellRef.current?.removeAttribute("data-threshold");
+    if (rowRef.current) {
+      rowRef.current.style.transition =
+        "transform 260ms cubic-bezier(0.2, 0.9, 0.28, 1)";
+      rowRef.current.style.transform = "translate3d(0, 0, 0)";
+    }
+  }, []);
+
+  const executeRightSwipeAction = useCallback(() => {
+    springRowClosed();
+    triggerHaptic("selection");
+    onSelect(item);
+  }, [item, onSelect, springRowClosed]);
+
+  // Automatically reset to idle when tapping anywhere outside if revealed
+  useEffect(() => {
+    if (swipe.phase !== "revealed") return undefined;
+    const handleOutside = (event) => {
+      if (
+        rowRef.current &&
+        !rowRef.current.contains(event.target) &&
+        (!shellRef.current || !shellRef.current.contains(event.target))
+      ) {
+        springRowClosed();
+      }
+    };
+    window.addEventListener("pointerdown", handleOutside, true);
+    return () => window.removeEventListener("pointerdown", handleOutside, true);
+  }, [swipe.phase, springRowClosed]);
+
+  useEffect(
+    () => () => {
+      clearTimeout(suppressClickTimerRef.current);
+      if (dragFrameRef.current) {
+        cancelAnimationFrame(dragFrameRef.current);
+      }
+    },
+    [],
+  );
+
   const paused = isRecurringPaused(item);
   const daysUntil = getDaysUntilDue(item.next);
   const isOverdue = !paused && daysUntil !== null && daysUntil < 0;
@@ -4265,104 +4319,366 @@ function RecurringRow({
     CAT[item.cat]?.[1] ||
     "#64748b";
 
-  const handlePointerDown = (event) => {
-    if (event.button !== undefined && event.button !== 0) return;
+  const startGesture = (event) => {
+    if (event.button != null && event.button !== 0) return;
+    if (dragFrameRef.current) {
+      cancelAnimationFrame(dragFrameRef.current);
+      dragFrameRef.current = null;
+    }
+
+    if (rowRef.current) {
+      rowRef.current.style.transition = "none";
+    }
+
+    const initialOffset = swipeRef.current.offset;
+    const width = rowRef.current?.offsetWidth || 320;
+
     pointerRef.current = {
       startX: event.clientX,
       startY: event.clientY,
-      dragging: true,
-      swiped: false,
+      lastX: event.clientX,
+      lastY: event.clientY,
+      startedAt: performance.now(),
+      width,
+      moved: false,
+      horizontal: false,
+      draggingStateApplied: false,
+      initialOffset,
+      pointerId: event.pointerId,
+      pointerType: event.pointerType,
+      passedHaptic: false,
     };
+    suppressClickRef.current = false;
   };
 
-  const handlePointerMove = (event) => {
-    if (!pointerRef.current.dragging) return;
-    const dx = event.clientX - pointerRef.current.startX;
-    const dy = event.clientY - pointerRef.current.startY;
-    if (Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy) * 1.4) {
-      pointerRef.current.swiped = true;
-      setSwipeOffset(Math.max(-88, Math.min(0, dx)));
+  const moveGesture = (event) => {
+    const gesture = pointerRef.current;
+    if (!gesture) return;
+    if (gesture.pointerId !== event.pointerId) return;
+
+    const dx = event.clientX - gesture.startX;
+    const dy = event.clientY - gesture.startY;
+    const absDx = Math.abs(dx);
+    const absDy = Math.abs(dy);
+
+    if (absDx > 6 || absDy > 6) {
+      gesture.moved = true;
+    }
+
+    if (!gesture.horizontal) {
+      const isHorizontalIntent =
+        (absDx > 6 && absDx > absDy * 1.1) ||
+        (gesture.initialOffset !== 0 && absDx > 5);
+
+      if (isHorizontalIntent) {
+        gesture.horizontal = true;
+        suppressNextClick();
+        rowRef.current?.classList.add("is-swipe-dragging");
+        shellRef.current?.classList.add("is-swipe-dragging");
+        try {
+          event.currentTarget.setPointerCapture(gesture.pointerId);
+        } catch {}
+        if (!gesture.draggingStateApplied) {
+          gesture.draggingStateApplied = true;
+          updateSwipe({
+            offset: gesture.initialOffset,
+            phase: "dragging",
+          });
+        }
+      }
+    }
+
+    if (gesture.horizontal) {
+      gesture.lastX = event.clientX;
+      gesture.lastY = event.clientY;
+
+      let targetOffset = gesture.initialOffset + dx;
+
+      if (targetOffset < 0) {
+        if (targetOffset < -140) {
+          targetOffset = -140 + (targetOffset - -140) * 0.25;
+        }
+        shellRef.current?.setAttribute("data-swipe-dir", "left");
+      } else if (targetOffset > 0) {
+        if (targetOffset > 125) {
+          targetOffset = 125 + (targetOffset - 125) * 0.25;
+        }
+        shellRef.current?.setAttribute("data-swipe-dir", "right");
+      } else {
+        shellRef.current?.removeAttribute("data-swipe-dir");
+      }
+
+      const leftThreshold = Math.max(84, gesture.width * 0.28);
+      const rightThreshold = Math.max(84, gesture.width * 0.28);
+      const isPastThreshold =
+        targetOffset <= -leftThreshold || targetOffset >= rightThreshold;
+      if (isPastThreshold && !gesture.passedHaptic) {
+        gesture.passedHaptic = true;
+        triggerHaptic("selection");
+        shellRef.current?.setAttribute("data-threshold", "true");
+      } else if (!isPastThreshold && gesture.passedHaptic) {
+        gesture.passedHaptic = false;
+        shellRef.current?.removeAttribute("data-threshold");
+      }
+
+      pendingOffsetRef.current = targetOffset;
+      swipeRef.current.offset = targetOffset;
+
+      if (!dragFrameRef.current) {
+        dragFrameRef.current = requestAnimationFrame(() => {
+          dragFrameRef.current = null;
+          const offset = pendingOffsetRef.current;
+          if (rowRef.current) {
+            rowRef.current.style.transform = `translate3d(${offset}px, 0, 0)`;
+          }
+        });
+      }
     }
   };
 
-  const handlePointerUp = (cancelled = false) => {
-    if (!pointerRef.current.dragging) return;
-    pointerRef.current.dragging = false;
-    if (cancelled) {
-      pointerRef.current.swiped = false;
-      setSwipeOffset(0);
+  const endGesture = (event) => {
+    if (dragFrameRef.current) {
+      cancelAnimationFrame(dragFrameRef.current);
+      dragFrameRef.current = null;
+    }
+    const gesture = pointerRef.current;
+    pointerRef.current = null;
+
+    if (!gesture) return;
+
+    try {
+      if (event?.currentTarget?.hasPointerCapture?.(gesture.pointerId)) {
+        event.currentTarget.releasePointerCapture(gesture.pointerId);
+      }
+    } catch {}
+
+    rowRef.current?.classList.remove("is-swipe-dragging");
+    shellRef.current?.classList.remove("is-swipe-dragging");
+    shellRef.current?.removeAttribute("data-threshold");
+
+    if (event?.type === "pointercancel") {
+      const resetOffset =
+        gesture.initialOffset === -80 || gesture.initialOffset === 80
+          ? gesture.initialOffset
+          : 0;
+      if (resetOffset < 0) {
+        shellRef.current?.setAttribute("data-swipe-dir", "left");
+      } else if (resetOffset > 0) {
+        shellRef.current?.setAttribute("data-swipe-dir", "right");
+      } else {
+        shellRef.current?.removeAttribute("data-swipe-dir");
+      }
+      updateSwipe({
+        offset: resetOffset,
+        phase: resetOffset === 0 ? "idle" : "revealed",
+      });
+      if (rowRef.current) {
+        rowRef.current.style.transition =
+          "transform 240ms cubic-bezier(0.2, 0.9, 0.28, 1)";
+        rowRef.current.style.transform = `translate3d(${resetOffset}px, 0, 0)`;
+      }
       return;
     }
-    const shouldOpen = swipeOffset < -42;
-    if (shouldOpen) triggerHaptic("light");
-    setSwipeOffset(shouldOpen ? -80 : 0);
+
+    if (gesture.horizontal) {
+      const dx = (event?.clientX ?? gesture.lastX) - gesture.startX;
+      const currentOffset = pendingOffsetRef.current;
+      const elapsed = Math.max(1, performance.now() - gesture.startedAt);
+      const velocity = dx / elapsed;
+      const leftThreshold = Math.max(90, gesture.width * 0.3);
+      const rightThreshold = Math.max(84, gesture.width * 0.28);
+      const revealThreshold = 40;
+
+      suppressNextClick();
+
+      // Full action threshold executions
+      const shouldFullLeftAction =
+        currentOffset <= -leftThreshold || (dx < -36 && velocity < -0.42);
+      const shouldFullRightAction =
+        currentOffset >= rightThreshold || (dx > 36 && velocity > 0.42);
+
+      if (shouldFullLeftAction) {
+        springRowClosed();
+        triggerHaptic("selection");
+        onTogglePause(item);
+      } else if (shouldFullRightAction) {
+        executeRightSwipeAction();
+      } else if (currentOffset <= -revealThreshold) {
+        shellRef.current?.setAttribute("data-swipe-dir", "left");
+        updateSwipe({ offset: -80, phase: "revealed" });
+        if (rowRef.current) {
+          rowRef.current.style.transition =
+            "transform 260ms cubic-bezier(0.2, 0.9, 0.28, 1)";
+          rowRef.current.style.transform = "translate3d(-80px, 0, 0)";
+        }
+      } else if (currentOffset >= revealThreshold) {
+        shellRef.current?.setAttribute("data-swipe-dir", "right");
+        updateSwipe({ offset: 80, phase: "revealed" });
+        if (rowRef.current) {
+          rowRef.current.style.transition =
+            "transform 260ms cubic-bezier(0.2, 0.9, 0.28, 1)";
+          rowRef.current.style.transform = "translate3d(80px, 0, 0)";
+        }
+      } else {
+        springRowClosed();
+      }
+    }
   };
 
   const handleRowClick = () => {
-    if (pointerRef.current.swiped) {
-      pointerRef.current.swiped = false;
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false;
+      clearTimeout(suppressClickTimerRef.current);
       return;
     }
-    if (swipeOffset !== 0) {
-      setSwipeOffset(0);
+    if (swipeRef.current.phase === "revealed" || swipeRef.current.offset !== 0) {
+      springRowClosed();
       return;
     }
     onSelect(item);
   };
 
+  const rowClasses = [
+    "rec-row",
+    "expense-row",
+    paused && "is-paused",
+    swipe.phase === "dragging" && "is-swipe-dragging",
+    swipe.phase === "revealed" && "is-swipe-revealed",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const shellClasses = [
+    "rec-row-swipe-wrap",
+    "expense-swipe-shell",
+    swipe.phase === "dragging" && "is-dragging",
+    swipe.phase === "dragging" && "is-swipe-dragging",
+    swipe.phase === "revealed" && "is-revealed",
+    swipe.phase === "revealed" && "is-swipe-revealed",
+    swipe.offset > 0 && "is-right-swipe",
+    paused && "is-paused-item",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
-    <div className="rec-row-swipe-wrap">
+    <div
+      ref={shellRef}
+      className={shellClasses}
+    >
+      {/* Left Action Button (Swipe Right to Edit) */}
       <button
+        className="expense-swipe-delete is-left is-edit"
         type="button"
-        className="rec-swipe-action"
+        tabIndex={swipe.phase === "revealed" && swipe.offset > 0 ? 0 : -1}
+        inert={
+          !(swipe.phase === "revealed" && swipe.offset > 0) ? true : undefined
+        }
+        aria-label={`Edit ${title}`}
         onClick={(event) => {
           event.stopPropagation();
-          pointerRef.current.swiped = false;
-          setSwipeOffset(0);
+          event.currentTarget.blur();
+          executeRightSwipeAction();
+        }}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+        </svg>
+        <span>Edit</span>
+      </button>
+
+      {/* Right Action Button (Swipe Left to Pause/Resume) */}
+      <button
+        className={`expense-swipe-delete is-right ${paused ? "is-resume" : "is-pause"}`}
+        type="button"
+        tabIndex={swipe.phase === "revealed" && swipe.offset < 0 ? 0 : -1}
+        inert={
+          !(swipe.phase === "revealed" && swipe.offset < 0) ? true : undefined
+        }
+        aria-label={`${paused ? "Resume" : "Pause"} ${title}`}
+        onClick={(event) => {
+          event.stopPropagation();
+          event.currentTarget.blur();
+          springRowClosed();
           onTogglePause(item);
         }}
-        aria-label={`${paused ? "Resume" : "Pause"} ${title}`}
       >
-        {paused ? "Resume" : "Pause"}
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          {paused ? (
+            <polygon points="7 4 19 12 7 20 7 4" />
+          ) : (
+            <>
+              <rect x="6" y="5" width="4" height="14" rx="1.5" />
+              <rect x="14" y="5" width="4" height="14" rx="1.5" />
+            </>
+          )}
+        </svg>
+        <span>{paused ? "Resume" : "Pause"}</span>
       </button>
+
+      {/* The sliding row itself */}
       <div
+        ref={rowRef}
         role="button"
         tabIndex={0}
-        className={`rec-row${paused ? " is-paused" : ""}`}
-        style={{ transform: `translateX(${swipeOffset}px)` }}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={() => handlePointerUp()}
-        onPointerCancel={() => handlePointerUp(true)}
+        className={rowClasses}
+        style={
+          swipe.offset !== 0
+            ? { transform: `translate3d(${swipe.offset}px, 0, 0)` }
+            : undefined
+        }
+        onPointerDown={startGesture}
+        onPointerMove={moveGesture}
+        onPointerUp={endGesture}
+        onPointerCancel={endGesture}
+        onLostPointerCapture={endGesture}
+        onContextMenu={(event) => event.preventDefault()}
         onClick={handleRowClick}
         onKeyDown={(event) => {
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
-            onSelect(item);
+            if (swipeRef.current.phase === "revealed") {
+              springRowClosed();
+            } else {
+              onSelect(item);
+            }
+          } else if (event.key === "Escape") {
+            if (swipeRef.current.phase === "revealed") {
+              event.preventDefault();
+              springRowClosed();
+            }
           }
         }}
-        aria-label={`${title}, ${fmt(item.amt)} ${freqSuffix}, next ${formatDueShortDate(item.next)}. ${paused ? "Paused" : "Active"}.`}
+        aria-label={`${title}, ${fmt(item.amt)} ${freqSuffix}, next ${formatDueShortDate(item.next)}. ${paused ? "Paused" : "Active"}. Tap to edit, swipe left to ${paused ? "resume" : "pause"}, swipe right to edit.`}
       >
-        <i
-          className="ic rec-badge"
-          style={{ "--c": iconColor }}
-          aria-hidden="true"
-        >
-          <CategorySymbol category={item.cat} description={item.desc} />
-        </i>
-        <div className="rec-row-main">
-          <div className="rec-row-title-line">
-            <span className="rec-row-title">{title}</span>
-            {paused && <span className="rec-paused-tag">Paused</span>}
+        <div className="rec-row-leading">
+          <i
+            className="ic rec-badge"
+            style={{ "--c": iconColor }}
+            aria-hidden="true"
+          >
+            <CategorySymbol category={item.cat} description={item.desc} />
+          </i>
+          <div className="rec-row-main">
+            <div className="rec-row-title-line">
+              <span className="rec-row-title">{title}</span>
+              {paused && <span className="rec-paused-tag">Paused</span>}
+            </div>
+            <span className="rec-row-sub">
+              {item.iv && item.iv !== "monthly" && (
+                <span className="rec-cadence-tag">
+                  {item.iv === "yearly"
+                    ? "Yearly"
+                    : item.iv === "weekly"
+                      ? "Weekly"
+                      : item.iv === "biweekly"
+                        ? "Bi-weekly"
+                        : item.iv} ·{" "}
+                </span>
+              )}
+              Next {formatDueShortDate(item.next)} · {accountLabel}
+            </span>
           </div>
-          <span className="rec-row-sub">
-            {item.iv && item.iv !== "monthly" && (
-              <span className="rec-cadence-tag">
-                {item.iv === "yearly" ? "Yearly" : item.iv === "weekly" ? "Weekly" : item.iv === "biweekly" ? "Bi-weekly" : item.iv} ·{" "}
-              </span>
-            )}
-            Next {formatDueShortDate(item.next)} · {accountLabel}
-          </span>
         </div>
         <div className="rec-row-right">
           <div className="rec-row-amt-line">
@@ -10183,8 +10499,12 @@ function useCollapsingHeader({ activeTab, enableSnap = true }) {
   const scrollToTop = React.useCallback(() => {
     const scroller = getActiveScroller();
     if (!scroller) return;
+    // Activity tab: the tab panel itself no longer scrolls; the inner
+    // .activity-scroll-feed does. Scroll that element instead.
+    const target =
+      scroller.querySelector(".activity-scroll-feed") || scroller;
     tabScrollTopRef.current[activeTab] = 0;
-    scroller.scrollTo({ top: 0, behavior: "smooth" });
+    target.scrollTo({ top: 0, behavior: "smooth" });
   }, [activeTab, getActiveScroller]);
 
   // Restore saved scrollTop & sync --collapse before paint when switching tabs
@@ -10280,6 +10600,10 @@ const CollapsibleTopBar = React.memo(function CollapsibleTopBar({
   onBack,
   settingsTitle,
 }) {
+  if (activeTab === "activity" && !settingsRoute) {
+    return null;
+  }
+
   // Compact title shows the active month on Home, and screen name on other tabs
   const compactTitle = settingsRoute
     ? settingsTitle
@@ -11767,13 +12091,14 @@ export default function MobilePrototype({
             <div
               ref={registerTabScroller("activity")}
               data-tab="activity"
-              className={`prototype-tab-panel ${tab === "activity" ? `is-active${animateScreen ? ` ${slideDirection === "forward" ? "slides-from-right" : "slides-from-left"}` : ""}` : "is-inactive"}`}
+              className={`prototype-tab-panel is-activity ${tab === "activity" ? `is-active${animateScreen ? ` ${slideDirection === "forward" ? "slides-from-right" : "slides-from-left"}` : ""}` : "is-inactive"}`}
               inert={tab !== "activity" ? true : undefined}
               hidden={tab !== "activity"}
             >
-              <ScreenLargeTitle title="Activity" className="is-activity" />
               <Activity
                 S={S}
+                onShift={onShift}
+                onScrollToTop={scrollToTop}
                 q={q}
                 setQ={setQ}
                 cf={cf}

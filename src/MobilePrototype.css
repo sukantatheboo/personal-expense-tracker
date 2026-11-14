@@ -1049,7 +1049,7 @@ a:active,
   overflow-x: hidden;
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
-  padding: 0 18px calc(var(--nav-h, 68px) + 76px + var(--safe-bottom));
+  padding: 0 18px calc(var(--nav-h, 68px) + 32px + var(--safe-bottom));
   scrollbar-width: none;
 }
 .mobile-prototype .prototype-tab-panel::-webkit-scrollbar {
@@ -6622,6 +6622,223 @@ a:active,
   background: #60a5fa;
 }
 
+/* ==========================================================================
+   QUICK ACTIONS — THEME TOKENS (Light & Dark)
+   ========================================================================== */
+:root,
+.mobile-prototype {
+  --qa-space-x: var(--space-5, 20px);
+  --qa-gap-col: var(--space-2, 8px);
+  --qa-gap-stack: 10px;
+  --qa-circle-size: 56px;
+
+  /* Light Mode Tokens */
+  --qa-surface: var(--bg, #ffffff);
+  --qa-ink: var(--ink, #1b1b1b);
+  --qa-brand-color: var(--brand, var(--accent, #1b1b1b));
+
+  /* Neutral fallback #F1F2F5; mixes 10% brand tint when --brand is set */
+  --qa-circle-bg: #f1f2f5;
+  --qa-circle-bg: color-mix(in srgb, var(--qa-brand-color) 10%, #f1f2f5);
+  --qa-circle-bg-active: #e4e6eb;
+  --qa-circle-bg-active: color-mix(in srgb, var(--qa-brand-color) 18%, #e4e6eb);
+  --qa-icon-color: var(--qa-brand-color, #1b1b1b);
+
+  /* Optional Primary ("Send") Highlight Tokens */
+  --qa-primary-bg: var(--qa-brand-color, #1b1b1b);
+  --qa-primary-bg-active: color-mix(in srgb, var(--qa-primary-bg) 85%, #000000);
+  --qa-primary-fg: #ffffff;
+
+  /* Page Indicator Dots (18x6 active pill + 6x6 inactive dots) */
+  --qa-dot-active-bg: var(--brand, var(--accent, #2563eb));
+  --qa-dot-inactive-bg: color-mix(in srgb, var(--qa-ink) 18%, transparent);
+
+  /* Keyboard / Switch Focus Ring */
+  --qa-focus-ring: var(--brand, var(--accent, #2563eb));
+}
+
+.mobile-prototype.dark,
+[data-theme="dark"],
+:root[data-theme="dark"],
+.mobile-prototype[data-theme="dark"] {
+  --qa-surface: #191c1f;
+  --qa-ink: #ffffff;
+  --qa-circle-bg: #2a2d31;
+  --qa-circle-bg-active: #35393e;
+  --qa-icon-color: #ffffff;
+
+  --qa-primary-bg: var(--brand, var(--accent, #3b82f6));
+  --qa-primary-bg-active: color-mix(in srgb, var(--qa-primary-bg) 84%, #000000);
+  --qa-primary-fg: #ffffff;
+
+  --qa-dot-active-bg: #ffffff;
+  --qa-dot-inactive-bg: rgba(255, 255, 255, 0.24);
+  --qa-focus-ring: #60a5fa;
+}
+
+/* ==========================================================================
+   QUICK ACTIONS — LAYOUT & INTERACTION
+   ========================================================================== */
+.qa-section {
+  width: 100%;
+  padding-inline: var(--qa-space-x);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.mobile-prototype .qa-section {
+  margin: 10px -18px 8px;
+  width: calc(100% + 36px);
+}
+
+/* 4-dot page indicator above the row: first (active) is 18x6 pill, rest 6x6 */
+.qa-dots {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.qa-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background-color: var(--qa-dot-inactive-bg);
+  transition: width 0.2s ease, background-color 0.2s ease;
+}
+
+.qa-dot.is-active {
+  width: 18px;
+  height: 6px;
+  background-color: var(--qa-dot-active-bg);
+}
+
+/* 4 equal-width columns, 8px horizontal gap */
+.qa-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--qa-gap-col);
+  align-items: start;
+}
+
+/* Whole column (circle + label) is the button tap target (>= 44px) */
+.qa-item {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 2px 0;
+  margin: 0;
+  min-width: 44px;
+  min-height: 44px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--qa-gap-stack);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transform: scale(1);
+  transition: transform 340ms cubic-bezier(0.2, 1.4, 0.45, 0.95);
+}
+
+.qa-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Visible focus ring for keyboard and switch access */
+.qa-item:focus-visible {
+  outline: 2px solid var(--qa-focus-ring);
+  outline-offset: 4px;
+  border-radius: 16px;
+}
+
+/* 56x56 flat circle — no shadows, no borders, no gradients */
+.qa-circle {
+  width: var(--qa-circle-size);
+  height: var(--qa-circle-size);
+  border-radius: 999px;
+  background: var(--qa-circle-bg);
+  color: var(--qa-icon-color);
+  border: none;
+  box-shadow: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background-color 0.14s ease;
+}
+
+.qa-circle svg {
+  width: 24px;
+  height: 24px;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex-shrink: 0;
+}
+
+/* Optional Primary ("Send") solid brand circle + white icon */
+.qa-item.is-primary .qa-circle {
+  background: var(--qa-primary-bg);
+  color: var(--qa-primary-fg);
+}
+
+/* Quick press, then a soft spring back across the whole action. */
+.qa-item:active:not(:disabled) {
+  transform: scale(0.94);
+  transition-duration: 90ms;
+  transition-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.qa-item:active:not(:disabled) .qa-circle {
+  background: var(--qa-circle-bg-active);
+}
+
+.qa-item.is-primary:active:not(:disabled) .qa-circle {
+  background: var(--qa-primary-bg-active);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qa-item,
+  .qa-item .qa-circle {
+    transition: none;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .qa-item:hover:not(:disabled) .qa-circle {
+    background: var(--qa-circle-bg-active);
+  }
+  .qa-item.is-primary:hover:not(:disabled) .qa-circle {
+    background: var(--qa-primary-bg-active);
+  }
+}
+
+/* Label: 12.5px, weight 500, single line, no wrapping */
+.qa-label {
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--qa-ink);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
 /* 2x2 Quick Action Cards matching video */
 .mobile-prototype .accounts-actions-grid {
   display: grid;
@@ -6758,8 +6975,8 @@ a:active,
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin: 18px 0 10px;
-  padding: 0 4px;
+  margin: 20px 0 10px;
+  padding: 0;
 }
 .mobile-prototype .accounts-transactions-header h2 {
   font-size: 18px;
@@ -6785,12 +7002,12 @@ a:active,
   opacity: 0.7;
 }
 .mobile-prototype .accounts-transactions-card {
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 22px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
-  padding: 4px 16px;
-  margin-bottom: 24px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+  margin-bottom: 0;
 }
 .mobile-prototype .accounts-tx-row {
   display: flex;
@@ -9787,21 +10004,85 @@ html[data-theme="dark"]
 
 /* ───────────── Native UX Upgrade 3: Bi-Directional Swipe Actions on Expense & Card Rows ───────────── */
 .mobile-prototype .accounts-transactions-card {
-  overflow: hidden;
-  padding: 4px 14px;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin-bottom: 0 !important;
 }
 
 .mobile-prototype .accounts-transactions-card .expense-row {
   position: relative;
   z-index: 2;
   min-height: 58px;
+  display: flex;
   align-items: center;
   gap: 12px;
-  padding: 9px 2px;
-  border: 0;
-  border-radius: 0;
-  background: var(--card);
+  width: 100%;
+  box-sizing: border-box;
+  padding: 11px 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: var(--bg) !important;
   touch-action: pan-y;
+  -webkit-touch-callout: none;
+  transform: translate3d(0, 0, 0);
+}
+
+.mobile-prototype .accounts-transactions-card .expense-swipe-shell {
+  position: relative;
+  background: transparent;
+  border-radius: 0;
+  border-top: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 75%, transparent);
+}
+
+.mobile-prototype .accounts-transactions-card .expense-swipe-shell:last-child {
+  border-bottom: none;
+}
+
+.mobile-prototype .accounts-transactions-card .expense-swipe-delete {
+  border-radius: 0;
+}
+
+.mobile-prototype .accounts-transactions-card .expense-swipe-shell.is-dragging,
+.mobile-prototype .accounts-transactions-card .expense-swipe-shell.is-revealed,
+.mobile-prototype .accounts-transactions-card .expense-swipe-shell.is-deleting {
+  background: #dc2626;
+}
+
+:root[data-theme="dark"] .mobile-prototype .accounts-transactions-card .expense-swipe-shell.is-dragging,
+:root[data-theme="dark"] .mobile-prototype .accounts-transactions-card .expense-swipe-shell.is-revealed,
+:root[data-theme="dark"] .mobile-prototype .accounts-transactions-card .expense-swipe-shell.is-deleting {
+  background: #e53935;
+}
+
+.mobile-prototype .accounts-transactions-card .expense-swipe-shell.is-skip-shell.is-dragging,
+.mobile-prototype .accounts-transactions-card .expense-swipe-shell.is-skip-shell.is-revealed,
+.mobile-prototype .accounts-transactions-card .expense-swipe-shell.is-skip-shell.is-deleting {
+  background: #0d9488;
+}
+
+:root[data-theme="dark"] .mobile-prototype .accounts-transactions-card .expense-swipe-shell.is-skip-shell.is-dragging,
+:root[data-theme="dark"] .mobile-prototype .accounts-transactions-card .expense-swipe-shell.is-skip-shell.is-revealed,
+:root[data-theme="dark"] .mobile-prototype .accounts-transactions-card .expense-swipe-shell.is-skip-shell.is-deleting {
+  background: #0f766e;
+}
+
+.mobile-prototype .accounts-transactions-card .expense-swipe-shell[data-swipe-dir="right"].is-dragging,
+.mobile-prototype .accounts-transactions-card .expense-swipe-shell[data-swipe-dir="right"].is-revealed,
+.mobile-prototype .accounts-transactions-card .expense-swipe-shell.is-right-swipe.is-dragging,
+.mobile-prototype .accounts-transactions-card .expense-swipe-shell.is-right-swipe.is-revealed {
+  background: #059669;
+}
+
+.mobile-prototype .accounts-transactions-card .expense-row:not(.expense-swipe-shell .expense-row) {
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 75%, transparent);
+}
+
+.mobile-prototype .accounts-transactions-card .expense-row:not(.expense-swipe-shell .expense-row):last-child {
+  border-bottom: none;
 }
 
 .mobile-prototype .expense-swipe-shell[data-swipe-dir="right"].is-dragging,
@@ -10931,44 +11212,135 @@ html[data-theme="dark"]
 .mobile-prototype .rec-row-swipe-wrap {
   position: relative;
   overflow: hidden;
+  isolation: isolate;
   border-top: 1px solid var(--rec-row-divider);
+  background: transparent;
+  border-radius: 14px;
+  transition: background 0.18s ease;
 }
 
 .mobile-prototype .rec-row-swipe-wrap:first-child {
   border-top: none;
 }
 
-.mobile-prototype .rec-swipe-action {
-  position: absolute;
-  top: 6px;
-  bottom: 6px;
-  right: 0;
-  width: 74px;
-  border: none;
-  border-radius: 14px;
-  background: var(--rec-swipe-bg);
-  color: var(--rec-swipe-ink);
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
+/* Left-swipe (Pause / Resume) background */
+.mobile-prototype .rec-row-swipe-wrap[data-swipe-dir="left"].is-dragging,
+.mobile-prototype .rec-row-swipe-wrap[data-swipe-dir="left"].is-revealed,
+.mobile-prototype .rec-row-swipe-wrap:not([data-swipe-dir="right"]).is-dragging,
+.mobile-prototype .rec-row-swipe-wrap:not([data-swipe-dir="right"]).is-revealed {
+  background: #334155 !important;
+}
+
+:root[data-theme="dark"] .mobile-prototype .rec-row-swipe-wrap[data-swipe-dir="left"].is-dragging,
+:root[data-theme="dark"] .mobile-prototype .rec-row-swipe-wrap[data-swipe-dir="left"].is-revealed,
+:root[data-theme="dark"] .mobile-prototype .rec-row-swipe-wrap:not([data-swipe-dir="right"]).is-dragging,
+:root[data-theme="dark"] .mobile-prototype .rec-row-swipe-wrap:not([data-swipe-dir="right"]).is-revealed {
+  background: #334155 !important;
+}
+
+.mobile-prototype .rec-row-swipe-wrap.is-paused-item[data-swipe-dir="left"].is-dragging,
+.mobile-prototype .rec-row-swipe-wrap.is-paused-item[data-swipe-dir="left"].is-revealed,
+.mobile-prototype .rec-row-swipe-wrap.is-paused-item:not([data-swipe-dir="right"]).is-dragging,
+.mobile-prototype .rec-row-swipe-wrap.is-paused-item:not([data-swipe-dir="right"]).is-revealed {
+  background: #0d9488 !important;
+}
+
+:root[data-theme="dark"] .mobile-prototype .rec-row-swipe-wrap.is-paused-item[data-swipe-dir="left"].is-dragging,
+:root[data-theme="dark"] .mobile-prototype .rec-row-swipe-wrap.is-paused-item[data-swipe-dir="left"].is-revealed,
+:root[data-theme="dark"] .mobile-prototype .rec-row-swipe-wrap.is-paused-item:not([data-swipe-dir="right"]).is-dragging,
+:root[data-theme="dark"] .mobile-prototype .rec-row-swipe-wrap.is-paused-item:not([data-swipe-dir="right"]).is-revealed {
+  background: #0f766e !important;
+}
+
+/* Right-swipe (Edit) background - matching Activity section emerald */
+.mobile-prototype .rec-row-swipe-wrap[data-swipe-dir="right"].is-dragging,
+.mobile-prototype .rec-row-swipe-wrap[data-swipe-dir="right"].is-revealed,
+.mobile-prototype .rec-row-swipe-wrap.is-right-swipe.is-dragging,
+.mobile-prototype .rec-row-swipe-wrap.is-right-swipe.is-revealed {
+  background: #059669 !important;
+}
+
+:root[data-theme="dark"] .mobile-prototype .rec-row-swipe-wrap[data-swipe-dir="right"].is-dragging,
+:root[data-theme="dark"] .mobile-prototype .rec-row-swipe-wrap[data-swipe-dir="right"].is-revealed,
+:root[data-theme="dark"] .mobile-prototype .rec-row-swipe-wrap.is-right-swipe.is-dragging,
+:root[data-theme="dark"] .mobile-prototype .rec-row-swipe-wrap.is-right-swipe.is-revealed {
+  background: #10b981 !important;
+}
+
+/* Action buttons inside rec-row-swipe-wrap */
+.mobile-prototype .rec-row-swipe-wrap .expense-swipe-delete {
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+  transition: opacity 0.15s ease, visibility 0.15s ease;
+}
+
+.mobile-prototype .rec-row-swipe-wrap[data-swipe-dir="right"] .expense-swipe-delete.is-left,
+.mobile-prototype .rec-row-swipe-wrap.is-right-swipe .expense-swipe-delete.is-left {
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
+}
+
+.mobile-prototype .rec-row-swipe-wrap[data-swipe-dir="left"] .expense-swipe-delete.is-right,
+.mobile-prototype .rec-row-swipe-wrap:not(.is-right-swipe):not([data-swipe-dir="right"]).is-dragging .expense-swipe-delete.is-right,
+.mobile-prototype .rec-row-swipe-wrap:not(.is-right-swipe):not([data-swipe-dir="right"]).is-revealed .expense-swipe-delete.is-right {
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
+}
+
+.mobile-prototype .rec-row-swipe-wrap .expense-swipe-delete.is-pause svg,
+.mobile-prototype .rec-row-swipe-wrap .expense-swipe-delete.is-resume svg {
+  fill: currentColor;
+  stroke: none;
 }
 
 .mobile-prototype .rec-row {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   background: var(--rec-card-bg);
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+  overflow: hidden;
   display: flex;
   align-items: center;
   gap: 12px;
   min-height: 60px; /* Guarantees >= 44pt tap target */
-  padding: 10px 0;
+  padding: 10px 14px 10px 4px;
+  border: none;
+  border-radius: 14px;
+  font: inherit;
+  color: inherit;
+  text-align: left;
   cursor: pointer;
-  transition: transform 0.18s ease, opacity 0.18s ease, background 0.15s ease, scale 0.14s ease;
   user-select: none;
+  -webkit-user-select: none;
+  touch-action: pan-y;
+  -webkit-touch-callout: none;
+  transform: translate3d(0, 0, 0);
+  transition:
+    transform 260ms cubic-bezier(0.2, 0.9, 0.28, 1),
+    opacity 0.18s ease,
+    background 0.15s ease;
+}
+
+.mobile-prototype .rec-row-leading {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.mobile-prototype .rec-row.is-swiping {
+  transition: none !important;
+  will-change: transform;
 }
 
 .mobile-prototype .rec-row:active {
-  background: var(--rec-row-active-bg);
+  background: color-mix(in srgb, var(--ink) 4%, var(--rec-card-bg));
   scale: 0.985;
 }
 
@@ -11057,7 +11429,9 @@ html[data-theme="dark"]
 
 /* Right Column: Native Amount + Conditional <=7d Lime Pill */
 .mobile-prototype .rec-row-right {
-  flex-shrink: 0;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 45%;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -11067,19 +11441,27 @@ html[data-theme="dark"]
 
 .mobile-prototype .rec-row-amt-line {
   display: inline-flex;
+  max-width: 100%;
+  overflow: hidden;
   align-items: baseline;
   gap: 2px;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .mobile-prototype .rec-row-amt {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: 15px;
   font-weight: 800;
   color: var(--ink);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .mobile-prototype .rec-row-unit {
+  flex: 0 0 auto;
   font-size: 12px;
   font-weight: 600;
   color: var(--rec-muted-aa);
@@ -11190,6 +11572,10 @@ html[data-theme="dark"]
   z-index: 2;
 }
 
+.mobile-prototype .rec-row:focus-visible {
+  outline-offset: -2px;
+}
+
 /* ───────────── Native iOS Polish (Touch, Containment & Overrides) ───────────── */
 /* Bottom Tab Bar Safe Area Inset */
 .mobile-prototype .bottom-nav,
@@ -11256,3 +11642,316 @@ html[data-theme="dark"]
   contain-intrinsic-size: auto 64px;
 }
 
+
+/* ==========================================================================
+   ACTIVITY SCREEN — NATIVE FIXED HEADER + SMOOTH SCROLLABLE FEED
+   ========================================================================== */
+
+/* 1. Fixed Activity Tab Panel: fill height and disable outer scrolling ONLY when active */
+.mobile-prototype .prototype-tab-panel[data-tab="activity"].is-active,
+.mobile-prototype .prototype-tab-panel.is-activity.is-active,
+.mobile-prototype .prototype-tab-panel:has(.activity-screen-shell).is-active {
+  height: 100% !important;
+  max-height: 100% !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.mobile-prototype .prototype-tab-panel[data-tab="activity"].is-inactive,
+.mobile-prototype .prototype-tab-panel[data-tab="activity"][hidden],
+.mobile-prototype .prototype-tab-panel.is-activity.is-inactive,
+.mobile-prototype .prototype-tab-panel.is-activity[hidden] {
+  display: none !important;
+}
+
+/* Hide floating prototype-header when on Activity tab */
+.mobile-prototype:has(.prototype-tab-panel[data-tab="activity"].is-active) .prototype-header {
+  display: none !important;
+}
+
+/* 2. Shell: fixed-height flex column filling viewport */
+.mobile-prototype .activity-screen-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+/* 3. Top Zone: Locked Header (Title + Month Pill + Search + Filter Tabs) */
+.mobile-prototype .activity-sticky-header {
+  flex-shrink: 0;
+  position: relative;
+  z-index: 20;
+  padding: calc(var(--safe-top, env(safe-area-inset-top, 0px)) + 12px) 18px 0;
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(18px) saturate(180%);
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 75%, transparent);
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
+/* Row 1: Title + Month Switcher */
+.mobile-prototype .activity-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  margin-bottom: 12px;
+}
+.mobile-prototype .activity-title {
+  margin: 0;
+  padding: 0;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.12;
+  color: var(--ink);
+}
+.mobile-prototype .activity-month-pill {
+  display: flex;
+  align-items: center;
+}
+.mobile-prototype .activity-month-pill .mon {
+  margin: 0;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  box-shadow: none;
+  background: var(--card);
+}
+.mobile-prototype .activity-month-pill .mon b {
+  min-width: 94px;
+  padding: 0 3px;
+  font-size: 12px;
+}
+.mobile-prototype .activity-month-pill .mon button {
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  min-height: 30px;
+}
+
+/* Row 2: Search Input + Filter Button */
+.mobile-prototype .activity-sticky-header .activity-search-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin-bottom: 10px;
+}
+.mobile-prototype .activity-sticky-header .activity-search-row .srch {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Row 3: Filter Tabs Bar */
+.mobile-prototype .activity-sticky-header .activity-tabs-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0;
+  margin: 0;
+  border-bottom: none; /* Hairline divider is on .activity-sticky-header */
+  position: relative;
+  box-sizing: border-box;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.mobile-prototype .activity-sticky-header .activity-tabs-bar::-webkit-scrollbar {
+  display: none;
+}
+.mobile-prototype .activity-sticky-header .activity-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  position: relative;
+  background: transparent;
+  border: 0;
+  padding: 10px 4px 12px;
+  font-size: 14.5px;
+  font-weight: 550;
+  letter-spacing: -0.01em;
+  color: var(--mut);
+  cursor: pointer;
+  white-space: nowrap;
+  touch-action: manipulation;
+}
+.mobile-prototype .activity-sticky-header .activity-tab-btn:first-child {
+  padding-left: 0;
+}
+.mobile-prototype .activity-sticky-header .activity-tab-btn:last-child {
+  padding-right: 0;
+}
+.mobile-prototype .activity-sticky-header .activity-tab-btn.is-active::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2.5px;
+  background: var(--ink);
+  border-radius: 99px;
+}
+
+/* Quick Filter Pills Bar & Filter Summary inside locked header */
+.mobile-prototype .activity-sticky-header .chips {
+  margin: 8px 0 4px;
+  padding: 0;
+}
+.mobile-prototype .activity-sticky-header .activity-filter-summary {
+  margin: 4px 0 8px;
+  padding: 0;
+}
+
+/* 4. Bottom Zone: Independent Smooth Scroller for Transactions Feed */
+.mobile-prototype .activity-scroll-feed {
+  flex: 1;
+  min-height: 0;            /* Critical for flex child scrolling */
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;   /* iOS momentum scrolling */
+  overscroll-behavior-y: contain;      /* Stops scroll chaining to body/window */
+  scroll-behavior: smooth;
+  padding: 0 0 calc(var(--nav-h, 68px) + 36px + env(safe-area-inset-bottom, 0px));
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.mobile-prototype .activity-scroll-feed::-webkit-scrollbar {
+  display: none;
+}
+
+/* 5. Sticky Day Headers ("Today", "Yesterday -৳610") */
+.mobile-prototype .activity-scroll-feed .activity-day-group {
+  position: relative;
+  display: block;
+  margin: 0;
+  padding: 0;
+}
+.mobile-prototype .activity-scroll-feed .activity-day-header,
+.mobile-prototype .activity-scroll-feed .day {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 11px 18px 8px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--mut);
+  background: color-mix(in srgb, var(--bg) 94%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  user-select: none;
+  -webkit-user-select: none;
+}
+.mobile-prototype .activity-scroll-feed .activity-day-label {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--mut);
+}
+.mobile-prototype .activity-scroll-feed .activity-day-total {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+/* 6. Remove White Card Box Wrapper around Activity Day Groups */
+.mobile-prototype .activity-scroll-feed .card,
+.mobile-prototype .activity-scroll-feed .expense-day-card,
+.mobile-prototype .activity-scroll-feed .activity-group-card {
+  background: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  contain: layout paint;
+}
+
+/* 7. Flat Transaction Rows directly on --bg Canvas with Unified Rails */
+.mobile-prototype .activity-scroll-feed .expense-row {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 11px 18px;
+  border: 0;
+  border-radius: 0;
+  background: var(--bg);
+  touch-action: pan-y;
+  -webkit-touch-callout: none;
+  transform: translate3d(0, 0, 0);
+}
+.mobile-prototype .activity-scroll-feed .expense-swipe-shell {
+  position: relative;
+  background: transparent;
+  border-radius: 0;
+  border-top: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 75%, transparent);
+}
+
+.mobile-prototype .activity-scroll-feed .expense-swipe-shell:last-child {
+  border-bottom: none;
+}
+
+.mobile-prototype .activity-scroll-feed .expense-swipe-delete {
+  border-radius: 0;
+}
+
+.mobile-prototype .activity-scroll-feed .expense-swipe-shell.is-dragging,
+.mobile-prototype .activity-scroll-feed .expense-swipe-shell.is-revealed,
+.mobile-prototype .activity-scroll-feed .expense-swipe-shell.is-deleting {
+  background: #dc2626;
+}
+
+:root[data-theme="dark"] .mobile-prototype .activity-scroll-feed .expense-swipe-shell.is-dragging,
+:root[data-theme="dark"] .mobile-prototype .activity-scroll-feed .expense-swipe-shell.is-revealed,
+:root[data-theme="dark"] .mobile-prototype .activity-scroll-feed .expense-swipe-shell.is-deleting {
+  background: #e53935;
+}
+
+.mobile-prototype .activity-scroll-feed .expense-swipe-shell.is-skip-shell.is-dragging,
+.mobile-prototype .activity-scroll-feed .expense-swipe-shell.is-skip-shell.is-revealed,
+.mobile-prototype .activity-scroll-feed .expense-swipe-shell.is-skip-shell.is-deleting {
+  background: #0d9488;
+}
+
+:root[data-theme="dark"] .mobile-prototype .activity-scroll-feed .expense-swipe-shell.is-skip-shell.is-dragging,
+:root[data-theme="dark"] .mobile-prototype .activity-scroll-feed .expense-swipe-shell.is-skip-shell.is-revealed,
+:root[data-theme="dark"] .mobile-prototype .activity-scroll-feed .expense-swipe-shell.is-skip-shell.is-deleting {
+  background: #0f766e;
+}
+
+.mobile-prototype .activity-scroll-feed .expense-swipe-shell[data-swipe-dir="right"].is-dragging,
+.mobile-prototype .activity-scroll-feed .expense-swipe-shell[data-swipe-dir="right"].is-revealed,
+.mobile-prototype .activity-scroll-feed .expense-swipe-shell.is-right-swipe.is-dragging,
+.mobile-prototype .activity-scroll-feed .expense-swipe-shell.is-right-swipe.is-revealed {
+  background: #059669;
+}
+
+.mobile-prototype .activity-scroll-feed .expense-row:not(.expense-swipe-shell .expense-row) {
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 75%, transparent);
+}
+
+.mobile-prototype .activity-scroll-feed .expense-row:not(.expense-swipe-shell .expense-row):last-child {
+  border-bottom: none;
+}
+
+/* 8. Empty state spacing inside feed */
+.mobile-prototype .activity-scroll-feed .emp-illustrated {
+  padding: 48px 18px;
+}

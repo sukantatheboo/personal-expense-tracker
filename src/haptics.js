@@ -7,6 +7,14 @@ function isNativePlatform() {
   );
 }
 
+function hasWebUserActivation() {
+  if (typeof navigator === "undefined") return false;
+  // Vibration is gated by sticky user activation, especially inside iframes.
+  // Skip it before the user has interacted with this frame to avoid a browser
+  // intervention warning during startup or programmatic state changes.
+  return navigator.userActivation?.hasBeenActive === true;
+}
+
 function triggerSafariWebHaptic() {
   if (!isHapticsEnabled()) return;
   if (typeof document === "undefined") return;
@@ -57,7 +65,8 @@ export function triggerHaptic(type = "light") {
 
   if (
     typeof navigator !== "undefined" &&
-    typeof navigator.vibrate === "function"
+    typeof navigator.vibrate === "function" &&
+    hasWebUserActivation()
   ) {
     try {
       const patterns = {
@@ -75,6 +84,13 @@ export function triggerHaptic(type = "light") {
     } catch {
       return false;
     }
+  }
+
+  if (
+    typeof navigator !== "undefined" &&
+    typeof navigator.vibrate === "function"
+  ) {
+    return false;
   }
 
   triggerSafariWebHaptic();

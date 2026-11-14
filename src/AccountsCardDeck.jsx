@@ -1,4 +1,10 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
+import {
+  ArrowDownToLine,
+  ArrowLeftRight,
+  SlidersHorizontal,
+  CreditCard,
+} from "lucide-react";
 import {
   BkashLogo,
   NagadLogo,
@@ -25,6 +31,204 @@ import {
 } from "./cardAssets.jsx";
 
 import { triggerHaptic } from "./haptics.js";
+
+/**
+ * Fallback inline SVGs (24x24 viewBox, fill="none", stroke="currentColor",
+ * strokeWidth=1.75, round caps & joins) if lucide-react isn't installed yet.
+ */
+const SVG_PROPS = {
+  viewBox: "0 0 24 24",
+  width: 24,
+  height: 24,
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 1.75,
+  strokeLinecap: "round",
+  strokeLinejoin: "round",
+  "aria-hidden": "true",
+  focusable: "false",
+};
+
+export const FallbackIcons = {
+  Income: (props) => (
+    <svg {...SVG_PROPS} {...props}>
+      <path d="M12 4v11" />
+      <path d="M7.5 10.5L12 15l4.5-4.5" />
+      <path d="M5 19.5h14" />
+    </svg>
+  ),
+  Transfer: (props) => (
+    <svg {...SVG_PROPS} {...props}>
+      <path d="M4 8h15" />
+      <path d="M15.5 4.5L19 8l-3.5 3.5" />
+      <path d="M20 16H5" />
+      <path d="M8.5 12.5L5 16l3.5 3.5" />
+    </svg>
+  ),
+  Adjust: (props) => (
+    <svg {...SVG_PROPS} {...props}>
+      <path d="M4 8h8.5" />
+      <path d="M17.5 8H20" />
+      <circle cx="15" cy="8" r="2.5" />
+      <path d="M4 16h2.5" />
+      <path d="M11.5 16H20" />
+      <circle cx="9" cy="16" r="2.5" />
+    </svg>
+  ),
+  Card: (props) => (
+    <svg {...SVG_PROPS} {...props}>
+      <rect x="3" y="5.5" width="18" height="13" rx="3" />
+      <path d="M3 10h18" />
+      <path d="M7 14.5h3" />
+    </svg>
+  ),
+};
+
+/**
+ * @typedef {Object} QuickActionProps
+ * @property {React.ComponentType<any>} icon - Icon component (Lucide or fallback SVG)
+ * @property {string} label - Single-line visible label ("Add money", "Send", "Adjust", "Cards")
+ * @property {() => void} onPress - Tap handler
+ * @property {boolean} [primary=false] - Solid brand circle + white icon when true
+ * @property {string} [ariaLabel] - Optional screen-reader override
+ * @property {boolean} [disabled=false]
+ */
+
+/**
+ * Reusable single quick-action column button (56x56 circle + 12.5px label).
+ * The entire column is the tap target (>= 44px).
+ * @param {QuickActionProps} props
+ */
+export const QuickAction = React.memo(function QuickAction({
+  icon: Icon,
+  label,
+  onPress,
+  primary = false,
+  ariaLabel,
+  disabled = false,
+}) {
+  return (
+    <button
+      type="button"
+      className={`qa-item ${primary ? "is-primary" : ""}`}
+      onClick={onPress}
+      disabled={disabled}
+      aria-label={ariaLabel || label}
+    >
+      <span className="qa-circle" aria-hidden="true">
+        <Icon
+          size={24}
+          strokeWidth={1.75}
+          aria-hidden="true"
+          focusable="false"
+        />
+      </span>
+      <span className="qa-label">{label}</span>
+    </button>
+  );
+});
+
+/**
+ * @typedef {Object} QuickActionItem
+ * @property {string} id
+ * @property {React.ComponentType<any>} icon
+ * @property {string} label
+ * @property {() => void} onPress
+ * @property {boolean} [primary]
+ * @property {string} [ariaLabel]
+ * @property {boolean} [disabled]
+ */
+
+/**
+ * @typedef {Object} QuickActionsRowProps
+ * @property {QuickActionItem[]} [actions] - Custom action list override
+ * @property {() => void} [onAddMoney] - Handler for Income ("Add money")
+ * @property {() => void} [onSend] - Handler for Transfer ("Send")
+ * @property {() => void} [onAdjust] - Handler for Adjust ("Adjust")
+ * @property {() => void} [onCardOptions] - Handler for Card Options ("Cards")
+ * @property {boolean} [highlightSend=false] - Set true to style "Send" as solid brand primary
+ * @property {number} [activeDotIndex=0] - Active page dot (0-3)
+ * @property {number} [dotCount=4] - Total page indicator dots
+ * @property {boolean} [showDots=true] - Show 4-dot page indicator above the row
+ */
+
+/**
+ * Horizontal row of 4 equal-width quick actions with optional 4-dot page indicator above.
+ * @param {QuickActionsRowProps} props
+ */
+export const QuickActionsRow = React.memo(function QuickActionsRow({
+  actions,
+  onAddMoney,
+  onSend,
+  onAdjust,
+  onCardOptions,
+  highlightSend = false,
+  activeDotIndex = 0,
+  dotCount = 4,
+  showDots = true,
+}) {
+  const resolvedActions = React.useMemo(
+    () =>
+      actions || [
+        {
+          id: "income",
+          icon: ArrowDownToLine || FallbackIcons.Income,
+          label: "Add money",
+          onPress: onAddMoney,
+        },
+        {
+          id: "transfer",
+          icon: ArrowLeftRight || FallbackIcons.Transfer,
+          label: "Send",
+          primary: highlightSend,
+          onPress: onSend,
+        },
+        {
+          id: "adjust",
+          icon: SlidersHorizontal || FallbackIcons.Adjust,
+          label: "Adjust",
+          onPress: onAdjust,
+        },
+        {
+          id: "cards",
+          icon: CreditCard || FallbackIcons.Card,
+          label: "Cards",
+          ariaLabel: "Card options",
+          onPress: onCardOptions,
+        },
+      ],
+    [actions, onAddMoney, onSend, onAdjust, onCardOptions, highlightSend]
+  );
+
+  return (
+    <section className="qa-section" aria-label="Quick actions">
+      {showDots && (
+        <div className="qa-dots" aria-hidden="true">
+          {Array.from({ length: dotCount }).map((_, idx) => (
+            <span
+              key={idx}
+              className={`qa-dot ${idx === activeDotIndex ? "is-active" : ""}`}
+            />
+          ))}
+        </div>
+      )}
+
+      <div className="qa-row">
+        {resolvedActions.map((action) => (
+          <QuickAction
+            key={action.id || action.label}
+            icon={action.icon}
+            label={action.label}
+            primary={Boolean(action.primary)}
+            ariaLabel={action.ariaLabel}
+            disabled={action.disabled}
+            onPress={action.onPress}
+          />
+        ))}
+      </div>
+    </section>
+  );
+});
 
 export { renderProviderLogo, triggerHaptic };
 
@@ -578,6 +782,7 @@ export function StackedCardDeck({
   onAddCardClick,
   onOpenCardDetails,
   onDragOffsetChange,
+  showDots = false,
 }) {
   const [activeIndex, setActiveIndex] = useState(() => {
     const idx = cards.findIndex((c) => c.id === selectedId);
@@ -1064,22 +1269,24 @@ export function StackedCardDeck({
       </div>
 
       {/* Subtle indicator dots */}
-      <div className="cards-deck-dots">
-        {cards.map((card, idx) => (
-          <button
-            key={card.id}
-            type="button"
-            className={`cards-deck-dot ${idx === safeActiveIndex ? "is-active" : ""}`}
-            aria-label={`Switch to ${card.name}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              if (phase !== "idle") return;
-              triggerHaptic("selection");
-              handleSelectCardIndex(idx);
-            }}
-          />
-        ))}
-      </div>
+      {showDots && (
+        <div className="cards-deck-dots">
+          {cards.map((card, idx) => (
+            <button
+              key={card.id}
+              type="button"
+              className={`cards-deck-dot ${idx === safeActiveIndex ? "is-active" : ""}`}
+              aria-label={`Switch to ${card.name}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (phase !== "idle") return;
+                triggerHaptic("selection");
+                handleSelectCardIndex(idx);
+              }}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

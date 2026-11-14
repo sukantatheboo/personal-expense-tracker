@@ -126,6 +126,9 @@ export default defineConfig(({ command }) => ({
     __APP_BUILT_AT__: JSON.stringify(builtAt),
   },
   plugins: [spendBuildVersionPlugin()],
+  optimizeDeps: {
+    include: ["lucide-react"],
+  },
   oxc: {
     jsx: {
       runtime: "automatic",
