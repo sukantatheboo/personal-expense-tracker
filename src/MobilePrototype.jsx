@@ -449,6 +449,7 @@ const amountFormatter = new Intl.NumberFormat("en-IN", {
   maximumFractionDigits: 2,
 });
 const M = (n) => "৳" + amountFormatter.format(Number(n) || 0);
+const money = M;
 const shift = (m, o) => {
   if (!m || typeof m !== "string" || !m.includes("-")) return ld().slice(0, 7);
   const [y, mo] = m.split("-").map(Number);
@@ -9526,6 +9527,7 @@ function AppSettingsPage({
 }) {
   const [reconcileExpanded, setReconcileExpanded] = useState(false);
   const [checkpointsExpanded, setCheckpointsExpanded] = useState(false);
+  const [statusTarget, setStatusTarget] = useState("data");
   const reconciliation = S?.reconciliation || {
     isBalanced: true,
     accountCount: 0,
@@ -9559,7 +9561,7 @@ function AppSettingsPage({
       : needsSignInForPush
         ? "Sign in required for closed-app web alerts"
         : isNotificationsActive
-          ? "Active for daily, bill, weekly & monthly alerts"
+          ? "Active for daily, bill & summary alerts"
           : "Tap to enable closed-app reminder alerts";
 
   const notificationActionBadge = notificationUnavailable
@@ -9598,7 +9600,7 @@ function AppSettingsPage({
             </i>
             <span className="nm">
               <b>Daily reminder</b>
-              <small>Time for daily, bill &amp; summary alerts</small>
+              <small>Daily, bill &amp; summary alerts</small>
             </span>
             <div className="mfs-time-pill-wrap">
               <input
@@ -9662,7 +9664,7 @@ function AppSettingsPage({
               </i>
               <span className="nm">
                 <b>Send test notification</b>
-                <small>Tests built-in notification banner &amp; tone</small>
+                <small>Preview banner &amp; alert tone</small>
               </span>
               <span className="settings-chevron" aria-hidden="true">
                 <Icon n="r" />
@@ -9690,6 +9692,7 @@ function AppSettingsPage({
             type="button"
             onClick={() => {
               triggerHaptic("light");
+              setStatusTarget("data");
               onBackupDownload?.();
             }}
           >
@@ -9713,6 +9716,7 @@ function AppSettingsPage({
             type="button"
             onClick={() => {
               triggerHaptic("light");
+              setStatusTarget("data");
               onEncryptedBackupDownload?.();
             }}
           >
@@ -9749,6 +9753,7 @@ function AppSettingsPage({
             type="button"
             onClick={() => {
               triggerHaptic("light");
+              setStatusTarget("data");
               onExpensesCsv?.();
             }}
           >
@@ -9772,6 +9777,7 @@ function AppSettingsPage({
             type="button"
             onClick={() => {
               triggerHaptic("light");
+              setStatusTarget("data");
               onBackupRestore?.();
             }}
           >
@@ -9791,7 +9797,7 @@ function AppSettingsPage({
           </button>
 
           <button
-            className="ri settings-action app-settings-minimal-item mfs-list-row"
+            className={`ri settings-action app-settings-minimal-item mfs-list-row${reconcileExpanded ? " is-expanded" : ""}`}
             type="button"
             aria-expanded={reconcileExpanded}
             onClick={() => {
@@ -9885,7 +9891,7 @@ function AppSettingsPage({
           </div>
         )}
 
-        {backupStatus && (
+        {backupStatus && statusTarget !== "checkpoint" && (
           <p
             className="settings-status mfs-card-footnote"
             role="status"
@@ -9905,6 +9911,8 @@ function AppSettingsPage({
             disabled={checkpointBusyId === "creating"}
             onClick={() => {
               triggerHaptic("light");
+              setStatusTarget("checkpoint");
+              setCheckpointsExpanded(true);
               onCreateCheckpoint?.();
             }}
           >
@@ -9936,8 +9944,8 @@ function AppSettingsPage({
               </b>
               <small>
                 {profile?.connected
-                  ? "Automatic daily + pre-restore cloud snapshots active"
-                  : "Automatic daily + pre-restore device snapshots active"}
+                  ? "Automatic daily & pre-restore cloud snapshots"
+                  : "Automatic daily & pre-restore device snapshots"}
               </small>
             </span>
             <span className="settings-inline-action mfs-status-pill is-active">
@@ -9947,7 +9955,7 @@ function AppSettingsPage({
           </button>
 
           <button
-            className="ri settings-action app-settings-minimal-item mfs-list-row"
+            className={`ri settings-action app-settings-minimal-item mfs-list-row${checkpointsExpanded ? " is-expanded" : ""}`}
             type="button"
             aria-expanded={checkpointsExpanded}
             onClick={() => {
@@ -9985,11 +9993,11 @@ function AppSettingsPage({
                 {checkpointsLoading
                   ? "Loading saved snapshots…"
                   : backupCheckpoints.length > 0
-                    ? "Roll back balances & transactions to any date in one tap"
-                    : "No snapshots yet · Tap above to create your first checkpoint"}
+                    ? "Roll back balances & activity in one tap"
+                    : "No snapshots yet · Tap above to save one"}
               </small>
             </span>
-            <span className="settings-chevron" aria-hidden="true">
+            <span className={`settings-chevron${checkpointsExpanded ? " is-expanded" : ""}`} aria-hidden="true">
               <Icon n="r" />
             </span>
           </button>
@@ -10047,6 +10055,7 @@ function AppSettingsPage({
                       disabled={Boolean(checkpointBusyId)}
                       onClick={() => {
                         triggerHaptic("selection");
+                        setStatusTarget("checkpoint");
                         onRestoreCheckpoint?.(cp);
                       }}
                     >
@@ -10057,6 +10066,16 @@ function AppSettingsPage({
               })
             )}
           </div>
+        )}
+
+        {backupStatus && statusTarget === "checkpoint" && (
+          <p
+            className="settings-status mfs-card-footnote"
+            role="status"
+            aria-live="polite"
+          >
+            {backupStatus}
+          </p>
         )}
       </section>
 
@@ -10943,7 +10962,11 @@ const CollapsibleTopBar = React.memo(function CollapsibleTopBar({
             className="prototype-header-back"
             type="button"
             aria-label="Back to settings"
-            onClick={onBack}
+            onClick={(e) => {
+              e.stopPropagation();
+              triggerHaptic("selection");
+              onBack?.();
+            }}
             style={{ marginRight: 8 }}
           >
             <Icon n="l" />
@@ -11299,7 +11322,7 @@ export default function MobilePrototype({
       : appSettingsOpen
         ? "app-settings"
         : tab,
-    enableSnap: true,
+    enableSnap: !profileSettingsOpen && !appSettingsOpen,
   });
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [slideDirection, setSlideDirection] = useState("forward");
@@ -12193,6 +12216,7 @@ export default function MobilePrototype({
         key={settingsRoute ? screenKey : "main-tabs"}
         onTouchStart={(e) => {
           if (
+            settingsRoute ||
             sheet ||
             ptrState.phase === "refreshing" ||
             e.touches.length !== 1
@@ -12320,7 +12344,8 @@ export default function MobilePrototype({
         {profileSettingsOpen ? (
           <div
             ref={registerTabScroller("profile-settings")}
-            className="prototype-tab-panel is-active"
+            data-tab="profile-settings"
+            className="prototype-tab-panel is-settings-panel is-active"
           >
             <ProfileSettingsPage
               S={S}
@@ -12344,7 +12369,8 @@ export default function MobilePrototype({
         ) : appSettingsOpen ? (
           <div
             ref={registerTabScroller("app-settings")}
-            className="prototype-tab-panel is-active"
+            data-tab="app-settings"
+            className="prototype-tab-panel is-settings-panel is-active"
           >
             <AppSettingsPage
               S={S}

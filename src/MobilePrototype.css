@@ -1106,6 +1106,7 @@ a:active,
 }
 .mobile-prototype .prototype-header.is-settings-route::before {
   opacity: 1 !important;
+  animation: none !important;
 }
 
 /* Compact sticky title (18px equivalent, driven strictly by opacity + transform) */
@@ -1115,6 +1116,17 @@ a:active,
   min-width: 0;
   flex: 1;
   pointer-events: none;
+}
+.mobile-prototype .prototype-header.is-settings-route .prototype-header-compact-wrap {
+  pointer-events: auto;
+}
+.mobile-prototype .prototype-header.is-settings-route .prototype-header-compact-title {
+  opacity: 1 !important;
+  transform: none !important;
+  animation: none !important;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
 }
 
 .mobile-prototype .prototype-header-compact-title {
@@ -1195,13 +1207,13 @@ a:active,
     scroll-timeline-axis: block;
   }
 
-  .mobile-prototype .prototype-header::before {
+  .mobile-prototype .prototype-header:not(.is-settings-route)::before {
     animation: header-surface-collapse linear both;
     animation-timeline: --active-tab-scroll;
     animation-range: 8px 60px;
   }
 
-  .mobile-prototype .prototype-header-compact-title {
+  .mobile-prototype .prototype-header:not(.is-settings-route) .prototype-header-compact-title {
     animation: compact-title-collapse linear both;
     animation-timeline: --active-tab-scroll;
     animation-range: 8px 60px;
@@ -1267,6 +1279,8 @@ a:active,
   border-radius: 50%;
   background: var(--card);
   color: var(--ink);
+  pointer-events: auto;
+  cursor: pointer;
 }
 .mobile-prototype .prototype-header-action svg,
 .mobile-prototype .prototype-header-back svg {
@@ -9205,8 +9219,15 @@ html[data-theme="dark"]
 /* ───────────── Lock Screen Container & Security Passcode Form ───────────── */
 .mobile-prototype.is-locked-screen {
   top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
   inset: 0 !important;
+  width: min(100%, 480px) !important;
+  max-width: 480px !important;
   height: 100dvh !important;
+  margin: 0 auto !important;
+  transform: none !important;
   display: block;
   padding: 0;
   background: var(--bg);
@@ -11959,16 +11980,139 @@ html[data-theme="dark"]
   padding: 48px 18px;
 }
 
-/* 9. Ledger Reconciliation & Cloud Backup Checkpoints */
+/* 9. Settings Route Panels, Flat Minimal App Settings & Checkpoints */
+.mobile-prototype .prototype-tab-panel.is-settings-panel {
+  padding: 14px 18px calc(44px + env(safe-area-inset-bottom, 0px)) !important;
+  scroll-behavior: smooth;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.mobile-prototype .mfs-app-settings-page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding-bottom: 12px;
+}
+
+.mobile-prototype .mfs-app-settings-page > .settings-page-intro {
+  margin: 0 !important;
+  padding: 0 !important;
+  color: var(--mut);
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+/* Remove white card boxes in App Settings — flat edge-aligned sections on --bg */
+.mobile-prototype .mfs-app-settings-page .card,
+.mobile-prototype .mfs-app-settings-page .app-settings-card,
+.mobile-prototype .mfs-app-settings-page .mfs-card-list {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow: visible !important;
+}
+
+.mobile-prototype .mfs-app-settings-page .mfs-card-list > h2 {
+  margin: 0 0 6px !important;
+  padding: 0 !important;
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--mut);
+  text-transform: uppercase;
+}
+
+.mobile-prototype .mfs-app-settings-page .mfs-card-rows {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+}
+
+:root[data-theme="dark"] .mobile-prototype .mfs-app-settings-page .mfs-card-rows,
+.mobile-prototype[data-theme="dark"] .mfs-app-settings-page .mfs-card-rows {
+  border-top-color: rgba(255, 255, 255, 0.08);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+.mobile-prototype .mfs-app-settings-page .mfs-list-row {
+  padding: 12px 0 !important;
+  min-height: 58px;
+  gap: 12px;
+  background: transparent !important;
+}
+
+.mobile-prototype .mfs-app-settings-page .mfs-list-row + .mfs-list-row::before {
+  left: 48px !important;
+  right: 0 !important;
+  background: color-mix(in srgb, var(--line) 75%, transparent);
+}
+
+:root[data-theme="dark"] .mobile-prototype .mfs-app-settings-page .mfs-list-row + .mfs-list-row::before,
+.mobile-prototype[data-theme="dark"] .mobile-prototype .mfs-app-settings-page .mfs-list-row + .mfs-list-row::before {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.mobile-prototype .mfs-app-settings-page .mfs-time-pill {
+  width: auto !important;
+  min-width: 118px !important;
+  max-width: none !important;
+  height: 34px !important;
+  padding: 0 12px !important;
+  border-radius: 999px !important;
+  border: 1px solid color-mix(in srgb, var(--line) 90%, transparent) !important;
+  background: color-mix(in srgb, var(--ink) 4.5%, transparent) !important;
+  color: var(--ink) !important;
+  font-size: 13px !important;
+  font-weight: 750 !important;
+  white-space: nowrap !important;
+  text-align: center;
+}
+
+:root[data-theme="dark"] .mobile-prototype .mfs-app-settings-page .mfs-time-pill,
+.mobile-prototype[data-theme="dark"] .mfs-app-settings-page .mfs-time-pill {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+.mobile-prototype .mfs-app-settings-page .mfs-card-footnote {
+  margin: 8px 0 0 !important;
+  padding: 0 !important;
+  border-top: none !important;
+  font-size: 12px;
+  color: var(--mut);
+  line-height: 1.45;
+}
+
+.mobile-prototype .settings-chevron {
+  transition: transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.mobile-prototype .settings-chevron.is-expanded {
+  transform: rotate(90deg);
+}
+
+/* Flat Minimal Ledger Reconciliation Breakdown (No White Box) */
 .mobile-prototype .mfs-reconcile-panel {
-  margin-top: 8px;
-  padding: 12px;
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--bg) 72%, var(--card));
-  border: 1px solid color-mix(in srgb, var(--line) 85%, transparent);
+  margin: 0;
+  padding: 12px 0 6px;
+  border-radius: 0;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+:root[data-theme="dark"] .mobile-prototype .mfs-reconcile-panel,
+.mobile-prototype[data-theme="dark"] .mfs-reconcile-panel {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
 }
 
 .mobile-prototype .mfs-reconcile-formula {
@@ -11976,29 +12120,42 @@ html[data-theme="dark"]
   align-items: center;
   justify-content: space-between;
   gap: 6px;
-  flex-wrap: wrap;
-  padding-bottom: 8px;
-  border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  flex-wrap: nowrap;
+  padding: 2px 0 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 65%, transparent);
+}
+
+:root[data-theme="dark"] .mobile-prototype .mfs-reconcile-formula,
+.mobile-prototype[data-theme="dark"] .mfs-reconcile-formula {
+  border-bottom-color: rgba(255, 255, 255, 0.065);
 }
 
 .mobile-prototype .mfs-reconcile-formula > div {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
+}
+
+.mobile-prototype .mfs-reconcile-formula > div:last-child {
+  text-align: right;
+  align-items: flex-end;
 }
 
 .mobile-prototype .mfs-reconcile-formula span {
-  font-size: 10.5px;
-  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--mut);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
 }
 
 .mobile-prototype .mfs-reconcile-formula b {
-  font-size: 12.5px;
-  font-weight: 650;
+  font-size: 13px;
+  font-weight: 750;
   color: var(--ink);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .mobile-prototype .mfs-reconcile-formula b.is-credit {
@@ -12012,13 +12169,13 @@ html[data-theme="dark"]
 .mobile-prototype .mfs-reconcile-op {
   font-size: 13px;
   font-weight: 700;
-  color: var(--muted);
+  color: var(--mut);
 }
 
 .mobile-prototype .mfs-reconcile-accounts {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 0;
 }
 
 .mobile-prototype .mfs-reconcile-acct-row {
@@ -12026,41 +12183,59 @@ html[data-theme="dark"]
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  font-size: 12.5px;
+  padding: 8px 0;
+  font-size: 13px;
+}
+
+.mobile-prototype .mfs-reconcile-acct-row + .mfs-reconcile-acct-row {
+  border-top: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
+}
+
+:root[data-theme="dark"] .mobile-prototype .mfs-reconcile-acct-row + .mfs-reconcile-acct-row,
+.mobile-prototype[data-theme="dark"] .mfs-reconcile-acct-row + .mfs-reconcile-acct-row {
+  border-top-color: rgba(255, 255, 255, 0.05);
 }
 
 .mobile-prototype .mfs-reconcile-acct-meta {
   display: flex;
   flex-direction: column;
+  gap: 1.5px;
   min-width: 0;
 }
 
 .mobile-prototype .mfs-reconcile-acct-meta b {
   color: var(--ink);
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 13.5px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .mobile-prototype .mfs-reconcile-acct-meta small {
-  font-size: 11px;
-  color: var(--muted);
+  font-size: 11.5px;
+  color: var(--mut);
   font-variant-numeric: tabular-nums;
 }
 
 .mobile-prototype .mfs-reconcile-acct-bal {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;
 }
 
+.mobile-prototype .mfs-reconcile-acct-bal > b {
+  font-size: 13.5px;
+  font-weight: 750;
+  color: var(--ink);
+}
+
 .mobile-prototype .mfs-reconcile-badge {
   font-size: 10.5px;
-  font-weight: 600;
-  padding: 2px 6px;
+  font-weight: 750;
+  padding: 2.5px 7px;
   border-radius: 999px;
 }
 
@@ -12074,65 +12249,92 @@ html[data-theme="dark"]
   background: color-mix(in srgb, #f59e0b 16%, transparent);
 }
 
+/* Flat Minimal Recovery Checkpoints List (No White Boxes) */
 .mobile-prototype .mfs-checkpoints-list {
-  margin-top: 8px;
+  margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+}
+
+:root[data-theme="dark"] .mobile-prototype .mfs-checkpoints-list,
+.mobile-prototype[data-theme="dark"] .mfs-checkpoints-list {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
 }
 
 .mobile-prototype .mfs-checkpoints-empty {
-  margin: 4px 0 0;
-  padding: 10px 12px;
+  margin: 0;
+  padding: 12px 0;
   font-size: 12.5px;
-  color: var(--muted);
-  background: color-mix(in srgb, var(--bg) 70%, var(--card));
-  border-radius: 12px;
-  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  color: var(--mut);
+  background: transparent;
+  border-radius: 0;
+  border: 0;
+  line-height: 1.45;
 }
 
 .mobile-prototype .mfs-checkpoint-item {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: 13px;
-  background: color-mix(in srgb, var(--bg) 72%, var(--card));
-  border: 1px solid color-mix(in srgb, var(--line) 85%, transparent);
+  gap: 12px;
+  padding: 11px 0 11px 48px;
+  border-radius: 0;
+  background: transparent;
+  border: 0;
+}
+
+.mobile-prototype .mfs-checkpoint-item + .mfs-checkpoint-item::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 48px;
+  right: 0;
+  height: 1px;
+  background: color-mix(in srgb, var(--line) 65%, transparent);
+  pointer-events: none;
+}
+
+:root[data-theme="dark"] .mobile-prototype .mfs-checkpoint-item + .mfs-checkpoint-item::before,
+.mobile-prototype[data-theme="dark"] .mfs-checkpoint-item + .mfs-checkpoint-item::before {
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .mobile-prototype .mfs-checkpoint-meta {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 2.5px;
   min-width: 0;
 }
 
 .mobile-prototype .mfs-checkpoint-title-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   flex-wrap: wrap;
 }
 
 .mobile-prototype .mfs-checkpoint-title-row b {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 13.5px;
+  font-weight: 700;
   color: var(--ink);
+  letter-spacing: -0.01em;
 }
 
 .mobile-prototype .mfs-checkpoint-meta small {
-  font-size: 11.5px;
-  color: var(--muted);
+  font-size: 12px;
+  color: var(--mut);
   font-variant-numeric: tabular-nums;
 }
 
 .mobile-prototype .mfs-checkpoint-badge {
   font-size: 10px;
-  font-weight: 650;
+  font-weight: 750;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.04em;
   padding: 2px 7px;
   border-radius: 999px;
   color: #3b82f6;
@@ -12152,16 +12354,22 @@ html[data-theme="dark"]
 
 .mobile-prototype .mfs-checkpoint-restore-btn {
   appearance: none;
-  border: 1px solid color-mix(in srgb, var(--line) 95%, transparent);
-  background: var(--card);
+  border: 1px solid color-mix(in srgb, var(--line) 90%, transparent);
+  background: color-mix(in srgb, var(--ink) 4.5%, transparent);
   color: var(--ink);
   font-size: 12px;
-  font-weight: 600;
-  padding: 6px 11px;
+  font-weight: 750;
+  padding: 6px 13px;
   border-radius: 999px;
   cursor: pointer;
   flex-shrink: 0;
-  transition: transform 0.12s ease, opacity 0.12s ease;
+  transition: transform 0.12s ease, opacity 0.12s ease, background-color 0.12s ease;
+}
+
+:root[data-theme="dark"] .mobile-prototype .mfs-checkpoint-restore-btn,
+.mobile-prototype[data-theme="dark"] .mfs-checkpoint-restore-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
 }
 
 .mobile-prototype .mfs-checkpoint-restore-btn:active {

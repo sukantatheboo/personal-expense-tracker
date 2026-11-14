@@ -55,6 +55,13 @@ export default function WelcomeFlow({ onDone, theme, exiting = false }) {
 
   const go = useCallback((nextIndex) => {
     const clamped = Math.max(0, Math.min(SLIDE_COUNT - 1, nextIndex));
+    if (
+      typeof document !== "undefined" &&
+      document.activeElement instanceof HTMLElement &&
+      document.activeElement.closest(".welcome-flow .slide")
+    ) {
+      document.activeElement.blur();
+    }
     setSlideIndex(clamped);
     setSlidesReady(true);
   }, []);
@@ -63,11 +70,29 @@ export default function WelcomeFlow({ onDone, theme, exiting = false }) {
     (mode = "sign-in") => {
       if (finishedRef.current) return;
       finishedRef.current = true;
+      if (
+        typeof document !== "undefined" &&
+        document.activeElement instanceof HTMLElement &&
+        document.activeElement.closest(".welcome-flow")
+      ) {
+        document.activeElement.blur();
+      }
       setLocalExiting(true);
       onDone?.(mode);
     },
     [onDone],
   );
+
+  useEffect(() => {
+    if (
+      isExiting &&
+      typeof document !== "undefined" &&
+      document.activeElement instanceof HTMLElement &&
+      document.activeElement.closest(".welcome-flow")
+    ) {
+      document.activeElement.blur();
+    }
+  }, [isExiting]);
 
   useEffect(() => {
     if (typeof document !== "undefined") {
@@ -194,7 +219,6 @@ export default function WelcomeFlow({ onDone, theme, exiting = false }) {
       data-theme={theme === "dark" || theme === "light" ? theme : undefined}
       role="region"
       aria-label="Welcome to Spend"
-      aria-hidden={isExiting ? "true" : undefined}
       inert={isExiting ? true : undefined}
     >
       <div className="phone">
@@ -256,7 +280,6 @@ export default function WelcomeFlow({ onDone, theme, exiting = false }) {
           <article
             className={`slide${slidesReady && slideIndex === 0 ? " on" : ""}`}
             aria-label="1 of 4"
-            aria-hidden={slideIndex !== 0}
             inert={!slidesReady || slideIndex !== 0 ? true : undefined}
           >
             <h2>See what’s left, not just what you spent</h2>
@@ -286,7 +309,6 @@ export default function WelcomeFlow({ onDone, theme, exiting = false }) {
           <article
             className={`slide${slidesReady && slideIndex === 1 ? " on" : ""}`}
             aria-label="2 of 4"
-            aria-hidden={slideIndex !== 1}
             inert={!slidesReady || slideIndex !== 1 ? true : undefined}
           >
             <h2>Know where every taka went</h2>
@@ -338,7 +360,6 @@ export default function WelcomeFlow({ onDone, theme, exiting = false }) {
           <article
             className={`slide${slidesReady && slideIndex === 2 ? " on" : ""}`}
             aria-label="3 of 4"
-            aria-hidden={slideIndex !== 2}
             inert={!slidesReady || slideIndex !== 2 ? true : undefined}
           >
             <h2>Never get surprised by a bill</h2>
@@ -418,7 +439,6 @@ export default function WelcomeFlow({ onDone, theme, exiting = false }) {
           <article
             className={`slide${slidesReady && slideIndex === 3 ? " on" : ""}`}
             aria-label="4 of 4"
-            aria-hidden={slideIndex !== 3}
             inert={!slidesReady || slideIndex !== 3 ? true : undefined}
           >
             <h2>Your balance stays private until you say so</h2>

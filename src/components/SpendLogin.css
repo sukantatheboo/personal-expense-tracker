@@ -190,7 +190,7 @@ html[data-theme="dark"] .sl,
   color: var(--ink);
   pointer-events: none;
 }
-.sl__lock-icon {
+.sl .sl__lock-icon {
   width: 20px;
   height: 20px;
   display: block;
@@ -256,7 +256,7 @@ html[data-theme="dark"] .sl,
   outline: none !important;
   box-shadow: none !important;
 }
-.sl__bio svg {
+.sl .sl__bio svg {
   width: 28px;
   height: 28px;
   display: block;
@@ -275,7 +275,7 @@ html[data-theme="dark"] .sl,
   min-height: 36px;
   margin-top: 12px;
 }
-.sl__link {
+.sl .sl__link {
   padding: 8px 0;
   font-size: 15px;
   font-weight: 700;
@@ -359,6 +359,13 @@ html[data-theme="dark"] .sl,
 .sl__key--ghost {
   background: transparent !important;
   color: var(--muted);
+}
+.sl .sl__key svg {
+  width: 26px;
+  height: 26px;
+  display: block;
+  fill: none !important;
+  stroke: currentColor !important;
 }
 
 /* Short desktop window: adjust vertical stack offset without shrinking the logo */

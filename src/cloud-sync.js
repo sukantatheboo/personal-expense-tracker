@@ -8,7 +8,7 @@ import {
   localDate,
   makeId,
 } from "./data.js";
-import { hasAppPin } from "./security.js";
+import { hasAppPin, isSessionUnlocked } from "./security.js";
 
 export const CLOUD_SYNC_USER_KEY = "spend-cloud-sync-user-v1";
 export const CLOUD_SYNC_OUTBOX_KEY = "spend-cloud-sync-outbox-v1";
@@ -304,12 +304,17 @@ function readLocalCheckpointsRaw() {
 
 function writeLocalCheckpointsRaw(items) {
   if (typeof window === "undefined") return false;
-  try {
-    localStorage.setItem(LOCAL_CHECKPOINTS_KEY, JSON.stringify(items));
-    return true;
-  } catch {
-    return false;
+  let current = Array.isArray(items) ? items : [];
+  while (current.length > 0) {
+    try {
+      localStorage.setItem(LOCAL_CHECKPOINTS_KEY, JSON.stringify(current));
+      return true;
+    } catch {
+      if (current.length === 1) return false;
+      current = current.slice(0, Math.max(1, current.length - 2));
+    }
   }
+  return false;
 }
 
 export function captureLocalBackupCheckpoint(
@@ -324,20 +329,27 @@ export function captureLocalBackupCheckpoint(
   } = {},
 ) {
   if (!data || typeof data !== "object") return null;
-  if (hasAppPin()) {
-    // Do not write unencrypted financial snapshots to local checkpoint buffer when PIN is active
-    return null;
-  }
   const normalizedType = ["daily", "pre_restore", "pre_overwrite", "manual"].includes(
     type,
   )
     ? type
     : "daily";
+  if (hasAppPin() && !isSessionUnlocked() && normalizedType !== "manual") {
+    // Do not write automatic local snapshots while the PIN session is locked
+    return null;
+  }
   if (normalizedType !== "manual" && !snapshotHasMeaningfulRecords(data)) {
     return null;
   }
 
   const sanitized = sanitizeCloudPayload(data);
+  if (
+    sanitized?.profile &&
+    typeof sanitized.profile === "object" &&
+    sanitized.profile.avatar
+  ) {
+    sanitized.profile = { ...sanitized.profile, avatar: "" };
+  }
   const summary = summarizeCheckpointSnapshot(sanitized);
   const today = localDate();
   const nowIso = createdAt || new Date().toISOString();
@@ -578,6 +590,16 @@ export async function restoreBackupCheckpoint(
 
   const restoredLocal = {
     ...localMatch.data,
+    ...(localMatch.data.profile &&
+    !localMatch.data.profile.avatar &&
+    currentData?.profile?.avatar
+      ? {
+          profile: {
+            ...localMatch.data.profile,
+            avatar: currentData.profile.avatar,
+          },
+        }
+      : {}),
     accountData: loadAccountData(
       localMatch.data.accountData ?? emptyAccountData(),
       localMatch.data.deletedRecords,
