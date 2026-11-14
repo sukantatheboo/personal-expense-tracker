@@ -6872,13 +6872,6 @@ function SettingsSheet({
   onAdvanced,
   onProfileSettings,
   onSecurity,
-  updateAvailable = false,
-  updateInfo = null,
-  checkingForUpdate = false,
-  updateCheckStatus = "",
-  onCheckForUpdates,
-  onOpenUpdateModal,
-  onToast,
   onClose,
 }) {
   useEffect(() => {
@@ -6886,8 +6879,6 @@ function SettingsSheet({
       window.__spendCheckForUpdates?.();
     }
   }, []);
-  const currentVersion =
-    typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "2.0.0";
   const themeMode =
     S?.themeMode ||
     (S?.theme === "auto" || S?.theme === "light" || S?.theme === "dark"
@@ -7145,81 +7136,6 @@ function SettingsSheet({
               </span>
               <span className={`mfs-row-badge${pinActive ? " is-active" : ""}`}>
                 {pinActive ? "Active" : "Off"}
-              </span>
-              <span className="settings-chevron" aria-hidden="true">
-                <Icon n="r" />
-              </span>
-            </button>
-
-            <button
-              className="ri mfs-settings-row"
-              type="button"
-              disabled={checkingForUpdate}
-              onClick={async () => {
-                triggerHaptic("selection");
-                if (updateAvailable) {
-                  onClose?.();
-                  onOpenUpdateModal?.();
-                  return;
-                }
-                if (onCheckForUpdates) {
-                  const found = await onCheckForUpdates();
-                  if (found) {
-                    onClose?.();
-                  } else {
-                    onToast?.(
-                      navigator.onLine
-                        ? `You’re on the latest version (v${currentVersion})`
-                        : "Offline — connect to the internet to check for updates",
-                    );
-                  }
-                }
-              }}
-            >
-              <i
-                className="ic mfs-row-icon"
-                style={{ "--c": updateAvailable ? "#10b981" : "#3b82f6" }}
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.1"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M12 16V8" />
-                  <path d="m8.5 11.5 3.5-3.5 3.5 3.5" />
-                  <circle cx="12" cy="12" r="9" />
-                </svg>
-              </i>
-              <span className="nm">
-                <b>
-                  {updateAvailable
-                    ? "Update available"
-                    : checkingForUpdate
-                      ? "Checking for updates…"
-                      : "Check for updates"}
-                </b>
-                <small>
-                  {updateAvailable
-                    ? updateInfo?.version
-                      ? `Spend v${updateInfo.version} ready to install`
-                      : "New version ready to install"
-                    : checkingForUpdate
-                      ? "Looking for new releases…"
-                      : updateCheckStatus || `Current version v${currentVersion}`}
-                </small>
-              </span>
-              <span
-                className={`mfs-row-badge${updateAvailable ? " is-active" : ""}`}
-              >
-                {updateAvailable
-                  ? "Update"
-                  : checkingForUpdate
-                    ? "Checking…"
-                    : `v${currentVersion}`}
               </span>
               <span className="settings-chevron" aria-hidden="true">
                 <Icon n="r" />
@@ -9524,7 +9440,13 @@ function AppSettingsPage({
   updateCheckStatus = "",
   onCheckForUpdates,
   onOpenUpdateModal,
+  onToast,
 }) {
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.__spendCheckForUpdates?.();
+    }
+  }, []);
   const [reconcileExpanded, setReconcileExpanded] = useState(false);
   const [checkpointsExpanded, setCheckpointsExpanded] = useState(false);
   const [statusTarget, setStatusTarget] = useState("data");
@@ -9576,10 +9498,6 @@ function AppSettingsPage({
 
   return (
     <div className="mfs-app-settings-page">
-      <p className="settings-page-intro">
-        Configure payment reminders, manage backups, and check for app updates.
-      </p>
-
       <section className="card app-settings-card mfs-card-list">
         <h2>Reminders</h2>
         <div className="mfs-card-rows">
@@ -10086,13 +10004,22 @@ function AppSettingsPage({
             className="ri settings-action mfs-list-row"
             type="button"
             disabled={checkingForUpdate}
-            onClick={() => {
+            onClick={async () => {
               triggerHaptic("selection");
               if (updateAvailable) {
                 onOpenUpdateModal?.();
                 return;
               }
-              void onCheckForUpdates?.();
+              if (onCheckForUpdates) {
+                const found = await onCheckForUpdates();
+                if (!found) {
+                  onToast?.(
+                    navigator.onLine
+                      ? `You’re on the latest version (v${currentVersion})`
+                      : "Offline — connect to the internet to check for updates",
+                  );
+                }
+              }
             }}
           >
             <i
@@ -10790,6 +10717,8 @@ function useCollapsingHeader({ activeTab, enableSnap = true }) {
     activity: 0,
     accounts: 0,
     plans: 0,
+    "app-settings": 0,
+    "profile-settings": 0,
   });
   const rafIdRef = React.useRef(0);
   const isSnappingRef = React.useRef(false);
@@ -10975,7 +10904,6 @@ const CollapsibleTopBar = React.memo(function CollapsibleTopBar({
         <span
           className="prototype-header-compact-title"
           onClick={onScrollToTop}
-          style={settingsRoute ? { opacity: 1, transform: "none" } : undefined}
         >
           {compactTitle}
         </span>
@@ -11322,7 +11250,7 @@ export default function MobilePrototype({
       : appSettingsOpen
         ? "app-settings"
         : tab,
-    enableSnap: !profileSettingsOpen && !appSettingsOpen,
+    enableSnap: true,
   });
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [slideDirection, setSlideDirection] = useState("forward");
@@ -12056,26 +11984,28 @@ export default function MobilePrototype({
   };
   const advanced = () => {
     close(null, () => {
+      tabScrollTopRef.current["app-settings"] = 0;
+      setSlideDirection("forward");
       setProfileSettingsOpen(false);
       setAppSettingsOpen(true);
       setAnimateScreen(true);
-      resetScreenScroll();
     });
   };
   const openProfileSettings = () => {
     close(null, () => {
+      tabScrollTopRef.current["profile-settings"] = 0;
+      setSlideDirection("forward");
       setAppSettingsOpen(false);
       setProfileSettingsOpen(true);
       setAnimateScreen(true);
-      resetScreenScroll();
     });
   };
   const backToSettings = () => {
+    setSlideDirection("backward");
     setProfileSettingsOpen(false);
     setAppSettingsOpen(false);
     openSheet({ type: "set" });
     setAnimateScreen(true);
-    resetScreenScroll();
   };
   const signIn = () => onSignIn?.();
 
@@ -12280,7 +12210,7 @@ export default function MobilePrototype({
             triggerHaptic("medium");
             setPtrState({ pullY: 48, phase: "refreshing" });
             if (typeof window !== "undefined") {
-              window.__spendCheckForUpdates?.();
+              window.__spendCheckForUpdates?.({ force: true, manual: true });
             }
             if (profile?.connected && onResumeSync) {
               try {
@@ -12345,8 +12275,12 @@ export default function MobilePrototype({
           <div
             ref={registerTabScroller("profile-settings")}
             data-tab="profile-settings"
-            className="prototype-tab-panel is-settings-panel is-active"
+            className={`prototype-tab-panel is-settings-panel is-active${animateScreen ? ` ${slideDirection === "forward" ? "slides-from-right" : "slides-from-left"}` : ""}`}
           >
+            <ScreenLargeTitle
+              title="Profile"
+              className="is-settings-large-title"
+            />
             <ProfileSettingsPage
               S={S}
               profile={profile}
@@ -12370,8 +12304,12 @@ export default function MobilePrototype({
           <div
             ref={registerTabScroller("app-settings")}
             data-tab="app-settings"
-            className="prototype-tab-panel is-settings-panel is-active"
+            className={`prototype-tab-panel is-settings-panel is-active${animateScreen ? ` ${slideDirection === "forward" ? "slides-from-right" : "slides-from-left"}` : ""}`}
           >
+            <ScreenLargeTitle
+              title="App settings"
+              className="is-settings-large-title"
+            />
             <AppSettingsPage
               S={S}
               profile={profile}
@@ -12399,6 +12337,7 @@ export default function MobilePrototype({
               updateCheckStatus={updateCheckStatus}
               onCheckForUpdates={onCheckForUpdates}
               onOpenUpdateModal={onOpenUpdateModal}
+              onToast={toast}
             />
           </div>
         ) : (
@@ -12798,13 +12737,6 @@ export default function MobilePrototype({
           onAdvanced={advanced}
           onProfileSettings={openProfileSettings}
           onSecurity={() => openSheet({ type: "sec" })}
-          updateAvailable={updateAvailable}
-          updateInfo={updateInfo}
-          checkingForUpdate={checkingForUpdate}
-          updateCheckStatus={updateCheckStatus}
-          onCheckForUpdates={onCheckForUpdates}
-          onOpenUpdateModal={onOpenUpdateModal}
-          onToast={toast}
         />
       )}
       {sheet?.type === "sec" && (

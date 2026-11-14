@@ -1081,8 +1081,7 @@ a:active,
 }
 
 .mobile-prototype .prototype-header.is-settings-route {
-  margin-bottom: 0;
-  pointer-events: auto;
+  pointer-events: none;
 }
 
 .mobile-prototype .prototype-header > * {
@@ -1104,10 +1103,6 @@ a:active,
   will-change: opacity;
   pointer-events: none;
 }
-.mobile-prototype .prototype-header.is-settings-route::before {
-  opacity: 1 !important;
-  animation: none !important;
-}
 
 /* Compact sticky title (18px equivalent, driven strictly by opacity + transform) */
 .mobile-prototype .prototype-header-compact-wrap {
@@ -1117,16 +1112,8 @@ a:active,
   flex: 1;
   pointer-events: none;
 }
-.mobile-prototype .prototype-header.is-settings-route .prototype-header-compact-wrap {
+.mobile-prototype .prototype-header-compact-wrap > * {
   pointer-events: auto;
-}
-.mobile-prototype .prototype-header.is-settings-route .prototype-header-compact-title {
-  opacity: 1 !important;
-  transform: none !important;
-  animation: none !important;
-  font-size: 20px;
-  font-weight: 800;
-  letter-spacing: -0.025em;
 }
 
 .mobile-prototype .prototype-header-compact-title {
@@ -1176,6 +1163,11 @@ a:active,
   padding-right: 144px;
 }
 
+.mobile-prototype .prototype-large-title-row.is-settings-large-title {
+  padding-left: 48px;
+  padding-right: 0;
+}
+
 .mobile-prototype .prototype-large-title {
   margin: 0;
   font-size: 30px;
@@ -1207,13 +1199,13 @@ a:active,
     scroll-timeline-axis: block;
   }
 
-  .mobile-prototype .prototype-header:not(.is-settings-route)::before {
+  .mobile-prototype .prototype-header::before {
     animation: header-surface-collapse linear both;
     animation-timeline: --active-tab-scroll;
     animation-range: 8px 60px;
   }
 
-  .mobile-prototype .prototype-header:not(.is-settings-route) .prototype-header-compact-title {
+  .mobile-prototype .prototype-header .prototype-header-compact-title {
     animation: compact-title-collapse linear both;
     animation-timeline: --active-tab-scroll;
     animation-range: 8px 60px;
@@ -11982,7 +11974,7 @@ html[data-theme="dark"]
 
 /* 9. Settings Route Panels, Flat Minimal App Settings & Checkpoints */
 .mobile-prototype .prototype-tab-panel.is-settings-panel {
-  padding: 14px 18px calc(44px + env(safe-area-inset-bottom, 0px)) !important;
+  padding: 0 18px calc(44px + env(safe-area-inset-bottom, 0px)) !important;
   scroll-behavior: smooth;
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;

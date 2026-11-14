@@ -1,4 +1,9 @@
 const CACHE_NAME = "spend-shell-v13";
+const SW_BUILD_ID = "dev";
+const SW_VERSION = "2.0.0";
+const SW_COMMIT = "";
+const SW_BUILT_AT = "";
+const PRECACHE_ASSETS = [];
 
 const STATIC_PATHS = [
   "",
@@ -23,7 +28,8 @@ function clearScheduledTimers() {
 
 function getScopeUrls() {
   const scope = self.registration.scope;
-  return STATIC_PATHS.map((path) => new URL(path, scope).toString());
+  const allPaths = [...new Set([...STATIC_PATHS, ...PRECACHE_ASSETS])];
+  return allPaths.map((path) => new URL(path, scope).toString());
 }
 
 function cacheCompleteResponse(request, response) {
@@ -77,6 +83,22 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("message", (event) => {
   if (event.data?.type === "SKIP_WAITING") {
     self.skipWaiting();
+    return;
+  }
+  if (event.data?.type === "GET_VERSION_INFO") {
+    const payload = {
+      type: "VERSION_INFO",
+      buildId: SW_BUILD_ID,
+      version: SW_VERSION,
+      commit: SW_COMMIT,
+      builtAt: SW_BUILT_AT,
+      cacheName: CACHE_NAME,
+    };
+    if (event.ports?.[0]) {
+      event.ports[0].postMessage(payload);
+    } else {
+      event.source?.postMessage?.(payload);
+    }
     return;
   }
   if (event.data?.type === "SYNC_SCHEDULED_NOTIFICATIONS") {
@@ -186,32 +208,19 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Always bypass cache for version manifest and service worker script
+  // Always bypass Service Worker caching for version manifest and service worker script
   if (
     url.pathname.endsWith("/version.json") ||
     url.pathname.endsWith("/sw.js")
   ) {
-    event.respondWith(
-      fetch(request.url, {
-        cache: "no-store",
-        headers: {
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-          Pragma: "no-cache",
-        },
-      }),
-    );
     return;
   }
 
   if (request.mode === "navigate") {
     const indexUrl = new URL("index.html", self.registration.scope).toString();
-    const isForceReload =
-      request.cache === "reload" ||
-      request.cache === "no-store" ||
-      request.cache === "no-cache" ||
-      url.searchParams.has("__update");
+    const isExplicitUpdate = url.searchParams.has("__update");
 
-    if (isForceReload) {
+    if (isExplicitUpdate) {
       event.respondWith(
         fetch(indexUrl, { cache: "no-store" })
           .then(async (response) => {
@@ -262,8 +271,13 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  const fetchOpts =
+    request.cache === "no-store" || request.cache === "reload"
+      ? { cache: "no-store" }
+      : undefined;
+
   event.respondWith(
-    fetch(request)
+    fetch(request, fetchOpts)
       .then((response) => {
         void cacheCompleteResponse(request, response);
         return response;

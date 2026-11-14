@@ -1442,12 +1442,38 @@ export default function App() {
   const dismissedBuildIdRef = useRef("");
   const updateModalRef = useRef(null);
 
+  const canPresentUpdateModal =
+    !sessionResolving &&
+    ready &&
+    isHydrated &&
+    (!hasAppPin() || isSessionUnlocked()) &&
+    !(
+      (!Boolean(sessionUser || pushUser) && (!welcomeSeen || devForceWelcome)) ||
+      welcomeExiting
+    );
+  const canPresentUpdateModalRef = useRef(canPresentUpdateModal);
+  canPresentUpdateModalRef.current = canPresentUpdateModal;
+
+  const dismissUpdateModal = useCallback(() => {
+    const candidateId = updateInfo?.buildId || "sw-pending-update";
+    dismissedBuildIdRef.current = candidateId;
+    if (typeof window !== "undefined") {
+      window.__spendAcknowledgeUpdate?.(candidateId);
+    }
+    hideUpdateModal();
+  }, [hideUpdateModal, updateInfo?.buildId]);
+
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
     const handleUpdateEvent = (event) => {
       const detail = event?.detail || window.__spendPendingUpdate || {};
       const candidateId = detail.buildId || "sw-pending-update";
       setUpdateInfo(detail);
+      setUpdateCheckStatus(
+        detail.version
+          ? `Update available: Spend v${detail.version} is ready to install.`
+          : "A new update is ready to install.",
+      );
       if (detail.manual) {
         dismissedBuildIdRef.current = "";
         showUpdateModal();
@@ -1459,7 +1485,9 @@ export default function App() {
       ) {
         return;
       }
-      showUpdateModal();
+      if (canPresentUpdateModalRef.current) {
+        showUpdateModal();
+      }
     };
     window.addEventListener("spend:update-available", handleUpdateEvent);
     if (window.__spendPendingUpdate) {
@@ -1469,6 +1497,18 @@ export default function App() {
       window.removeEventListener("spend:update-available", handleUpdateEvent);
     };
   }, [showUpdateModal]);
+
+  useEffect(() => {
+    if (!canPresentUpdateModal || !updateInfo) return;
+    const candidateId = updateInfo.buildId || "sw-pending-update";
+    if (
+      dismissedBuildIdRef.current &&
+      dismissedBuildIdRef.current === candidateId
+    ) {
+      return;
+    }
+    showUpdateModal();
+  }, [canPresentUpdateModal, showUpdateModal, updateInfo]);
 
   const handleCheckForUpdates = useCallback(
     async ({ silent = false } = {}) => {
@@ -2075,6 +2115,14 @@ export default function App() {
 
       isHydratedRef.current = true;
       setIsHydrated(true);
+      if (
+        typeof window !== "undefined" &&
+        window.__spendPendingUpdate &&
+        dismissedBuildIdRef.current !==
+          (window.__spendPendingUpdate.buildId || "sw-pending-update")
+      ) {
+        showUpdateModal();
+      }
 
       // If any record in localStorage was still plaintext from an older version, encrypt it now
       if (sessionKey) {
@@ -5919,8 +5967,7 @@ export default function App() {
             className={`update-modal-backdrop${updateModalClosing ? " is-closing" : ""}`}
             onMouseDown={(event) => {
               if (event.target === event.currentTarget && !updateApplying) {
-                dismissedBuildIdRef.current = updateInfo?.buildId || "sw-pending-update";
-                hideUpdateModal();
+                dismissUpdateModal();
               }
             }}
           >
@@ -5932,8 +5979,7 @@ export default function App() {
               aria-labelledby="update-modal-title"
               onKeyDown={(event) => {
                 if (event.key === "Escape" && !updateApplying) {
-                  dismissedBuildIdRef.current = updateInfo?.buildId || "sw-pending-update";
-                  hideUpdateModal();
+                  dismissUpdateModal();
                   return;
                 }
                 if (event.key !== "Tab") return;
@@ -5981,10 +6027,7 @@ export default function App() {
                   type="button"
                   className="update-modal-btn is-later"
                   disabled={updateApplying}
-                  onClick={() => {
-                    dismissedBuildIdRef.current = updateInfo?.buildId || "sw-pending-update";
-                    hideUpdateModal();
-                  }}
+                  onClick={dismissUpdateModal}
                 >
                   Later
                 </button>

@@ -58,18 +58,23 @@ function readPackageVersion() {
   }
 }
 
-const pkgVersion = readPackageVersion();
-const gitCommit = resolveGitCommit();
-const builtAt = new Date().toISOString();
-const buildTimestamp = Date.now();
-const buildId = `${pkgVersion}${gitCommit ? `-${gitCommit}` : ""}-${buildTimestamp}`;
+function createVersionManifest() {
+  const pkgVer = readPackageVersion();
+  const commit = resolveGitCommit();
+  const timestamp = Date.now();
+  const iso = new Date(timestamp).toISOString();
+  const id = `${pkgVer}${commit ? `-${commit}` : ""}-${timestamp}`;
+  return {
+    buildId: id,
+    version: pkgVer,
+    commit: commit || null,
+    builtAt: iso,
+  };
+}
 
-const versionManifest = {
-  buildId,
-  version: pkgVersion,
-  commit: gitCommit || null,
-  builtAt,
-};
+const versionManifest = createVersionManifest();
+const { buildId, version: pkgVersion, commit: gitCommit, builtAt } =
+  versionManifest;
 
 function spendBuildVersionPlugin() {
   let outDir = "dist";
@@ -103,11 +108,48 @@ function spendBuildVersionPlugin() {
 
         const swPath = resolve(resolvedOutDir, "sw.js");
         if (existsSync(swPath)) {
+          let precacheAssets = [];
+          try {
+            const indexHtmlPath = resolve(resolvedOutDir, "index.html");
+            if (existsSync(indexHtmlPath)) {
+              const html = readFileSync(indexHtmlPath, "utf8");
+              const matches = html.matchAll(
+                /(?:src|href)=["'](?:\.\/|\/personal-expense-tracker\/|\/)?(assets\/[^"'?#]+)["']/g,
+              );
+              precacheAssets = [
+                ...new Set(Array.from(matches, (m) => m[1]).filter(Boolean)),
+              ];
+            }
+          } catch {
+            precacheAssets = [];
+          }
+
           const swSource = readFileSync(swPath, "utf8");
-          const stampedSw = swSource.replace(
-            /const CACHE_NAME = ["'][^"']+["'];/,
-            `const CACHE_NAME = "spend-shell-${buildId}";`,
-          );
+          const stampedSw = swSource
+            .replace(
+              /const CACHE_NAME = ["'][^"']*["'];/,
+              `const CACHE_NAME = ${JSON.stringify(`spend-shell-${buildId}`)};`,
+            )
+            .replace(
+              /const SW_BUILD_ID = ["'][^"']*["'];/,
+              `const SW_BUILD_ID = ${JSON.stringify(buildId)};`,
+            )
+            .replace(
+              /const SW_VERSION = ["'][^"']*["'];/,
+              `const SW_VERSION = ${JSON.stringify(pkgVersion)};`,
+            )
+            .replace(
+              /const SW_COMMIT = ["'][^"']*["'];/,
+              `const SW_COMMIT = ${JSON.stringify(gitCommit || "")};`,
+            )
+            .replace(
+              /const SW_BUILT_AT = ["'][^"']*["'];/,
+              `const SW_BUILT_AT = ${JSON.stringify(builtAt)};`,
+            )
+            .replace(
+              /const PRECACHE_ASSETS = \[[^\]]*\];/,
+              `const PRECACHE_ASSETS = ${JSON.stringify(precacheAssets)};`,
+            );
           writeFileSync(swPath, stampedSw, "utf8");
         }
       } catch (error) {
