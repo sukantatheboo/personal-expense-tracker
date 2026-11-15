@@ -28,6 +28,23 @@ function clearScheduledTimers() {
   scheduledTimers.clear();
 }
 
+function notifyClientsToPlaySound(tone = "reminder") {
+  return self.clients
+    .matchAll({ type: "window", includeUncontrolled: true })
+    .then((clients) => {
+      const matching = clients.filter((client) =>
+        client.url.startsWith(self.registration.scope),
+      );
+      if (!matching.length) return;
+      const target =
+        matching.find((client) => client.focused) ||
+        matching.find((client) => client.visibilityState === "visible") ||
+        matching[0];
+      target.postMessage({ type: "PLAY_NOTIFICATION_SOUND", tone });
+    })
+    .catch(() => {});
+}
+
 function getScopeUrls() {
   const scope = self.registration.scope;
   const allPaths = [...new Set([...STATIC_PATHS, ...PRECACHE_ASSETS])];
@@ -140,6 +157,7 @@ self.addEventListener("message", (event) => {
               tab: item.tab || "home",
             },
           })
+          .then(() => notifyClientsToPlaySound(item.tone || "reminder"))
           .catch(() => {});
       }, delay);
       scheduledTimers.set(key, timerId);
@@ -180,6 +198,7 @@ self.addEventListener("message", (event) => {
                 },
               },
             )
+            .then(() => notifyClientsToPlaySound(event.data.tone || "reminder"))
             .catch(() => {})
             .finally(resolve);
         }, delayMs);
@@ -327,18 +346,21 @@ self.addEventListener("push", (event) => {
   ).toString();
 
   event.waitUntil(
-    self.registration.showNotification(payload.title, {
-      body: payload.body,
-      icon: iconUrl,
-      badge: badgeUrl,
-      tag,
-      renotify: Boolean(payload.renotify),
-      vibrate: [200, 100, 200],
-      data: {
-        url: targetUrl,
-        tab: payload.tab || fallback.tab,
-      },
-    }),
+    Promise.all([
+      self.registration.showNotification(payload.title, {
+        body: payload.body,
+        icon: iconUrl,
+        badge: badgeUrl,
+        tag,
+        renotify: Boolean(payload.renotify),
+        vibrate: [200, 100, 200],
+        data: {
+          url: targetUrl,
+          tab: payload.tab || fallback.tab,
+        },
+      }),
+      notifyClientsToPlaySound(payload.tone || "reminder"),
+    ]),
   );
 });
 

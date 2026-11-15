@@ -79,7 +79,8 @@ function resolveSoundUrl(tone) {
   const base = import.meta.env.BASE_URL || "./";
   const fileName = tone === "welcome" ? "sounds/welcome.wav" : "sounds/reminder.wav";
   if (typeof window !== "undefined") {
-    return new URL(`${base}${fileName}`, window.location.origin).href;
+    const originBase = base.startsWith("/") ? window.location.origin : window.location.href;
+    return new URL(`${base}${fileName}`, originBase).href;
   }
   return `./${fileName}`;
 }
@@ -370,10 +371,9 @@ export async function sendNativeBuiltinNotification({
       return false;
     }
 
-    const iconHref = new URL(
-      `${import.meta.env.BASE_URL || "./"}icons/icon-192.png`,
-      window.location.origin,
-    ).href;
+    const base = import.meta.env.BASE_URL || "./";
+    const originBase = base.startsWith("/") ? window.location.origin : window.location.href;
+    const iconHref = new URL(`${base}icons/icon-192.png`, originBase).href;
     const options = {
       body,
       icon: iconHref,
@@ -880,6 +880,8 @@ export function setupNotificationListeners(onNavigate) {
         typeof onNavigate === "function"
       ) {
         onNavigate(event.data.tab);
+      } else if (event.data?.type === "PLAY_NOTIFICATION_SOUND") {
+        playNotificationAudioTone(event.data.tone || "reminder");
       }
     };
     navigator.serviceWorker.addEventListener("message", handler);
