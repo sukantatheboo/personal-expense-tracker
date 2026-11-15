@@ -5404,10 +5404,13 @@ a:active,
   font-size: 12.5px;
   font-weight: 550;
   color: var(--mut);
-  line-height: 1.35;
+  line-height: 1.4;
+  white-space: normal;
+  display: -webkit-box;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .mobile-prototype .mfs-profile-hero-photo-actions {
   display: flex;
@@ -12609,5 +12612,200 @@ html[data-theme="dark"]
 .mobile-prototype .mfs-checkpoint-restore-btn:disabled {
   opacity: 0.55;
   cursor: default;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   UNIFIED CROSS-PLATFORM iOS & ANDROID QA FIXES (P0, P1 & P2)
+   Dynamic platform-aware rules for iOS (Safari / WKWebView) & Android (Chrome / WebView)
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* P2 #10: Android WebView Scroll & Tap Polish */
+html,
+body {
+  overscroll-behavior-y: contain;
+  -webkit-tap-highlight-color: transparent;
+}
+.mobile-prototype,
+.mobile-prototype *,
+.mobile-prototype *::before,
+.mobile-prototype *::after {
+  -webkit-tap-highlight-color: transparent;
+}
+.mobile-prototype .prototype-tab-panel,
+.mobile-prototype .sheet-content,
+.mobile-prototype .sh {
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
+@media (hover: none) {
+  .mobile-prototype button:not(:disabled):not(.dock__fab):not(.tab):active,
+  .mobile-prototype [role="button"]:not([aria-disabled="true"]):active {
+    filter: brightness(0.95);
+  }
+}
+
+/* P0 #3: iOS Safari Input Auto-Zoom Prevention (16px minimum on text/search inputs,
+   while strictly preserving the 54px / 44px / 36px Hero Amount input typography) */
+.mobile-prototype .activity-search-input,
+.mobile-prototype .srch input,
+.mobile-prototype input.in,
+.mobile-prototype .add-card-search-input,
+.mobile-prototype .add-card-native-input:not(.add-card-balance-input),
+.mobile-prototype .card-options-field input:not(.add-card-balance-input),
+.mobile-prototype .auth-input-group > input,
+.mobile-prototype textarea,
+.mobile-prototype select {
+  font-size: 16px;
+}
+.mobile-prototype .amt.amt-hero-redesigned input,
+.mobile-prototype .amt.amt-hero-redesigned input.amt-hero-input {
+  font-size: 54px !important;
+}
+.mobile-prototype .amt.amt-hero-redesigned.is-medium input,
+.mobile-prototype .amt.amt-hero-redesigned.is-medium input.amt-hero-input {
+  font-size: 44px !important;
+}
+.mobile-prototype .amt.amt-hero-redesigned.is-compact input,
+.mobile-prototype .amt.amt-hero-redesigned.is-compact input.amt-hero-input {
+  font-size: 36px !important;
+}
+
+/* P0 #4 & P1 #8: Fixed Bottom Tab Bar & + FAB GPU Compositing Reset + iOS Safe Area
+   NOTE: .dock__fab is already centered via left: 50% + margin-left: calc(var(--fab) / -2),
+   so its idle transform must stay translate3d(0, 0, 0) (never translateX(-50%)) */
+.mobile-prototype .dock {
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.mobile-prototype .dock__tabs {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 4px);
+}
+.mobile-prototype:not([data-sheet-open="true"]):not([data-sheet-closing="true"]) .dock:not([data-hidden="true"]):not([data-keyboard-open="true"]) {
+  transform: translate3d(0, 0, 0);
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+.mobile-prototype:not([data-sheet-open="true"]):not([data-sheet-closing="true"]) .dock:not([data-hidden="true"]):not([data-keyboard-open="true"]) .dock__tabs {
+  z-index: 2;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+.mobile-prototype:not([data-sheet-open="true"]):not([data-sheet-closing="true"]) .dock:not([data-hidden="true"]):not([data-keyboard-open="true"]) .dock__fab {
+  z-index: 3;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+/* P1 #5: Unified 48x48 Touch Targets (Apple HIG 44pt & Material Design 3 48dp)
+   Uses ::after 48x48 invisible hit-slop on compact circle/pill buttons so visual
+   circles (like the 30x30px sheet X button) never bloat or clip */
+.mobile-prototype .sheet-drag-zone {
+  z-index: 30;
+}
+.mobile-prototype .sheet-close-btn {
+  width: 30px !important;
+  height: 30px !important;
+  min-width: 30px !important;
+  min-height: 30px !important;
+  z-index: 32;
+}
+.mobile-prototype .icon-btn,
+.mobile-prototype .prototype-header-avatar,
+.mobile-prototype .prototype-header-action,
+.mobile-prototype .prototype-header-back,
+.mobile-prototype .mx-eye,
+.mobile-prototype .sheet-close-btn,
+.mobile-prototype .mn button,
+.mobile-prototype .mon button,
+.mobile-prototype .plans-calendar-btn,
+.mobile-prototype .add-card-back-btn,
+.mobile-prototype .add-card-search-clear,
+.mobile-prototype .srch-clear-btn {
+  position: relative;
+  touch-action: manipulation;
+}
+.mobile-prototype .icon-btn::after,
+.mobile-prototype .prototype-header-avatar::after,
+.mobile-prototype .prototype-header-action::after,
+.mobile-prototype .prototype-header-back::after,
+.mobile-prototype .mx-eye::after,
+.mobile-prototype .sheet-close-btn::after,
+.mobile-prototype .mn button::after,
+.mobile-prototype .mon button::after,
+.mobile-prototype .plans-calendar-btn::after,
+.mobile-prototype .add-card-back-btn::after,
+.mobile-prototype .add-card-search-clear::after,
+.mobile-prototype .srch-clear-btn::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: max(100%, 48px);
+  height: max(100%, 48px);
+  transform: translate(-50%, -50%);
+}
+.mobile-prototype .chips button,
+.mobile-prototype .cg button,
+.mobile-prototype .seg button,
+.mobile-prototype .seg input[type="date"],
+.mobile-prototype .mfs-theme-seg-btn,
+.mobile-prototype .add-card-filter-chip {
+  min-height: 44px;
+  touch-action: manipulation;
+}
+.mobile-prototype .see-all-btn,
+.mobile-prototype .sec > button,
+.mobile-prototype .accounts-see-all-link {
+  min-width: 48px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+  margin: -6px -4px;
+  position: relative;
+  touch-action: manipulation;
+}
+
+/* P1 #8: Bottom Sheet Opacity (0.94 + blur(24px)) & Sticky Header Z-Index / Padding */
+.mobile-prototype .sh {
+  --sheet-surface: rgba(251, 250, 246, 0.94);
+  background: var(--sheet-surface) !important;
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+}
+:root[data-theme="dark"] .mobile-prototype .sh,
+.mobile-prototype[data-theme="dark"] .sh,
+.mobile-prototype.dark .sh {
+  --sheet-surface: rgba(20, 20, 24, 0.94);
+  background: var(--sheet-surface) !important;
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+}
+.mobile-prototype .sheet-content > h3:first-child {
+  position: sticky;
+  top: -1px;
+  z-index: 4;
+  padding: 6px 36px 10px 4px;
+}
+.mobile-prototype .sheet-content .amt.amt-hero-redesigned {
+  position: relative;
+  z-index: 1;
+  margin-top: 6px;
+}
+
+/* P2 #11: Undo Toast Z-Index Above Modal Sheets & Disabled Transfer CTA */
+.mobile-prototype .toast {
+  z-index: 1200;
+}
+.mobile-prototype .btn:disabled,
+.mobile-prototype .btn[aria-disabled="true"] {
+  opacity: 0.45;
+  pointer-events: none;
+  cursor: not-allowed;
 }
 

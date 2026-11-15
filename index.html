@@ -2,350 +2,46 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta
-      http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self';"
-    />
-    <meta
-      http-equiv="Permissions-Policy"
-      content="camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
-    />
-    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
-    <meta name="referrer" content="strict-origin-when-cross-origin" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
-    />
-    <meta
-      name="theme-color"
-      content="#f4f3ee"
-      media="(prefers-color-scheme: light)"
-    />
-    <meta
-      name="theme-color"
-      content="#08080c"
-      media="(prefers-color-scheme: dark)"
-    />
-    <meta name="theme-color" content="#f4f3ee" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#f4f3ee" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#08080c" media="(prefers-color-scheme: dark)" />
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem("spend-theme-v1") || localStorage.getItem("spend-theme");
+          if (!mode) {
+            var rawState = localStorage.getItem("spend-v1") || localStorage.getItem("spend-state-v1");
+            if (rawState) {
+              var parsed = JSON.parse(rawState);
+              mode = (parsed && (parsed.themeMode || parsed.theme)) || "auto";
+            }
+          }
+          mode = mode || "auto";
+          var dark =
+            mode === "dark" ||
+            (mode !== "light" &&
+              window.matchMedia &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches);
+          var resolved = dark ? "dark" : "light";
+          var root = document.documentElement;
+          root.dataset.theme = resolved;
+          root.setAttribute("data-theme", resolved);
+          root.style.colorScheme = resolved;
+          root.style.backgroundColor = dark ? "#08080c" : "#f4f3ee";
+        } catch (e) {}
+      })();
+    </script>
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta
-      name="apple-mobile-web-app-status-bar-style"
-      content="black-translucent"
-    />
-    <meta name="mobile-web-app-title" content="Spend" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Spend" />
-    <meta
-      name="description"
-      content="Spend is a free, private personal expense tracker. All tracking data is stored locally on device. Not affiliated with or collecting credentials for any financial institution or bank."
-    />
-    <link rel="manifest" href="%BASE_URL%manifest.webmanifest?v=2" />
-    <link rel="icon" type="image/svg+xml" href="%BASE_URL%favicon.svg?v=2" />
-    <link rel="apple-touch-icon" href="%BASE_URL%icons/icon-180.png?v=2" />
-    <link
-      rel="apple-touch-startup-image"
-      href="%BASE_URL%splash/apple-splash-1320-2868.png"
-      media="(device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
-    />
-    <link
-      rel="apple-touch-startup-image"
-      href="%BASE_URL%splash/apple-splash-1206-2622.png"
-      media="(device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
-    />
-    <link
-      rel="apple-touch-startup-image"
-      href="%BASE_URL%splash/apple-splash-1290-2796.png"
-      media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
-    />
-    <link
-      rel="apple-touch-startup-image"
-      href="%BASE_URL%splash/apple-splash-1179-2556.png"
-      media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
-    />
-    <link
-      rel="apple-touch-startup-image"
-      href="%BASE_URL%splash/apple-splash-1284-2778.png"
-      media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
-    />
-    <link
-      rel="apple-touch-startup-image"
-      href="%BASE_URL%splash/apple-splash-1170-2532.png"
-      media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
-    />
-    <link
-      rel="apple-touch-startup-image"
-      href="%BASE_URL%splash/apple-splash-1125-2436.png"
-      media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
-    />
-    <link
-      rel="apple-touch-startup-image"
-      href="%BASE_URL%splash/apple-splash-828-1792.png"
-      media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)"
-    />
-    <link
-      rel="apple-touch-startup-image"
-      href="%BASE_URL%splash/apple-splash-750-1334.png"
-      media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)"
-    />
-    <link
-      rel="apple-touch-startup-image"
-      href="%BASE_URL%splash/apple-splash-2048-2732.png"
-      media="(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)"
-    />
-    <link
-      rel="apple-touch-startup-image"
-      href="%BASE_URL%splash/apple-splash-1668-2388.png"
-      media="(device-width: 834px) and (device-height: 1194px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)"
-    />
-    <link
-      rel="apple-touch-startup-image"
-      href="%BASE_URL%splash/apple-splash-1640-2360.png"
-      media="(device-width: 820px) and (device-height: 1180px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)"
-    />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <title>Spend — Expense tracker</title>
-    <style id="spend-critical-splash-css">
-      :root {
-        --bg: #f4f3ee;
-        color-scheme: light;
-      }
-      @media (prefers-color-scheme: dark) {
-        html:not([data-theme="light"]) {
-          --bg: #08080c;
-          color-scheme: dark;
-        }
-      }
-      html[data-theme="dark"] {
-        --bg: #08080c;
-        color-scheme: dark;
-      }
-      html[data-theme="light"] {
-        --bg: #f4f3ee;
-        color-scheme: light;
-      }
-      html,
-      body {
-        margin: 0;
-        background: var(--bg);
-      }
-      .sp-root {
-        --sp-bg: #0c130f;
-        --sp-green: #d5f45b;
-        --sp-ink: #eaf4ed;
-        --sp-font: "Outfit", "Nunito Sans", ui-rounded, system-ui, sans-serif;
-        --tile: min(96px, 26vw);
-        --gap: 16px;
-        --sp-shift: calc(var(--tile) * 0.96 + 8px);
-        position: fixed;
-        inset: -2px;
-        z-index: 2147483000;
-        width: calc(100vw + 4px);
-        height: calc(100dvh + 4px);
-        box-shadow: 0 0 0 4px var(--sp-bg);
-        display: grid;
-        place-items: center;
-        background: var(--sp-bg);
-        font-family: var(--sp-font);
-        -webkit-font-smoothing: antialiased;
-        user-select: none;
-        -webkit-user-select: none;
-        touch-action: none;
-        overscroll-behavior: contain;
-      }
-      #initial-splash {
-        z-index: 2147483001;
-        transition: opacity 160ms ease-out;
-      }
-      #initial-splash.sp-handoff {
-        opacity: 0;
-        pointer-events: none;
-      }
-      .sp-root[hidden] {
-        display: none;
-      }
-      .sp-stage {
-        display: grid;
-        place-items: center;
-        will-change: transform;
-      }
-      .sp-lockup {
-        display: flex;
-        align-items: center;
-        column-gap: var(--gap);
-      }
-      .sp-mark {
-        flex: none;
-        width: var(--tile);
-        height: var(--tile);
-        will-change: transform;
-        transform: translate3d(var(--sp-shift), 0, 0);
-      }
-      .sp-tile {
-        width: 100%;
-        height: 100%;
-        background: var(--sp-green);
-        border-radius: 25%;
-        transform: scale3d(0.07, 0.07, 1);
-        will-change: transform;
-        backface-visibility: hidden;
-      }
-      .sp-tile svg {
-        display: block;
-        width: 100%;
-        height: 100%;
-        overflow: visible;
-      }
-      .sp-arrow path {
-        fill: none;
-        stroke: #161d2b;
-        stroke-width: 7.5;
-        stroke-linecap: round;
-        stroke-linejoin: round;
-        opacity: 0;
-      }
-      .sp-word {
-        display: flex;
-        white-space: nowrap;
-        font-size: calc(var(--tile) * 0.667);
-        line-height: 1;
-        font-weight: 600;
-        letter-spacing: -0.03em;
-        color: var(--sp-ink);
-      }
-      .sp-l {
-        display: inline-block;
-        opacity: 0;
-        will-change: transform, opacity;
-      }
-      #initial-splash .sp-tile {
-        animation: sp-tile-in 800ms both;
-      }
-      #initial-splash .sp-shaft {
-        stroke-dasharray: 45.255;
-        animation: sp-shaft-draw 400ms 640ms both;
-      }
-      #initial-splash .sp-arm {
-        stroke-dasharray: 22;
-        animation: sp-arm-draw 300ms 980ms both;
-      }
-      #initial-splash .sp-mark {
-        animation: sp-mark-shift 720ms 1340ms cubic-bezier(0.22, 1, 0.36, 1) both;
-      }
-      #initial-splash .sp-l {
-        animation: sp-letter-in 480ms calc(1400ms + var(--i, 0) * 60ms)
-          cubic-bezier(0.22, 1, 0.36, 1) both;
-      }
-      @keyframes sp-tile-in {
-        0% {
-          transform: scale3d(0.07, 0.07, 1);
-          border-radius: 50%;
-          animation-timing-function: cubic-bezier(0.2, 0.8, 0.3, 1);
-        }
-        20% {
-          transform: scale3d(0.07, 0.07, 1);
-          border-radius: 50%;
-          animation-timing-function: cubic-bezier(0.34, 1.3, 0.64, 1);
-        }
-        100% {
-          transform: scale3d(1, 1, 1);
-          border-radius: 25%;
-        }
-      }
-      @keyframes sp-shaft-draw {
-        0% {
-          stroke-dashoffset: 45.255;
-          opacity: 0;
-        }
-        0.1% {
-          stroke-dashoffset: 45.255;
-          opacity: 1;
-          animation-timing-function: cubic-bezier(0.65, 0, 0.35, 1);
-        }
-        100% {
-          stroke-dashoffset: 0;
-          opacity: 1;
-        }
-      }
-      @keyframes sp-arm-draw {
-        0% {
-          stroke-dashoffset: 22;
-          opacity: 0;
-        }
-        0.1% {
-          stroke-dashoffset: 22;
-          opacity: 1;
-          animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
-        }
-        100% {
-          stroke-dashoffset: 0;
-          opacity: 1;
-        }
-      }
-      @keyframes sp-mark-shift {
-        0% {
-          transform: translate3d(var(--sp-shift), 0, 0);
-        }
-        100% {
-          transform: translate3d(0, 0, 0);
-        }
-      }
-      @keyframes sp-letter-in {
-        0% {
-          opacity: 0;
-          transform: translate3d(-0.16em, 0, 0);
-        }
-        100% {
-          opacity: 1;
-          transform: translate3d(0, 0, 0);
-        }
-      }
-      @media (prefers-reduced-motion: reduce) {
-        #initial-splash .sp-tile,
-        #initial-splash .sp-shaft,
-        #initial-splash .sp-arm,
-        #initial-splash .sp-mark,
-        #initial-splash .sp-l {
-          animation: none !important;
-        }
-        #initial-splash .sp-mark,
-        #initial-splash .sp-tile {
-          transform: none;
-        }
-        #initial-splash .sp-l,
-        #initial-splash .sp-arrow path {
-          opacity: 1;
-        }
-      }
-    </style>
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="format-detection" content="telephone=no" />
+    <link rel="manifest" href="%BASE_URL%manifest.webmanifest" />
+    <link rel="icon" type="image/svg+xml" href="%BASE_URL%icon.svg" />
+    <link rel="apple-touch-icon" href="%BASE_URL%apple-touch-icon.png" />
+    <title>Spend — Personal Expense Tracker</title>
   </head>
   <body>
-    <div id="initial-splash" class="sp-root" role="img" aria-label="Spend">
-      <div class="sp-stage">
-        <div class="sp-lockup">
-          <div class="sp-mark">
-            <div class="sp-tile">
-              <svg class="sp-arrow" viewBox="0 0 100 100" aria-hidden="true">
-                <path class="sp-shaft" d="M34 66L66 34" />
-                <path class="sp-arm" d="M66 34H44" />
-                <path class="sp-arm" d="M66 34V56" />
-              </svg>
-            </div>
-          </div>
-          <div class="sp-word" aria-hidden="true">
-            <span class="sp-l" style="--i: 0">S</span><span class="sp-l" style="--i: 1">p</span><span class="sp-l" style="--i: 2">e</span><span class="sp-l" style="--i: 3">n</span><span class="sp-l" style="--i: 4">d</span>
-          </div>
-        </div>
-      </div>
-    </div>
-    <input
-      id="safari-haptic-trigger"
-      type="checkbox"
-      switch
-      aria-hidden="true"
-      tabindex="-1"
-      style="position:fixed;opacity:0;pointer-events:none;left:-9999px;width:0;height:0;"
-    />
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

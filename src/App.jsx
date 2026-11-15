@@ -6203,6 +6203,7 @@ export default function App() {
         ref={backupFileInputRef}
         type="file"
         accept=".json,application/json"
+        aria-label="Restore backup file"
         hidden
         onChange={restoreBackup}
       />

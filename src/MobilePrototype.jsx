@@ -80,6 +80,40 @@ import {
 const MonthEndBanner = lazy(() => import("./components/MonthEndBanner.jsx"));
 const SpendLogin = lazy(() => import("./components/SpendLogin.jsx"));
 
+// Dynamic runtime platform detection (Capacitor native shell + mobile browser / DevTools emulation)
+function detectMobilePlatform() {
+  if (typeof window === "undefined") return "web";
+  try {
+    const capPlatform = window.Capacitor?.getPlatform?.();
+    if (capPlatform === "ios" || capPlatform === "android") return capPlatform;
+  } catch {}
+  const ua = typeof navigator !== "undefined" ? navigator.userAgent || "" : "";
+  const platformStr =
+    (typeof navigator !== "undefined" &&
+      (navigator.userAgentData?.platform || navigator.platform)) ||
+    "";
+  if (/android/i.test(ua) || /android/i.test(platformStr)) return "android";
+  if (
+    /iPhone|iPad|iPod/i.test(ua) ||
+    /iPhone|iPad|iPod/i.test(platformStr) ||
+    (/Mac/i.test(platformStr) &&
+      typeof navigator !== "undefined" &&
+      navigator.maxTouchPoints > 1)
+  ) {
+    return "ios";
+  }
+  return "web";
+}
+
+function isAndroidPlatform() {
+  if (typeof document !== "undefined") {
+    const attr = document.documentElement?.dataset?.platform;
+    if (attr === "android") return true;
+    if (attr === "ios") return false;
+  }
+  return detectMobilePlatform() === "android";
+}
+
 let accountsDeckModule = null;
 const loadAccountsCardDeck = () => {
   if (accountsDeckModule) return Promise.resolve(accountsDeckModule);
@@ -681,13 +715,24 @@ function suggestedCategory(description, expenses = [], excludeId = null) {
   return best.score >= 0.5 && best.category !== "Savings" ? best.category : "";
 }
 
+// Cross-platform iOS & Android swipe-to-delete click-through guard
+let swipeDeleteClickLockUntil = 0;
+function lockRowClicksAfterDelete(ms = 320) {
+  swipeDeleteClickLockUntil = Math.max(swipeDeleteClickLockUntil, Date.now() + ms);
+}
+function isRowClickLocked() {
+  return Date.now() < swipeDeleteClickLockUntil;
+}
+const ANDROID_RIGHT_EDGE_DEADZONE_PX = 32;
+
 function HeroAmountField({
   value,
   onChange,
+  onBlur,
   inputRef,
   placeholder = "0",
   ariaLabel = "Amount in taka",
-  enterKeyHint = "next",
+  enterKeyHint = "done",
   onEnter,
   hasError = false,
   errorMessage = "",
@@ -719,13 +764,16 @@ function HeroAmountField({
           </span>
           <input
             ref={inputRef}
+            className="amt-hero-input"
+            type="text"
             inputMode="decimal"
-            enterKeyHint={enterKeyHint}
+            enterKeyHint={enterKeyHint || "done"}
             aria-label={ariaLabel}
             aria-invalid={hasError ? "true" : undefined}
             placeholder={placeholder}
             value={raw}
             style={{ width: `${inputWidthCh}ch` }}
+            onBlur={onBlur}
             onChange={(e) => {
               let next = e.target.value
                 .replace(/,/g, ".")
@@ -895,6 +943,11 @@ function ExpenseRow({
             : onDelete);
       if (!commit) return;
 
+      // Lock row click handlers across the list so iOS tap-delete never triggers
+      // Edit expense on the next row shifting up underneath the active touch
+      lockRowClicksAfterDelete(700);
+      suppressClickRef.current = true;
+
       if (dragFrameRef.current) {
         cancelAnimationFrame(dragFrameRef.current);
         dragFrameRef.current = null;
@@ -919,6 +972,7 @@ function ExpenseRow({
         // Phase 3: Commit state deletion cleanly after height animation finishes
         clearTimeout(collapseTimerRef.current);
         collapseTimerRef.current = setTimeout(() => {
+          lockRowClicksAfterDelete(320);
           commit(e.id);
         }, 220);
       }, 190);
@@ -960,6 +1014,21 @@ function ExpenseRow({
     if (!canDelete && !canSwipeRight) return;
     if (event.button != null && event.button !== 0) return;
     if (["deleting", "collapsing"].includes(swipeRef.current.phase)) return;
+    const initialOffset = swipeRef.current.offset;
+    // Dynamic Android 32px right-edge deadzone: prevent left-swipe row gesture from fighting Android system Back swipe
+    // (On iOS, system Back only swipes from the left edge, so right-edge row swipes remain unrestricted)
+    const viewportWidth =
+      typeof window !== "undefined"
+        ? window.innerWidth || document.documentElement.clientWidth || 360
+        : 360;
+    if (
+      initialOffset === 0 &&
+      isAndroidPlatform() &&
+      typeof event.clientX === "number" &&
+      event.clientX >= viewportWidth - ANDROID_RIGHT_EDGE_DEADZONE_PX
+    ) {
+      return;
+    }
     clearHoldTimer();
     clearTimeout(swipeTimerRef.current);
     clearTimeout(collapseTimerRef.current);
@@ -971,8 +1040,6 @@ function ExpenseRow({
     if (rowRef.current) {
       rowRef.current.style.transition = "none";
     }
-
-    const initialOffset = swipeRef.current.offset;
     const width = rowRef.current?.offsetWidth || 320;
 
     pointerRef.current = {
@@ -1283,13 +1350,23 @@ function ExpenseRow({
           }
         }
       }}
-      onClick={() => {
+      onClick={(event) => {
+        if (isRowClickLocked()) {
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
         if (suppressClickRef.current) {
           suppressClickRef.current = false;
           clearTimeout(suppressClickTimerRef.current);
           return;
         }
-        if (swipeRef.current.phase === "revealed") {
+        if (
+          swipeRef.current.phase === "revealed" ||
+          swipeRef.current.phase === "deleting" ||
+          swipeRef.current.phase === "collapsing" ||
+          swipeRef.current.offset !== 0
+        ) {
           springRowClosed();
           return;
         }
@@ -1419,8 +1496,18 @@ function ExpenseRow({
           aria-label={
             e.rec ? `Skip ${title} for this occurrence` : `Delete ${title}`
           }
-          onClick={(event) => {
+          onPointerDown={(event) => {
             event.stopPropagation();
+            lockRowClicksAfterDelete(450);
+          }}
+          onTouchStart={(event) => {
+            event.stopPropagation();
+            lockRowClicksAfterDelete(450);
+          }}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            lockRowClicksAfterDelete(700);
             event.currentTarget.blur();
             executeDeleteAnimation();
           }}
@@ -1514,8 +1601,10 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
         }
       };
 
-      // Defer slightly so the sheet slide-up animation begins smoothly without sudden viewport jumping
-      const timer = setTimeout(focusTarget, 60);
+      // Dynamically delay auto-focus (300ms on Android IME, 280ms on iOS/Web) until the sheet
+      // entrance transition finishes so keyboard resize never janks or clips the sticky Save footer
+      const focusDelayMs = isAndroidPlatform() ? 300 : 280;
+      const timer = setTimeout(focusTarget, focusDelayMs);
       return () => clearTimeout(timer);
     }
   }, []);
@@ -1958,32 +2047,46 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
 /* ───────────── amount masking & reveal components ───────────── */
 const AUTO_HIDE_MS = 7000;
 
-function useReveal(autoHideMs = AUTO_HIDE_MS) {
-  const [shown, setShown] = useState(false);
-  const timer = useRef(null);
+// Persist privacy mask boolean outside scroll-dependent component state
+let persistedBalanceShown = false;
+const balanceShownSubscribers = new Set();
+function setPersistedBalanceShown(nextValue) {
+  const resolved =
+    typeof nextValue === "function"
+      ? Boolean(nextValue(persistedBalanceShown))
+      : Boolean(nextValue);
+  if (persistedBalanceShown === resolved) return;
+  persistedBalanceShown = resolved;
+  balanceShownSubscribers.forEach((listener) => {
+    try {
+      listener(persistedBalanceShown);
+    } catch {}
+  });
+}
 
-  const set = useCallback(
-    (next) => {
-      setShown(next);
-      clearTimeout(timer.current);
-      if (next && autoHideMs) {
-        timer.current = setTimeout(() => setShown(false), autoHideMs);
-      }
-      triggerHaptic("selection");
-    },
-    [autoHideMs],
-  );
+function useReveal() {
+  const [shown, setShown] = useState(() => persistedBalanceShown);
 
   useEffect(() => {
-    const onVis = () => document.hidden && setShown(false);
+    const sync = (val) => setShown(val);
+    balanceShownSubscribers.add(sync);
+    const onVis = () => {
+      if (document.hidden) {
+        setPersistedBalanceShown(false);
+      }
+    };
     document.addEventListener("visibilitychange", onVis);
     return () => {
+      balanceShownSubscribers.delete(sync);
       document.removeEventListener("visibilitychange", onVis);
-      clearTimeout(timer.current);
     };
   }, []);
 
-  const toggle = useCallback(() => set(!shown), [set, shown]);
+  const toggle = useCallback(() => {
+    setPersistedBalanceShown((prev) => !prev);
+    triggerHaptic("selection");
+  }, []);
+
   return { shown, toggle };
 }
 
@@ -2389,7 +2492,7 @@ function Home({
 }) {
   const [currentTime, setCurrentTime] = useState(() => new Date());
   const [highlightedCategory, setHighlightedCategory] = useState("");
-  const { shown, toggle } = useReveal(7000);
+  const { shown, toggle } = useReveal();
   const todayStr = ld();
   const currentMonthKey = todayStr.slice(0, 7);
   const currentDay = Number(todayStr.split("-")[2]) || 1;
@@ -2772,7 +2875,7 @@ function Home({
 
       <div className="sec">
         <h2>Recent</h2>
-        <button onClick={() => onTab("activity")}>See all</button>
+        <button type="button" className="see-all-btn" onClick={() => onTab("activity")}>See all</button>
       </div>
       <div
         className="card expense-day-card"
@@ -3260,6 +3363,7 @@ function Activity({
             <Icon n="s" />
             <input
               ref={searchRef}
+              className="activity-search-input"
               type="search"
               aria-label="Search transactions"
               placeholder="Search transactions"
@@ -4047,7 +4151,7 @@ function Accounts({
           {filteredEvents.length > 8 && (
             <button
               type="button"
-              className="accounts-see-all-link"
+              className="accounts-see-all-link see-all-btn"
               onClick={() => {
                 triggerHaptic("selection");
                 setShowAllTx((prev) => !prev);
@@ -4369,6 +4473,20 @@ function RecurringRow({
 
   const startGesture = (event) => {
     if (event.button != null && event.button !== 0) return;
+    const initialOffset = swipeRef.current.offset;
+    // Dynamic Android 32px right-edge deadzone: prevent left-swipe row gesture from fighting Android system Back swipe
+    const viewportWidth =
+      typeof window !== "undefined"
+        ? window.innerWidth || document.documentElement.clientWidth || 360
+        : 360;
+    if (
+      initialOffset === 0 &&
+      isAndroidPlatform() &&
+      typeof event.clientX === "number" &&
+      event.clientX >= viewportWidth - ANDROID_RIGHT_EDGE_DEADZONE_PX
+    ) {
+      return;
+    }
     if (dragFrameRef.current) {
       cancelAnimationFrame(dragFrameRef.current);
       dragFrameRef.current = null;
@@ -4377,8 +4495,6 @@ function RecurringRow({
     if (rowRef.current) {
       rowRef.current.style.transition = "none";
     }
-
-    const initialOffset = swipeRef.current.offset;
     const width = rowRef.current?.offsetWidth || 320;
 
     pointerRef.current = {
@@ -4573,7 +4689,12 @@ function RecurringRow({
     }
   };
 
-  const handleRowClick = () => {
+  const handleRowClick = (event) => {
+    if (isRowClickLocked()) {
+      event?.preventDefault?.();
+      event?.stopPropagation?.();
+      return;
+    }
     if (suppressClickRef.current) {
       suppressClickRef.current = false;
       clearTimeout(suppressClickTimerRef.current);
@@ -5330,6 +5451,8 @@ function AddSheet({
     iv: iv || "none",
   });
   const [amtError, setAmtError] = useState("");
+  const [amtTouched, setAmtTouched] = useState(false);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
   const prevNonSavingsAcctRef = useRef(resolvedInitialAcct);
   const amtInputRef = useRef(null);
   const descInputRef = useRef(null);
@@ -5338,6 +5461,7 @@ function AddSheet({
   const categorySuggestion = suggestedCategory(f.desc, expenses);
 
   const handleSave = () => {
+    setSubmitAttempted(true);
     const resolvedCat = f.cat || categorySuggestion || "Other";
     const rawAmtStr = String(f.amt ?? "").trim();
     const parsedAmt = parseAmount(f.amt);
@@ -5358,8 +5482,8 @@ function AddSheet({
     ) {
       setAmtError(
         resolvedCat === "Savings"
-          ? "Enter an amount greater than ৳0 to record a savings transfer."
-          : "Enter an amount greater than ৳0 for a recurring item.",
+          ? "Recurring savings need an amount."
+          : "Recurring expenses need an amount.",
       );
       triggerHaptic("warning");
       amtInputRef.current?.focus({ preventScroll: true });
@@ -5428,28 +5552,46 @@ function AddSheet({
       <HeroAmountField
         value={f.amt}
         onChange={(val) => {
+          setAmtTouched(true);
           set("amt", val);
           if (amtError) setAmtError("");
         }}
+        onBlur={() => setAmtTouched(true)}
         inputRef={amtInputRef}
         placeholder="0"
-        enterKeyHint="next"
+        enterKeyHint="done"
         ariaLabel={
           f.cat === "Savings" ? "Savings transfer amount" : "Expense amount"
         }
-        hasError={Boolean(amtError)}
-        errorMessage={amtError}
+        hasError={
+          Boolean(amtError) ||
+          ((amtTouched || submitAttempted) &&
+            f.iv !== "none" &&
+            !parseAmount(f.amt))
+        }
+        errorMessage={
+          amtError ||
+          ((amtTouched || submitAttempted) &&
+          f.iv !== "none" &&
+          !parseAmount(f.amt)
+            ? f.cat === "Savings"
+              ? "Recurring savings need an amount."
+              : "Recurring expenses need an amount."
+            : "")
+        }
         onEnter={() => descInputRef.current?.focus()}
       />
-      <p className="hint">
-        {f.cat === "Savings" && f.iv === "none"
-          ? "Enter an amount to record a savings transfer."
-          : f.iv === "none"
-            ? "Leave the amount blank to fill it in later."
-            : f.cat === "Savings"
-              ? "Recurring savings need an amount."
-              : "Recurring expenses need an amount."}
-      </p>
+      {(f.iv === "none" || ((amtTouched || submitAttempted) && !amtError && !parseAmount(f.amt))) && (
+        <p className="hint">
+          {f.cat === "Savings" && f.iv === "none"
+            ? "Enter an amount to record a savings transfer."
+            : f.iv === "none"
+              ? "Leave the amount blank to fill it in later."
+              : f.cat === "Savings"
+                ? "Recurring savings need an amount."
+                : "Recurring expenses need an amount."}
+        </p>
+      )}
 
       <span className="lbl">What was it for?</span>
       <input
@@ -5916,6 +6058,8 @@ function TxSheet({
     }));
   };
 
+  const isTransferDisabledForCardCount = tr && accountOptions.length < 2;
+
   return (
     <Sheet
       onClose={onClose}
@@ -5923,7 +6067,13 @@ function TxSheet({
         <button
           type="button"
           className="btn"
-          aria-disabled={!canSave}
+          disabled={isTransferDisabledForCardCount}
+          aria-disabled={!canSave || isTransferDisabledForCardCount}
+          style={
+            isTransferDisabledForCardCount || !canSave
+              ? { opacity: 0.45, pointerEvents: isTransferDisabledForCardCount ? "none" : undefined }
+              : undefined
+          }
           onClick={handleSaveTx}
         >
           Save
@@ -6002,7 +6152,7 @@ function TxSheet({
         }}
         inputRef={amtInputRef}
         placeholder="0"
-        enterKeyHint="next"
+        enterKeyHint="done"
         ariaLabel={`${g.type === "adjust" ? "Adjustment" : g.type === "transfer" ? "Transfer" : "Income"} amount in taka`}
         hasError={Boolean(amtError)}
         errorMessage={amtError}
@@ -6308,6 +6458,9 @@ function AccountTxDetailSheet({
     }));
   };
 
+  const isTransferDisabledForCardCount =
+    tr && (allTransferOptions.length < 2 || allToOptions.length < 1);
+
   return (
     <Sheet
       onClose={onClose}
@@ -6317,7 +6470,13 @@ function AccountTxDetailSheet({
           <button
             type="button"
             className="btn"
-            aria-disabled={!canSave}
+            disabled={isTransferDisabledForCardCount}
+            aria-disabled={!canSave || isTransferDisabledForCardCount}
+            style={
+              isTransferDisabledForCardCount || !canSave
+                ? { opacity: 0.45, pointerEvents: isTransferDisabledForCardCount ? "none" : undefined }
+                : undefined
+            }
             onClick={handleSaveAccountTx}
           >
             Save changes
@@ -6390,7 +6549,7 @@ function AccountTxDetailSheet({
         }}
         inputRef={amtInputRef}
         placeholder="0"
-        enterKeyHint="next"
+        enterKeyHint="done"
         ariaLabel="Transaction amount in taka"
         hasError={Boolean(amtError)}
         errorMessage={amtError}
@@ -6708,7 +6867,7 @@ function DetailSheet({
         }}
         inputRef={amtInputRef}
         placeholder="0"
-        enterKeyHint="next"
+        enterKeyHint="done"
         ariaLabel="Expense amount in taka"
         hasError={Boolean(amtError)}
         errorMessage={amtError}
@@ -6994,7 +7153,7 @@ function RecurringDetailSheet({
         }}
         inputRef={amtInputRef}
         placeholder="0"
-        enterKeyHint="next"
+        enterKeyHint="done"
         ariaLabel="Recurring amount in taka"
         hasError={Boolean(amtError)}
         errorMessage={amtError}
@@ -7835,6 +7994,7 @@ function AddCardSheet({
             <input
               type="text"
               className="add-card-search-input"
+              aria-label="Search by bank, card, or wallet"
               placeholder="Search by bank, card, or wallet..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -8145,9 +8305,11 @@ function AddCardSheet({
               <div className="add-card-balance-input-wrap">
                 <span className="add-card-curr-prefix">৳</span>
                 <input
+                  type="text"
                   className="add-card-native-input add-card-balance-input"
                   inputMode="decimal"
                   enterKeyHint="done"
+                  aria-label="Starting balance"
                   placeholder="0.00"
                   value={formData.initialBalance}
                   onChange={(e) => {
@@ -9256,8 +9418,11 @@ function CardOptionsSheet({
               <div className="add-card-balance-input-wrap">
                 <span className="add-card-curr-prefix">৳</span>
                 <input
+                  type="text"
                   className="add-card-native-input add-card-balance-input"
                   inputMode="decimal"
+                  enterKeyHint="done"
+                  aria-label="Opening balance"
                   placeholder="0.00"
                   value={formData.initialBalance}
                   onChange={(e) => {
@@ -9484,6 +9649,7 @@ function ProfileSettingsPage({
         ref={fileInputRef}
         type="file"
         accept="image/*"
+        aria-label="Upload profile photo"
         hidden
         onChange={handleFileChange}
       />
@@ -11677,10 +11843,42 @@ export default function MobilePrototype({
   const sheetCloseTimer = useRef();
   const highlightTimer = useRef();
   const mobileRootRef = useRef(null);
+  const dockRef = useRef(null);
   const sheetTriggerCandidateRef = useRef(null);
   const sheetReturnFocusRef = useRef(null);
   const activitySearchRef = useRef(null);
   const baseViewportHeightRef = useRef(0);
+
+  // P0 #4: Cleanly reset fixed bottom dock GPU compositing & visibility after sheet/keyboard dismissal
+  const resetDockCompositing = useCallback(() => {
+    if (typeof window === "undefined") return;
+    window.requestAnimationFrame(() => {
+      const root = mobileRootRef.current;
+      if (root && !document.querySelector('[role="dialog"][aria-modal="true"]')) {
+        root.removeAttribute("data-sheet-open");
+        root.removeAttribute("data-sheet-closing");
+        root.style.removeProperty("--sheet-drag-progress");
+      }
+      const dock = dockRef.current || document.querySelector(".mobile-prototype .dock");
+      if (!dock) return;
+      dock.style.transform = "";
+      dock.style.visibility = "";
+      dock.style.opacity = "";
+      const tabsEl = dock.querySelector(".dock__tabs");
+      const fabEl = dock.querySelector(".dock__fab");
+      if (tabsEl) {
+        tabsEl.style.transform = "";
+        tabsEl.style.visibility = "";
+        tabsEl.style.opacity = "";
+      }
+      if (fabEl) {
+        fabEl.style.transform = "";
+        fabEl.style.visibility = "";
+        fabEl.style.opacity = "";
+      }
+    });
+  }, []);
+
   const categoryOrder = useMemo(() => {
     const categoryCounts = new Map();
     for (const expense of S.exp) {
@@ -11731,13 +11929,56 @@ export default function MobilePrototype({
     return systemDark ? "dark" : "light";
   }, [S?.theme, S?.themeMode, systemDark]);
 
+  const [platform, setPlatform] = useState(() => detectMobilePlatform());
+
   useLayoutEffect(() => {
-    document.documentElement.dataset.theme = resolvedTheme;
+    const rootEl = document.documentElement;
+    rootEl.dataset.theme = resolvedTheme;
+    rootEl.setAttribute("data-theme", resolvedTheme);
+    rootEl.style.colorScheme = resolvedTheme;
     const themeColor = resolvedTheme === "dark" ? "#08080c" : "#f4f3ee";
+    rootEl.style.backgroundColor = themeColor;
     document
       .querySelectorAll('meta[name="theme-color"]')
       .forEach((meta) => meta.setAttribute("content", themeColor));
-  }, [resolvedTheme]);
+    try {
+      const modeToSave = S?.themeMode || S?.theme || resolvedTheme;
+      localStorage.setItem("spend-theme-v1", modeToSave);
+    } catch {}
+  }, [resolvedTheme, S?.theme, S?.themeMode]);
+
+  // Dynamically sync iOS / Android platform attribute & ensure viewport meta allows accessibility zoom
+  useLayoutEffect(() => {
+    if (typeof document === "undefined") return undefined;
+    // Clean up any legacy inline style tag now that rules live in MobilePrototype.css
+    document.getElementById("spend-cross-platform-native-fixes")?.remove();
+
+    const syncPlatform = () => {
+      const detected = detectMobilePlatform();
+      setPlatform(detected);
+      document.documentElement.dataset.platform = detected;
+      document.documentElement.setAttribute("data-platform", detected);
+    };
+    syncPlatform();
+
+    const viewportMeta = document.querySelector('meta[name="viewport"]');
+    if (viewportMeta) {
+      const content = viewportMeta.getAttribute("content") || "";
+      if (/user-scalable\s*=\s*no/i.test(content) || /maximum-scale\s*=\s*1(\.0)?/i.test(content)) {
+        viewportMeta.setAttribute(
+          "content",
+          "width=device-width, initial-scale=1.0, viewport-fit=cover",
+        );
+      }
+    }
+
+    window.addEventListener("resize", syncPlatform, { passive: true });
+    window.addEventListener("orientationchange", syncPlatform, { passive: true });
+    return () => {
+      window.removeEventListener("resize", syncPlatform);
+      window.removeEventListener("orientationchange", syncPlatform);
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -11914,6 +12155,7 @@ export default function MobilePrototype({
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
     }
+    setKeyboardOpen(false);
 
     if (exit?.kind === "drag") {
       const returnFocus = sheetReturnFocusRef.current;
@@ -11924,6 +12166,7 @@ export default function MobilePrototype({
       setSheetExitFromTransform("translate3d(0, 0, 0)");
       setSheetExitFromOpacity("1");
       sheetCloseTimer.current = null;
+      resetDockCompositing();
       afterClose?.();
       if (returnFocus) {
         window.requestAnimationFrame(() => {
@@ -11955,6 +12198,7 @@ export default function MobilePrototype({
       setSheetExitFromTransform("translate3d(0, 0, 0)");
       setSheetExitFromOpacity("1");
       sheetCloseTimer.current = null;
+      resetDockCompositing();
       afterClose?.();
       if (returnFocus) {
         window.requestAnimationFrame(() => {
@@ -11968,6 +12212,12 @@ export default function MobilePrototype({
       }
     }, exitDuration);
   };
+
+  useEffect(() => {
+    if (!sheet && !sheetClosing) {
+      resetDockCompositing();
+    }
+  }, [sheet, sheetClosing, keyboardOpen, resetDockCompositing]);
   const captureSheetTrigger = (event) => {
     const target = event.target instanceof Element ? event.target : null;
     const button = target?.closest('button, [role="button"]');
@@ -12428,6 +12678,118 @@ export default function MobilePrototype({
   const signIn = () => onSignIn?.();
 
   const settingsRoute = appSettingsOpen || profileSettingsOpen;
+
+  // P0 #1: Android Hardware Back & Chrome/PWA Edge-Swipe Back Navigation
+  // Priority: Confirm modals -> Active sheets -> Settings sub-routes -> Non-Home tabs -> Exit at root
+  const backNavStateRef = useRef(null);
+  const historyGuardArmedRef = useRef(false);
+  backNavStateRef.current = {
+    sheet,
+    sheetClosing,
+    confirmDeleteExpense,
+    resetPinConfirmOpen,
+    profileSettingsOpen,
+    appSettingsOpen,
+    tab,
+    close,
+    nav,
+  };
+
+  const isNonRootLayer =
+    Boolean(sheet) ||
+    Boolean(confirmDeleteExpense) ||
+    Boolean(resetPinConfirmOpen) ||
+    Boolean(profileSettingsOpen) ||
+    Boolean(appSettingsOpen) ||
+    tab !== "home";
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.history?.pushState) return;
+    if (isNonRootLayer && !historyGuardArmedRef.current) {
+      try {
+        window.history.pushState({ __spendBackGuard: true }, "", window.location.href);
+        historyGuardArmedRef.current = true;
+      } catch {}
+    }
+  }, [isNonRootLayer, sheet?.type, profileSettingsOpen, appSettingsOpen, tab]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const handleBackStep = () => {
+      const st = backNavStateRef.current;
+      if (!st) return false;
+      if (st.confirmDeleteExpense) {
+        setConfirmDeleteExpense(null);
+        return true;
+      }
+      if (st.resetPinConfirmOpen) {
+        setResetPinConfirmOpen(false);
+        return true;
+      }
+      if (st.sheet && !st.sheetClosing) {
+        st.close();
+        return true;
+      }
+      if (st.profileSettingsOpen || st.appSettingsOpen) {
+        setSlideDirection("backward");
+        setProfileSettingsOpen(false);
+        setAppSettingsOpen(false);
+        setAnimateScreen(true);
+        return true;
+      }
+      if (st.tab !== "home") {
+        st.nav("home");
+        return true;
+      }
+      return false;
+    };
+
+    const onPopState = () => {
+      historyGuardArmedRef.current = false;
+      const handled = handleBackStep();
+      if (handled) {
+        window.setTimeout(() => {
+          const next = backNavStateRef.current;
+          const stillDeep =
+            Boolean(next?.sheet) ||
+            Boolean(next?.confirmDeleteExpense) ||
+            Boolean(next?.resetPinConfirmOpen) ||
+            Boolean(next?.profileSettingsOpen) ||
+            Boolean(next?.appSettingsOpen) ||
+            (next?.tab && next.tab !== "home");
+          if (stillDeep && !historyGuardArmedRef.current) {
+            try {
+              window.history.pushState({ __spendBackGuard: true }, "", window.location.href);
+              historyGuardArmedRef.current = true;
+            } catch {}
+          }
+        }, 40);
+      }
+    };
+
+    window.addEventListener("popstate", onPopState);
+
+    let capBackListener = null;
+    if (window.Capacitor?.Plugins?.App?.addListener) {
+      try {
+        capBackListener = window.Capacitor.Plugins.App.addListener(
+          "backButton",
+          () => {
+            const handled = handleBackStep();
+            if (!handled) {
+              window.Capacitor?.Plugins?.App?.exitApp?.();
+            }
+          },
+        );
+      } catch {}
+    }
+
+    return () => {
+      window.removeEventListener("popstate", onPopState);
+      capBackListener?.then?.((h) => h?.remove?.())?.catch?.(() => {});
+    };
+  }, []);
   const activeMonthLabel = fM(S.m);
   const screenKey = profileSettingsOpen
     ? "profile-settings"
@@ -12507,6 +12869,7 @@ export default function MobilePrototype({
         }}
         className="mobile-prototype is-locked-screen"
         data-theme={resolvedTheme}
+        data-platform={platform}
       >
         <Suspense fallback={null}>
           <SpendLogin
@@ -12539,6 +12902,7 @@ export default function MobilePrototype({
       className={`mobile-prototype ${resolvedTheme === "dark" ? "dark" : ""}`}
       onClickCapture={captureSheetTrigger}
       data-theme={resolvedTheme}
+      data-platform={platform}
       data-sheet-open={sheet ? "true" : undefined}
       data-sheet-closing={sheetClosing ? "true" : undefined}
       style={{
@@ -12883,6 +13247,7 @@ export default function MobilePrototype({
       </div>
 
       <nav
+        ref={dockRef}
         className="dock"
         aria-label="Main"
         data-keyboard-open={keyboardOpen ? "true" : undefined}
