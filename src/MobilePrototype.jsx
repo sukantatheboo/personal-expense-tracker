@@ -71,6 +71,7 @@ import {
 } from "./AccountsCardDeck.jsx";
 import {
   AnimatedRecurringIcon,
+  AnimatedBudgetIcon,
   AnimatedExpensesIcon,
   AnimatedTransactionsIcon,
   AnimatedActivityIcon,
@@ -445,9 +446,22 @@ const ld = (d = new Date()) =>
   "-" +
   String(d.getDate()).padStart(2, "0");
 const ago = (n) => ld(new Date(Date.now() - n * 864e5));
-const amountFormatter = new Intl.NumberFormat("en-IN", {
+const intAmountFormatter = new Intl.NumberFormat("en-IN", {
+  maximumFractionDigits: 0,
+});
+const decAmountFormatter = new Intl.NumberFormat("en-IN", {
+  minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
+const amountFormatter = {
+  format(val) {
+    const num = Number(val) || 0;
+    const hasFraction = Math.round(Math.abs(num) * 100) % 100 !== 0;
+    return hasFraction
+      ? decAmountFormatter.format(num)
+      : intAmountFormatter.format(num);
+  },
+};
 const M = (n) => "৳" + amountFormatter.format(Number(n) || 0);
 const money = M;
 const shift = (m, o) => {
@@ -675,6 +689,8 @@ function HeroAmountField({
   ariaLabel = "Amount in taka",
   enterKeyHint = "next",
   onEnter,
+  hasError = false,
+  errorMessage = "",
 }) {
   const raw = String(value ?? "");
   const displayStr = raw.length > 0 ? raw : String(placeholder || "0");
@@ -688,68 +704,81 @@ function HeroAmountField({
         : "";
 
   return (
-    <div
-      className={`amt amt-hero-redesigned ${raw ? "has-value" : "is-empty"} ${scaleClass}`}
-      onClick={(e) => {
-        if (e.target !== inputRef?.current) {
-          inputRef?.current?.focus({ preventScroll: true });
-        }
-      }}
-    >
-      <div className="amt-hero-inner">
-        <span className="amt-hero-currency" aria-hidden="true">
-          ৳
-        </span>
-        <input
-          ref={inputRef}
-          inputMode="decimal"
-          enterKeyHint={enterKeyHint}
-          aria-label={ariaLabel}
-          placeholder={placeholder}
-          value={raw}
-          style={{ width: `${inputWidthCh}ch` }}
-          onChange={(e) => {
-            let next = e.target.value
-              .replace(/,/g, ".")
-              .replace(/[^0-9.]/g, "");
-            if (next.startsWith(".")) {
-              next = "0" + next;
-            }
-            next = next.replace(/^0+(?=\d)/, "");
-            const firstDot = next.indexOf(".");
-            if (firstDot !== -1) {
-              next =
-                next.slice(0, firstDot + 1) +
-                next.slice(firstDot + 1).replace(/\./g, "").slice(0, 2);
-            }
-            onChange(next);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              onEnter?.(e);
-            }
-          }}
-        />
-        {raw.length > 0 && (
-          <button
-            type="button"
-            className="amt-hero-clear"
-            aria-label="Clear amount"
-            onClick={(e) => {
-              e.stopPropagation();
-              triggerHaptic("light");
-              onChange("");
-              inputRef?.current?.focus({ preventScroll: true });
+    <>
+      <div
+        className={`amt amt-hero-redesigned ${raw ? "has-value" : "is-empty"} ${scaleClass}${hasError ? " is-error" : ""}`}
+        onClick={(e) => {
+          if (e.target !== inputRef?.current) {
+            inputRef?.current?.focus({ preventScroll: true });
+          }
+        }}
+      >
+        <div className="amt-hero-inner">
+          <span className="amt-hero-currency" aria-hidden="true">
+            ৳
+          </span>
+          <input
+            ref={inputRef}
+            inputMode="decimal"
+            enterKeyHint={enterKeyHint}
+            aria-label={ariaLabel}
+            aria-invalid={hasError ? "true" : undefined}
+            placeholder={placeholder}
+            value={raw}
+            style={{ width: `${inputWidthCh}ch` }}
+            onChange={(e) => {
+              let next = e.target.value
+                .replace(/,/g, ".")
+                .replace(/[^0-9.]/g, "");
+              if (next.startsWith(".")) {
+                next = "0" + next;
+              }
+              next = next.replace(/^0+(?=\d)/, "");
+              const firstDot = next.indexOf(".");
+              if (firstDot !== -1) {
+                const intPart = next.slice(0, firstDot).slice(0, 9);
+                const decPart = next
+                  .slice(firstDot + 1)
+                  .replace(/\./g, "")
+                  .slice(0, 2);
+                next = `${intPart}.${decPart}`;
+              } else {
+                next = next.slice(0, 9);
+              }
+              onChange(next);
             }}
-          >
-            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-              <path d="m18 6-12 12M6 6l12 12" strokeWidth="2.5" />
-            </svg>
-          </button>
-        )}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                onEnter?.(e);
+              }
+            }}
+          />
+          {raw.length > 0 && (
+            <button
+              type="button"
+              className="amt-hero-clear"
+              aria-label="Clear amount"
+              onClick={(e) => {
+                e.stopPropagation();
+                triggerHaptic("light");
+                onChange("");
+                inputRef?.current?.focus({ preventScroll: true });
+              }}
+            >
+              <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                <path d="m18 6-12 12M6 6l12 12" strokeWidth="2.5" />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
-    </div>
+      {errorMessage ? (
+        <p className="field-error-msg" role="alert">
+          {errorMessage}
+        </p>
+      ) : null}
+    </>
   );
 }
 
@@ -1877,14 +1906,25 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
       >
         <div
           className="sheet-drag-zone"
-          aria-hidden="true"
           onPointerDown={onTopPointerDown}
           onDoubleClick={() => {
             triggerHaptic("selection");
             updateDetent(detent === "expanded" ? "default" : "expanded");
           }}
         >
-          <div className="grab" />
+          <div className="grab" aria-hidden="true" />
+          <button
+            type="button"
+            className="sheet-close-btn"
+            aria-label="Close"
+            onClick={(e) => {
+              e.stopPropagation();
+              triggerHaptic("light");
+              onClose();
+            }}
+          >
+            <Icon n="x" />
+          </button>
         </div>
         <div
           ref={scrollRef}
@@ -1916,7 +1956,7 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
 }
 
 /* ───────────── amount masking & reveal components ───────────── */
-const AUTO_HIDE_MS = 5000;
+const AUTO_HIDE_MS = 7000;
 
 function useReveal(autoHideMs = AUTO_HIDE_MS) {
   const [shown, setShown] = useState(false);
@@ -1957,10 +1997,11 @@ function Amount({ value, mask = 3, shown }) {
     ...chars.map((c) => ({ c, kind: /\d/.test(c) ? "digit" : "sep" })),
     ...Array.from({ length: extras }, () => ({ c: "", kind: "x" })),
   ];
+  const visibleCols = !shown && cols.length > 8 ? cols.slice(0, 8) : cols;
 
   return (
     <span className="mx-amt">
-      {cols.map(({ c, kind }, i) => (
+      {visibleCols.map(({ c, kind }, i) => (
         <span
           key={i}
           className={`mx-ch mx-${kind}`}
@@ -2282,7 +2323,17 @@ const WhereItWentCard = memo(
               onClick={() => select(-1)}
             >
               <span className="where-donut-label">Total</span>
-              <b className="where-donut-total">{M(total)}</b>
+              <b
+                className={`where-donut-total${
+                  M(total).length > 11
+                    ? " is-extra-compact"
+                    : M(total).length > 8
+                      ? " is-compact"
+                      : ""
+                }`}
+              >
+                {M(total)}
+              </b>
             </div>
           </div>
 
@@ -2338,7 +2389,7 @@ function Home({
 }) {
   const [currentTime, setCurrentTime] = useState(() => new Date());
   const [highlightedCategory, setHighlightedCategory] = useState("");
-  const { shown, toggle } = useReveal(5000);
+  const { shown, toggle } = useReveal(7000);
   const todayStr = ld();
   const currentMonthKey = todayStr.slice(0, 7);
   const currentDay = Number(todayStr.split("-")[2]) || 1;
@@ -2503,7 +2554,16 @@ function Home({
         </div>
 
         <div className="mx-hero">
-          <div className="big mx-hero-amt" onClick={toggle}>
+          <div
+            className={`big mx-hero-amt${
+              amountFormatter.format(Number(t) || 0).length > 12
+                ? " is-ultra-compact-hero"
+                : amountFormatter.format(Number(t) || 0).length > 9
+                  ? " is-compact-hero"
+                  : ""
+            }`}
+            onClick={toggle}
+          >
             <span className="mx-cur">৳</span>
             <Amount
               value={amountFormatter.format(Number(t) || 0)}
@@ -3145,8 +3205,9 @@ function Activity({
       .reduce((sum, item) => sum + (item.amt || 0), 0),
   );
 
-  const hasFilter =
-    feedType !== "all" || Boolean(quickFilter) || Boolean(cf) || Boolean(query);
+  const hasSearchOrChipFilter =
+    Boolean(quickFilter) || Boolean(cf) || Boolean(query);
+  const hasFilter = feedType !== "all" || hasSearchOrChipFilter;
 
   const clearAllFilters = () => {
     triggerHaptic("light");
@@ -3532,20 +3593,20 @@ function Activity({
               <AnimatedActivityIcon />
             </div>
             <b>
-              {hasFilter
+              {hasSearchOrChipFilter
                 ? `No matching ${feedType === "income" ? "income" : feedType === "transfers" ? "transfers" : feedType === "expenses" ? "expenses" : "activity"}`
-                : countAll === 0
+                : countAll === 0 && feedType === "all"
                   ? `No activity in ${fM(currentMonth)}`
-                  : `No ${feedType} in ${fM(currentMonth)}`}
+                  : `No ${feedType === "all" ? "activity" : feedType} recorded this month`}
             </b>
             <small>
-              {hasFilter
+              {hasSearchOrChipFilter
                 ? matchesInOtherMonths
                   ? `No matches in ${fM(currentMonth)}. Matching items found in other months — switch months above to view them.`
                   : "Try searching another keyword or clearing your filter."
                 : `${feedType === "income" ? "Income" : feedType === "transfers" ? "Transfers and adjustments" : feedType === "expenses" ? "Expenses" : "Activity"} for this month will show up here by date.`}
             </small>
-            {hasFilter && (
+            {hasSearchOrChipFilter && (
               <button
                 type="button"
                 className="emp-action-pill"
@@ -4756,12 +4817,8 @@ function RecurringPlansView({
           <span className="rec-screen-subtitle">Automated bills &amp; savings</span>
         </div>
         <section className="card rec-empty-card">
-          <div
-            className="ic rec-badge rec-empty-ic"
-            style={{ "--c": "#4f46e5" }}
-            aria-hidden="true"
-          >
-            ↻
+          <div className="emp-illustrated-icon" aria-hidden="true">
+            <AnimatedRecurringIcon />
           </div>
           <h2 className="rec-empty-title">No recurring plans yet</h2>
           <p className="rec-empty-sub">
@@ -5043,11 +5100,13 @@ function Plans({
                   <div className="plans-ring-val-row">
                     <strong
                       className={`plans-ring-amount${
-                        (overBudget ? fmt(t - b) : fmt(b - t)).length > 8
-                          ? " is-extra-compact"
-                          : (overBudget ? fmt(t - b) : fmt(b - t)).length > 6
-                            ? " is-compact"
-                            : ""
+                        (overBudget ? fmt(t - b) : fmt(b - t)).length > 11
+                          ? " is-ultra-compact"
+                          : (overBudget ? fmt(t - b) : fmt(b - t)).length > 8
+                            ? " is-extra-compact"
+                            : (overBudget ? fmt(t - b) : fmt(b - t)).length > 6
+                              ? " is-compact"
+                              : ""
                       }`}
                     >
                       {overBudget
@@ -5059,7 +5118,7 @@ function Plans({
                     </span>
                   </div>
                   <span className="plans-ring-sub">
-                    {Math.round(pctUsed)}% used
+                    {pctUsed > 999 ? ">999%" : `${Math.round(pctUsed)}%`} used
                   </span>
                 </div>
               </div>
@@ -5081,8 +5140,19 @@ function Plans({
             </>
           ) : (
             <div className="plans-no-budget">
-              <strong>No budget set for {monthLabel}</strong>
-              <span>Set a monthly spending limit to track your pace.</span>
+              <div className="emp-illustrated-icon" aria-hidden="true">
+                <AnimatedBudgetIcon />
+              </div>
+              <div className="plans-no-budget-copy">
+                <strong>No budget set for {monthLabel}</strong>
+                <span>Set a monthly spending limit to track your pace.</span>
+              </div>
+              {t > 0 && (
+                <div className="plans-no-budget-spent">
+                  <span>Spent so far</span>
+                  <b>{fmt(t)}</b>
+                </div>
+              )}
             </div>
           )}
         </section>
@@ -5212,6 +5282,7 @@ function AddSheet({
   onAccountChange,
   onSave,
   onClose,
+  onSwitchToTx,
 }) {
   const nonSavingsCards = cards.filter(
     (c) =>
@@ -5258,6 +5329,7 @@ function AddSheet({
         : resolvedInitialAcct,
     iv: iv || "none",
   });
+  const [amtError, setAmtError] = useState("");
   const prevNonSavingsAcctRef = useRef(resolvedInitialAcct);
   const amtInputRef = useRef(null);
   const descInputRef = useRef(null);
@@ -5267,6 +5339,34 @@ function AddSheet({
 
   const handleSave = () => {
     const resolvedCat = f.cat || categorySuggestion || "Other";
+    const rawAmtStr = String(f.amt ?? "").trim();
+    const parsedAmt = parseAmount(f.amt);
+
+    if (
+      rawAmtStr !== "" &&
+      (parsedAmt === null || !Number.isFinite(parsedAmt) || parsedAmt <= 0)
+    ) {
+      setAmtError("Enter an amount greater than ৳0, or leave blank.");
+      triggerHaptic("warning");
+      amtInputRef.current?.focus({ preventScroll: true });
+      return;
+    }
+
+    if (
+      (resolvedCat === "Savings" || f.iv !== "none") &&
+      (parsedAmt === null || !Number.isFinite(parsedAmt) || parsedAmt <= 0)
+    ) {
+      setAmtError(
+        resolvedCat === "Savings"
+          ? "Enter an amount greater than ৳0 to record a savings transfer."
+          : "Enter an amount greater than ৳0 for a recurring item.",
+      );
+      triggerHaptic("warning");
+      amtInputRef.current?.focus({ preventScroll: true });
+      return;
+    }
+
+    setAmtError("");
     onSave({ ...f, cat: resolvedCat });
   };
 
@@ -5298,15 +5398,47 @@ function AddSheet({
           ? "Savings transfer"
           : "New expense"}
       </h3>
+      {!iv && onSwitchToTx && (
+        <Seg
+          value="expense"
+          onPick={(mode) => {
+            if (mode === "income" || mode === "transfer") {
+              onSwitchToTx(mode, f.acct || primaryCard?.id || cards[0]?.id);
+            }
+          }}
+          options={[
+            ["expense", "Expense"],
+            [
+              "income",
+              <span className="seg-item-with-icon" key="income">
+                <TransactionSymbol type="income" />
+                <span>Income</span>
+              </span>,
+            ],
+            [
+              "transfer",
+              <span className="seg-item-with-icon" key="transfer">
+                <TransactionSymbol type="transfer" />
+                <span>Transfer</span>
+              </span>,
+            ],
+          ]}
+        />
+      )}
       <HeroAmountField
         value={f.amt}
-        onChange={(val) => set("amt", val)}
+        onChange={(val) => {
+          set("amt", val);
+          if (amtError) setAmtError("");
+        }}
         inputRef={amtInputRef}
         placeholder="0"
         enterKeyHint="next"
         ariaLabel={
           f.cat === "Savings" ? "Savings transfer amount" : "Expense amount"
         }
+        hasError={Boolean(amtError)}
+        errorMessage={amtError}
         onEnter={() => descInputRef.current?.focus()}
       />
       <p className="hint">
@@ -5708,6 +5840,7 @@ function TxSheet({
     fromAccount: defaultTransferFrom,
     toAccount: defaultTo,
   });
+  const [amtError, setAmtError] = useState("");
   const amtInputRef = useRef(null);
   const noteInputRef = useRef(null);
   const reasonSelectRef = useRef(null);
@@ -5733,6 +5866,43 @@ function TxSheet({
         g.fromAccount !== g.toAccount &&
         !fromCardIsFrozen));
 
+  const handleSaveTx = () => {
+    if (!hasValidAmt) {
+      setAmtError("Enter an amount greater than ৳0.");
+      triggerHaptic("warning");
+      amtInputRef.current?.focus({ preventScroll: true });
+      return;
+    }
+    if (accountOptions.length === 0) {
+      setAmtError("Add a card or wallet in Accounts first.");
+      triggerHaptic("warning");
+      return;
+    }
+    if (tr && accountOptions.length < 2) {
+      setAmtError("Add at least two cards or wallets to transfer.");
+      triggerHaptic("warning");
+      return;
+    }
+    if (tr && fromCardIsFrozen) {
+      setAmtError("Source card is locked. Choose an unlocked account.");
+      triggerHaptic("warning");
+      return;
+    }
+    if (tr && g.fromAccount === g.toAccount) {
+      setAmtError("Select two different accounts for a transfer.");
+      triggerHaptic("warning");
+      return;
+    }
+    if (!canSave) {
+      setAmtError("Enter a valid amount greater than ৳0.");
+      triggerHaptic("warning");
+      return;
+    }
+    setAmtError("");
+    triggerHaptic("selection");
+    onSave(g);
+  };
+
   const handleSwapTransferAccounts = () => {
     if (!canSwap) {
       triggerHaptic("warning");
@@ -5753,12 +5923,8 @@ function TxSheet({
         <button
           type="button"
           className="btn"
-          disabled={!canSave}
-          onClick={() => {
-            if (!canSave) return;
-            triggerHaptic("selection");
-            onSave(g);
-          }}
+          aria-disabled={!canSave}
+          onClick={handleSaveTx}
         >
           Save
         </button>
@@ -5768,6 +5934,7 @@ function TxSheet({
       <Seg
         value={g.type}
         onPick={(v) => {
+          setAmtError("");
           if (v === "transfer" && !hasUnfrozenCard) {
             const lockedCard =
               cards.find((c) => c.id === defaultAccount) || cards[0];
@@ -5829,11 +5996,16 @@ function TxSheet({
       />
       <HeroAmountField
         value={g.amt}
-        onChange={(val) => set("amt", val)}
+        onChange={(val) => {
+          set("amt", val);
+          if (amtError) setAmtError("");
+        }}
         inputRef={amtInputRef}
         placeholder="0"
         enterKeyHint="next"
         ariaLabel={`${g.type === "adjust" ? "Adjustment" : g.type === "transfer" ? "Transfer" : "Income"} amount in taka`}
+        hasError={Boolean(amtError)}
+        errorMessage={amtError}
         onEnter={() => {
           if (g.type === "adjust") {
             reasonSelectRef.current?.focus();
@@ -6050,6 +6222,7 @@ function AccountTxDetailSheet({
         ? tx.to
         : cards.find((c) => c.id !== fallbackFrom)?.id || "",
   });
+  const [amtError, setAmtError] = useState("");
   const amtInputRef = useRef(null);
   const noteInputRef = useRef(null);
   const reasonSelectRef = useRef(null);
@@ -6090,6 +6263,37 @@ function AccountTxDetailSheet({
         !fromCardIsFrozen
       : singleAccountOptions.length > 0 && Boolean(g.acct));
 
+  const handleSaveAccountTx = () => {
+    if (!hasValidAmt) {
+      setAmtError("Enter an amount greater than ৳0.");
+      triggerHaptic("warning");
+      amtInputRef.current?.focus({ preventScroll: true });
+      return;
+    }
+    if (tr && fromCardIsFrozen) {
+      setAmtError("Source card is locked. Choose an unlocked account.");
+      triggerHaptic("warning");
+      return;
+    }
+    if (tr && (!normFrom || !normTo || normFrom === normTo)) {
+      setAmtError("Select two different accounts for a transfer.");
+      triggerHaptic("warning");
+      return;
+    }
+    if (!canSave) {
+      setAmtError("Select a valid account and amount greater than ৳0.");
+      triggerHaptic("warning");
+      return;
+    }
+    setAmtError("");
+    triggerHaptic("selection");
+    onSave(tx.id, {
+      ...g,
+      fromAccount: tr ? normFrom : g.fromAccount,
+      toAccount: tr ? normTo : g.toAccount,
+    });
+  };
+
   const handleSwapTransferAccounts = () => {
     if (!canSwap) {
       triggerHaptic("warning");
@@ -6113,16 +6317,8 @@ function AccountTxDetailSheet({
           <button
             type="button"
             className="btn"
-            disabled={!canSave}
-            onClick={() => {
-              if (!canSave) return;
-              triggerHaptic("selection");
-              onSave(tx.id, {
-                ...g,
-                fromAccount: tr ? normFrom : g.fromAccount,
-                toAccount: tr ? normTo : g.toAccount,
-              });
-            }}
+            aria-disabled={!canSave}
+            onClick={handleSaveAccountTx}
           >
             Save changes
           </button>
@@ -6140,6 +6336,7 @@ function AccountTxDetailSheet({
       <Seg
         value={g.type}
         onPick={(v) => {
+          setAmtError("");
           setG((current) => {
             const nextFrom =
               v === "transfer"
@@ -6187,11 +6384,16 @@ function AccountTxDetailSheet({
       />
       <HeroAmountField
         value={g.amt}
-        onChange={(val) => set("amt", val)}
+        onChange={(val) => {
+          set("amt", val);
+          if (amtError) setAmtError("");
+        }}
         inputRef={amtInputRef}
         placeholder="0"
         enterKeyHint="next"
         ariaLabel="Transaction amount in taka"
+        hasError={Boolean(amtError)}
+        errorMessage={amtError}
         onEnter={() => {
           if (g.type === "adjust") {
             reasonSelectRef.current?.focus();
@@ -6396,12 +6598,18 @@ function DetailSheet({
     date: e.date,
     acct: e.acct || "",
   });
+  const [amtError, setAmtError] = useState("");
+  const [descError, setDescError] = useState("");
   const amtInputRef = useRef(null);
   const descInputRef = useRef(null);
   const set = (key, value) => setF((current) => ({ ...current, [key]: value }));
+  const customDate = f.date !== ld() && f.date !== ago(1);
   const activeSuggestion =
     suggestedCategory(f.desc, expenses, e.id) || suggestion || "";
+  const rawAmtStr = String(f.amt ?? "").trim();
   const amtNum = parseAmount(f.amt);
+  const hasExplicitInvalidAmt =
+    rawAmtStr !== "" && (amtNum === null || !Number.isFinite(amtNum) || amtNum <= 0);
   const isSavings = f.cat === "Savings";
   const savingsId = getSavingsAccountId(cards);
   const hasSavingsAccount = Boolean(savingsId);
@@ -6419,6 +6627,7 @@ function DetailSheet({
   const canSave =
     Boolean(f.desc?.trim()) &&
     Boolean(f.date) &&
+    !hasExplicitInvalidAmt &&
     (amtNum === null || (Number.isFinite(amtNum) && amtNum > 0)) &&
     !selectedCard?.frozen &&
     !(isSavings && savingsCard?.frozen) &&
@@ -6426,6 +6635,46 @@ function DetailSheet({
       (amtNum !== null &&
         amtNum > 0 &&
         (!hasSavingsAccount || (Boolean(f.acct) && f.acct !== "cash"))));
+
+  const handleSaveDetail = () => {
+    if (hasExplicitInvalidAmt) {
+      setAmtError("Enter an amount greater than ৳0, or clear the field.");
+      triggerHaptic("warning");
+      amtInputRef.current?.focus({ preventScroll: true });
+      return;
+    }
+    if (isSavings && (amtNum === null || !Number.isFinite(amtNum) || amtNum <= 0)) {
+      setAmtError("Enter an amount greater than ৳0 for savings transfers.");
+      triggerHaptic("warning");
+      amtInputRef.current?.focus({ preventScroll: true });
+      return;
+    }
+    if (!f.desc?.trim()) {
+      setDescError("Enter a description for this expense.");
+      triggerHaptic("warning");
+      descInputRef.current?.focus({ preventScroll: true });
+      return;
+    }
+    if (selectedCard?.frozen || (isSavings && savingsCard?.frozen)) {
+      setAmtError("Selected card is locked. Choose an unlocked account.");
+      triggerHaptic("warning");
+      return;
+    }
+    if (isSavings && hasSavingsAccount && (!f.acct || f.acct === "cash")) {
+      setAmtError("Select a card or wallet to transfer savings from.");
+      triggerHaptic("warning");
+      return;
+    }
+    if (!canSave) {
+      triggerHaptic("warning");
+      return;
+    }
+    setAmtError("");
+    setDescError("");
+    triggerHaptic("selection");
+    onSave(e.id, f);
+  };
+
   return (
     <Sheet
       onClose={onClose}
@@ -6435,8 +6684,8 @@ function DetailSheet({
           <button
             type="button"
             className="btn"
-            disabled={!canSave}
-            onClick={() => canSave && onSave(e.id, f)}
+            aria-disabled={!canSave}
+            onClick={handleSaveDetail}
           >
             Save changes
           </button>
@@ -6453,30 +6702,43 @@ function DetailSheet({
       <h3 id="sheet-title">Edit expense</h3>
       <HeroAmountField
         value={f.amt}
-        onChange={(val) => set("amt", val)}
+        onChange={(val) => {
+          set("amt", val);
+          if (amtError) setAmtError("");
+        }}
         inputRef={amtInputRef}
         placeholder="0"
         enterKeyHint="next"
         ariaLabel="Expense amount in taka"
+        hasError={Boolean(amtError)}
+        errorMessage={amtError}
         onEnter={() => descInputRef.current?.focus()}
       />
       <span className="lbl">What was it for?</span>
       <input
         ref={descInputRef}
-        className="in"
+        className={`in${descError ? " is-error" : ""}`}
         maxLength={80}
         aria-label="Expense description"
         enterKeyHint="done"
         value={f.desc}
-        onChange={(event) => set("desc", event.target.value)}
+        onChange={(event) => {
+          set("desc", event.target.value);
+          if (descError) setDescError("");
+        }}
         onKeyDown={(event) => {
           if (event.key === "Enter") {
             event.preventDefault();
             event.currentTarget.blur();
-            if (canSave) onSave(e.id, f);
+            handleSaveDetail();
           }
         }}
       />
+      {descError ? (
+        <p className="field-error-msg" role="alert">
+          {descError}
+        </p>
+      ) : null}
       <div className="category-header-row">
         <span className="lbl">Category</span>
         {activeSuggestion && activeSuggestion !== f.cat && (
@@ -6539,19 +6801,55 @@ function DetailSheet({
         ))}
       </div>
       <span className="lbl">Date</span>
-      {e.rec && (
-        <p className="hint recurring-date-note">
-          This recurring expense stays on its scheduled date.
-        </p>
+      {e.rec ? (
+        <>
+          <p className="hint recurring-date-note">
+            This recurring expense stays on its scheduled date.
+          </p>
+          <input
+            className="in"
+            type="date"
+            aria-label="Expense date"
+            value={f.date}
+            disabled={true}
+            onChange={(event) => set("date", event.target.value)}
+          />
+        </>
+      ) : (
+        <div className="seg">
+          <button
+            type="button"
+            aria-pressed={f.date === ld()}
+            className={f.date === ld() ? "on" : ""}
+            onClick={() => {
+              triggerHaptic("selection");
+              set("date", ld());
+            }}
+          >
+            Today
+          </button>
+          <button
+            type="button"
+            aria-pressed={f.date === ago(1)}
+            className={f.date === ago(1) ? "on" : ""}
+            onClick={() => {
+              triggerHaptic("selection");
+              set("date", ago(1));
+            }}
+          >
+            Yesterday
+          </button>
+          <input
+            type="date"
+            className={customDate ? "on" : ""}
+            aria-label="Expense date"
+            value={f.date}
+            onChange={(event) => {
+              if (event.target.value) set("date", event.target.value);
+            }}
+          />
+        </div>
       )}
-      <input
-        className="in"
-        type="date"
-        aria-label="Expense date"
-        value={f.date}
-        disabled={e.rec}
-        onChange={(event) => set("date", event.target.value)}
-      />
       <span className="lbl">
         {isSavings && hasSavingsAccount ? "Transfer from" : "Paid from"}
       </span>
@@ -6608,6 +6906,8 @@ function RecurringDetailSheet({
     iv: r.iv || "monthly",
     on: Boolean(r.on),
   });
+  const [amtError, setAmtError] = useState("");
+  const [descError, setDescError] = useState("");
   const amtInputRef = useRef(null);
   const descInputRef = useRef(null);
   const set = (key, value) => setF((current) => ({ ...current, [key]: value }));
@@ -6636,6 +6936,29 @@ function RecurringDetailSheet({
     !(isSavings && savingsCard?.frozen) &&
     (!isSavings || !hasSavingsAccount || (Boolean(f.acct) && f.acct !== "cash"));
 
+  const handleSaveRecurring = () => {
+    if (!Number.isFinite(amtNum) || amtNum <= 0) {
+      setAmtError("Enter an amount greater than ৳0.");
+      triggerHaptic("warning");
+      amtInputRef.current?.focus({ preventScroll: true });
+      return;
+    }
+    if (!f.desc?.trim()) {
+      setDescError("Enter a name or description.");
+      triggerHaptic("warning");
+      descInputRef.current?.focus({ preventScroll: true });
+      return;
+    }
+    if (!canSave) {
+      triggerHaptic("warning");
+      return;
+    }
+    setAmtError("");
+    setDescError("");
+    triggerHaptic("selection");
+    onSave(r.id, f);
+  };
+
   return (
     <Sheet
       onClose={onClose}
@@ -6645,8 +6968,8 @@ function RecurringDetailSheet({
           <button
             type="button"
             className="btn"
-            disabled={!canSave}
-            onClick={() => canSave && onSave(r.id, f)}
+            aria-disabled={!canSave}
+            onClick={handleSaveRecurring}
           >
             Save changes
           </button>
@@ -6665,30 +6988,43 @@ function RecurringDetailSheet({
       </h3>
       <HeroAmountField
         value={f.amt}
-        onChange={(val) => set("amt", val)}
+        onChange={(val) => {
+          set("amt", val);
+          if (amtError) setAmtError("");
+        }}
         inputRef={amtInputRef}
         placeholder="0"
         enterKeyHint="next"
         ariaLabel="Recurring amount in taka"
+        hasError={Boolean(amtError)}
+        errorMessage={amtError}
         onEnter={() => descInputRef.current?.focus()}
       />
       <span className="lbl">What was it for?</span>
       <input
         ref={descInputRef}
-        className="in"
+        className={`in${descError ? " is-error" : ""}`}
         maxLength={80}
         aria-label="Recurring description"
         enterKeyHint="done"
         value={f.desc}
-        onChange={(event) => set("desc", event.target.value)}
+        onChange={(event) => {
+          set("desc", event.target.value);
+          if (descError) setDescError("");
+        }}
         onKeyDown={(event) => {
           if (event.key === "Enter") {
             event.preventDefault();
             event.currentTarget.blur();
-            if (canSave) onSave(r.id, f);
+            handleSaveRecurring();
           }
         }}
       />
+      {descError ? (
+        <p className="field-error-msg" role="alert">
+          {descError}
+        </p>
+      ) : null}
       <div className="category-header-row">
         <span className="lbl">Category</span>
         {activeSuggestion && activeSuggestion !== f.cat && (
@@ -6819,7 +7155,32 @@ function RecurringDetailSheet({
 function BudgetSheet({ S, onSave, onClear, onClose }) {
   const currentBudget = S?.bud?.[S.m] || "";
   const [v, setV] = useState(currentBudget);
+  const [amtError, setAmtError] = useState("");
   const amtInputRef = useRef(null);
+
+  const handleSaveBudget = () => {
+    const rawStr = String(v ?? "").trim();
+    if (!rawStr) {
+      if (currentBudget) {
+        onClear?.();
+        return;
+      }
+      setAmtError("Enter a monthly budget greater than ৳0.");
+      triggerHaptic("warning");
+      amtInputRef.current?.focus({ preventScroll: true });
+      return;
+    }
+    const num = parseAmount(v);
+    if (num === null || !Number.isFinite(num) || num <= 0) {
+      setAmtError("Enter a monthly budget greater than ৳0.");
+      triggerHaptic("warning");
+      amtInputRef.current?.focus({ preventScroll: true });
+      return;
+    }
+    setAmtError("");
+    onSave(num);
+  };
+
   return (
     <Sheet
       onClose={onClose}
@@ -6827,16 +7188,14 @@ function BudgetSheet({ S, onSave, onClear, onClose }) {
       actions={
         <>
           <button
+            type="button"
             className="btn"
-            onClick={() => {
-              const num = parseAmount(v);
-              onSave(num);
-            }}
+            onClick={handleSaveBudget}
           >
             Save budget
           </button>
           {currentBudget ? (
-            <button className="btn del" onClick={onClear}>
+            <button type="button" className="btn del" onClick={onClear}>
               Clear budget
             </button>
           ) : null}
@@ -6849,15 +7208,17 @@ function BudgetSheet({ S, onSave, onClear, onClose }) {
       </p>
       <HeroAmountField
         value={v}
-        onChange={(val) => setV(val)}
+        onChange={(val) => {
+          setV(val);
+          if (amtError) setAmtError("");
+        }}
         inputRef={amtInputRef}
         placeholder="20000"
         enterKeyHint="done"
         ariaLabel="Monthly budget amount in taka"
-        onEnter={() => {
-          const num = parseAmount(v);
-          onSave(num);
-        }}
+        hasError={Boolean(amtError)}
+        errorMessage={amtError}
+        onEnter={handleSaveBudget}
       />
     </Sheet>
   );
@@ -7532,7 +7893,7 @@ function AddCardSheet({
 
                     <div className="add-card-template-trailing">
                       <span className="add-card-currency-pill">
-                        {prov.currency || "USD"}
+                        {prov.currency || "BDT"}
                       </span>
                       <span
                         className="add-card-template-chevron"
@@ -7799,9 +8160,14 @@ function AddCardSheet({
                     next = next.replace(/^0+(?=\d)/, "");
                     const firstDot = next.indexOf(".");
                     if (firstDot !== -1) {
-                      next =
-                        next.slice(0, firstDot + 1) +
-                        next.slice(firstDot + 1).replace(/\./g, "").slice(0, 2);
+                      const intPart = next.slice(0, firstDot).slice(0, 9);
+                      const decPart = next
+                        .slice(firstDot + 1)
+                        .replace(/\./g, "")
+                        .slice(0, 2);
+                      next = `${intPart}.${decPart}`;
+                    } else {
+                      next = next.slice(0, 9);
                     }
                     handleFormChange("initialBalance", next);
                   }}
@@ -12721,6 +13087,9 @@ export default function MobilePrototype({
           onAccountChange={handlePreferredAccountChange}
           onSave={saveExpense}
           onClose={close}
+          onSwitchToTx={(txType, acct) =>
+            openSheet({ type: "tx", t: txType, acct: acct || undefined })
+          }
         />
       )}
       {sheet?.type === "tx" && (

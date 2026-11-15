@@ -959,6 +959,12 @@ export function loadAccountData(
         id,
         name: card.name || id,
         holderName: card.holderName || "Cardholder",
+        subtitle:
+          typeof card.subtitle === "string"
+            ? card.subtitle.replace(/\bUSD\b/g, "BDT")
+            : card.subtitle || "",
+        currency:
+          !card.currency || card.currency === "USD" ? "BDT" : card.currency,
         type: isSavings ? "savings" : card.type || "credit",
         network: isSavings ? "none" : card.network || "visa",
         ...(isSavings ? { category: "savings" } : {}),

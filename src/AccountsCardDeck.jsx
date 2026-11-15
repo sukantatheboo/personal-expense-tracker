@@ -233,11 +233,22 @@ export const QuickActionsRow = React.memo(function QuickActionsRow({
 export { renderProviderLogo, triggerHaptic };
 
 /* ───────────── Currency & Number Formatters ───────────── */
-export const formatMoney = (n) =>
-  "৳" +
-  new Intl.NumberFormat("en-IN", {
-    maximumFractionDigits: 2,
-  }).format(Number(n) || 0);
+const moneyFormatterInt = new Intl.NumberFormat("en-IN", {
+  maximumFractionDigits: 0,
+});
+const moneyFormatterDec = new Intl.NumberFormat("en-IN", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+export const formatMoney = (n) => {
+  const num = Number(n) || 0;
+  const absNum = Math.abs(num);
+  const hasFraction = Math.round(absNum * 100) % 100 !== 0;
+  const formatted = (hasFraction ? moneyFormatterDec : moneyFormatterInt).format(
+    absNum,
+  );
+  return `${num < 0 ? "-৳" : "৳"}${formatted}`;
+};
 
 export function formatCardNumber(
   raw = "",
@@ -345,11 +356,17 @@ export function WalletCard({
 
   const isLegacyProviderSubtitle =
     LEGACY_CARD_SUBTITLES.has(card.subtitle) ||
-    ((isGold || isVirtualMc) && card.subtitle === "Mastercard Credit · USD") ||
-    (isVirtualVisa && card.subtitle === "Visa Debit · USD");
+    ((isGold || isVirtualMc) &&
+      (card.subtitle === "Mastercard Credit · USD" ||
+        card.subtitle === "Mastercard Credit · BDT")) ||
+    (isVirtualVisa &&
+      (card.subtitle === "Visa Debit · USD" ||
+        card.subtitle === "Visa Debit · BDT"));
 
   const rawSubtitle =
-    card.subtitle && !isLegacyProviderSubtitle ? card.subtitle : "";
+    card.subtitle && !isLegacyProviderSubtitle
+      ? String(card.subtitle).replace(/\bUSD\b/g, "BDT")
+      : "";
   const cardSubtitle =
     rawSubtitle ||
     (isMfs
@@ -357,16 +374,16 @@ export function WalletCard({
       : isSavings
         ? "Personal Savings"
         : isGold
-          ? "Gold Credit · USD"
+          ? "Gold Credit · BDT"
           : isVirtualVisa
-            ? "Virtual Debit · USD"
+            ? "Virtual Debit · BDT"
             : isVirtualMc
-              ? "Virtual Credit · USD"
+              ? "Virtual Credit · BDT"
               : isCustom
                 ? "Signature Edition"
                 : card.type === "credit"
-                  ? "Platinum Credit"
-                  : "Debit Card");
+                  ? "Visa Credit · BDT"
+                  : "Debit Card · BDT");
 
   const rawSavingsStr = String(card.number || card.last4 || "").trim();
   const savingsRawDigits = rawSavingsStr.replace(/\D/g, "");
