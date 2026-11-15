@@ -15,6 +15,8 @@ const STATIC_PATHS = [
   "icons/icon-192.png",
   "icons/icon-512.png",
   "icons/icon-maskable-512.png",
+  "sounds/reminder.wav",
+  "sounds/welcome.wav",
 ];
 
 const scheduledTimers = new Map();

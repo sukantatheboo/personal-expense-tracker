@@ -60,18 +60,70 @@ export function getWeeklySpendSummary(expenses = [], now = new Date()) {
   };
 }
 
+let sharedAudioCtx = null;
+let audioUnlocked = false;
+let pendingBlockedTone = null;
+let pendingBlockedToneAt = 0;
+
+function getSharedAudioContext() {
+  if (typeof window === "undefined") return null;
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return null;
+  if (!sharedAudioCtx || sharedAudioCtx.state === "closed") {
+    sharedAudioCtx = new AudioContextClass();
+  }
+  return sharedAudioCtx;
+}
+
+function resolveSoundUrl(tone) {
+  const base = import.meta.env.BASE_URL || "./";
+  const fileName = tone === "welcome" ? "sounds/welcome.wav" : "sounds/reminder.wav";
+  if (typeof window !== "undefined") {
+    return new URL(`${base}${fileName}`, window.location.origin).href;
+  }
+  return `./${fileName}`;
+}
+
+function setupAudioUnlock() {
+  if (typeof window === "undefined" || audioUnlocked) return;
+  const unlock = () => {
+    audioUnlocked = true;
+    const ctx = getSharedAudioContext();
+    if (ctx && ctx.state === "suspended") {
+      ctx.resume().catch(() => {});
+    }
+    if (pendingBlockedTone && Date.now() - pendingBlockedToneAt < 15000) {
+      const toneToPlay = pendingBlockedTone;
+      pendingBlockedTone = null;
+      pendingBlockedToneAt = 0;
+      playNotificationAudioTone(toneToPlay);
+    }
+    window.removeEventListener("pointerdown", unlock, true);
+    window.removeEventListener("touchstart", unlock, true);
+    window.removeEventListener("keydown", unlock, true);
+  };
+  window.addEventListener("pointerdown", unlock, { capture: true, passive: true });
+  window.addEventListener("touchstart", unlock, { capture: true, passive: true });
+  window.addEventListener("keydown", unlock, { capture: true, passive: true });
+}
+
+if (typeof window !== "undefined") {
+  setupAudioUnlock();
+}
+
 /**
  * Web Audio API synthesizer fallback.
  */
-function synthesizeAudioTone(tone = "reminder") {
+async function synthesizeAudioTone(tone = "reminder") {
   try {
-    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContextClass) return;
-    const ctx = new AudioContextClass();
+    const ctx = getSharedAudioContext();
+    if (!ctx) return false;
     if (ctx.state === "suspended") {
-      ctx.resume().catch(() => {});
+      await ctx.resume();
     }
+    if (ctx.state !== "running") return false;
 
+    const now = ctx.currentTime;
     if (tone === "welcome") {
       const notes = [
         { freq: 523.25, start: 0, dur: 0.14, gainVal: 0.35 },
@@ -82,20 +134,14 @@ function synthesizeAudioTone(tone = "reminder") {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.type = "sine";
-        osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
-        gain.gain.setValueAtTime(0.001, ctx.currentTime + start);
-        gain.gain.exponentialRampToValueAtTime(
-          gainVal,
-          ctx.currentTime + start + 0.02,
-        );
-        gain.gain.exponentialRampToValueAtTime(
-          0.001,
-          ctx.currentTime + start + dur,
-        );
+        osc.frequency.setValueAtTime(freq, now + start);
+        gain.gain.setValueAtTime(0.001, now + start);
+        gain.gain.exponentialRampToValueAtTime(gainVal, now + start + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + start + dur);
         osc.connect(gain);
         gain.connect(ctx.destination);
-        osc.start(ctx.currentTime + start);
-        osc.stop(ctx.currentTime + start + dur);
+        osc.start(now + start);
+        osc.stop(now + start + dur);
       });
     } else {
       const notes = [
@@ -106,24 +152,19 @@ function synthesizeAudioTone(tone = "reminder") {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.type = "triangle";
-        osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
-        gain.gain.setValueAtTime(0.001, ctx.currentTime + start);
-        gain.gain.exponentialRampToValueAtTime(
-          gainVal,
-          ctx.currentTime + start + 0.02,
-        );
-        gain.gain.exponentialRampToValueAtTime(
-          0.001,
-          ctx.currentTime + start + dur,
-        );
+        osc.frequency.setValueAtTime(freq, now + start);
+        gain.gain.setValueAtTime(0.001, now + start);
+        gain.gain.exponentialRampToValueAtTime(gainVal, now + start + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + start + dur);
         osc.connect(gain);
         gain.connect(ctx.destination);
-        osc.start(ctx.currentTime + start);
-        osc.stop(ctx.currentTime + start + dur);
+        osc.start(now + start);
+        osc.stop(now + start + dur);
       });
     }
+    return true;
   } catch {
-    // Audio context unavailable or suppressed
+    return false;
   }
 }
 
@@ -144,19 +185,27 @@ export function playNotificationAudioTone(tone = "reminder") {
       .catch(() => {});
   }
 
-  const soundFile =
-    tone === "welcome" ? "./sounds/welcome.wav" : "./sounds/reminder.wav";
+  const soundUrl = resolveSoundUrl(tone);
   try {
-    const audio = new Audio(soundFile);
+    const audio = new Audio(soundUrl);
     audio.volume = 0.75;
     const playPromise = audio.play();
     if (playPromise !== undefined) {
-      playPromise.catch(() => {
-        synthesizeAudioTone(tone);
+      playPromise.catch(async () => {
+        const played = await synthesizeAudioTone(tone);
+        if (!played && !audioUnlocked) {
+          pendingBlockedTone = tone;
+          pendingBlockedToneAt = Date.now();
+        }
       });
     }
   } catch {
-    synthesizeAudioTone(tone);
+    void synthesizeAudioTone(tone).then((played) => {
+      if (!played && !audioUnlocked) {
+        pendingBlockedTone = tone;
+        pendingBlockedToneAt = Date.now();
+      }
+    });
   }
 }
 
@@ -321,10 +370,14 @@ export async function sendNativeBuiltinNotification({
       return false;
     }
 
+    const iconHref = new URL(
+      `${import.meta.env.BASE_URL || "./"}icons/icon-192.png`,
+      window.location.origin,
+    ).href;
     const options = {
       body,
-      icon: new URL("./icons/icon-192.png", window.location.origin).href,
-      badge: new URL("./icons/icon-192.png", window.location.origin).href,
+      icon: iconHref,
+      badge: iconHref,
       tag: tag || `spend-${notifId}`,
       renotify: true,
       vibrate: tone === "welcome" ? [120, 60, 120, 60, 240] : [200, 100, 200],

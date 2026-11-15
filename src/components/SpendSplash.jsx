@@ -93,10 +93,7 @@ function handoffStaticSplash(immediate = false) {
   return animTime;
 }
 
-const fUrlBase =
-  ((typeof document !== "undefined" &&
-    document.querySelector('link[rel="preconnect"]')?.href) ||
-    "") + "css2?family=";
+const fUrlBase = "https://fonts.googleapis.com/css2?family=";
 
 function ensureAppFontsLoaded(fUrl) {
   if (typeof document === "undefined" || !fUrl) return;
