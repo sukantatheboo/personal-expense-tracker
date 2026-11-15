@@ -2045,16 +2045,32 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
 }
 
 /* ───────────── amount masking & reveal components ───────────── */
-const AUTO_HIDE_MS = 7000;
+const AUTO_HIDE_MS = 6000;
 
 // Persist privacy mask boolean outside scroll-dependent component state
 let persistedBalanceShown = false;
+let autoHideTimer = null;
 const balanceShownSubscribers = new Set();
+
+function clearAutoHideTimer() {
+  if (autoHideTimer !== null) {
+    clearTimeout(autoHideTimer);
+    autoHideTimer = null;
+  }
+}
+
 function setPersistedBalanceShown(nextValue) {
   const resolved =
     typeof nextValue === "function"
       ? Boolean(nextValue(persistedBalanceShown))
       : Boolean(nextValue);
+  clearAutoHideTimer();
+  if (resolved) {
+    autoHideTimer = setTimeout(() => {
+      autoHideTimer = null;
+      setPersistedBalanceShown(false);
+    }, AUTO_HIDE_MS);
+  }
   if (persistedBalanceShown === resolved) return;
   persistedBalanceShown = resolved;
   balanceShownSubscribers.forEach((listener) => {
