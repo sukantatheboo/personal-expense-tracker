@@ -461,29 +461,15 @@ export function WalletCard({
             fill="none"
             aria-hidden="true"
           >
-            {/* Luxury Faceted Bullion Prism & Geometric Diamond Bevel (Zero Circles) */}
+            {/* Minimalist Bullion Nested Diamond Outline */}
             <path
-              d="M196 0L326 0L326 206L118 206L196 0Z"
-              fill="rgba(254, 240, 138, 0.05)"
-            />
-            <path
-              d="M254 0L326 0L326 206L176 206L254 0Z"
-              fill="rgba(251, 191, 36, 0.06)"
-            />
-            <path
-              d="M196 0L118 206M254 0L176 206"
-              stroke="rgba(254, 240, 138, 0.16)"
+              d="M254 54L302 103L254 152L206 103L254 54Z"
+              stroke="rgba(43, 30, 8, 0.16)"
               strokeWidth="1"
             />
             <path
-              d="M266 56L294 94L266 132L238 94L266 56Z"
-              fill="rgba(253, 224, 71, 0.05)"
-              stroke="rgba(254, 240, 138, 0.22)"
-              strokeWidth="1"
-            />
-            <path
-              d="M266 72L282 94L266 116L250 94L266 72Z"
-              stroke="rgba(254, 240, 138, 0.14)"
+              d="M254 76L280 103L254 130L228 103L254 76Z"
+              stroke="rgba(43, 30, 8, 0.14)"
               strokeWidth="1"
             />
           </svg>
@@ -495,39 +481,19 @@ export function WalletCard({
             fill="none"
             aria-hidden="true"
           >
-            {/* Aero-Glass Fluid Topographic Horizon Waves (Zero Circles) */}
+            {/* Subtle Aero Dual Horizon Wave Lines */}
             <path
-              d="M-10 162C68 118 156 184 336 86L336 216L-10 216Z"
-              fill="rgba(45, 212, 191, 0.07)"
+              d="M-10 148C86 132 198 158 336 138L336 216L-10 216Z"
+              fill="rgba(11, 107, 97, 0.035)"
             />
             <path
-              d="M-10 182C84 138 176 196 336 114L336 216L-10 216Z"
-              fill="rgba(56, 189, 248, 0.06)"
-            />
-            <path
-              d="M-10 162C68 118 156 184 336 86"
-              stroke="rgba(94, 234, 212, 0.22)"
-              strokeWidth="1.15"
-            />
-            <path
-              d="M-10 138C76 94 168 162 336 58"
-              stroke="rgba(56, 189, 248, 0.14)"
-              strokeWidth="1"
-              strokeDasharray="3 4"
-            />
-            <path
-              d="M-10 182C84 138 176 196 336 114"
-              stroke="rgba(153, 246, 228, 0.14)"
+              d="M-10 146C86 132 198 156 336 138"
+              stroke="rgba(11, 107, 97, 0.14)"
               strokeWidth="1"
             />
-            <rect
-              x="224"
-              y="48"
-              width="78"
-              height="50"
-              rx="8"
-              fill="rgba(255, 255, 255, 0.03)"
-              stroke="rgba(94, 234, 212, 0.18)"
+            <path
+              d="M-10 156C94 142 204 166 336 148"
+              stroke="rgba(11, 107, 97, 0.1)"
               strokeWidth="1"
             />
           </svg>
@@ -539,56 +505,25 @@ export function WalletCard({
             fill="none"
             aria-hidden="true"
           >
-            {/* Stealth Isometric Dual-Glass Planes & Architectural Grid (Zero Circles) */}
-            <path
-              d="M210 0V206M248 0V206M286 0V206M180 48H326M180 96H326M180 144H326"
-              stroke="rgba(165, 180, 252, 0.055)"
+            {/* Clean Overlapping Translucent Stealth Planes */}
+            <rect
+              x="246"
+              y="48"
+              width="94"
+              height="68"
+              rx="12"
+              fill="rgba(165, 180, 252, 0.03)"
+              stroke="rgba(165, 180, 252, 0.16)"
               strokeWidth="1"
             />
             <rect
-              x="198"
-              y="44"
-              width="86"
-              height="56"
-              rx="10"
-              transform="rotate(-14 241 72)"
-              fill="rgba(129, 140, 248, 0.07)"
-              stroke="rgba(165, 180, 252, 0.22)"
-              strokeWidth="1"
-            />
-            <rect
-              x="222"
-              y="68"
-              width="86"
-              height="56"
-              rx="10"
-              transform="rotate(-14 265 96)"
-              fill="rgba(244, 63, 94, 0.07)"
-              stroke="rgba(253, 164, 175, 0.2)"
-              strokeWidth="1"
-            />
-          </svg>
-        )}
-        {isCustom && (
-          <svg
-            className="wallet-card-artwork is-custom-art"
-            viewBox="0 0 326 206"
-            fill="none"
-            aria-hidden="true"
-          >
-            {/* Minimalist Titanium Anodized Split-Plane & Architectural Chamfer (Zero Circles) */}
-            <path
-              d="M222 0L326 0L326 206L146 206L222 0Z"
-              fill="rgba(255, 255, 255, 0.035)"
-            />
-            <path
-              d="M222 0L146 206"
-              stroke="rgba(255, 255, 255, 0.13)"
-              strokeWidth="1"
-            />
-            <path
-              d="M282 0L206 206"
-              stroke="rgba(255, 255, 255, 0.06)"
+              x="262"
+              y="78"
+              width="94"
+              height="68"
+              rx="12"
+              fill="rgba(165, 180, 252, 0.035)"
+              stroke="rgba(165, 180, 252, 0.14)"
               strokeWidth="1"
             />
           </svg>
@@ -655,74 +590,88 @@ export function WalletCard({
             <div className="wallet-card-mid">
               {!isMfs && !isVirtual && (
                 <div className="wallet-card-chip-cluster">
-                  <EmvChip size={32} />
+                  <EmvChip
+                    size={32}
+                    variant={isCustom || isGold ? "wireframe" : "gold"}
+                    strokeColor={
+                      isGold
+                        ? "rgba(43, 30, 8, 0.5)"
+                        : isCustom
+                          ? "rgba(255, 255, 255, 0.36)"
+                          : undefined
+                    }
+                    fillColor={
+                      isGold
+                        ? "rgba(43, 30, 8, 0.06)"
+                        : "rgba(255, 255, 255, 0.075)"
+                    }
+                    centerFillColor={
+                      isGold
+                        ? "rgba(229, 193, 108, 0.55)"
+                        : "rgba(255, 255, 255, 0.04)"
+                    }
+                  />
                   <ContactlessWaves
                     size={15}
+                    tone={isGold ? "bronze" : "light"}
                     className="wallet-card-contactless"
                   />
                 </div>
               )}
               {isVirtualVisa && (
                 <div className="wallet-card-virtual-cluster is-visa-digital">
-                  <span
-                    className="wallet-card-digital-chip is-aero"
-                    aria-hidden="true"
-                  >
+                  <span className="wallet-card-virtual-pill is-aero">
                     <svg
-                      width="13"
-                      height="13"
+                      width="11"
+                      height="11"
                       style={{
-                        width: 13,
-                        height: 13,
+                        width: 11,
+                        height: 11,
                         display: "block",
                         stroke: "none",
                       }}
                       viewBox="0 0 24 24"
                       fill="none"
+                      aria-hidden="true"
                     >
                       <path
                         d="M13 2L4.5 13.5H11.5L10.5 22L19.5 10.5H12.5L13 2Z"
-                        fill="#5EEAD4"
+                        fill="#0B6B61"
                       />
                     </svg>
-                  </span>
-                  <span className="wallet-card-virtual-meta">
-                    CLOUD PASS · INSTANT DEBIT
+                    <span>INSTANT DEBIT</span>
                   </span>
                   <ContactlessWaves
                     size={14}
+                    tone="teal"
                     className="wallet-card-contactless is-virtual-nfc"
                   />
                 </div>
               )}
               {isVirtualMc && (
                 <div className="wallet-card-virtual-cluster is-mc-digital">
-                  <span
-                    className="wallet-card-digital-chip is-stealth"
-                    aria-hidden="true"
-                  >
+                  <span className="wallet-card-virtual-pill is-stealth">
                     <svg
-                      width="12"
-                      height="12"
+                      width="11"
+                      height="11"
                       style={{
-                        width: 12,
-                        height: 12,
+                        width: 11,
+                        height: 11,
                         display: "block",
                         stroke: "none",
                       }}
                       viewBox="0 0 24 24"
                       fill="none"
+                      aria-hidden="true"
                     >
                       <path
                         d="M12 2.5L19 5.8V11.5C19 16.4 15.9 20.6 12 22C8.1 20.6 5 16.4 5 11.5V5.8L12 2.5Z"
                         stroke="#A5B4FC"
                         strokeWidth="2"
-                        fill="rgba(165, 180, 252, 0.2)"
+                        fill="rgba(165, 180, 252, 0.16)"
                       />
                     </svg>
-                  </span>
-                  <span className="wallet-card-virtual-meta">
-                    ENCRYPTED · DISPOSABLE KEY
+                    <span>DISPOSABLE KEY</span>
                   </span>
                   <ContactlessWaves
                     size={14}
@@ -775,11 +724,23 @@ export function WalletCard({
 
           {!isMfs && !isSavings && (
             <div className="wallet-card-network">
-              {card.network === "visa" && <VisaBadge width={44} height={15} />}
-              {card.network === "mastercard" && (
-                <MastercardBadge width={34} height={22} />
+              {!isGold && card.network === "visa" && (
+                <VisaBadge
+                  width={44}
+                  height={15}
+                  variant={isVirtualVisa ? "navy" : "auto"}
+                />
               )}
-              {card.network === "amex" && <AmexBadge width={38} height={17} />}
+              {(isGold || card.network === "mastercard") && (
+                <MastercardBadge
+                  width={34}
+                  height={22}
+                  variant={isGold ? "bronze" : "default"}
+                />
+              )}
+              {!isGold && card.network === "amex" && (
+                <AmexBadge width={38} height={17} />
+              )}
             </div>
           )}
         </div>

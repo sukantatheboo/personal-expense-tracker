@@ -72,15 +72,15 @@ export const CARD_PROVIDERS = [
   },
   {
     id: "gold_mc",
-    name: "Gold Master Card",
+    name: "Gold Mastercard",
     category: "bank",
     subtitle: "Gold Credit · BDT",
     defaultType: "credit",
     defaultNetwork: "mastercard",
     currency: "BDT",
-    color: "#9a6f28",
+    color: "#d4b062",
     gradient:
-      "linear-gradient(135deg, #c59b47 0%, #8f6722 36%, #4a310c 74%, #1e1304 100%)",
+      "linear-gradient(135deg, #ddbd75 0%, #d3af62 52%, #c9a252 100%)",
     numberPrefix: "5134",
     numberPlaceholder: "5134 4455 6677 1234",
     isPhone: false,
@@ -101,15 +101,15 @@ export const CARD_PROVIDERS = [
   },
   {
     id: "virtual_mc",
-    name: "Virtual MasterCard",
+    name: "Virtual Mastercard",
     category: "bank",
     subtitle: "Virtual Credit · BDT",
     defaultType: "credit",
     defaultNetwork: "mastercard",
     currency: "BDT",
-    color: "#312e81",
+    color: "#1b183a",
     gradient:
-      "linear-gradient(135deg, #312e81 0%, #1e1b4b 44%, #111024 78%, #07060e 100%)",
+      "linear-gradient(135deg, #1d1a3e 0%, #161332 52%, #0f0d24 100%)",
     numberPrefix: "5500",
     numberPlaceholder: "5500 0011 2233 4455",
     isPhone: false,
@@ -122,9 +122,9 @@ export const CARD_PROVIDERS = [
     defaultType: "debit",
     defaultNetwork: "visa",
     currency: "BDT",
-    color: "#0d9488",
+    color: "#e6f3ef",
     gradient:
-      "linear-gradient(135deg, #0ea5e9 0%, #0d9488 40%, #0b3c49 78%, #04161e 100%)",
+      "linear-gradient(135deg, #f2f9f6 0%, #eaf5f1 52%, #e2f0eb 100%)",
     numberPrefix: "4111",
     numberPlaceholder: "4111 2233 4455 6677",
     isPhone: false,
@@ -280,9 +280,9 @@ export const CARD_PROVIDERS = [
     defaultType: "debit",
     defaultNetwork: "visa",
     currency: "BDT",
-    color: "#1f2430",
+    color: "#111114",
     gradient:
-      "linear-gradient(135deg, #383c47 0%, #20232b 46%, #12141a 80%, #08090c 100%)",
+      "linear-gradient(135deg, #161619 0%, #111114 54%, #0b0b0d 100%)",
     numberPrefix: "4000",
     numberPlaceholder: "4000 1234 5678 9010",
     isPhone: false,
@@ -303,18 +303,22 @@ const LEGACY_PROVIDER_GRADIENTS = {
   gold_mc: [
     "linear-gradient(135deg, #b45309 0%, #92400e 50%, #78350f 100%)",
     "linear-gradient(135deg, #a67c37 0%, #785421 38%, #452e11 74%, #1f1407 100%)",
+    "linear-gradient(135deg, #c59b47 0%, #8f6722 36%, #4a310c 74%, #1e1304 100%)",
   ],
   virtual_mc: [
     "linear-gradient(135deg, #4f46e5 0%, #3730a3 60%, #1e1b4b 100%)",
     "linear-gradient(135deg, #3b4262 0%, #232942 45%, #131728 78%, #090b14 100%)",
+    "linear-gradient(135deg, #312e81 0%, #1e1b4b 44%, #111024 78%, #07060e 100%)",
   ],
   virtual_visa: [
     "linear-gradient(135deg, #0d9488 0%, #0f766e 60%, #115e59 100%)",
     "linear-gradient(135deg, #0d9488 0%, #0f5c59 42%, #0b3740 76%, #04171d 100%)",
+    "linear-gradient(135deg, #0ea5e9 0%, #0d9488 40%, #0b3c49 78%, #04161e 100%)",
   ],
   custom: [
     "linear-gradient(135deg, #27272a 0%, #18181b 60%, #09090b 100%)",
     "linear-gradient(135deg, #353a47 0%, #1d2028 48%, #101218 80%, #07080c 100%)",
+    "linear-gradient(135deg, #383c47 0%, #20232b 46%, #12141a 80%, #08090c 100%)",
   ],
 };
 

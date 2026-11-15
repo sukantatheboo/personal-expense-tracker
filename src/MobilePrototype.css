@@ -6328,75 +6328,50 @@ a:active,
     );
 }
 .mobile-prototype .wallet-card.is-gold {
-  border-color: rgba(253, 224, 71, 0.34);
+  color: #2b1e08;
+  border-color: rgba(43, 30, 8, 0.14);
   box-shadow:
-    inset 0 1px 0 rgba(254, 240, 138, 0.42),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.28);
+    inset 0 1px 0 rgba(255, 248, 225, 0.42),
+    inset 0 -1px 0 rgba(43, 30, 8, 0.14);
 }
-.mobile-prototype .wallet-card.is-gold .wallet-card-sheen {
-  background: linear-gradient(
-    130deg,
-    rgba(254, 240, 138, 0.26) 0%,
-    rgba(251, 191, 36, 0.08) 38%,
-    rgba(0, 0, 0, 0) 68%
-  );
-}
+.mobile-prototype .wallet-card.is-gold .wallet-card-sheen,
 .mobile-prototype .wallet-card.is-gold .wallet-card-pattern {
-  background-image:
-    radial-gradient(
-      circle at 84% 22%,
-      rgba(253, 224, 71, 0.18) 0%,
-      transparent 48%
-    ),
-    radial-gradient(
-      circle at 16% 84%,
-      rgba(217, 119, 6, 0.14) 0%,
-      transparent 45%
-    );
+  background: none;
+  background-image: none;
 }
 .mobile-prototype .wallet-card.is-virtual-visa {
-  border-color: rgba(94, 234, 212, 0.3);
+  color: #0a3b34;
+  border-color: rgba(11, 107, 97, 0.16);
   box-shadow:
-    inset 0 1px 0 rgba(204, 251, 241, 0.35),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.24);
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    inset 0 -1px 0 rgba(11, 107, 97, 0.08);
 }
+.mobile-prototype .wallet-card.is-virtual-visa .wallet-card-sheen,
 .mobile-prototype .wallet-card.is-virtual-visa .wallet-card-pattern {
-  background-image:
-    radial-gradient(
-      circle at 84% 24%,
-      rgba(45, 212, 191, 0.2) 0%,
-      transparent 50%
-    ),
-    radial-gradient(
-      circle at 18% 85%,
-      rgba(6, 182, 212, 0.14) 0%,
-      transparent 45%
-    );
+  background: none;
+  background-image: none;
 }
 .mobile-prototype .wallet-card.is-virtual-mc {
-  border-color: rgba(165, 180, 252, 0.28);
+  border-color: rgba(165, 180, 252, 0.22);
   box-shadow:
-    inset 0 1px 0 rgba(224, 231, 255, 0.32),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.26);
+    inset 0 1px 0 rgba(224, 231, 255, 0.18),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.28);
 }
+.mobile-prototype .wallet-card.is-virtual-mc .wallet-card-sheen,
 .mobile-prototype .wallet-card.is-virtual-mc .wallet-card-pattern {
-  background-image:
-    radial-gradient(
-      circle at 84% 24%,
-      rgba(129, 140, 248, 0.18) 0%,
-      transparent 50%
-    ),
-    radial-gradient(
-      circle at 18% 85%,
-      rgba(245, 158, 11, 0.1) 0%,
-      transparent 45%
-    );
+  background: none;
+  background-image: none;
 }
 .mobile-prototype .wallet-card.is-custom {
-  border-color: rgba(255, 255, 255, 0.26);
+  border-color: rgba(255, 255, 255, 0.12);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.36),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.26);
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.35);
+}
+.mobile-prototype .wallet-card.is-custom .wallet-card-sheen,
+.mobile-prototype .wallet-card.is-custom .wallet-card-pattern {
+  background: none;
+  background-image: none;
 }
 .mobile-prototype .wallet-card-header {
   position: relative;
@@ -6426,6 +6401,20 @@ a:active,
   max-width: 190px;
   line-height: 1.18;
 }
+.mobile-prototype .wallet-card.is-gold .wallet-card-holder-name {
+  color: #2b1e08;
+  text-transform: none;
+  letter-spacing: -0.01em;
+}
+.mobile-prototype .wallet-card.is-virtual-visa .wallet-card-holder-name {
+  color: #0a3b34;
+  text-transform: none;
+  letter-spacing: -0.01em;
+}
+.mobile-prototype .wallet-card.is-virtual-mc .wallet-card-holder-name {
+  text-transform: none;
+  letter-spacing: -0.01em;
+}
 .mobile-prototype .wallet-card.is-savings .wallet-card-holder-name {
   font-size: 15px;
   font-weight: 850;
@@ -6449,7 +6438,16 @@ a:active,
   color: rgba(255, 255, 255, 0.8);
 }
 .mobile-prototype .wallet-card.is-gold .wallet-card-type-tag {
-  color: rgba(254, 240, 138, 0.82);
+  color: rgba(43, 30, 8, 0.78);
+}
+.mobile-prototype .wallet-card.is-virtual-visa .wallet-card-type-tag {
+  color: rgba(10, 59, 52, 0.72);
+}
+.mobile-prototype .wallet-card.is-virtual-mc .wallet-card-type-tag {
+  color: rgba(199, 210, 254, 0.72);
+}
+.mobile-prototype .wallet-card.is-custom .wallet-card-type-tag {
+  color: rgba(255, 255, 255, 0.56);
 }
 .mobile-prototype .wallet-card-subtitle-text {
   display: inline-block;
@@ -6504,7 +6502,7 @@ a:active,
   margin: 0;
 }
 .mobile-prototype .wallet-card.is-virtual .wallet-card-mid {
-  min-height: 22px;
+  min-height: 24px;
   margin: 2px 0 0;
 }
 .mobile-prototype .wallet-card-chip-cluster {
@@ -6516,6 +6514,30 @@ a:active,
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+.mobile-prototype .wallet-card-virtual-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 11px;
+  border-radius: 999px;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  line-height: 1;
+  box-sizing: border-box;
+}
+.mobile-prototype .wallet-card-virtual-pill.is-aero {
+  color: #0a3b34;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(11, 107, 97, 0.24);
+}
+.mobile-prototype .wallet-card-virtual-pill.is-stealth {
+  color: #e0e7ff;
+  background: rgba(165, 180, 252, 0.08);
+  border: 1px solid rgba(165, 180, 252, 0.28);
 }
 .mobile-prototype .wallet-card-digital-chip {
   width: 26px;
@@ -6546,7 +6568,7 @@ a:active,
   line-height: 1;
 }
 .mobile-prototype .wallet-card.is-virtual-visa .wallet-card-virtual-meta {
-  color: rgba(204, 251, 241, 0.86);
+  color: #0a3b34;
 }
 .mobile-prototype .wallet-card.is-virtual-mc .wallet-card-virtual-meta {
   color: rgba(224, 231, 255, 0.84);
@@ -6559,6 +6581,10 @@ a:active,
   object-fit: contain;
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.25));
   opacity: 0.84;
+}
+.mobile-prototype .wallet-card.is-virtual-visa .wallet-card-contactless,
+.mobile-prototype .wallet-card.is-gold .wallet-card-contactless {
+  filter: none;
 }
 /* Minimalist Savings Vault Middle Architecture (Borderless — No White HR) */
 .mobile-prototype .wallet-card-savings-mid {
@@ -6629,6 +6655,22 @@ a:active,
   line-height: 1.2;
   margin: 2px 0 1px;
 }
+.mobile-prototype .wallet-card.is-custom .wallet-card-number {
+  color: rgba(255, 255, 255, 0.45);
+  text-shadow: none;
+}
+.mobile-prototype .wallet-card.is-virtual-visa .wallet-card-number {
+  color: rgba(10, 59, 52, 0.72);
+  text-shadow: none;
+}
+.mobile-prototype .wallet-card.is-virtual-mc .wallet-card-number {
+  color: rgba(199, 210, 254, 0.62);
+  text-shadow: none;
+}
+.mobile-prototype .wallet-card.is-gold .wallet-card-number {
+  color: rgba(43, 30, 8, 0.72);
+  text-shadow: none;
+}
 .mobile-prototype .wallet-card.is-mfs .wallet-card-number {
   font-size: clamp(14px, 4.1vw, 15.5px);
   letter-spacing: 0.1em;
@@ -6660,6 +6702,18 @@ a:active,
   color: rgba(255, 255, 255, 0.64);
   line-height: 1;
 }
+.mobile-prototype .wallet-card.is-gold .wallet-card-meta-lbl {
+  color: rgba(43, 30, 8, 0.72);
+}
+.mobile-prototype .wallet-card.is-virtual-visa .wallet-card-meta-lbl {
+  color: rgba(10, 59, 52, 0.68);
+}
+.mobile-prototype .wallet-card.is-virtual-mc .wallet-card-meta-lbl {
+  color: rgba(199, 210, 254, 0.68);
+}
+.mobile-prototype .wallet-card.is-custom .wallet-card-meta-lbl {
+  color: rgba(255, 255, 255, 0.56);
+}
 .mobile-prototype .wallet-card-balance-val {
   font-size: 15.5px;
   font-weight: 850;
@@ -6667,6 +6721,14 @@ a:active,
   color: #ffffff;
   line-height: 1.12;
   font-variant-numeric: tabular-nums;
+}
+.mobile-prototype .wallet-card.is-gold .wallet-card-balance-val,
+.mobile-prototype .wallet-card.is-gold .wallet-card-meta-val {
+  color: #2b1e08;
+}
+.mobile-prototype .wallet-card.is-virtual-visa .wallet-card-balance-val,
+.mobile-prototype .wallet-card.is-virtual-visa .wallet-card-meta-val {
+  color: #0a3b34;
 }
 .mobile-prototype .wallet-card.is-savings .wallet-card-balance-val {
   font-size: 20px;

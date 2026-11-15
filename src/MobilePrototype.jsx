@@ -7937,7 +7937,11 @@ function AddCardSheet({
         ? userProfileName.toUpperCase()
         : isCustom
           ? "CARDHOLDER"
-          : selectedProvider.name.toUpperCase()),
+          : selectedProvider.id === "virtual_visa" ||
+              selectedProvider.id === "virtual_mc" ||
+              selectedProvider.id === "gold_mc"
+            ? selectedProvider.name
+            : selectedProvider.name.toUpperCase()),
     subtitle: isCustom
       ? formData.name.trim()
         ? `${formData.name.trim()} ${formData.network === "visa" ? "Visa" : formData.network === "mastercard" ? "Mastercard" : "Amex"}`
@@ -8107,7 +8111,8 @@ function AddCardSheet({
             <h4 className="add-card-section-label">Card Details</h4>
 
             {!selectedProvider.isPhone &&
-              selectedProvider.category !== "savings" && (
+              selectedProvider.category !== "savings" &&
+              selectedProvider.id !== "gold_mc" && (
                 <div className="add-card-field">
                   <label className="add-card-input-lbl">Card Network</label>
                   <div className="add-card-network-selector">
@@ -8593,6 +8598,9 @@ function CardOptionsSheet({
     String(selectedCard?.number || "").startsWith("DPS-");
 
   const isCard = !isMfs && !isSavings;
+  const isGoldMc =
+    selectedCard?.provider === "gold_mc" ||
+    /^gold\s+master\s*card$/i.test(String(selectedCard?.name || "").trim());
   const initialCardBal =
     (selectedCard?.id != null ? startBalances[selectedCard.id] : undefined) ??
     selectedCard?.initialBalance;
@@ -8653,6 +8661,9 @@ function CardOptionsSheet({
         selectedCard.provider === "nagad" ||
         selectedCard.provider === "rocket" ||
         Boolean(selectedCard.isPhone);
+      const goldMcCard =
+        selectedCard.provider === "gold_mc" ||
+        /^gold\s+master\s*card$/i.test(String(selectedCard.name || "").trim());
       setFormData({
         name: selectedCard.name || "",
         holderName: selectedCard.holderName || "Cardholder",
@@ -8664,7 +8675,7 @@ function CardOptionsSheet({
             : ""),
         number: getEditableCardNumber(selectedCard, mfsCard),
         expiry: selectedCard.expiry || "",
-        network: selectedCard.network || "visa",
+        network: goldMcCard ? "mastercard" : selectedCard.network || "visa",
         type: selectedCard.type || "credit",
         color: selectedCard.color || "#1e293b",
         gradient:
@@ -8686,7 +8697,9 @@ function CardOptionsSheet({
       name: formData.name || selectedCard.name,
       holderName: formData.holderName || selectedCard.holderName,
       subtitle: formData.subtitle || selectedCard.subtitle,
-      network: formData.network || selectedCard.network,
+      network: isGoldMc
+        ? "mastercard"
+        : formData.network || selectedCard.network,
       type: formData.type || selectedCard.type,
       gradient: formData.gradient,
       color: formData.color,
@@ -9067,49 +9080,51 @@ function CardOptionsSheet({
             {/* If regular card (Visa, Mastercard, Amex, Bank, Custom) */}
             {isCard && (
               <>
-                <div className="card-options-field">
-                  <label>Card Network</label>
-                  <div className="add-card-network-selector">
-                    <button
-                      type="button"
-                      className={`add-card-network-btn ${formData.network === "visa" ? "is-selected" : ""}`}
-                      onClick={() => {
-                        triggerHaptic("selection");
-                        setFormData((prev) => ({ ...prev, network: "visa" }));
-                      }}
-                    >
-                      <VisaBadge width={44} height={17} variant="adaptive" />
-                      <span>Visa</span>
-                    </button>
+                {!isGoldMc && (
+                  <div className="card-options-field">
+                    <label>Card Network</label>
+                    <div className="add-card-network-selector">
+                      <button
+                        type="button"
+                        className={`add-card-network-btn ${formData.network === "visa" ? "is-selected" : ""}`}
+                        onClick={() => {
+                          triggerHaptic("selection");
+                          setFormData((prev) => ({ ...prev, network: "visa" }));
+                        }}
+                      >
+                        <VisaBadge width={44} height={17} variant="adaptive" />
+                        <span>Visa</span>
+                      </button>
 
-                    <button
-                      type="button"
-                      className={`add-card-network-btn ${formData.network === "mastercard" ? "is-selected" : ""}`}
-                      onClick={() => {
-                        triggerHaptic("selection");
-                        setFormData((prev) => ({
-                          ...prev,
-                          network: "mastercard",
-                        }));
-                      }}
-                    >
-                      <MastercardBadge width={30} height={20} />
-                      <span>Mastercard</span>
-                    </button>
+                      <button
+                        type="button"
+                        className={`add-card-network-btn ${formData.network === "mastercard" ? "is-selected" : ""}`}
+                        onClick={() => {
+                          triggerHaptic("selection");
+                          setFormData((prev) => ({
+                            ...prev,
+                            network: "mastercard",
+                          }));
+                        }}
+                      >
+                        <MastercardBadge width={30} height={20} />
+                        <span>Mastercard</span>
+                      </button>
 
-                    <button
-                      type="button"
-                      className={`add-card-network-btn ${formData.network === "amex" ? "is-selected" : ""}`}
-                      onClick={() => {
-                        triggerHaptic("selection");
-                        setFormData((prev) => ({ ...prev, network: "amex" }));
-                      }}
-                    >
-                      <AmexBadge width={34} height={17} />
-                      <span>Amex</span>
-                    </button>
+                      <button
+                        type="button"
+                        className={`add-card-network-btn ${formData.network === "amex" ? "is-selected" : ""}`}
+                        onClick={() => {
+                          triggerHaptic("selection");
+                          setFormData((prev) => ({ ...prev, network: "amex" }));
+                        }}
+                      >
+                        <AmexBadge width={34} height={17} />
+                        <span>Amex</span>
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <div className="card-options-field">
                   <label>Card Type</label>

@@ -804,6 +804,7 @@ export function VisaBadge({
   variant = "auto",
 }) {
   const isAdaptive = variant === "adaptive";
+  const isNavy = variant === "navy";
   return (
     <img
       src={visaImg}
@@ -817,7 +818,9 @@ export function VisaBadge({
         display: "block",
         filter: isAdaptive
           ? "var(--visa-badge-filter, brightness(0))"
-          : "brightness(0) invert(1) drop-shadow(0 1px 2px rgba(0,0,0,0.25))",
+          : isNavy
+            ? "brightness(0) saturate(100%) invert(14%) sepia(78%) saturate(3825%) hue-rotate(228deg) brightness(86%) contrast(103%)"
+            : "brightness(0) invert(1) drop-shadow(0 1px 2px rgba(0,0,0,0.25))",
       }}
     />
   );
@@ -826,7 +829,34 @@ export function VisaBadge({
 /**
  * High-Res Official Mastercard Logo from tight-cropped payment-logos/mastercard.svg
  */
-export function MastercardBadge({ className = "", height = 22, width }) {
+export function MastercardBadge({
+  className = "",
+  height = 22,
+  width,
+  variant = "default",
+}) {
+  if (variant === "bronze") {
+    const w = width || Math.round(height * 1.55);
+    return (
+      <svg
+        width={w}
+        height={height}
+        viewBox="0 0 34 22"
+        fill="none"
+        className={`card-network-badge ${className}`}
+        aria-label="Mastercard"
+        style={{
+          height,
+          width: w,
+          display: "block",
+          stroke: "none",
+        }}
+      >
+        <circle cx="12" cy="11" r="9.5" fill="#2B1E08" fillOpacity="0.9" />
+        <circle cx="22" cy="11" r="9.5" fill="#2B1E08" fillOpacity="0.46" />
+      </svg>
+    );
+  }
   return (
     <img
       src={mastercardSvg}
@@ -867,10 +897,63 @@ export function AmexBadge({ className = "", height = 17, width }) {
 }
 
 /**
- * Realistic Metallic Gold EMV Smart Chip (Refined Minimal Scale)
+ * Realistic Metallic Gold or Wireframe Etched EMV Smart Chip
  */
-export function EmvChip({ className = "", size = 32 }) {
+export function EmvChip({
+  className = "",
+  size = 32,
+  variant = "gold",
+  strokeColor = "rgba(255, 255, 255, 0.36)",
+  fillColor = "rgba(255, 255, 255, 0.075)",
+  centerFillColor = "transparent",
+}) {
   const h = Math.round(size * 0.75);
+  if (variant === "wireframe") {
+    return (
+      <svg
+        className={`card-emv-chip is-wireframe ${className}`}
+        width={size}
+        height={h}
+        style={{
+          width: size,
+          height: h,
+          display: "block",
+          flexShrink: 0,
+        }}
+        viewBox="0 0 52 40"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        aria-hidden="true"
+      >
+        <rect
+          x="1"
+          y="1"
+          width="50"
+          height="38"
+          rx="8"
+          fill={fillColor}
+          stroke={strokeColor}
+          strokeWidth="1.25"
+        />
+        <path
+          d="M1 13.5H51M1 26.5H51M26 1V13.5M26 26.5V39"
+          stroke={strokeColor}
+          strokeWidth="1.2"
+          strokeLinecap="butt"
+        />
+        <rect
+          x="17.5"
+          y="13.5"
+          width="17"
+          height="13"
+          rx="4.5"
+          fill={centerFillColor}
+          stroke={strokeColor}
+          strokeWidth="1.2"
+        />
+      </svg>
+    );
+  }
   return (
     <svg
       className={`card-emv-chip ${className}`}
@@ -951,9 +1034,16 @@ export function ContactlessWaves({
   size = 15,
   height,
   width,
+  tone = "light",
   style = {},
 }) {
   const h = height || size;
+  const toneFilter =
+    tone === "bronze"
+      ? "brightness(0) saturate(100%) invert(12%) sepia(38%) saturate(1100%) hue-rotate(12deg) brightness(94%) contrast(96%)"
+      : tone === "teal"
+        ? "brightness(0) saturate(100%) invert(18%) sepia(28%) saturate(1350%) hue-rotate(131deg) brightness(94%) contrast(95%)"
+        : "drop-shadow(0 1px 2px rgba(0,0,0,0.25))";
   return (
     <img
       src={contactlessImg}
@@ -965,8 +1055,8 @@ export function ContactlessWaves({
         maxHeight: h,
         objectFit: "contain",
         display: "block",
-        filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.25))",
-        opacity: 0.78,
+        filter: toneFilter,
+        opacity: tone === "light" ? 0.78 : 0.72,
         ...style,
       }}
     />
@@ -1006,8 +1096,53 @@ export function renderProviderLogo(
             display: "inline-flex",
             alignItems: "center",
             gap: 6,
-            height: 22,
-            color: "#FEF08A",
+            height: 20,
+            color: "#2B1E08",
+          }}
+        >
+          <svg
+            width="13"
+            height="13"
+            style={{
+              width: 13,
+              height: 13,
+              display: "block",
+              stroke: "none",
+            }}
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path
+              d="M12 2.5L21.5 12L12 21.5L2.5 12L12 2.5Z"
+              stroke="#2B1E08"
+              strokeWidth="2"
+            />
+          </svg>
+          <span
+            style={{
+              fontSize: 9.5,
+              fontWeight: 800,
+              letterSpacing: "0.14em",
+              color: "#2B1E08",
+              lineHeight: 1,
+            }}
+          >
+            GOLD BULLION
+          </span>
+        </span>
+      );
+    }
+    case "virtual_visa": {
+      return (
+        <span
+          className={`card-bespoke-mark is-virtual-visa-mark ${className}`}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            height: 20,
+            color: "#0B6B61",
           }}
         >
           <svg
@@ -1024,122 +1159,29 @@ export function renderProviderLogo(
             aria-hidden="true"
           >
             <path
-              d="M12 2L21 12L12 22L3 12L12 2Z"
-              stroke="#FDE047"
-              strokeWidth="1.6"
-              fill="rgba(253, 224, 71, 0.14)"
-            />
-            <path
-              d="M12 2L16.5 12L12 22L7.5 12L12 2Z"
-              stroke="rgba(254, 240, 138, 0.55)"
-              strokeWidth="1.1"
-            />
-            <path
-              d="M3 12H21"
-              stroke="rgba(254, 240, 138, 0.45)"
-              strokeWidth="1.1"
-            />
-          </svg>
-          <span
-            style={{
-              display: "inline-flex",
-              flexDirection: "column",
-              alignItems: "flex-end",
-              lineHeight: 1,
-              gap: 2,
-            }}
-          >
-            <span
-              style={{
-                fontSize: 10,
-                fontWeight: 850,
-                letterSpacing: "0.18em",
-                color: "#FEF9C3",
-              }}
-            >
-              GOLD
-            </span>
-            <span
-              style={{
-                fontSize: 6.5,
-                fontWeight: 700,
-                letterSpacing: "0.22em",
-                color: "rgba(253, 224, 71, 0.72)",
-              }}
-            >
-              BULLION
-            </span>
-          </span>
-        </span>
-      );
-    }
-    case "virtual_visa": {
-      return (
-        <span
-          className={`card-bespoke-mark is-virtual-visa-mark ${className}`}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            height: 22,
-            color: "#CCFBF1",
-          }}
-        >
-          <svg
-            width="16"
-            height="16"
-            style={{
-              width: 16,
-              height: 16,
-              display: "block",
-              stroke: "none",
-            }}
-            viewBox="0 0 24 24"
-            fill="none"
-            aria-hidden="true"
-          >
-            <path
               d="M2 15C5.5 11 8.5 11 12 15C15.5 19 18.5 19 22 15"
-              stroke="#5EEAD4"
-              strokeWidth="1.9"
+              stroke="#0B6B61"
+              strokeWidth="2"
               strokeLinecap="round"
             />
             <path
               d="M2 9.5C5.5 5.5 8.5 5.5 12 9.5C15.5 13.5 18.5 13.5 22 9.5"
-              stroke="rgba(153, 246, 228, 0.55)"
-              strokeWidth="1.5"
+              stroke="#0B6B61"
+              strokeOpacity="0.65"
+              strokeWidth="1.7"
               strokeLinecap="round"
             />
           </svg>
           <span
             style={{
-              display: "inline-flex",
-              flexDirection: "column",
-              alignItems: "flex-end",
+              fontSize: 9.5,
+              fontWeight: 800,
+              letterSpacing: "0.16em",
+              color: "#0B6B61",
               lineHeight: 1,
-              gap: 2,
             }}
           >
-            <span
-              style={{
-                fontSize: 9.5,
-                fontWeight: 850,
-                letterSpacing: "0.15em",
-                color: "#F0FDFA",
-              }}
-            >
-              AERO
-            </span>
-            <span
-              style={{
-                fontSize: 6.5,
-                fontWeight: 700,
-                letterSpacing: "0.18em",
-                color: "rgba(94, 234, 212, 0.78)",
-              }}
-            >
-              VIRTUAL
-            </span>
+            AERO
           </span>
         </span>
       );
@@ -1152,16 +1194,16 @@ export function renderProviderLogo(
             display: "inline-flex",
             alignItems: "center",
             gap: 6,
-            height: 22,
-            color: "#E0E7FF",
+            height: 20,
+            color: "#C7D2FE",
           }}
         >
           <svg
-            width="16"
-            height="16"
+            width="15"
+            height="15"
             style={{
-              width: 16,
-              height: 16,
+              width: 15,
+              height: 15,
               display: "block",
               stroke: "none",
             }}
@@ -1170,57 +1212,34 @@ export function renderProviderLogo(
             aria-hidden="true"
           >
             <rect
-              x="3"
-              y="6"
-              width="12"
+              x="3.5"
+              y="5.5"
+              width="11"
               height="9"
-              rx="2"
-              transform="rotate(-10 9 10.5)"
+              rx="2.2"
               stroke="#A5B4FC"
-              strokeWidth="1.6"
-              fill="rgba(129, 140, 248, 0.16)"
+              strokeWidth="1.7"
             />
             <rect
-              x="9"
-              y="9"
-              width="12"
+              x="9.5"
+              y="9.5"
+              width="11"
               height="9"
-              rx="2"
-              transform="rotate(-10 15 13.5)"
-              stroke="#FDA4AF"
-              strokeWidth="1.6"
-              fill="rgba(244, 63, 94, 0.16)"
+              rx="2.2"
+              stroke="#A5B4FC"
+              strokeWidth="1.7"
             />
           </svg>
           <span
             style={{
-              display: "inline-flex",
-              flexDirection: "column",
-              alignItems: "flex-end",
+              fontSize: 9.5,
+              fontWeight: 800,
+              letterSpacing: "0.16em",
+              color: "#C7D2FE",
               lineHeight: 1,
-              gap: 2,
             }}
           >
-            <span
-              style={{
-                fontSize: 9.5,
-                fontWeight: 850,
-                letterSpacing: "0.15em",
-                color: "#EEF2FF",
-              }}
-            >
-              STEALTH
-            </span>
-            <span
-              style={{
-                fontSize: 6.5,
-                fontWeight: 700,
-                letterSpacing: "0.18em",
-                color: "rgba(165, 180, 252, 0.76)",
-              }}
-            >
-              VIRTUAL
-            </span>
+            STEALTH
           </span>
         </span>
       );
@@ -1255,17 +1274,17 @@ export function renderProviderLogo(
           style={{
             display: "inline-flex",
             alignItems: "center",
-            gap: 5.5,
-            height: 22,
-            color: "rgba(255, 255, 255, 0.9)",
+            justifyContent: "flex-end",
+            height: 20,
+            color: "rgba(255, 255, 255, 0.72)",
           }}
         >
           <svg
-            width="14"
-            height="14"
+            width="15"
+            height="15"
             style={{
-              width: 14,
-              height: 14,
+              width: 15,
+              height: 15,
               display: "block",
               stroke: "none",
             }}
@@ -1273,23 +1292,10 @@ export function renderProviderLogo(
             fill="none"
           >
             <path
-              d="M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z"
-              stroke="currentColor"
-              strokeWidth="1.6"
-              fill="rgba(255, 255, 255, 0.14)"
-              strokeLinejoin="round"
+              d="M12 2L14.3 9.7L22 12L14.3 14.3L12 22L9.7 14.3L2 12L9.7 9.7L12 2Z"
+              fill="currentColor"
             />
           </svg>
-          <span
-            style={{
-              fontSize: 8.5,
-              fontWeight: 800,
-              letterSpacing: "0.18em",
-              color: "rgba(255, 255, 255, 0.84)",
-            }}
-          >
-            SIGNATURE
-          </span>
         </span>
       );
     }
@@ -1408,16 +1414,17 @@ const MINI_CARD_PROTOTYPE_SPECS = {
   // Virtual and other
   virtual_mc: {
     variant: "vt",
-    a: "#4A4F8F",
-    b: "#2E3260",
+    a: "#1D1A3E",
+    b: "#100E24",
     mk: "Virtual",
     digits: "4455",
     net: "mastercard",
   },
   virtual_visa: {
     variant: "vt",
-    a: "#25807B",
-    b: "#17605C",
+    a: "#EDF6F3",
+    b: "#D8EDE7",
+    fg: "#0A3B34",
     mk: "Virtual",
     digits: "6677",
     net: "visa",
@@ -1425,7 +1432,7 @@ const MINI_CARD_PROTOTYPE_SPECS = {
   savings: { variant: "", a: "#2F6B4F", ring: true, mk: "Vault" },
   custom: {
     variant: "",
-    a: "#2B2D33",
+    a: "#141417",
     mk: "Sign",
     digits: "9010",
     net: "visa",
