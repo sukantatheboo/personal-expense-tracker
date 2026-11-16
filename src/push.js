@@ -17,6 +17,52 @@ export const PUSH_DISABLED_BY_USER_KEY = "spend-push-disabled-by-user-v1";
 
 export let supabase = null;
 let supabaseInitPromise = null;
+let registerPushRpcUnavailable = false;
+
+const FALLBACK_RPC_CODES = new Set([
+  "42883", // undefined_function
+  "PGRST202", // function not found in PostgREST schema cache
+  "42703", // undefined_column (e.g. unmigrated push_devices.updated_at)
+  "42804", // datatype_mismatch (e.g. unmigrated text vs uuid device_id)
+]);
+
+async function upsertPushDeviceWithFallback(
+  client,
+  { userId, deviceId, endpoint, subscription },
+) {
+  if (!registerPushRpcUnavailable) {
+    const rpcRes = await client.rpc("register_spend_push_device", {
+      p_device_id: deviceId,
+      p_endpoint: endpoint,
+      p_subscription: subscription,
+    });
+    if (!rpcRes.error) {
+      return;
+    }
+    if (FALLBACK_RPC_CODES.has(rpcRes.error.code)) {
+      registerPushRpcUnavailable = true;
+    } else {
+      throw rpcRes.error;
+    }
+  }
+
+  await client
+    .from("push_devices")
+    .delete()
+    .eq("endpoint", endpoint)
+    .neq("user_id", userId);
+
+  const { error } = await client.from("push_devices").upsert(
+    {
+      user_id: userId,
+      device_id: deviceId,
+      endpoint,
+      subscription,
+    },
+    { onConflict: "user_id,device_id" },
+  );
+  if (error) throw error;
+}
 
 export async function getSupabase() {
   if (!supabaseConfigured) return null;
@@ -114,32 +160,12 @@ export async function enableBackgroundPush(userId) {
 
   // Ensure this subscription endpoint is detached from any older user on this browser via SECURITY DEFINER RPC
   const deviceId = getDeviceId();
-  const rpcRes = await client.rpc("register_spend_push_device", {
-    p_device_id: deviceId,
-    p_endpoint: serialized.endpoint,
-    p_subscription: serialized,
+  await upsertPushDeviceWithFallback(client, {
+    userId,
+    deviceId,
+    endpoint: serialized.endpoint,
+    subscription: serialized,
   });
-  if (rpcRes.error) {
-    const isRpcMissing =
-      rpcRes.error.code === "42883" || rpcRes.error.code === "PGRST202";
-    if (!isRpcMissing) throw rpcRes.error;
-    await client
-      .from("push_devices")
-      .delete()
-      .eq("endpoint", serialized.endpoint)
-      .neq("user_id", userId);
-
-    const { error } = await client.from("push_devices").upsert(
-      {
-        user_id: userId,
-        device_id: deviceId,
-        endpoint: serialized.endpoint,
-        subscription: serialized,
-      },
-      { onConflict: "user_id,device_id" },
-    );
-    if (error) throw error;
-  }
   try {
     localStorage.removeItem(PUSH_DISABLED_BY_USER_KEY);
   } catch {}
@@ -237,34 +263,13 @@ export async function syncBackgroundSchedules(
           serialized?.keys?.p256dh &&
           serialized?.keys?.auth
         ) {
-          const rpcRes = await client.rpc("register_spend_push_device", {
-            p_device_id: deviceId,
-            p_endpoint: serialized.endpoint,
-            p_subscription: serialized,
+          await upsertPushDeviceWithFallback(client, {
+            userId,
+            deviceId,
+            endpoint: serialized.endpoint,
+            subscription: serialized,
           });
-          if (!rpcRes.error) {
-            deviceSynced = true;
-          } else {
-            await client
-              .from("push_devices")
-              .delete()
-              .eq("endpoint", serialized.endpoint)
-              .neq("user_id", userId);
-            const { error: upsertDevError } = await client
-              .from("push_devices")
-              .upsert(
-                {
-                  user_id: userId,
-                  device_id: deviceId,
-                  endpoint: serialized.endpoint,
-                  subscription: serialized,
-                },
-                { onConflict: "user_id,device_id" },
-              );
-            if (!upsertDevError) {
-              deviceSynced = true;
-            }
-          }
+          deviceSynced = true;
         }
       }
     } catch {

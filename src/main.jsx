@@ -104,6 +104,8 @@ if (typeof window !== "undefined") {
   let updateAccepted = false;
   let latestDetectedManifest = null;
   let versionCheckInFlight = null;
+  let lastVersionCheckAt = 0;
+  const VERSION_CHECK_COOLDOWN_MS = 10_000;
 
   const readInstalledBuildId = () => {
     try {
@@ -316,6 +318,14 @@ if (typeof window !== "undefined") {
 
   const checkRemoteVersion = async ({ force = false, manual = false } = {}) => {
     if (!import.meta.env.PROD && !force) return false;
+    if (
+      !force &&
+      !manual &&
+      lastVersionCheckAt > 0 &&
+      Date.now() - lastVersionCheckAt < VERSION_CHECK_COOLDOWN_MS
+    ) {
+      return Boolean(window.__spendPendingUpdate);
+    }
     if (versionCheckInFlight) {
       const result = await versionCheckInFlight;
       if (manual && (result || window.__spendPendingUpdate)) {
@@ -328,6 +338,7 @@ if (typeof window !== "undefined") {
       if (!manual) return result;
     }
 
+    lastVersionCheckAt = Date.now();
     versionCheckInFlight = (async () => {
       try {
         if (swRegistration) {

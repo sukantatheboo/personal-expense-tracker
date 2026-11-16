@@ -1854,6 +1854,9 @@ export default function App() {
   }
 
   const lastLocalSaveTimeRef = useRef(0);
+  const lastCloudRefreshTimeRef = useRef(0);
+  const cloudRealtimeStatusRef = useRef("disconnected");
+  cloudRealtimeStatusRef.current = cloudRealtimeStatus;
 
   function queueCloudSnapshotSave(userId, { forceOverwrite = false } = {}) {
     const saveTask = cloudSaveQueueRef.current
@@ -1908,6 +1911,7 @@ export default function App() {
               localDataOwnerRef.current === userId
             ) {
               lastLocalSaveTimeRef.current = Date.now();
+              lastCloudRefreshTimeRef.current = Date.now();
               cloudVersionRef.current = savedVersion;
               const effectiveSavedSnapshot = serverMergedData
                 ? mergeCloudSnapshots(snapshot, serverMergedData, true, true)
@@ -1946,6 +1950,7 @@ export default function App() {
           }
 
           const remote = await loadCloudData(userId);
+          lastCloudRefreshTimeRef.current = Date.now();
           if (
             authUserIdRef.current !== userId ||
             localDataOwnerRef.current !== userId
@@ -2020,7 +2025,16 @@ export default function App() {
         }
 
         const remote = await loadCloudData(userId);
+        lastCloudRefreshTimeRef.current = Date.now();
         if (!remote?.data) return null;
+
+        const rawLocal = cloudSnapshotRef.current;
+        const remoteSnapshot = mergeCloudSnapshots(
+          createEmptyCloudSnapshot(rawLocal),
+          remote.data,
+          false,
+          false,
+        );
 
         const isSameVersion =
           Boolean(cloudVersionRef.current) &&
@@ -2030,14 +2044,13 @@ export default function App() {
           source === "live" &&
           lastSyncedSnapshotRef.current &&
           isSameVersion &&
-          areCloudSnapshotsEqual(remote.data, lastSyncedSnapshotRef.current)
+          areCloudSnapshotsEqual(remoteSnapshot, lastSyncedSnapshotRef.current)
         ) {
           if (remote.updated_at) cloudVersionRef.current = remote.updated_at;
           setCloudSyncActivity("synced");
           return lastSyncedSnapshotRef.current;
         }
 
-        const rawLocal = cloudSnapshotRef.current;
         const previousCloud = lastSyncedSnapshotRef.current;
         const hasPendingChanges =
           previousCloud && !areCloudSnapshotsEqual(rawLocal, previousCloud);
@@ -2054,12 +2067,6 @@ export default function App() {
             local.accountData.settings,
             previousCloud.accountData.settings,
           );
-        const remoteSnapshot = mergeCloudSnapshots(
-          createEmptyCloudSnapshot(local),
-          remote.data,
-          false,
-          false,
-        );
         const refreshed = hasPendingChanges
           ? mergeCloudSnapshots(
               local,
@@ -2069,7 +2076,11 @@ export default function App() {
             )
           : remoteSnapshot;
 
-        setNormalizedAccountSync(remote.normalizedAccountSync !== false);
+        setNormalizedAccountSync((prev) =>
+          prev === (remote.normalizedAccountSync !== false)
+            ? prev
+            : remote.normalizedAccountSync !== false,
+        );
         cloudVersionRef.current = remote.updated_at ?? cloudVersionRef.current;
         cloudAccountSettingsRef.current = remoteSnapshot.accountData.settings;
         lastSyncedSnapshotRef.current = remoteSnapshot;
@@ -2590,7 +2601,12 @@ export default function App() {
       setCloudSyncActivity("syncing");
       try {
         let remote = await loadCloudData(pushUser.id);
-        setNormalizedAccountSync(remote?.normalizedAccountSync !== false);
+        lastCloudRefreshTimeRef.current = Date.now();
+        setNormalizedAccountSync((prev) =>
+          prev === (remote?.normalizedAccountSync !== false)
+            ? prev
+            : remote?.normalizedAccountSync !== false,
+        );
         const pendingOutbox = readCloudSyncOutbox(pushUser.id);
         const hasPendingOutboxMutations = Boolean(pendingOutbox?.dirty);
         let merged;
@@ -2714,6 +2730,7 @@ export default function App() {
             break;
           }
           const nextRemote = await loadCloudData(pushUser.id);
+          lastCloudRefreshTimeRef.current = Date.now();
           if (
             attemptedVersion &&
             nextRemote?.updated_at &&
@@ -2722,13 +2739,19 @@ export default function App() {
             nextRemote._bypassVersionMismatch = true;
           }
           remote = nextRemote;
-          setNormalizedAccountSync(remote?.normalizedAccountSync !== false);
+          setNormalizedAccountSync((prev) =>
+            prev === (remote?.normalizedAccountSync !== false)
+              ? prev
+              : remote?.normalizedAccountSync !== false,
+          );
         }
         if (!savedVersion || !merged) {
           throw new Error("Cloud data changed repeatedly; please try again.");
         }
         if (!active) return;
         localDataWasUnownedRef.current = false;
+        lastLocalSaveTimeRef.current = Date.now();
+        lastCloudRefreshTimeRef.current = Date.now();
         cloudVersionRef.current = savedVersion;
         lastSyncedSnapshotRef.current = lastSuccessfulSnapshot ?? merged;
         cloudAccountSettingsRef.current =
@@ -2877,14 +2900,24 @@ export default function App() {
         }
       }
     };
+    const triggerForegroundSyncIfNeeded = () => {
+      if (!navigator.onLine) return;
+      if (hasPendingCloudOutbox(pushUser.id)) {
+        void queueCloudSnapshotSave(pushUser.id).catch(() => {});
+        return;
+      }
+      if (
+        Date.now() - lastCloudRefreshTimeRef.current >= 3000 &&
+        Date.now() - lastLocalSaveTimeRef.current >= 2500
+      ) {
+        handleCloudChange();
+      }
+    };
     const handleVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
         flushOutboxOnClose();
       } else if (document.visibilityState === "visible") {
-        if (hasPendingCloudOutbox(pushUser.id)) {
-          void queueCloudSnapshotSave(pushUser.id).catch(() => {});
-        }
-        handleCloudChange();
+        triggerForegroundSyncIfNeeded();
       }
     };
     const handlePageHide = () => {
@@ -2898,8 +2931,8 @@ export default function App() {
           ({ isActive }) => {
             if (!isActive) {
               flushOutboxOnClose();
-            } else if (hasPendingCloudOutbox(pushUser.id)) {
-              void queueCloudSnapshotSave(pushUser.id).catch(() => {});
+            } else {
+              triggerForegroundSyncIfNeeded();
             }
           },
         );
@@ -2908,23 +2941,24 @@ export default function App() {
       }
     }
     const handleWindowFocus = () => {
-      if (document.visibilityState === "visible" && navigator.onLine) {
-        if (hasPendingCloudOutbox(pushUser.id)) {
-          void queueCloudSnapshotSave(pushUser.id).catch(() => {});
-        }
-        handleCloudChange();
+      if (document.visibilityState === "visible") {
+        triggerForegroundSyncIfNeeded();
       }
     };
     const periodicSyncTimer = window.setInterval(() => {
+      const now = Date.now();
+      const realtimeLive = cloudRealtimeStatusRef.current === "live";
+      const minElapsedMs = realtimeLive ? 60_000 : 15_000;
       if (
         active &&
         document.visibilityState === "visible" &&
         navigator.onLine &&
-        Date.now() - lastLocalSaveTimeRef.current >= 4000
+        now - lastLocalSaveTimeRef.current >= 4000 &&
+        now - lastCloudRefreshTimeRef.current >= minElapsedMs
       ) {
         void queueCloudSnapshotRefresh(pushUser.id, "live").catch(() => {});
       }
-    }, 10000);
+    }, 15000);
 
     window.addEventListener("offline", handleOffline);
     window.addEventListener("online", handleOnline);

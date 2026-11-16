@@ -31,6 +31,9 @@ as $$
 $$;
 
 -- 2. SECURITY DEFINER RPC: register_spend_push_device (BUG-03)
+alter table if exists public.push_devices
+  add column if not exists updated_at timestamptz not null default timezone('utc', now());
+
 create or replace function public.register_spend_push_device(
   p_device_id text,
   p_endpoint text,
@@ -44,6 +47,7 @@ as $$
 declare
   v_uid uuid := auth.uid();
   v_dev_id text := btrim(coalesce(p_device_id, ''));
+  v_dev_uuid uuid;
   v_ep text := btrim(coalesce(p_endpoint, ''));
 begin
   if v_uid is null then
@@ -52,6 +56,12 @@ begin
   if v_dev_id = '' or v_ep = '' or p_subscription is null or jsonb_typeof(p_subscription) <> 'object' then
     raise exception 'Invalid push device parameters' using errcode = '22023';
   end if;
+
+  begin
+    v_dev_uuid := v_dev_id::uuid;
+  exception when others then
+    raise exception 'Invalid push device ID format' using errcode = '22023';
+  end;
 
   if to_regclass('public.push_devices') is null then
     return jsonb_build_object('status', 'skipped');
@@ -71,14 +81,13 @@ begin
   where endpoint = v_ep
     and user_id <> v_uid;
 
-  insert into public.push_devices (user_id, device_id, endpoint, subscription, updated_at)
-  values (v_uid, v_dev_id, v_ep, p_subscription, timezone('utc', now()))
+  insert into public.push_devices (user_id, device_id, endpoint, subscription)
+  values (v_uid, v_dev_uuid, v_ep, p_subscription)
   on conflict (user_id, device_id) do update
   set endpoint = excluded.endpoint,
-      subscription = excluded.subscription,
-      updated_at = timezone('utc', now());
+      subscription = excluded.subscription;
 
-  return jsonb_build_object('status', 'registered', 'device_id', v_dev_id);
+  return jsonb_build_object('status', 'registered', 'device_id', v_dev_uuid::text);
 end;
 $$;
 
@@ -1164,6 +1173,114 @@ begin
   );
 end;
 $$;
+
+-- 6. Update verify_spend_sql_installation to include register_spend_push_device & spend_is_credit_card
+create or replace function public.verify_spend_sql_installation()
+returns table (
+  component text,
+  category text,
+  status text,
+  details text
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  return query
+  select
+    'spend_user_data'::text,
+    'Table'::text,
+    case when to_regclass('public.spend_user_data') is not null then '✅ INSTALLED' else '❌ MISSING' end,
+    'Primary user snapshot store'::text
+  union all
+  select
+    'spend_account_settings'::text,
+    'Table + Columns'::text,
+    case when exists (
+      select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'spend_account_settings' and column_name = 'current_balances'
+    ) then '✅ INSTALLED' else '❌ MISSING' end,
+    'Opening & live current balances per card/MFS/cash account'::text
+  union all
+  select
+    'spend_account_transactions'::text,
+    'Table + Columns'::text,
+    case when exists (
+      select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'spend_account_transactions' and column_name = 'updated_at_ms'
+    ) and exists (
+      select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'spend_account_transactions' and column_name = 'balance_after'
+    ) then '✅ INSTALLED' else '❌ MISSING' end,
+    'Unified MFS/card/cash ledger with balance_before/after & client ms timestamps'::text
+  union all
+  select
+    'spend_backup_checkpoints'::text,
+    'Table'::text,
+    case when to_regclass('public.spend_backup_checkpoints') is not null then '✅ INSTALLED' else '❌ MISSING' end,
+    'Immutable daily & pre-restore cloud backup checkpoints'::text
+  union all
+  select
+    'sync_spend_accounts_from_snapshot'::text,
+    'Trigger'::text,
+    case when exists (
+      select 1 from pg_trigger
+      where tgname = 'sync_spend_accounts_from_snapshot'
+    ) then '✅ INSTALLED' else '❌ MISSING' end,
+    'Automatic ledger computation, credit card liability & 60-day soft-delete purge trigger'::text
+  union all
+  select
+    'load_spend_user_snapshot'::text,
+    'RPC Function'::text,
+    case when to_regprocedure('public.load_spend_user_snapshot()') is not null then '✅ INSTALLED' else '❌ MISSING' end,
+    'Tombstone-filtered multi-device snapshot loader'::text
+  union all
+  select
+    'save_spend_user_snapshot'::text,
+    'RPC Function'::text,
+    case when to_regprocedure('public.save_spend_user_snapshot(jsonb,text,boolean)') is not null then '✅ INSTALLED' else '❌ MISSING' end,
+    'Atomic CRDT-merging snapshot save with checkpointing'::text
+  union all
+  select
+    'verify_spend_ledger_reconciliation'::text,
+    'RPC Function'::text,
+    case when to_regprocedure('public.verify_spend_ledger_reconciliation(uuid)') is not null then '✅ INSTALLED' else '❌ MISSING' end,
+    'Server-side Opening + Credits - Debits = Current verification (v2026.11.18)'::text
+  union all
+  select
+    'restore_spend_backup_checkpoint'::text,
+    'RPC Function'::text,
+    case when to_regprocedure('public.restore_spend_backup_checkpoint(uuid)') is not null then '✅ INSTALLED' else '❌ MISSING' end,
+    'One-tap checkpoint rollback with complete cross-device tombstones'::text
+  union all
+  select
+    'register_spend_push_device'::text,
+    'RPC Function'::text,
+    case when to_regprocedure('public.register_spend_push_device(text,text,jsonb)') is not null then '✅ INSTALLED' else '❌ MISSING' end,
+    'SECURITY DEFINER push subscription endpoint detachment across accounts'::text
+  union all
+  select
+    'claim_due_push_reminders'::text,
+    'RPC Function'::text,
+    case when to_regprocedure('public.claim_due_push_reminders(integer,integer)') is not null then '✅ INSTALLED' else '❌ MISSING' end,
+    'Atomic skip-locked lease RPC for send-due-reminders Edge Function'::text
+  union all
+  select
+    'supabase_realtime'::text,
+    'Realtime Publication'::text,
+    case when exists (
+      select 1 from pg_publication_tables
+      where pubname = 'supabase_realtime'
+        and schemaname = 'public'
+        and tablename = 'spend_user_data'
+    ) then '✅ INSTALLED' else '❌ MISSING' end,
+    'Live WebSocket push across signed-in devices'::text;
+end;
+$$;
+
+revoke all on function public.verify_spend_sql_installation() from public, anon;
+grant execute on function public.verify_spend_sql_installation() to authenticated, service_role;
 
 -- Re-run snapshot sync for all existing users so credit card and cash balances reconcile immediately
 update public.spend_user_data

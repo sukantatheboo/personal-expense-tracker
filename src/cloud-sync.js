@@ -774,16 +774,17 @@ export async function checkSupabaseSqlHealth() {
       return {
         installed: true,
         allPassed,
-        schemaVersion: cloudReconciliation?.schemaVersion || "2026.11.17",
+        schemaVersion: cloudReconciliation?.schemaVersion || "2026.11.18",
         checks,
         cloudReconciliation,
       };
     }
     if (cloudReconciliation) {
+      const ver = String(cloudReconciliation.schemaVersion || "");
       return {
         installed: true,
-        allPassed: Boolean(cloudReconciliation.schemaVersion === "2026.11.17"),
-        schemaVersion: cloudReconciliation.schemaVersion || "2026.11.16",
+        allPassed: Boolean(ver >= "2026.11.17"),
+        schemaVersion: ver || "2026.11.16",
         checks: [],
         cloudReconciliation,
       };
