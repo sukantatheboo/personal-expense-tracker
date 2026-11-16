@@ -1,5 +1,21 @@
 @import url("https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap");
 
+/* Android local @font-face definitions for offline reliability */
+@font-face {
+  font-family: "Manrope";
+  font-style: normal;
+  font-weight: 500 800;
+  font-display: swap;
+  src:
+    local("Manrope"),
+    local("Manrope-Regular"),
+    local("Manrope-Medium"),
+    local("Manrope-SemiBold"),
+    local("Manrope-Bold"),
+    local("Manrope-ExtraBold"),
+    local("Roboto");
+}
+
 :root {
   color-scheme: light;
   --page-bg: #f4f3ee;

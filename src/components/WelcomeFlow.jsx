@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { App as CapacitorApp } from "@capacitor/app";
 import "./WelcomeFlow.css";
 
 const SLIDE_COUNT = 4;
@@ -24,10 +25,42 @@ export default function WelcomeFlow({ onDone, theme, exiting = false }) {
   const touchStartXRef = useRef(null);
   const splashGoneRef = useRef(exiting);
   const finishedRef = useRef(false);
+  const slideIndexRef = useRef(0);
 
   useEffect(() => {
     splashGoneRef.current = splashGone;
   }, [splashGone]);
+
+  useEffect(() => {
+    slideIndexRef.current = slideIndex;
+  }, [slideIndex]);
+
+  useEffect(() => {
+    if (
+      typeof document === "undefined" ||
+      document.documentElement.dataset.platform !== "android"
+    ) {
+      return undefined;
+    }
+    const appPlugin = CapacitorApp || window.Capacitor?.Plugins?.App;
+    if (!appPlugin?.addListener) return undefined;
+    let listener = null;
+    try {
+      listener = appPlugin.addListener("backButton", () => {
+        if (slideIndexRef.current > 0) {
+          setSlideIndex((prev) => Math.max(0, prev - 1));
+          setSlidesReady(true);
+        } else if (typeof appPlugin.minimizeApp === "function") {
+          appPlugin.minimizeApp().catch(() => {});
+        }
+      });
+    } catch {}
+    return () => {
+      Promise.resolve(listener)
+        .then((h) => h?.remove?.())
+        .catch(() => {});
+    };
+  }, []);
 
   const donutSegments = useMemo(() => {
     let offset = 0;

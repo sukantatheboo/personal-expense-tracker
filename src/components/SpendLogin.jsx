@@ -142,6 +142,20 @@ export default function SpendLogin({
     return () => window.removeEventListener("keydown", onKey);
   }, [press, back]);
 
+  // Android back-swipe dismisses open PIN pad sheet instead of exiting
+  useEffect(() => {
+    if (
+      !open ||
+      typeof document === "undefined" ||
+      document.documentElement.dataset.platform !== "android"
+    ) {
+      return undefined;
+    }
+    const onPopState = () => setOpen(false);
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [open]);
+
   const cls = [
     "sl",
     open && "sl--open",

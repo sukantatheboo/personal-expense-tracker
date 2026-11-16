@@ -9,6 +9,7 @@ const STATIC_PATHS = [
   "",
   "index.html",
   "manifest.webmanifest",
+  "fonts/fonts.css",
   "favicon.svg",
   "icon.svg",
   "icons/icon-180.png",
@@ -237,6 +238,30 @@ self.addEventListener("fetch", (event) => {
   if (request.headers.has("range")) return;
 
   const url = new URL(request.url);
+  if (
+    url.hostname === "fonts.googleapis.com" ||
+    url.hostname === "fonts.gstatic.com"
+  ) {
+    event.respondWith(
+      caches.match(request).then(
+        (cached) =>
+          cached ||
+          fetch(request)
+            .then((response) => {
+              if (response && (response.ok || response.type === "opaque")) {
+                const copy = response.clone();
+                caches
+                  .open(STATIC_CACHE)
+                  .then((cache) => cache.put(request, copy))
+                  .catch(() => {});
+              }
+              return response;
+            })
+            .catch(() => new Response("", { status: 200 })),
+      ),
+    );
+    return;
+  }
   if (url.origin !== self.location.origin) return;
 
   const scopeUrl = new URL(self.registration.scope);

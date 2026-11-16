@@ -10,6 +10,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { App as CapacitorApp } from "@capacitor/app";
 import {
   computeAccountBalances,
   flushStorageWriteQueues,
@@ -10052,6 +10053,23 @@ function AppSettingsPage({
       window.__spendCheckForUpdates?.();
     }
   }, []);
+  const [canInstallAndroidApp, setCanInstallAndroidApp] = useState(() =>
+    isAndroidPlatform() && Boolean(window.__spendCanInstallWebApk?.()),
+  );
+  const [installingAndroidApp, setInstallingAndroidApp] = useState(false);
+  useEffect(() => {
+    if (!isAndroidPlatform() || typeof window === "undefined") return undefined;
+    const syncInstallState = () => {
+      setCanInstallAndroidApp(Boolean(window.__spendCanInstallWebApk?.()));
+    };
+    syncInstallState();
+    window.addEventListener("spend:install-available", syncInstallState);
+    window.addEventListener("spend:app-installed", syncInstallState);
+    return () => {
+      window.removeEventListener("spend:install-available", syncInstallState);
+      window.removeEventListener("spend:app-installed", syncInstallState);
+    };
+  }, []);
   const [reconcileExpanded, setReconcileExpanded] = useState(false);
   const [checkpointsExpanded, setCheckpointsExpanded] = useState(false);
   const [statusTarget, setStatusTarget] = useState("data");
@@ -10651,6 +10669,49 @@ function AppSettingsPage({
       <section className="card app-settings-card mfs-card-list">
         <h2>App updates</h2>
         <div className="mfs-card-rows">
+          {isAndroidPlatform() && canInstallAndroidApp && (
+            <button
+              className="ri settings-action mfs-list-row"
+              type="button"
+              disabled={installingAndroidApp}
+              onClick={async () => {
+                triggerHaptic("selection");
+                setInstallingAndroidApp(true);
+                try {
+                  const res = await window.__spendPromptInstall?.();
+                  if (res?.outcome === "accepted") {
+                    setCanInstallAndroidApp(false);
+                    onToast?.("Installing Spend on your Android home screen…");
+                  }
+                } finally {
+                  setInstallingAndroidApp(false);
+                }
+              }}
+            >
+              <i className="ic mfs-row-icon" style={{ "--c": "#10b981" }}>
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.1"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M12 3v12" />
+                  <path d="m7 10 5 5 5-5" />
+                  <path d="M5 21h14" />
+                </svg>
+              </i>
+              <span className="nm">
+                <b>Install Android app</b>
+                <small>Add native WebAPK to your home screen</small>
+              </span>
+              <span className="settings-inline-action mfs-status-pill is-active">
+                {installingAndroidApp ? "Installing…" : "Install"}
+              </span>
+            </button>
+          )}
           <button
             className="ri settings-action mfs-list-row"
             type="button"
@@ -11023,26 +11084,51 @@ function SecuritySheet({ onClose, onBack, onLockNow }) {
                   onClick={handleToggleBiometrics}
                 >
                   <i className="ic mfs-row-icon" style={{ "--c": "#6366f1" }}>
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.1"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                    >
-                      <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
-                      <path d="M9 9h.01M15 9h.01M10 13a2 2 0 0 0 4 0m-2 0v2" />
-                    </svg>
+                    {isAndroidPlatform() ? (
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.1"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4" />
+                        <path d="M14 13.12c0 2.38 0 6.38-1 8.88" />
+                        <path d="M17.29 21.02c.12-.6.43-2.3.5-3.02" />
+                        <path d="M2 12a10 10 0 0 1 18-6" />
+                        <path d="M21.8 16c.2-2 .131-5.354 0-6" />
+                        <path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2" />
+                        <path d="M8.65 22c.21-.66.45-1.32.57-2" />
+                        <path d="M9 6.8a6 6 0 0 1 9 5.2v2" />
+                      </svg>
+                    ) : (
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.1"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+                        <path d="M9 9h.01M15 9h.01M10 13a2 2 0 0 0 4 0m-2 0v2" />
+                      </svg>
+                    )}
                   </i>
                   <span className="nm">
                     <b>Biometric Unlock</b>
                     <small>
                       {biometricsConfigured
-                        ? "Face ID / Touch ID"
+                        ? isAndroidPlatform()
+                          ? "Fingerprint / Biometrics"
+                          : "Face ID / Touch ID"
                         : biometricsAvailable
-                          ? "Off"
+                          ? isAndroidPlatform()
+                            ? "Use Fingerprint or Biometrics"
+                            : "Off"
                           : "Unavailable on this device"}
                     </small>
                   </span>
@@ -11755,8 +11841,11 @@ export default function MobilePrototype({
         message: `Too many attempts. Try again in ${lockoutSec}s.`,
       };
     }
-    const biometricLabel =
-      detectMobilePlatform() === "ios" ? "Face ID / Touch ID" : "Biometrics";
+    const biometricLabel = isAndroidPlatform()
+      ? "Fingerprint / Biometrics"
+      : detectMobilePlatform() === "ios"
+        ? "Face ID / Touch ID"
+        : "Biometrics";
     triggerHaptic("light");
     if (!hasBiometricsConfigured()) {
       triggerHaptic("warning");
@@ -11848,11 +11937,12 @@ export default function MobilePrototype({
       }
     }, 5000);
 
-    // Native Capacitor app lifecycle support
+    // Native Capacitor app lifecycle support (Android & iOS)
     let capacitorListenerHandle = null;
-    if (window.Capacitor?.Plugins?.App?.addListener) {
+    const appPlugin = CapacitorApp || window.Capacitor?.Plugins?.App;
+    if (appPlugin?.addListener) {
       try {
-        capacitorListenerHandle = window.Capacitor.Plugins.App.addListener(
+        capacitorListenerHandle = appPlugin.addListener(
           "appStateChange",
           ({ isActive }) => {
             if (isActive) {
@@ -12782,27 +12872,51 @@ export default function MobilePrototype({
     tab !== "home";
 
   useEffect(() => {
-    if (typeof window === "undefined" || !window.history?.pushState) return;
+    if (
+      typeof window === "undefined" ||
+      !isAndroidPlatform() ||
+      !window.history?.pushState
+    ) {
+      return;
+    }
     if (isNonRootLayer && !historyGuardArmedRef.current) {
       try {
-        window.history.pushState({ __spendBackGuard: true }, "", window.location.href);
+        window.history.pushState(
+          { __spendBackGuard: true },
+          "",
+          window.location.href,
+        );
         historyGuardArmedRef.current = true;
       } catch {}
     }
   }, [isNonRootLayer, sheet?.type, profileSettingsOpen, appSettingsOpen, tab]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return undefined;
+    if (typeof window === "undefined" || !isAndroidPlatform()) return undefined;
 
     const handleBackStep = () => {
       const st = backNavStateRef.current;
       if (!st) return false;
+      if (st.resetPinConfirmOpen) {
+        setResetPinConfirmOpen(false);
+        return true;
+      }
+      if (document.querySelector(".sl.sl--open")) {
+        window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+        return true;
+      }
       if (st.confirmDeleteExpense) {
         setConfirmDeleteExpense(null);
         return true;
       }
-      if (st.resetPinConfirmOpen) {
-        setResetPinConfirmOpen(false);
+      const innerSheetBackBtn = document.querySelector(
+        ".security-sheet-back-btn, .add-card-back-btn",
+      );
+      if (
+        innerSheetBackBtn instanceof HTMLElement &&
+        !innerSheetBackBtn.hasAttribute("disabled")
+      ) {
+        innerSheetBackBtn.click();
         return true;
       }
       if (st.sheet && !st.sheetClosing) {
@@ -12838,7 +12952,11 @@ export default function MobilePrototype({
             (next?.tab && next.tab !== "home");
           if (stillDeep && !historyGuardArmedRef.current) {
             try {
-              window.history.pushState({ __spendBackGuard: true }, "", window.location.href);
+              window.history.pushState(
+                { __spendBackGuard: true },
+                "",
+                window.location.href,
+              );
               historyGuardArmedRef.current = true;
             } catch {}
           }
@@ -12849,14 +12967,24 @@ export default function MobilePrototype({
     window.addEventListener("popstate", onPopState);
 
     let capBackListener = null;
-    if (window.Capacitor?.Plugins?.App?.addListener) {
+    const appPlugin = CapacitorApp || window.Capacitor?.Plugins?.App;
+    if (appPlugin?.addListener) {
       try {
-        capBackListener = window.Capacitor.Plugins.App.addListener(
+        capBackListener = appPlugin.addListener(
           "backButton",
-          () => {
+          ({ canGoBack } = {}) => {
             const handled = handleBackStep();
-            if (!handled) {
-              window.Capacitor?.Plugins?.App?.exitApp?.();
+            if (handled) return;
+            if (canGoBack && window.history.length > 1) {
+              window.history.back();
+              return;
+            }
+            if (typeof appPlugin.minimizeApp === "function") {
+              appPlugin.minimizeApp().catch(() => {
+                appPlugin.exitApp?.();
+              });
+            } else {
+              appPlugin.exitApp?.();
             }
           },
         );
@@ -12865,7 +12993,9 @@ export default function MobilePrototype({
 
     return () => {
       window.removeEventListener("popstate", onPopState);
-      capBackListener?.then?.((h) => h?.remove?.())?.catch?.(() => {});
+      Promise.resolve(capBackListener)
+        .then((h) => h?.remove?.())
+        .catch(() => {});
     };
   }, []);
   const activeMonthLabel = fM(S.m);
@@ -12957,7 +13087,11 @@ export default function MobilePrototype({
                 ? {
                     type: platform === "ios" ? "face" : "fingerprint",
                     label:
-                      platform === "ios" ? "Face ID / Touch ID" : "Biometrics",
+                      platform === "android"
+                        ? "Fingerprint / Biometrics"
+                        : platform === "ios"
+                          ? "Face ID / Touch ID"
+                          : "Biometrics",
                   }
                 : null
             }

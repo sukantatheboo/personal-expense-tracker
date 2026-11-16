@@ -31,7 +31,74 @@ const CURRENT_BUILT_AT =
 const INSTALLED_BUILD_KEY = "spend-installed-build-id-v1";
 const ACCEPTED_BUILD_KEY = "spend-update-accepted-v1";
 
+function isAndroidRuntime() {
+  if (typeof window === "undefined") return false;
+  try {
+    if (document.documentElement?.dataset?.platform === "android") return true;
+    if (window.Capacitor?.getPlatform?.() === "android") return true;
+  } catch {
+    // ignore
+  }
+  const ua = typeof navigator !== "undefined" ? navigator.userAgent || "" : "";
+  const plat =
+    (typeof navigator !== "undefined" &&
+      (navigator.userAgentData?.platform || navigator.platform)) ||
+    "";
+  return /android/i.test(ua) || /android/i.test(plat);
+}
+
 if (typeof window !== "undefined") {
+  // Capture beforeinstallprompt on Android Chrome for WebAPK installation
+  if (isAndroidRuntime()) {
+    window.__spendDeferredInstallPrompt =
+      window.__spendDeferredInstallPrompt || null;
+
+    window.addEventListener("beforeinstallprompt", (event) => {
+      event.preventDefault();
+      window.__spendDeferredInstallPrompt = event;
+      window.dispatchEvent(
+        new CustomEvent("spend:install-available", {
+          detail: { available: true },
+        }),
+      );
+    });
+
+    window.addEventListener("appinstalled", () => {
+      window.__spendDeferredInstallPrompt = null;
+      window.dispatchEvent(
+        new CustomEvent("spend:install-available", {
+          detail: { available: false },
+        }),
+      );
+      window.dispatchEvent(new CustomEvent("spend:app-installed"));
+    });
+
+    window.__spendCanInstallWebApk = () =>
+      Boolean(window.__spendDeferredInstallPrompt);
+
+    window.__spendPromptInstall = async () => {
+      const promptEvent = window.__spendDeferredInstallPrompt;
+      if (!promptEvent || typeof promptEvent.prompt !== "function") {
+        return { outcome: "unavailable" };
+      }
+      try {
+        await promptEvent.prompt();
+        const choiceResult = await promptEvent.userChoice;
+        if (choiceResult?.outcome === "accepted") {
+          window.__spendDeferredInstallPrompt = null;
+          window.dispatchEvent(
+            new CustomEvent("spend:install-available", {
+              detail: { available: false },
+            }),
+          );
+        }
+        return choiceResult || { outcome: "dismissed" };
+      } catch {
+        return { outcome: "error" };
+      }
+    };
+  }
+
   let swRegistration = null;
   let refreshing = false;
   let updateAccepted = false;

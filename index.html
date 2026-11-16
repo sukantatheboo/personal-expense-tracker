@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="theme-color" content="#f4f3ee" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#08080c" media="(prefers-color-scheme: dark)" />
     <script>
@@ -28,6 +28,29 @@
           root.setAttribute("data-theme", resolved);
           root.style.colorScheme = resolved;
           root.style.backgroundColor = dark ? "#08080c" : "#f4f3ee";
+
+          var ua = (navigator && navigator.userAgent) || "";
+          var plat =
+            (navigator &&
+              ((navigator.userAgentData && navigator.userAgentData.platform) ||
+                navigator.platform)) ||
+            "";
+          var capPlat =
+            window.Capacitor && typeof window.Capacitor.getPlatform === "function"
+              ? window.Capacitor.getPlatform()
+              : "";
+          var detectedPlatform =
+            capPlat === "android" || capPlat === "ios"
+              ? capPlat
+              : /android/i.test(ua) || /android/i.test(plat)
+                ? "android"
+                : /iPhone|iPad|iPod/i.test(ua) ||
+                    /iPhone|iPad|iPod/i.test(plat) ||
+                    (/Mac/i.test(plat) && navigator.maxTouchPoints > 1)
+                  ? "ios"
+                  : "web";
+          root.dataset.platform = detectedPlatform;
+          root.setAttribute("data-platform", detectedPlatform);
         } catch (e) {}
       })();
     </script>
@@ -36,6 +59,36 @@
     <meta name="apple-mobile-web-app-title" content="Spend" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="format-detection" content="telephone=no" />
+    <style id="spend-local-fonts">
+      @font-face {
+        font-family: "Manrope";
+        font-style: normal;
+        font-weight: 500 800;
+        font-display: swap;
+        src:
+          local("Manrope"),
+          local("Manrope-Regular"),
+          local("Manrope-Medium"),
+          local("Manrope-SemiBold"),
+          local("Manrope-Bold"),
+          local("Manrope-ExtraBold"),
+          local("Roboto"),
+          local("sans-serif");
+      }
+      @font-face {
+        font-family: "Plus Jakarta Sans";
+        font-style: normal;
+        font-weight: 500 800;
+        font-display: swap;
+        src:
+          local("Plus Jakarta Sans"),
+          local("PlusJakartaSans-Medium"),
+          local("PlusJakartaSans-Bold"),
+          local("PlusJakartaSans-ExtraBold"),
+          local("Roboto"),
+          local("sans-serif");
+      }
+    </style>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="manifest" href="%BASE_URL%manifest.webmanifest" />

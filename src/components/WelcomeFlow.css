@@ -1,4 +1,15 @@
-@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;700;800&display=swap");
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  font-style: normal;
+  font-weight: 500 800;
+  font-display: swap;
+  src:
+    local("Plus Jakarta Sans"),
+    local("PlusJakartaSans-Bold"),
+    local("PlusJakartaSans-ExtraBold"),
+    local("Roboto"),
+    local("sans-serif");
+}
 
 .welcome-flow {
   --bg: #f3f2ec;
@@ -279,7 +290,7 @@ html[data-theme="light"] .welcome-flow,
   display: flex;
   min-height: 0;
   transition: transform 0.55s cubic-bezier(0.65, 0, 0.25, 1);
-  touch-action: pan-y pinch-zoom;
+  touch-action: pan-y;
 }
 
 .welcome-flow .slide {
@@ -289,7 +300,16 @@ html[data-theme="light"] .welcome-flow,
   display: flex;
   flex-direction: column;
   min-height: 0;
-  touch-action: none;
+}
+
+/* Android-only: prevent horizontal slide drag from triggering Chrome's tab switcher or edge overscroll */
+html[data-platform="android"] .welcome-flow,
+html[data-platform="android"] .welcome-flow .track,
+html[data-platform="android"] .welcome-flow .slide {
+  touch-action: pan-y pinch-zoom;
+  overscroll-behavior-x: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .welcome-flow h2 {
