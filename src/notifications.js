@@ -85,25 +85,54 @@ function resolveSoundUrl(tone) {
   return `./${fileName}`;
 }
 
+function isIosWebKitAudio() {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent || "";
+  const platform = navigator.userAgentData?.platform || navigator.platform || "";
+  return (
+    /iPhone|iPad|iPod/i.test(ua) ||
+    /iPhone|iPad|iPod/i.test(platform) ||
+    (/Mac/i.test(platform) && navigator.maxTouchPoints > 1)
+  );
+}
+
 function setupAudioUnlock() {
   if (typeof window === "undefined" || audioUnlocked) return;
   const unlock = () => {
+    if (
+      typeof navigator !== "undefined" &&
+      navigator.userActivation &&
+      !navigator.userActivation.isActive &&
+      !navigator.userActivation.hasBeenActive
+    ) {
+      return;
+    }
     audioUnlocked = true;
     const ctx = getSharedAudioContext();
     if (ctx) {
+      const playSilentBuffer = () => {
+        try {
+          const buffer = ctx.createBuffer(1, 1, 22050);
+          const source = ctx.createBufferSource();
+          source.buffer = buffer;
+          source.connect(ctx.destination);
+          source.start(0);
+        } catch {
+          // ignore
+        }
+      };
+
       if (ctx.state === "suspended" || ctx.state === "interrupted") {
-        ctx.resume().catch(() => {});
-      }
-      // iOS Safari WebKit requires playing a silent buffer inside a direct user
-      // gesture to fully unlock the AudioContext output channel.
-      try {
-        const buffer = ctx.createBuffer(1, 1, 22050);
-        const source = ctx.createBufferSource();
-        source.buffer = buffer;
-        source.connect(ctx.destination);
-        source.start(0);
-      } catch {
-        // ignore
+        ctx
+          .resume()
+          .then(() => {
+            if (isIosWebKitAudio() && ctx.state === "running") {
+              playSilentBuffer();
+            }
+          })
+          .catch(() => {});
+      } else if (isIosWebKitAudio() && ctx.state === "running") {
+        playSilentBuffer();
       }
     }
     if (pendingBlockedTone && Date.now() - pendingBlockedToneAt < 15000) {
@@ -112,20 +141,10 @@ function setupAudioUnlock() {
       pendingBlockedToneAt = 0;
       playNotificationAudioTone(toneToPlay);
     }
-    window.removeEventListener("pointerdown", unlock, true);
-    window.removeEventListener("touchstart", unlock, true);
     window.removeEventListener("touchend", unlock, true);
     window.removeEventListener("click", unlock, true);
     window.removeEventListener("keydown", unlock, true);
   };
-  window.addEventListener("pointerdown", unlock, {
-    capture: true,
-    passive: true,
-  });
-  window.addEventListener("touchstart", unlock, {
-    capture: true,
-    passive: true,
-  });
   window.addEventListener("touchend", unlock, { capture: true, passive: true });
   window.addEventListener("click", unlock, { capture: true, passive: true });
   window.addEventListener("keydown", unlock, { capture: true, passive: true });
