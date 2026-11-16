@@ -293,6 +293,7 @@ function snapshotHasMeaningfulRecords(data) {
 function readLocalCheckpointsRaw() {
   if (typeof window === "undefined") return [];
   try {
+    if (hasAppPin() && !isSessionUnlocked()) return [];
     const raw = localStorage.getItem(LOCAL_CHECKPOINTS_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
@@ -304,6 +305,7 @@ function readLocalCheckpointsRaw() {
 
 function writeLocalCheckpointsRaw(items) {
   if (typeof window === "undefined") return false;
+  if (hasAppPin() && !isSessionUnlocked()) return false;
   let current = Array.isArray(items) ? items : [];
   while (current.length > 0) {
     try {
@@ -601,6 +603,38 @@ export async function restoreBackupCheckpoint(
         mergedDel.recurringSchedules[rec.id] = {
           deleted: true,
           updatedAt: Math.max(nowMs, recTime + 1),
+        };
+      }
+    }
+
+    const targetCardIds = new Set(
+      (targetData?.accountData?.settings?.cards || [])
+        .map((c) => c?.id)
+        .filter(Boolean),
+    );
+    for (const card of beforeData?.accountData?.settings?.cards || []) {
+      if (card?.id && !targetCardIds.has(card.id)) {
+        const cardTime =
+          parseRecordTime(card.updatedAt) ||
+          parseRecordTime(card.createdAt) ||
+          0;
+        mergedDel.cards[card.id] = {
+          deleted: true,
+          updatedAt: Math.max(nowMs, cardTime + 1),
+        };
+      }
+    }
+
+    const targetBudgetMonths = new Set(
+      Object.keys(targetData?.budgets || {}).filter(Boolean),
+    );
+    for (const month of Object.keys(beforeData?.budgets || {})) {
+      if (month && !targetBudgetMonths.has(month)) {
+        const bTime =
+          parseRecordTime(beforeData?.budgetUpdatedAt?.[month]) || 0;
+        mergedDel.budgets[month] = {
+          deleted: true,
+          updatedAt: Math.max(nowMs, bTime + 1),
         };
       }
     }
@@ -1014,6 +1048,14 @@ function mergeAccountDataWithRawSnapshot(
 
     return {
       ...card,
+      subtitle:
+        typeof card?.subtitle === "string"
+          ? card.subtitle.replace(/\bUSD\b/gi, "BDT")
+          : card?.subtitle || "",
+      currency:
+        !card?.currency || String(card.currency).toUpperCase() === "USD"
+          ? "BDT"
+          : card.currency,
       initialBalance: cleanBal,
       ...(mergedCurrentBalances[id] !== undefined
         ? { currentBalance: mergedCurrentBalances[id] }
@@ -1536,7 +1578,29 @@ export async function saveCloudData(
       if (rpcRes.data.status === "conflict") {
         return null;
       }
-      return rpcRes.data.updated_at ?? null;
+      const updatedAt = rpcRes.data.updated_at ?? null;
+      if (!updatedAt) return null;
+      const mergedData = rpcRes.data.data
+        ? {
+            ...rpcRes.data.data,
+            accountData: loadAccountData(
+              rpcRes.data.data.accountData ?? emptyAccountData(),
+              rpcRes.data.data.deletedRecords,
+              rpcRes.data.data.expenses,
+            ),
+          }
+        : null;
+      return {
+        updated_at: updatedAt,
+        data: mergedData,
+        reconciliation: rpcRes.data.reconciliation ?? null,
+        toString() {
+          return String(updatedAt);
+        },
+        valueOf() {
+          return String(updatedAt);
+        },
+      };
     }
     return rpcRes.data ?? null;
   }

@@ -228,6 +228,30 @@ export function isSavingsCard(card) {
   );
 }
 
+export function isCashCard(card) {
+  if (!card || typeof card !== "object") return false;
+  return Boolean(
+    card.id === "cash" ||
+      card.provider === "cash" ||
+      card.category === "cash" ||
+      card.type === "cash",
+  );
+}
+
+export function isCreditCard(card) {
+  if (!card || typeof card !== "object") return false;
+  if (isSavingsCard(card) || isCashCard(card)) return false;
+  if (
+    card.category === "mfs" ||
+    card.type === "mfs" ||
+    card.network === "mfs" ||
+    card.isPhone
+  ) {
+    return false;
+  }
+  return String(card.type || "").toLowerCase() === "credit";
+}
+
 export function isPhantomAutoReconstructedCard(card) {
   if (!card || typeof card !== "object") return false;
   const hasNoCustomDetails =
@@ -456,22 +480,38 @@ export function computeAccountBalances(
       ? openingBalances
       : {};
   const savingsId = getSavingsAccountId(safeCards);
+  const cashCard = safeCards.find(isCashCard) || null;
+  const cashAccountId = cashCard?.id || "cash";
+  const creditCardIds = new Set(
+    safeCards.filter(isCreditCard).map((c) => c.id),
+  );
+
+  const normalizeAcctId = (raw) => {
+    const trimmed = typeof raw === "string" ? raw.trim() : "";
+    if (!trimmed || trimmed === "cash") return cashAccountId;
+    return trimmed;
+  };
 
   const openingMap = {};
   const creditsByAccount = {};
   const debitsByAccount = {};
   for (const [k, v] of Object.entries(rawOpening)) {
     if (k === "date") continue;
+    const key = k === "cash" ? cashAccountId : k;
     const num = Number(v);
     if (Number.isFinite(num) && num >= 0) {
-      openingMap[k] = roundMoney(num);
-      creditsByAccount[k] = 0;
-      debitsByAccount[k] = 0;
+      openingMap[key] = roundMoney(num);
+      creditsByAccount[key] = 0;
+      debitsByAccount[key] = 0;
     }
   }
   for (const card of safeCards) {
     if (!card?.id) continue;
-    const rawVal = rawOpening[card.id] ?? card.initialBalance ?? 0;
+    const rawVal =
+      rawOpening[card.id] ??
+      (isCashCard(card) ? rawOpening.cash : undefined) ??
+      card.initialBalance ??
+      0;
     const num = Number(rawVal);
     openingMap[card.id] =
       Number.isFinite(num) && num >= 0 ? roundMoney(num) : 0;
@@ -479,14 +519,29 @@ export function computeAccountBalances(
     debitsByAccount[card.id] = 0;
   }
 
+  const ensureAccountInitialized = (acctId) => {
+    if (!acctId || acctId === "date") return;
+    if (!Object.hasOwn(openingMap, acctId)) {
+      openingMap[acctId] = 0;
+    }
+    if (!Object.hasOwn(creditsByAccount, acctId)) {
+      creditsByAccount[acctId] = 0;
+    }
+    if (!Object.hasOwn(debitsByAccount, acctId)) {
+      debitsByAccount[acctId] = 0;
+    }
+  };
+
   const addCredit = (acctId, amount) => {
-    if (!acctId || acctId === "cash") return;
+    if (!acctId || acctId === "date") return;
+    ensureAccountInitialized(acctId);
     creditsByAccount[acctId] = roundMoney(
       (Number(creditsByAccount[acctId]) || 0) + amount,
     );
   };
   const addDebit = (acctId, amount) => {
-    if (!acctId || acctId === "cash") return;
+    if (!acctId || acctId === "date") return;
+    ensureAccountInitialized(acctId);
     debitsByAccount[acctId] = roundMoney(
       (Number(debitsByAccount[acctId]) || 0) + amount,
     );
@@ -501,15 +556,14 @@ export function computeAccountBalances(
       const amt = Number(exp.amount ?? exp.amt);
       if (!Number.isFinite(amt) || amt <= 0) continue;
       const date = exp.date ?? exp.d ?? "";
-      const acct =
+      const rawAcct =
         typeof (exp.account ?? exp.acct) === "string"
           ? (exp.account ?? exp.acct).trim()
           : "";
+      const acct = normalizeAcctId(rawAcct);
       const cat = exp.category ?? exp.cat ?? "Other";
       const isSavingsTransfer =
         cat === "Savings" && Boolean(savingsId) && acct !== savingsId;
-
-      if (!acct && !isSavingsTransfer) continue;
 
       const createdAt = parseTimestampMs(exp.createdAt);
       const updatedAt = parseTimestampMs(exp.updatedAt) || createdAt;
@@ -525,7 +579,7 @@ export function computeAccountBalances(
         category: String(cat),
         recurringId: exp.recurringId || (exp.rec ? "recurring" : ""),
         account: isSavingsTransfer ? acct || savingsId : acct,
-        fromAccount: isSavingsTransfer && acct && acct !== "cash" ? acct : "",
+        fromAccount: isSavingsTransfer ? acct : "",
         toAccount: isSavingsTransfer ? savingsId : "",
         direction: null,
       });
@@ -540,18 +594,21 @@ export function computeAccountBalances(
       const rawType = tx.type === "adjust" ? "adjustment" : tx.type;
       if (!["income", "adjustment", "transfer"].includes(rawType)) continue;
       const date = tx.date ?? tx.d ?? "";
-      const acct =
+      const rawAcct =
         typeof (tx.account ?? tx.acct) === "string"
           ? (tx.account ?? tx.acct).trim()
           : "";
-      const fromAcct =
+      const rawFrom =
         typeof (tx.fromAccount ?? tx.from_account ?? tx.acct) === "string"
           ? (tx.fromAccount ?? tx.from_account ?? tx.acct).trim()
           : "";
-      const toAcct =
+      const rawTo =
         typeof (tx.toAccount ?? tx.to_account ?? tx.to) === "string"
           ? (tx.toAccount ?? tx.to_account ?? tx.to).trim()
           : "";
+      const acct = rawAcct ? normalizeAcctId(rawAcct) : "";
+      const fromAcct = rawFrom ? normalizeAcctId(rawFrom) : "";
+      const toAcct = rawTo ? normalizeAcctId(rawTo) : "";
       const rawDir = tx.direction ?? tx.dir;
       const direction =
         rawDir === "up" || rawDir === "increase" ? "increase" : "decrease";
@@ -607,24 +664,41 @@ export function computeAccountBalances(
 
     if (ev.type === "expense") {
       totalExpenses = roundMoney(totalExpenses + ev.amount);
-      if (ev.account && ev.account !== "cash") {
+      if (ev.account) {
+        ensureAccountInitialized(ev.account);
         balanceBefore = roundMoney(Number(runningBalances[ev.account]) || 0);
-        balanceAfter = roundMoney(balanceBefore - ev.amount);
-        runningBalances[ev.account] = balanceAfter;
-        addDebit(ev.account, ev.amount);
+        if (creditCardIds.has(ev.account)) {
+          // Credit card expense increases liability owed
+          balanceAfter = roundMoney(balanceBefore + ev.amount);
+          runningBalances[ev.account] = balanceAfter;
+          addCredit(ev.account, ev.amount);
+        } else {
+          balanceAfter = roundMoney(balanceBefore - ev.amount);
+          runningBalances[ev.account] = balanceAfter;
+          addDebit(ev.account, ev.amount);
+        }
       }
     } else if (ev.type === "income") {
       totalIncome = roundMoney(totalIncome + ev.amount);
-      if (ev.account && ev.account !== "cash") {
+      if (ev.account) {
+        ensureAccountInitialized(ev.account);
         balanceBefore = roundMoney(Number(runningBalances[ev.account]) || 0);
-        balanceAfter = roundMoney(balanceBefore + ev.amount);
-        runningBalances[ev.account] = balanceAfter;
-        addCredit(ev.account, ev.amount);
+        if (creditCardIds.has(ev.account)) {
+          // Credit/refund to a credit card reduces liability owed
+          balanceAfter = roundMoney(balanceBefore - ev.amount);
+          runningBalances[ev.account] = balanceAfter;
+          addDebit(ev.account, ev.amount);
+        } else {
+          balanceAfter = roundMoney(balanceBefore + ev.amount);
+          runningBalances[ev.account] = balanceAfter;
+          addCredit(ev.account, ev.amount);
+        }
       }
     } else if (ev.type === "adjustment") {
       const delta = ev.direction === "increase" ? ev.amount : -ev.amount;
       totalAdjustmentsNet = roundMoney(totalAdjustmentsNet + delta);
-      if (ev.account && ev.account !== "cash") {
+      if (ev.account) {
+        ensureAccountInitialized(ev.account);
         balanceBefore = roundMoney(Number(runningBalances[ev.account]) || 0);
         balanceAfter = roundMoney(balanceBefore + delta);
         runningBalances[ev.account] = balanceAfter;
@@ -637,20 +711,25 @@ export function computeAccountBalances(
     } else if (ev.type === "savings") {
       totalSavingsTransfers = roundMoney(totalSavingsTransfers + ev.amount);
       const hasValidFunding =
-        Boolean(ev.fromAccount) &&
-        ev.fromAccount !== "cash" &&
-        ev.fromAccount !== ev.toAccount;
+        Boolean(ev.fromAccount) && ev.fromAccount !== ev.toAccount;
       if (hasValidFunding) {
+        ensureAccountInitialized(ev.fromAccount);
         fromBalanceBefore = roundMoney(
           Number(runningBalances[ev.fromAccount]) || 0,
         );
-        fromBalanceAfter = roundMoney(fromBalanceBefore - ev.amount);
+        if (creditCardIds.has(ev.fromAccount)) {
+          fromBalanceAfter = roundMoney(fromBalanceBefore + ev.amount);
+          addCredit(ev.fromAccount, ev.amount);
+        } else {
+          fromBalanceAfter = roundMoney(fromBalanceBefore - ev.amount);
+          addDebit(ev.fromAccount, ev.amount);
+        }
         runningBalances[ev.fromAccount] = fromBalanceAfter;
         balanceBefore = fromBalanceBefore;
         balanceAfter = fromBalanceAfter;
-        addDebit(ev.fromAccount, ev.amount);
       }
       if (ev.toAccount && hasValidFunding) {
+        ensureAccountInitialized(ev.toAccount);
         toBalanceBefore = roundMoney(
           Number(runningBalances[ev.toAccount]) || 0,
         );
@@ -664,35 +743,40 @@ export function computeAccountBalances(
       }
     } else if (ev.type === "transfer") {
       totalAccountTransfers = roundMoney(totalAccountTransfers + ev.amount);
-      if (
-        ev.fromAccount &&
-        ev.fromAccount !== "cash" &&
-        ev.fromAccount !== ev.toAccount
-      ) {
+      if (ev.fromAccount && ev.fromAccount !== ev.toAccount) {
+        ensureAccountInitialized(ev.fromAccount);
         fromBalanceBefore = roundMoney(
           Number(runningBalances[ev.fromAccount]) || 0,
         );
-        fromBalanceAfter = roundMoney(fromBalanceBefore - ev.amount);
+        if (creditCardIds.has(ev.fromAccount)) {
+          fromBalanceAfter = roundMoney(fromBalanceBefore + ev.amount);
+          addCredit(ev.fromAccount, ev.amount);
+        } else {
+          fromBalanceAfter = roundMoney(fromBalanceBefore - ev.amount);
+          addDebit(ev.fromAccount, ev.amount);
+        }
         runningBalances[ev.fromAccount] = fromBalanceAfter;
         balanceBefore = fromBalanceBefore;
         balanceAfter = fromBalanceAfter;
-        addDebit(ev.fromAccount, ev.amount);
       }
-      if (
-        ev.toAccount &&
-        ev.toAccount !== "cash" &&
-        ev.toAccount !== ev.fromAccount
-      ) {
+      if (ev.toAccount && ev.toAccount !== ev.fromAccount) {
+        ensureAccountInitialized(ev.toAccount);
         toBalanceBefore = roundMoney(
           Number(runningBalances[ev.toAccount]) || 0,
         );
-        toBalanceAfter = roundMoney(toBalanceBefore + ev.amount);
+        if (creditCardIds.has(ev.toAccount)) {
+          // Transferring to a credit card pays down credit card liability
+          toBalanceAfter = roundMoney(toBalanceBefore - ev.amount);
+          addDebit(ev.toAccount, ev.amount);
+        } else {
+          toBalanceAfter = roundMoney(toBalanceBefore + ev.amount);
+          addCredit(ev.toAccount, ev.amount);
+        }
         runningBalances[ev.toAccount] = toBalanceAfter;
         if (balanceBefore === null) {
           balanceBefore = toBalanceBefore;
           balanceAfter = toBalanceAfter;
         }
-        addCredit(ev.toAccount, ev.amount);
       }
     }
 
@@ -711,6 +795,12 @@ export function computeAccountBalances(
     }
   }
 
+  // Also keep "cash" alias synchronized if cashCard has a custom ID
+  if (cashAccountId !== "cash" && Object.hasOwn(runningBalances, cashAccountId)) {
+    openingMap.cash = openingMap[cashAccountId];
+    runningBalances.cash = runningBalances[cashAccountId];
+  }
+
   // #2 Ledger Reconciliation Check: opening + credits - debits == current_balance
   const accountIds = new Set([
     ...Object.keys(openingMap),
@@ -720,6 +810,9 @@ export function computeAccountBalances(
   const cardNameMap = new Map(
     safeCards.filter((c) => c?.id).map((c) => [c.id, c.name || c.id]),
   );
+  if (!cardNameMap.has("cash")) {
+    cardNameMap.set("cash", "Cash");
+  }
   const reconciliationAccounts = {};
   let discrepancyCount = 0;
   let totalOpening = 0;
@@ -730,7 +823,8 @@ export function computeAccountBalances(
   let totalDiscrepancy = 0;
 
   for (const acctId of accountIds) {
-    if (!acctId || acctId === "cash" || acctId === "date") continue;
+    if (!acctId || acctId === "date") continue;
+    if (acctId === "cash" && cashAccountId !== "cash") continue;
     const opening = roundMoney(Number(openingMap[acctId]) || 0);
     const credits = roundMoney(Number(creditsByAccount[acctId]) || 0);
     const debits = roundMoney(Number(debitsByAccount[acctId]) || 0);
@@ -757,7 +851,12 @@ export function computeAccountBalances(
 
     reconciliationAccounts[acctId] = {
       id: acctId,
-      name: cardNameMap.get(acctId) || acctId,
+      name: cardNameMap.get(acctId) || (acctId === "cash" ? "Cash" : acctId),
+      type: creditCardIds.has(acctId)
+        ? "credit"
+        : acctId === cashAccountId || acctId === "cash"
+          ? "cash"
+          : "asset",
       opening,
       credits,
       debits,
@@ -961,16 +1060,23 @@ export function loadAccountData(
         holderName: card.holderName || "Cardholder",
         subtitle:
           typeof card.subtitle === "string"
-            ? card.subtitle.replace(/\bUSD\b/g, "BDT")
+            ? card.subtitle.replace(/\bUSD\b/gi, "BDT")
             : card.subtitle || "",
         currency:
-          !card.currency || card.currency === "USD" ? "BDT" : card.currency,
-        type: isSavings ? "savings" : card.type || "credit",
-        network: isSavings ? "none" : card.network || "visa",
+          !card.currency || String(card.currency).toUpperCase() === "USD"
+            ? "BDT"
+            : card.currency,
+        type: isSavings
+          ? "savings"
+          : isCashCard(card)
+            ? "cash"
+            : card.type || "credit",
+        network: isSavings || isCashCard(card) ? "none" : card.network || "visa",
         ...(isSavings ? { category: "savings" } : {}),
+        ...(isCashCard(card) ? { category: "cash" } : {}),
         last4: rawLast4,
         number: storedNumber,
-        expiry: isSavings || isMfs ? "" : card.expiry || "",
+        expiry: isSavings || isMfs || isCashCard(card) ? "" : card.expiry || "",
         color: card.color || "#1e293b",
         gradient: card.gradient || "",
         initialBalance: resolvedBalance,
@@ -1003,8 +1109,19 @@ export function loadAccountData(
   const cards = Array.from(cardMap.values());
 
   const initialBalances = {};
+  if (
+    Object.hasOwn(rawBalances, "cash") &&
+    rawBalances.cash !== undefined &&
+    rawBalances.cash !== null &&
+    Number.isFinite(Number(rawBalances.cash))
+  ) {
+    initialBalances.cash = cleanBalance(rawBalances.cash);
+  }
   for (const card of cards) {
     initialBalances[card.id] = cleanBalance(card.initialBalance);
+    if (isCashCard(card)) {
+      initialBalances.cash = cleanBalance(card.initialBalance);
+    }
   }
 
   const normalizedAccountContext = {

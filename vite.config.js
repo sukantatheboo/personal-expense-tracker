@@ -179,6 +179,7 @@ export default defineConfig(({ command }) => ({
   build: {
     target: "es2022",
     cssMinify: true,
+    chunkSizeWarningLimit: 900,
     rollupOptions: {
       output: {
         manualChunks(id) {
@@ -188,6 +189,9 @@ export default defineConfig(({ command }) => ({
           }
           if (id.includes("@capacitor/")) {
             return "capacitor";
+          }
+          if (id.includes("lucide-react")) {
+            return "icons";
           }
           if (
             id.includes("/react/") ||

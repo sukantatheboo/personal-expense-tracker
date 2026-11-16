@@ -69,7 +69,15 @@ import {
   QuickActionsRow,
   QuickAction,
   FallbackIcons,
+  StackedCardDeck,
+  WalletCard,
 } from "./AccountsCardDeck.jsx";
+import {
+  VisaBadge,
+  MastercardBadge,
+  AmexBadge,
+  MiniCardPreview,
+} from "./cardAssets.jsx";
 import {
   AnimatedRecurringIcon,
   AnimatedBudgetIcon,
@@ -114,140 +122,6 @@ function isAndroidPlatform() {
     if (attr === "ios") return false;
   }
   return detectMobilePlatform() === "android";
-}
-
-let accountsDeckModule = null;
-const loadAccountsCardDeck = () => {
-  if (accountsDeckModule) return Promise.resolve(accountsDeckModule);
-  return import("./AccountsCardDeck.jsx").then((m) => {
-    accountsDeckModule = m;
-    return m;
-  });
-};
-
-let cardAssetsModule = null;
-const loadCardAssets = () => {
-  if (cardAssetsModule) return Promise.resolve(cardAssetsModule);
-  return import("./cardAssets.jsx").then((m) => {
-    cardAssetsModule = m;
-    return m;
-  });
-};
-
-// Start fetching immediately in the background without any 1.5s idle delay
-if (typeof window !== "undefined") {
-  void loadAccountsCardDeck();
-  void loadCardAssets();
-}
-
-const LazyStackedCardDeck = lazy(() =>
-  loadAccountsCardDeck().then((m) => ({
-    default: m.StackedCardDeck,
-  })),
-);
-const LazyWalletCard = lazy(() =>
-  loadAccountsCardDeck().then((m) => ({
-    default: m.WalletCard,
-  })),
-);
-const LazyVisaBadge = lazy(() =>
-  loadCardAssets().then((m) => ({ default: m.VisaBadge })),
-);
-const LazyMastercardBadge = lazy(() =>
-  loadCardAssets().then((m) => ({ default: m.MastercardBadge })),
-);
-const LazyAmexBadge = lazy(() =>
-  loadCardAssets().then((m) => ({ default: m.AmexBadge })),
-);
-const LazyMiniCardPreview = lazy(() =>
-  loadCardAssets().then((m) => ({ default: m.MiniCardPreview })),
-);
-
-function StackedCardDeck(props) {
-  if (accountsDeckModule?.StackedCardDeck) {
-    const Component = accountsDeckModule.StackedCardDeck;
-    return <Component {...props} />;
-  }
-  return (
-    <Suspense fallback={<div style={{ minHeight: 212 }} />}>
-      <LazyStackedCardDeck {...props} />
-    </Suspense>
-  );
-}
-
-function WalletCard(props) {
-  if (accountsDeckModule?.WalletCard) {
-    const Component = accountsDeckModule.WalletCard;
-    return <Component {...props} />;
-  }
-  return (
-    <Suspense fallback={<div style={{ minHeight: 190 }} />}>
-      <LazyWalletCard {...props} />
-    </Suspense>
-  );
-}
-
-function VisaBadge(props) {
-  if (cardAssetsModule?.VisaBadge) {
-    const Component = cardAssetsModule.VisaBadge;
-    return <Component {...props} />;
-  }
-  return (
-    <Suspense fallback={null}>
-      <LazyVisaBadge {...props} />
-    </Suspense>
-  );
-}
-
-function MastercardBadge(props) {
-  if (cardAssetsModule?.MastercardBadge) {
-    const Component = cardAssetsModule.MastercardBadge;
-    return <Component {...props} />;
-  }
-  return (
-    <Suspense fallback={null}>
-      <LazyMastercardBadge {...props} />
-    </Suspense>
-  );
-}
-
-function AmexBadge(props) {
-  if (cardAssetsModule?.AmexBadge) {
-    const Component = cardAssetsModule.AmexBadge;
-    return <Component {...props} />;
-  }
-  return (
-    <Suspense fallback={null}>
-      <LazyAmexBadge {...props} />
-    </Suspense>
-  );
-}
-
-function MiniCardPreview(props) {
-  if (cardAssetsModule?.MiniCardPreview) {
-    const Component = cardAssetsModule.MiniCardPreview;
-    return <Component {...props} />;
-  }
-  return (
-    <Suspense
-      fallback={
-        <div
-          className={`mini-card-preview ${props.className || ""}`}
-          style={{
-            background:
-              props.card?.gradient ||
-              props.provider?.gradient ||
-              props.card?.color ||
-              props.provider?.color ||
-              "#1e293b",
-          }}
-          aria-hidden="true"
-        />
-      }
-    >
-      <LazyMiniCardPreview {...props} />
-    </Suspense>
-  );
 }
 
 const cardMoneyFormatter = new Intl.NumberFormat("en-IN", {
@@ -3876,7 +3750,54 @@ function Accounts({
   initialSelectedAccount,
   onActiveAccountChange,
 }) {
-  const cards = Array.isArray(S.cards) ? S.cards : [];
+  const rawCards = Array.isArray(S.cards) ? S.cards : [];
+  const explicitCashCard = rawCards.find(
+    (c) =>
+      c.id === "cash" ||
+      c.provider === "cash" ||
+      c.category === "cash" ||
+      c.type === "cash",
+  );
+  const cashAccountId = explicitCashCard?.id || "cash";
+  const hasCashActivity =
+    Boolean(explicitCashCard) ||
+    Number(S?.start?.cash) > 0 ||
+    (S?.exp || []).some(
+      (e) => !e.acct || e.acct === "cash" || e.acct === cashAccountId,
+    ) ||
+    (S?.tx || []).some(
+      (t) =>
+        t.acct === "cash" ||
+        t.to === "cash" ||
+        t.acct === cashAccountId ||
+        t.to === cashAccountId,
+    );
+  const cards = useMemo(
+    () =>
+      !explicitCashCard && (rawCards.length > 0 || hasCashActivity)
+        ? [
+            ...rawCards,
+            {
+              id: "cash",
+              name: "Cash",
+              provider: "cash",
+              category: "cash",
+              type: "cash",
+              network: "none",
+              holderName: "CASH WALLET",
+              subtitle: "Cash in Hand · BDT",
+              last4: "CASH",
+              number: "CASH-BDT",
+              expiry: "",
+              color: "#0f766e",
+              gradient:
+                "linear-gradient(135deg, #115e59 0%, #0f766e 45%, #134e4a 80%, #042f2e 100%)",
+              initialBalance: Number(S?.start?.cash) || 0,
+            },
+          ]
+        : rawCards,
+    [rawCards, explicitCashCard, hasCashActivity, S?.start?.cash],
+  );
   const savingsAccountId = getSavingsAccountId(cards);
   const balances = Object.fromEntries(cards.map((c) => [c.id, bal(S, c.id)]));
   const [selectedAccount, setSelectedAccount] = useState(() => {
@@ -3890,7 +3811,7 @@ function Accounts({
   });
   const [showAllTx, setShowAllTx] = useState(false);
   const [deckDragY, setDeckDragY] = useState(0);
-  const prevCardCountRef = useRef(cards.length);
+  const prevCardCountRef = useRef(rawCards.length);
 
   useEffect(() => {
     onActiveAccountChange?.(selectedAccount);
@@ -3912,19 +3833,19 @@ function Accounts({
       prevCardCountRef.current = 0;
       return;
     }
-    if (cards.length > prevCardCountRef.current) {
-      const newestCard = cards[cards.length - 1];
+    if (rawCards.length > prevCardCountRef.current) {
+      const newestCard = rawCards[rawCards.length - 1];
       if (newestCard?.id) {
         setSelectedAccount(newestCard.id);
-        prevCardCountRef.current = cards.length;
+        prevCardCountRef.current = rawCards.length;
         return;
       }
     }
-    prevCardCountRef.current = cards.length;
+    prevCardCountRef.current = rawCards.length;
     if (!selectedAccount || !cards.some((c) => c.id === selectedAccount)) {
       setSelectedAccount(cards[0].id);
     }
-  }, [cards, selectedAccount]);
+  }, [cards, rawCards, selectedAccount]);
 
   useEffect(() => {
     setShowAllTx(false);
@@ -3940,7 +3861,7 @@ function Accounts({
   };
 
   const getAccountName = (id) => {
-    if (!id || id === "cash") return "Cash";
+    if (!id || id === "cash" || id === cashAccountId) return "Cash";
     const card = cards.find((c) => c.id === id);
     if (card?.name) return card.name;
     const tombstone = S?.deletedCards?.[id];
@@ -3948,19 +3869,36 @@ function Accounts({
     return id || "Account";
   };
 
+  const normalizeAcct = (id) => {
+    if (!id || id === "cash") return cashAccountId;
+    return id;
+  };
+
+  const isCreditAcct = (id) => {
+    const c = cards.find((card) => card.id === id);
+    if (!c) return false;
+    if (
+      c.category === "savings" ||
+      c.type === "savings" ||
+      c.category === "mfs" ||
+      c.type === "mfs" ||
+      c.category === "cash" ||
+      c.type === "cash"
+    ) {
+      return false;
+    }
+    return String(c.type || "").toLowerCase() === "credit";
+  };
+
   const events = [
     ...S.exp
-      .filter(
-        (expense) =>
-          (expense.acct ||
-            (expense.cat === "Savings" && Boolean(savingsAccountId))) &&
-          expense.amt != null,
-      )
+      .filter((expense) => expense.amt != null)
       .map((expense) => {
+        const resolvedAcct = normalizeAcct(expense.acct);
         const isSavingsTransfer =
           expense.cat === "Savings" &&
           Boolean(savingsAccountId) &&
-          expense.acct !== savingsAccountId;
+          resolvedAcct !== savingsAccountId;
         return {
           id: expense.id,
           sourceType: "expense",
@@ -3973,40 +3911,46 @@ function Accounts({
           type: isSavingsTransfer ? "transfer" : "expense",
           cat: expense.cat,
           amount: expense.amt,
-          account: expense.acct,
-          from: isSavingsTransfer ? expense.acct || "cash" : "",
+          account: resolvedAcct,
+          from: isSavingsTransfer ? resolvedAcct : "",
           to: isSavingsTransfer ? savingsAccountId : "",
         };
       }),
-    ...S.tx.map((transaction) => ({
-      id: transaction.id,
-      sourceType: "tx",
-      createdAt: transaction.createdAt,
-      updatedAt: transaction.updatedAt,
-      d: transaction.date,
-      title:
-        capitalizeFirstLetter(transaction.note) ||
-        {
-          income: "Income",
-          transfer: "Transfer",
-          adjust: "Adjustment",
-          adjustment: "Adjustment",
-        }[transaction.type] ||
-        "Transaction",
-      type: transaction.type,
-      cat:
-        transaction.type === "income"
-          ? "Savings"
-          : transaction.type === "transfer"
-            ? "Transport"
-            : "Bills",
-      amount: transaction.amt,
-      account: transaction.acct,
-      from: transaction.acct,
-      to: transaction.to,
-      dir: transaction.dir,
-      direction: transaction.dir,
-    })),
+    ...S.tx.map((transaction) => {
+      const resolvedAcct = transaction.acct
+        ? normalizeAcct(transaction.acct)
+        : "";
+      const resolvedTo = transaction.to ? normalizeAcct(transaction.to) : "";
+      return {
+        id: transaction.id,
+        sourceType: "tx",
+        createdAt: transaction.createdAt,
+        updatedAt: transaction.updatedAt,
+        d: transaction.date,
+        title:
+          capitalizeFirstLetter(transaction.note) ||
+          {
+            income: "Income",
+            transfer: "Transfer",
+            adjust: "Adjustment",
+            adjustment: "Adjustment",
+          }[transaction.type] ||
+          "Transaction",
+        type: transaction.type,
+        cat:
+          transaction.type === "income"
+            ? "Savings"
+            : transaction.type === "transfer"
+              ? "Transport"
+              : "Bills",
+        amount: transaction.amt,
+        account: resolvedAcct,
+        from: resolvedAcct,
+        to: resolvedTo,
+        dir: transaction.dir,
+        direction: transaction.dir,
+      };
+    }),
   ];
 
   const itemCreationTime = (item) => {
@@ -4027,6 +3971,7 @@ function Accounts({
       left.id.localeCompare(right.id),
   );
   const runningBalances = {
+    cash: Number(S?.start?.cash) || 0,
     ...S.start,
     ...Object.fromEntries(
       cards.map((c) => [
@@ -4038,9 +3983,15 @@ function Accounts({
   const adjustmentBalances = new Map();
   for (const event of ascendingEvents) {
     const changes = {};
-    if (event.type === "expense") changes[event.account] = -event.amount;
-    else if (event.type === "income") changes[event.account] = event.amount;
-    else if (event.type === "adjust" || event.type === "adjustment") {
+    if (event.type === "expense") {
+      changes[event.account] = isCreditAcct(event.account)
+        ? event.amount
+        : -event.amount;
+    } else if (event.type === "income") {
+      changes[event.account] = isCreditAcct(event.account)
+        ? -event.amount
+        : event.amount;
+    } else if (event.type === "adjust" || event.type === "adjustment") {
       const isUp =
         event.direction === "up" ||
         event.direction === "increase" ||
@@ -4048,8 +3999,16 @@ function Accounts({
         event.dir === "increase";
       changes[event.account] = isUp ? event.amount : -event.amount;
     } else if (event.type === "transfer") {
-      changes[event.from] = (changes[event.from] || 0) - event.amount;
-      changes[event.to] = (changes[event.to] || 0) + event.amount;
+      if (event.from) {
+        changes[event.from] =
+          (changes[event.from] || 0) +
+          (isCreditAcct(event.from) ? event.amount : -event.amount);
+      }
+      if (event.to) {
+        changes[event.to] =
+          (changes[event.to] || 0) +
+          (isCreditAcct(event.to) ? -event.amount : event.amount);
+      }
     }
 
     if (event.type === "adjust" || event.type === "adjustment") {
@@ -5996,20 +5955,33 @@ function TxSheet({
   onClose,
   onLockedCardNotice,
 }) {
-  const accountOptions = cards.map((c) => [c.id, c.name]);
-  const unfrozenFromOptions = cards
-    .filter((c) => !c.frozen)
-    .map((c) => [c.id, c.name]);
+  const hasCashInCards = cards.some(
+    (c) =>
+      c.id === "cash" ||
+      c.provider === "cash" ||
+      c.category === "cash" ||
+      c.type === "cash",
+  );
+  const accountOptions = [
+    ...cards.map((c) => [c.id, c.name]),
+    ...(!hasCashInCards ? [["cash", "Cash"]] : []),
+  ];
+  const unfrozenFromOptions = [
+    ...cards.filter((c) => !c.frozen).map((c) => [c.id, c.name]),
+    ...(!hasCashInCards ? [["cash", "Cash"]] : []),
+  ];
   const defaultFrom =
-    defaultAccount && cards.some((c) => c.id === defaultAccount)
+    defaultAccount && accountOptions.some(([id]) => id === defaultAccount)
       ? defaultAccount
-      : unfrozenFromOptions[0]?.[0] || cards[0]?.id || "";
+      : unfrozenFromOptions[0]?.[0] || accountOptions[0]?.[0] || "";
   const defaultTransferFrom =
     defaultAccount && unfrozenFromOptions.some(([id]) => id === defaultAccount)
       ? defaultAccount
       : unfrozenFromOptions[0]?.[0] || defaultFrom;
   const defaultTo =
-    cards.find((c) => c.id !== defaultTransferFrom)?.id || cards[1]?.id || "";
+    accountOptions.find(([id]) => id !== defaultTransferFrom)?.[0] ||
+    accountOptions[1]?.[0] ||
+    "";
 
   const [g, setG] = useState({
     type,
@@ -6385,19 +6357,28 @@ function AccountTxDetailSheet({
   onDelete,
   onClose,
 }) {
-  const cardOptions = cards.map((c) => [c.id, c.name]);
+  const hasCashInCards = cards.some(
+    (c) =>
+      c.id === "cash" ||
+      c.provider === "cash" ||
+      c.category === "cash" ||
+      c.type === "cash",
+  );
+  const cardOptions = [
+    ...cards.map((c) => [c.id, c.name]),
+    ...(!hasCashInCards ? [["cash", "Cash"]] : []),
+  ];
   const ensureAccountOption = (...ids) => {
     const list = [...cardOptions];
     for (const rawId of ids) {
-      if (!rawId || rawId === "cash") continue;
+      if (!rawId) continue;
       if (!list.some(([optId]) => optId === rawId)) {
         list.push([rawId, getAccountDisplay(rawId, cards, deletedCards)[0]]);
       }
     }
     return list;
   };
-  const fallbackFrom =
-    tx.acct && tx.acct !== "cash" ? tx.acct : cards[0]?.id || "";
+  const fallbackFrom = tx.acct || cardOptions[0]?.[0] || "";
   const [g, setG] = useState({
     type: tx.type === "adjustment" ? "adjust" : tx.type || "income",
     amt: tx.amt ?? "",
@@ -7891,8 +7872,9 @@ function AddCardSheet({
     e?.preventDefault();
     const isMfs = selectedProvider.category === "mfs";
     const isSavings = selectedProvider.category === "savings";
+    const isCash = selectedProvider.category === "cash";
 
-    if (!isMfs && !isSavings && formData.expiry.trim()) {
+    if (!isMfs && !isSavings && !isCash && formData.expiry.trim()) {
       const expMatch = formData.expiry
         .trim()
         .match(/^(0[1-9]|1[0-2])\/(\d{2})$/);
@@ -7907,31 +7889,42 @@ function AddCardSheet({
       formData.last4 ||
       (formData.number ? formData.number.replace(/\D/g, "").slice(-4) : "")
     ).trim();
-    const last4 = isSavings ? enteredLast4 || "4710" : enteredLast4;
+    const last4 = isSavings
+      ? enteredLast4 || "4710"
+      : isCash
+        ? enteredLast4 || "CASH"
+        : enteredLast4;
     const enteredPhoneDigits = formData.number.replace(/\D/g, "").slice(0, 11);
     const number = selectedProvider.isPhone
       ? enteredPhoneDigits
       : isSavings
         ? `SAV-${last4}`
-        : last4
-          ? `•••• •••• •••• ${last4}`
-          : "";
+        : isCash
+          ? "CASH-BDT"
+          : last4
+            ? `•••• •••• •••• ${last4}`
+            : "";
     const holderName =
-      formData.holderName.trim() || userProfileName || "Cardholder";
+      formData.holderName.trim() ||
+      (isCash ? "CASH WALLET" : userProfileName || "Cardholder");
     const network = isMfs
       ? "mfs"
-      : isSavings
+      : isSavings || isCash
         ? "none"
         : formData.network || selectedProvider.defaultNetwork || "visa";
     const type = isMfs
       ? "mfs"
       : isSavings
         ? "savings"
-        : formData.type || selectedProvider.defaultType || "credit";
+        : isCash
+          ? "cash"
+          : formData.type || selectedProvider.defaultType || "credit";
     const name = formData.name.trim() || selectedProvider.name;
 
     const newCard = {
-      id: `card_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      id: isCash
+        ? "cash"
+        : `card_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       name,
       provider: selectedProvider.id,
       category: selectedProvider.category,
@@ -7942,14 +7935,16 @@ function AddCardSheet({
         ? "Personal"
         : isSavings
           ? "Personal Savings"
-          : isCustom
-            ? formData.name.trim()
-              ? `${name} ${network === "visa" ? "Visa" : network === "mastercard" ? "Mastercard" : "Amex"}`
-              : "Signature Edition"
-            : selectedProvider.subtitle,
+          : isCash
+            ? "Cash in Hand · BDT"
+            : isCustom
+              ? formData.name.trim()
+                ? `${name} ${network === "visa" ? "Visa" : network === "mastercard" ? "Mastercard" : "Amex"}`
+                : "Signature Edition"
+              : selectedProvider.subtitle,
       last4,
       number,
-      expiry: isMfs || isSavings ? "" : formData.expiry.trim(),
+      expiry: isMfs || isSavings || isCash ? "" : formData.expiry.trim(),
       color: formData.color || selectedProvider.color,
       gradient: formData.gradient || selectedProvider.gradient,
       initialBalance: parseAmount(formData.initialBalance) || 0,
@@ -11861,15 +11856,22 @@ export default function MobilePrototype({
         triggerHaptic("success");
         return true;
       }
-      if (res?.reason === "key_missing") {
+      if (res?.reason === "key_missing" || res?.reason === "origin_mismatch") {
         triggerHaptic("warning");
         return {
           ok: false,
           message: `Enter PIN once to sync ${biometricLabel}.`,
         };
       }
-    } catch (err) {
-      console.warn("Biometric authentication error:", err);
+      if (res?.reason === "not_allowed") {
+        triggerHaptic("warning");
+        return {
+          ok: false,
+          message: `${biometricLabel} was cancelled or unavailable. Enter your PIN.`,
+        };
+      }
+    } catch {
+      // Handled gracefully via fallback message below
     }
     triggerHaptic("warning");
     return {

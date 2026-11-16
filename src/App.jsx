@@ -1405,8 +1405,6 @@ export default function App() {
   }, []);
   useEffect(() => {
     void loadMobilePrototype();
-    void import("./AccountsCardDeck.jsx");
-    void import("./cardAssets.jsx");
   }, []);
   const [deletedRecords, setDeletedRecords] = useState(() => {
     const saved = readStorage(STORAGE_KEYS.deletedRecords, null);
@@ -1880,12 +1878,12 @@ export default function App() {
         setCloudSyncActivity("syncing");
         let bypassVersionMismatch = false;
         for (let attempt = 0; attempt < 3; attempt += 1) {
-          let savedVersion = null;
+          let savedResult = null;
           const attemptedVersion = bypassVersionMismatch
             ? null
             : cloudVersionRef.current;
           try {
-            savedVersion = await saveCloudData(
+            savedResult = await saveCloudData(
               userId,
               snapshot,
               attemptedVersion,
@@ -1895,6 +1893,15 @@ export default function App() {
             if (error.code !== "23505") throw error;
           }
 
+          const savedVersion =
+            savedResult && typeof savedResult === "object"
+              ? savedResult.updated_at ?? null
+              : savedResult;
+          const serverMergedData =
+            savedResult && typeof savedResult === "object"
+              ? savedResult.data ?? null
+              : null;
+
           if (savedVersion) {
             if (
               authUserIdRef.current === userId &&
@@ -1902,10 +1909,29 @@ export default function App() {
             ) {
               lastLocalSaveTimeRef.current = Date.now();
               cloudVersionRef.current = savedVersion;
-              cloudAccountSettingsRef.current = snapshot.accountData.settings;
-              lastSyncedSnapshotRef.current = snapshot;
-              ensureDailyBackupCheckpoint(userId, snapshot, savedVersion);
-              if (!areCloudSnapshotsEqual(cloudSnapshotRef.current, snapshot)) {
+              const effectiveSavedSnapshot = serverMergedData
+                ? mergeCloudSnapshots(snapshot, serverMergedData, true, true)
+                : snapshot;
+              cloudAccountSettingsRef.current =
+                effectiveSavedSnapshot.accountData.settings;
+              lastSyncedSnapshotRef.current = effectiveSavedSnapshot;
+              ensureDailyBackupCheckpoint(
+                userId,
+                effectiveSavedSnapshot,
+                savedVersion,
+              );
+              if (
+                serverMergedData &&
+                !areCloudSnapshotsEqual(
+                  cloudSnapshotRef.current,
+                  effectiveSavedSnapshot,
+                ) &&
+                areCloudSnapshotsEqual(cloudSnapshotRef.current, snapshot)
+              ) {
+                applyCloudSnapshot(effectiveSavedSnapshot);
+              } else if (
+                !areCloudSnapshotsEqual(cloudSnapshotRef.current, snapshot)
+              ) {
                 snapshot = cloudSnapshotRef.current;
                 bypassVersionMismatch = false;
                 continue;
@@ -2635,8 +2661,9 @@ export default function App() {
             applyCloudSnapshot(merged);
           }
           const attemptedVersion = remote?.updated_at ?? null;
+          let savedResult = null;
           try {
-            savedVersion = await saveCloudData(
+            savedResult = await saveCloudData(
               pushUser.id,
               merged,
               attempt >= 1 && remote?._bypassVersionMismatch
@@ -2651,7 +2678,23 @@ export default function App() {
           } catch (error) {
             if (error.code !== "23505" || remote?.data) throw error;
           }
+          savedVersion =
+            savedResult && typeof savedResult === "object"
+              ? savedResult.updated_at ?? null
+              : savedResult;
+          const serverMergedData =
+            savedResult && typeof savedResult === "object"
+              ? savedResult.data ?? null
+              : null;
           if (savedVersion) {
+            if (serverMergedData) {
+              merged = mergeCloudSnapshots(
+                merged,
+                serverMergedData,
+                true,
+                true,
+              );
+            }
             lastSuccessfulSnapshot = merged;
             if (cloudSnapshotRef.current === rawLocal) break;
             remote = { data: merged, updated_at: savedVersion };
@@ -3037,35 +3080,49 @@ export default function App() {
     reminderTime,
   ]);
 
+  const todayRecurringKey = useMemo(() => {
+    const today = localDate();
+    return expenses
+      .filter((e) => e?.recurringId && e?.date === today)
+      .map((e) => `${e.recurringId}:${e.date}`)
+      .sort()
+      .join(",");
+  }, [expenses]);
+
   useEffect(() => {
     if (!supabase || !pushUser || !backgroundPushEnabled || !isHydrated)
       return undefined;
     let active = true;
-    async function syncSchedules() {
-      if (!active) return;
-      try {
-        await syncBackgroundSchedules(
-          pushUser.id,
-          recurringSchedules,
-          reminderTime,
-          { expenses },
-        );
-        if (active) setAuthStatus("");
-      } catch (error) {
-        if (active)
-          setAuthStatus(`Could not sync reminder schedules: ${error.message}`);
+    const timer = window.setTimeout(() => {
+      async function syncSchedules() {
+        if (!active) return;
+        try {
+          await syncBackgroundSchedules(
+            pushUser.id,
+            recurringSchedules,
+            reminderTime,
+            { expenses: cloudSnapshotRef.current?.expenses || expenses },
+          );
+          if (active) setAuthStatus("");
+        } catch (error) {
+          if (active)
+            setAuthStatus(
+              `Could not sync reminder schedules: ${error.message}`,
+            );
+        }
       }
-    }
-    pushScheduleSyncRef.current = pushScheduleSyncRef.current.then(
-      syncSchedules,
-      syncSchedules,
-    );
+      pushScheduleSyncRef.current = pushScheduleSyncRef.current.then(
+        syncSchedules,
+        syncSchedules,
+      );
+    }, 800);
     return () => {
       active = false;
+      window.clearTimeout(timer);
     };
   }, [
     backgroundPushEnabled,
-    expenses,
+    todayRecurringKey,
     isHydrated,
     pushUser,
     recurringSchedules,

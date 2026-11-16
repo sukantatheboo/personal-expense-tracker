@@ -273,6 +273,21 @@ export const CARD_PROVIDERS = [
     isPhone: false,
   },
   {
+    id: "cash",
+    name: "Cash",
+    category: "cash",
+    subtitle: "Cash in Hand · BDT",
+    defaultType: "cash",
+    defaultNetwork: "none",
+    currency: "BDT",
+    color: "#0f766e",
+    gradient:
+      "linear-gradient(135deg, #115e59 0%, #0f766e 45%, #134e4a 80%, #042f2e 100%)",
+    numberPrefix: "CASH",
+    numberPlaceholder: "CASH-BDT",
+    isPhone: false,
+  },
+  {
     id: "custom",
     name: "Custom Card",
     category: "bank",

@@ -37,6 +37,8 @@ export const SENSITIVE_STORAGE_KEYS = [
   "spend-account-balances-v1",
   "spend-deleted-records-v1",
   "spend-local-user-snapshots-v1",
+  "spend-backup-checkpoints-v1",
+  "spend-cloud-sync-outbox-v1",
 ];
 
 // Purge any legacy plaintext biometric keys that may have been written to localStorage
@@ -731,7 +733,25 @@ export async function isBiometricsAvailable() {
 }
 
 export function hasBiometricsConfigured() {
-  return Boolean(localStorage.getItem(BIOMETRIC_KEY_ID));
+  const raw = localStorage.getItem(BIOMETRIC_KEY_ID);
+  if (!raw) return false;
+  if (raw.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (
+        parsed?.rpId &&
+        typeof window !== "undefined" &&
+        window.location?.hostname &&
+        parsed.rpId !== window.location.hostname
+      ) {
+        return false;
+      }
+      return Boolean(parsed?.id);
+    } catch {
+      return false;
+    }
+  }
+  return true;
 }
 
 export async function enableBiometrics(currentPin) {
@@ -758,11 +778,18 @@ export async function enableBiometrics(currentPin) {
 
     const challenge = getRandomBytes(32);
     const userId = getRandomBytes(16);
+    const rpId =
+      typeof window !== "undefined" && window.location?.hostname
+        ? window.location.hostname
+        : undefined;
 
     const credential = await navigator.credentials.create({
       publicKey: {
         challenge,
-        rp: { name: "Spend Expense Tracker" },
+        rp: {
+          name: "Spend Expense Tracker",
+          ...(rpId ? { id: rpId } : {}),
+        },
         user: {
           id: userId,
           name: "spend_user",
@@ -774,6 +801,7 @@ export async function enableBiometrics(currentPin) {
         ],
         authenticatorSelection: {
           authenticatorAttachment: "platform",
+          residentKey: "preferred",
           userVerification: "required",
         },
         timeout: 60000,
@@ -781,7 +809,11 @@ export async function enableBiometrics(currentPin) {
     });
 
     if (credential && credential.rawId) {
-      localStorage.setItem(BIOMETRIC_KEY_ID, bufferToBase64(credential.rawId));
+      const storedMeta = JSON.stringify({
+        id: bufferToBase64(credential.rawId),
+        rpId: rpId || "",
+      });
+      localStorage.setItem(BIOMETRIC_KEY_ID, storedMeta);
       await persistBiometricSessionKey(activeSessionKey);
       return true;
     }
@@ -798,8 +830,29 @@ export async function disableBiometrics() {
 
 export async function authenticateWithBiometrics() {
   try {
-    const credentialId = localStorage.getItem(BIOMETRIC_KEY_ID);
+    const rawStored = localStorage.getItem(BIOMETRIC_KEY_ID);
+    if (!rawStored) return { ok: false, reason: "not_configured" };
+
+    let credentialId = rawStored;
+    let storedRpId = "";
+    if (rawStored.startsWith("{")) {
+      try {
+        const parsed = JSON.parse(rawStored);
+        credentialId = parsed?.id || "";
+        storedRpId = parsed?.rpId || "";
+      } catch {
+        credentialId = "";
+      }
+    }
     if (!credentialId) return { ok: false, reason: "not_configured" };
+
+    const currentRpId =
+      typeof window !== "undefined" && window.location?.hostname
+        ? window.location.hostname
+        : "";
+    if (storedRpId && currentRpId && storedRpId !== currentRpId) {
+      return { ok: false, reason: "origin_mismatch" };
+    }
 
     const capPlugins =
       typeof window !== "undefined" ? window.Capacitor?.Plugins : null;
@@ -807,6 +860,30 @@ export async function authenticateWithBiometrics() {
       typeof window !== "undefined" &&
       window.Capacitor?.isNativePlatform?.() &&
       credentialId === "native-biometric";
+
+    // Pre-verify that a biometric decryption key exists on this device before prompting Touch ID / Face ID
+    let restoredKey = biometricCachedKey;
+    if (!restoredKey) {
+      restoredKey = await loadNonExtractableBiometricKey();
+    }
+    if (!restoredKey && NativeSecureStorage.isAvailable()) {
+      const storedKeyB64 = await NativeSecureStorage.getItem(
+        BIOMETRIC_KEY_STORAGE,
+      );
+      if (storedKeyB64) {
+        const keyBuffer = base64ToBuffer(storedKeyB64);
+        restoredKey = await crypto.subtle.importKey(
+          "raw",
+          keyBuffer,
+          { name: "AES-GCM", length: 256 },
+          false,
+          ["encrypt", "decrypt"],
+        );
+      }
+    }
+    if (!restoredKey) {
+      return { ok: false, reason: "key_missing" };
+    }
 
     let verifiedByAuthenticator = false;
 
@@ -833,10 +910,12 @@ export async function authenticateWithBiometrics() {
       const assertion = await navigator.credentials.get({
         publicKey: {
           challenge,
+          ...(currentRpId ? { rpId: currentRpId } : {}),
           allowCredentials: [
             {
               id: new Uint8Array(base64ToBuffer(credentialId)),
               type: "public-key",
+              transports: ["internal"],
             },
           ],
           userVerification: "required",
@@ -850,37 +929,21 @@ export async function authenticateWithBiometrics() {
       return { ok: false, reason: "auth_failed" };
     }
 
-    let restoredKey = biometricCachedKey;
-    if (!restoredKey) {
-      restoredKey = await loadNonExtractableBiometricKey();
-    }
-    if (!restoredKey && NativeSecureStorage.isAvailable()) {
-      const storedKeyB64 = await NativeSecureStorage.getItem(
-        BIOMETRIC_KEY_STORAGE,
-      );
-      if (storedKeyB64) {
-        const keyBuffer = base64ToBuffer(storedKeyB64);
-        restoredKey = await crypto.subtle.importKey(
-          "raw",
-          keyBuffer,
-          { name: "AES-GCM", length: 256 },
-          false,
-          ["encrypt", "decrypt"],
-        );
-      }
-    }
-
-    if (restoredKey) {
-      biometricCachedKey = restoredKey;
-      setSessionKey(restoredKey);
-      setSessionUnlocked(true);
-      markActive();
-      return true;
-    }
-
-    return { ok: false, reason: "key_missing" };
+    biometricCachedKey = restoredKey;
+    setSessionKey(restoredKey);
+    setSessionUnlocked(true);
+    markActive();
+    return true;
   } catch (err) {
-    console.warn("Biometric authentication error:", err);
+    const errName = err?.name || "";
+    if (
+      errName === "NotAllowedError" ||
+      errName === "AbortError" ||
+      errName === "SecurityError" ||
+      errName === "InvalidStateError"
+    ) {
+      return { ok: false, reason: "not_allowed" };
+    }
     return { ok: false, reason: "error", error: err };
   }
 }

@@ -189,18 +189,26 @@ Deno.serve(async (req) => {
     return new Response(devicesError.message, { status: 500 });
   }
   const byDevice = new Map((devices ?? []).map((d) => [`${d.user_id}:${d.device_id}`, d]));
+  const deadDevices = new Set<string>();
 
   let sent = 0;
-  for (const r of due) {
-    const device = byDevice.get(`${r.user_id}:${r.device_id}`);
+  const CONCURRENCY = 10;
+
+  async function processReminder(r: (typeof due)[number]) {
+    const deviceKey = `${r.user_id}:${r.device_id}`;
+    if (deadDevices.has(deviceKey)) {
+      return;
+    }
+    const device = byDevice.get(deviceKey);
     if (!device) {
+      deadDevices.add(deviceKey);
       // Clean up orphaned push_reminders whose device subscription no longer exists
       await supabase
         .from("push_reminders")
         .delete()
         .eq("user_id", r.user_id)
         .eq("device_id", r.device_id);
-      continue;
+      return;
     }
 
     // (lease already acquired atomically by claim_due_push_reminders)
@@ -226,7 +234,7 @@ Deno.serve(async (req) => {
         .eq("user_id", r.user_id)
         .eq("device_id", r.device_id)
         .eq("schedule_id", r.schedule_id);
-      continue;
+      return;
     }
 
     const payload = buildPushPayload(r);
@@ -242,6 +250,8 @@ Deno.serve(async (req) => {
     } catch (err) {
       const status = (err as { statusCode?: number }).statusCode;
       if (status === 404 || status === 410) {
+        deadDevices.add(deviceKey);
+        byDevice.delete(deviceKey);
         // Subscription expired: remove both device and its reminders so orphaned rows do not accumulate
         await supabase
           .from("push_reminders")
@@ -253,7 +263,7 @@ Deno.serve(async (req) => {
           .delete()
           .eq("user_id", r.user_id)
           .eq("device_id", r.device_id);
-        continue;
+        return;
       } else {
         console.error("push failed", status, (err as { body?: unknown }).body ?? err);
       }
@@ -285,5 +295,11 @@ Deno.serve(async (req) => {
         .eq("schedule_id", r.schedule_id);
     }
   }
+
+  for (let i = 0; i < due.length; i += CONCURRENCY) {
+    const batch = due.slice(i, i + CONCURRENCY);
+    await Promise.allSettled(batch.map((r) => processReminder(r)));
+  }
+
   return Response.json({ due: due.length, sent });
 });

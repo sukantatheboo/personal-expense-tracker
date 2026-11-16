@@ -112,23 +112,34 @@ export async function enableBackgroundPush(userId) {
     throw new Error("The browser returned an invalid push subscription.");
   }
 
-  // Ensure this subscription endpoint is detached from any older user on this browser to avoid privacy leaks
-  await client
-    .from("push_devices")
-    .delete()
-    .eq("endpoint", serialized.endpoint)
-    .neq("user_id", userId);
+  // Ensure this subscription endpoint is detached from any older user on this browser via SECURITY DEFINER RPC
+  const deviceId = getDeviceId();
+  const rpcRes = await client.rpc("register_spend_push_device", {
+    p_device_id: deviceId,
+    p_endpoint: serialized.endpoint,
+    p_subscription: serialized,
+  });
+  if (rpcRes.error) {
+    const isRpcMissing =
+      rpcRes.error.code === "42883" || rpcRes.error.code === "PGRST202";
+    if (!isRpcMissing) throw rpcRes.error;
+    await client
+      .from("push_devices")
+      .delete()
+      .eq("endpoint", serialized.endpoint)
+      .neq("user_id", userId);
 
-  const { error } = await client.from("push_devices").upsert(
-    {
-      user_id: userId,
-      device_id: getDeviceId(),
-      endpoint: serialized.endpoint,
-      subscription: serialized,
-    },
-    { onConflict: "user_id,device_id" },
-  );
-  if (error) throw error;
+    const { error } = await client.from("push_devices").upsert(
+      {
+        user_id: userId,
+        device_id: deviceId,
+        endpoint: serialized.endpoint,
+        subscription: serialized,
+      },
+      { onConflict: "user_id,device_id" },
+    );
+    if (error) throw error;
+  }
   try {
     localStorage.removeItem(PUSH_DISABLED_BY_USER_KEY);
   } catch {}
@@ -226,24 +237,33 @@ export async function syncBackgroundSchedules(
           serialized?.keys?.p256dh &&
           serialized?.keys?.auth
         ) {
-          await client
-            .from("push_devices")
-            .delete()
-            .eq("endpoint", serialized.endpoint)
-            .neq("user_id", userId);
-          const { error: upsertDevError } = await client
-            .from("push_devices")
-            .upsert(
-              {
-                user_id: userId,
-                device_id: deviceId,
-                endpoint: serialized.endpoint,
-                subscription: serialized,
-              },
-              { onConflict: "user_id,device_id" },
-            );
-          if (!upsertDevError) {
+          const rpcRes = await client.rpc("register_spend_push_device", {
+            p_device_id: deviceId,
+            p_endpoint: serialized.endpoint,
+            p_subscription: serialized,
+          });
+          if (!rpcRes.error) {
             deviceSynced = true;
+          } else {
+            await client
+              .from("push_devices")
+              .delete()
+              .eq("endpoint", serialized.endpoint)
+              .neq("user_id", userId);
+            const { error: upsertDevError } = await client
+              .from("push_devices")
+              .upsert(
+                {
+                  user_id: userId,
+                  device_id: deviceId,
+                  endpoint: serialized.endpoint,
+                  subscription: serialized,
+                },
+                { onConflict: "user_id,device_id" },
+              );
+            if (!upsertDevError) {
+              deviceSynced = true;
+            }
           }
         }
       }

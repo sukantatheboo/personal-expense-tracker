@@ -354,6 +354,18 @@ export function WalletCard({
     isSavings,
   );
 
+  const isCash =
+    card.id === "cash" ||
+    card.type === "cash" ||
+    card.category === "cash" ||
+    card.provider === "cash" ||
+    provider?.category === "cash";
+  const isCredit =
+    !isSavings &&
+    !isMfs &&
+    !isCash &&
+    String(card.type || "").toLowerCase() === "credit";
+
   const isLegacyProviderSubtitle =
     LEGACY_CARD_SUBTITLES.has(card.subtitle) ||
     ((isGold || isVirtualMc) &&
@@ -365,25 +377,27 @@ export function WalletCard({
 
   const rawSubtitle =
     card.subtitle && !isLegacyProviderSubtitle
-      ? String(card.subtitle).replace(/\bUSD\b/g, "BDT")
+      ? String(card.subtitle).replace(/\bUSD\b/gi, "BDT")
       : "";
   const cardSubtitle =
     rawSubtitle ||
-    (isMfs
-      ? "Personal"
-      : isSavings
-        ? "Personal Savings"
-        : isGold
-          ? "Gold Credit · BDT"
-          : isVirtualVisa
-            ? "Virtual Debit · BDT"
-            : isVirtualMc
-              ? "Virtual Credit · BDT"
-              : isCustom
-                ? "Signature Edition"
-                : card.type === "credit"
-                  ? "Visa Credit · BDT"
-                  : "Debit Card · BDT");
+    (isCash
+      ? "Cash in Hand · BDT"
+      : isMfs
+        ? "Personal"
+        : isSavings
+          ? "Personal Savings"
+          : isGold
+            ? "Gold Credit · BDT"
+            : isVirtualVisa
+              ? "Virtual Debit · BDT"
+              : isVirtualMc
+                ? "Virtual Credit · BDT"
+                : isCustom
+                  ? "Signature Edition"
+                  : isCredit
+                    ? "Visa Credit · BDT"
+                    : "Debit Card · BDT");
 
   const rawSavingsStr = String(card.number || card.last4 || "").trim();
   const savingsRawDigits = rawSavingsStr.replace(/\D/g, "");
@@ -698,21 +712,32 @@ export function WalletCard({
             {showBalance && (
               <div className="wallet-card-balance-block">
                 <span className="wallet-card-meta-lbl">
-                  {isSavings ? "TOTAL SAVED" : "BALANCE"}
+                  {isSavings
+                    ? "TOTAL SAVED"
+                    : isCredit
+                      ? "AMOUNT OWED"
+                      : isCash
+                        ? "CASH ON HAND"
+                        : "BALANCE"}
                 </span>
                 <b
-                  className={`wallet-card-balance-val${balance < 0 && card.type !== "credit" ? " is-overdrawn" : ""}`}
+                  className={`wallet-card-balance-val${balance < 0 && !isCredit ? " is-overdrawn" : ""}`}
                 >
                   {formatMoney(balance || 0)}
-                  {balance < 0 && card.type !== "credit" && (
+                  {balance < 0 && !isCredit && (
                     <span className="wallet-card-overdrawn-badge">
                       OVERDRAWN
+                    </span>
+                  )}
+                  {balance < 0 && isCredit && (
+                    <span className="wallet-card-overdrawn-badge">
+                      IN CREDIT
                     </span>
                   )}
                 </b>
               </div>
             )}
-            {!isMfs && !isSavings && (
+            {!isMfs && !isSavings && !isCash && (
               <div className="wallet-card-expiry-block">
                 <span className="wallet-card-meta-lbl">VALID THRU</span>
                 <span className="wallet-card-meta-val">
@@ -722,7 +747,7 @@ export function WalletCard({
             )}
           </div>
 
-          {!isMfs && !isSavings && (
+          {!isMfs && !isSavings && !isCash && (
             <div className="wallet-card-network">
               {!isGold && card.network === "visa" && (
                 <VisaBadge
