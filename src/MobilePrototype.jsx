@@ -11755,12 +11755,14 @@ export default function MobilePrototype({
         message: `Too many attempts. Try again in ${lockoutSec}s.`,
       };
     }
+    const biometricLabel =
+      detectMobilePlatform() === "ios" ? "Face ID / Touch ID" : "Biometrics";
     triggerHaptic("light");
     if (!hasBiometricsConfigured()) {
       triggerHaptic("warning");
       return {
         ok: false,
-        message: "Enable Touch ID in Settings first.",
+        message: `Enable ${biometricLabel} in Settings first.`,
       };
     }
     try {
@@ -11773,7 +11775,7 @@ export default function MobilePrototype({
         triggerHaptic("warning");
         return {
           ok: false,
-          message: "Enter PIN once to sync Touch ID.",
+          message: `Enter PIN once to sync ${biometricLabel}.`,
         };
       }
     } catch (err) {
@@ -11782,7 +11784,7 @@ export default function MobilePrototype({
     triggerHaptic("warning");
     return {
       ok: false,
-      message: "Touch ID failed. Use your PIN.",
+      message: `${biometricLabel} failed. Use your PIN.`,
     };
   }, []);
 
@@ -12030,17 +12032,6 @@ export default function MobilePrototype({
       document.documentElement.setAttribute("data-platform", detected);
     };
     syncPlatform();
-
-    const viewportMeta = document.querySelector('meta[name="viewport"]');
-    if (viewportMeta) {
-      const content = viewportMeta.getAttribute("content") || "";
-      if (/user-scalable\s*=\s*no/i.test(content) || /maximum-scale\s*=\s*1(\.0)?/i.test(content)) {
-        viewportMeta.setAttribute(
-          "content",
-          "width=device-width, initial-scale=1.0, viewport-fit=cover",
-        );
-      }
-    }
 
     window.addEventListener("resize", syncPlatform, { passive: true });
     window.addEventListener("orientationchange", syncPlatform, { passive: true });
@@ -12963,7 +12954,11 @@ export default function MobilePrototype({
             verifyPin={handleVerifyPin}
             biometric={
               hasBiometricsConfigured()
-                ? { type: "fingerprint", label: "Touch ID" }
+                ? {
+                    type: platform === "ios" ? "face" : "fingerprint",
+                    label:
+                      platform === "ios" ? "Face ID / Touch ID" : "Biometrics",
+                  }
                 : null
             }
             onBiometric={handleBiometricAuth}
