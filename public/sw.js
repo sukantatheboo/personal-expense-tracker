@@ -84,18 +84,34 @@ self.addEventListener("install", (event) => {
   );
 });
 
+function cleanRedirectedResponse(response) {
+  if (!response || !response.redirected) return Promise.resolve(response);
+  return response.blob().then(
+    (body) =>
+      new Response(body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: new Headers(response.headers),
+      }),
+  );
+}
+
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches
-      .keys()
-      .then((keys) =>
-        Promise.all(
-          keys
-            .filter((key) => key !== CACHE_NAME)
-            .map((key) => caches.delete(key)),
+    Promise.all([
+      caches
+        .keys()
+        .then((keys) =>
+          Promise.all(
+            keys
+              .filter((key) => key !== CACHE_NAME)
+              .map((key) => caches.delete(key)),
+          ),
         ),
-      )
-      .then(() => self.clients.claim()),
+      self.registration.navigationPreload
+        ? self.registration.navigationPreload.disable().catch(() => {})
+        : Promise.resolve(),
+    ]).then(() => self.clients.claim()),
   );
 });
 
@@ -208,6 +224,12 @@ self.addEventListener("message", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
+  // Always settle navigation preload responses if the browser initiated one
+  // so Chromium/WebKit never log an unhandled preload cancellation error.
+  if (event.preloadResponse) {
+    event.waitUntil(Promise.resolve(event.preloadResponse).catch(() => {}));
+  }
+
   const { request } = event;
   if (request.method !== "GET") return;
   // Let the browser handle byte-range requests directly. Partial (206)
@@ -245,12 +267,14 @@ self.addEventListener("fetch", (event) => {
       event.respondWith(
         fetch(indexUrl, { cache: "no-store" })
           .then(async (response) => {
-            await cacheCompleteResponse(indexUrl, response);
-            return response;
+            const clean = await cleanRedirectedResponse(response);
+            await cacheCompleteResponse(indexUrl, clean);
+            return clean;
           })
           .catch(async () => {
-            const fallback = await caches.match(indexUrl);
-            return fallback || caches.match(request);
+            const fallback =
+              (await caches.match(indexUrl)) || (await caches.match(request));
+            return cleanRedirectedResponse(fallback);
           }),
       );
       return;
@@ -260,19 +284,22 @@ self.addEventListener("fetch", (event) => {
       caches
         .open(CACHE_NAME)
         .then((cache) => cache.match(indexUrl))
-        .then(
-          (cachedIndex) =>
-            cachedIndex ||
-            fetch(indexUrl, { cache: "no-store" })
-              .then(async (response) => {
-                await cacheCompleteResponse(indexUrl, response);
-                return response;
-              })
-              .catch(async () => {
-                const fallback = await caches.match(indexUrl);
-                return fallback || caches.match(request);
-              }),
-        ),
+        .then((cachedIndex) => {
+          if (cachedIndex) {
+            return cleanRedirectedResponse(cachedIndex);
+          }
+          return fetch(indexUrl, { cache: "no-store" })
+            .then(async (response) => {
+              const clean = await cleanRedirectedResponse(response);
+              await cacheCompleteResponse(indexUrl, clean);
+              return clean;
+            })
+            .catch(async () => {
+              const fallback =
+                (await caches.match(indexUrl)) || (await caches.match(request));
+              return cleanRedirectedResponse(fallback);
+            });
+        }),
     );
     return;
   }

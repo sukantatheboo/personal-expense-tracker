@@ -2316,6 +2316,23 @@ const WhereItWentCard = memo(
       };
     }, []);
 
+    // Safari / WebKit often skips firing `onAnimationEnd` on SVG elements inside `<defs><mask>`,
+    // and `prefers-reduced-motion: reduce` disables the sweep animation entirely (`animation: none`),
+    // which would otherwise leave the mask attribute attached forever.
+    useEffect(() => {
+      const reducedMotion =
+        typeof window !== "undefined" &&
+        window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+      if (reducedMotion) {
+        segsGroupRef.current?.removeAttribute("mask");
+        return undefined;
+      }
+      const timer = window.setTimeout(() => {
+        segsGroupRef.current?.removeAttribute("mask");
+      }, 1150);
+      return () => window.clearTimeout(timer);
+    }, [csSignature]);
+
     const hit = useCallback((e) => {
       const svg = svgRef.current;
       const items = stateRef.current;
@@ -5042,6 +5059,10 @@ function RecurringPlansView({
         <section key={section.id} className="card rec-section-card">
           <header className="rec-section-header">
             <div className="rec-section-title-group">
+              <span
+                className={`rec-section-dot is-${section.id}`}
+                aria-hidden="true"
+              />
               <h2 className="section-title rec-section-title">{section.title}</h2>
               <span className="rec-section-count">{section.items.length}</span>
             </div>
@@ -8772,8 +8793,26 @@ function CardOptionsSheet({
         "",
     ).trim();
     const toCopy = raw.includes("•") ? raw : raw.replace(/\s+/g, "");
+    const fallbackCopy = (text) => {
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.setAttribute("readonly", "");
+        ta.style.cssText =
+          "position:fixed;opacity:0;pointer-events:none;left:-9999px;top:0;font-size:16px;";
+        document.body.appendChild(ta);
+        ta.select();
+        ta.setSelectionRange(0, text.length);
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      } catch {
+        // ignore
+      }
+    };
     if (navigator?.clipboard?.writeText) {
-      navigator.clipboard.writeText(toCopy).catch(() => {});
+      navigator.clipboard.writeText(toCopy).catch(() => fallbackCopy(toCopy));
+    } else {
+      fallbackCopy(toCopy);
     }
     setCopied(true);
     clearTimeout(copyTimerRef.current);
@@ -12164,20 +12203,37 @@ export default function MobilePrototype({
       if (frame) window.cancelAnimationFrame(frame);
       frame = window.requestAnimationFrame(syncViewport);
     };
+    let blurTimer1 = 0;
+    let blurTimer2 = 0;
+    const handleFocusOut = () => {
+      scheduleViewportSync();
+      // Dynamically run delayed keyboard dismissal resync only on iOS, where
+      // Safari's visualViewport offsetTop and innerHeight settle asynchronously.
+      if (detectMobilePlatform() !== "ios") return;
+      window.clearTimeout(blurTimer1);
+      window.clearTimeout(blurTimer2);
+      blurTimer1 = window.setTimeout(() => {
+        if (window.scrollY !== 0) window.scrollTo(0, 0);
+        scheduleViewportSync();
+      }, 120);
+      blurTimer2 = window.setTimeout(scheduleViewportSync, 320);
+    };
 
     syncViewport();
     viewport?.addEventListener("resize", scheduleViewportSync);
     viewport?.addEventListener("scroll", scheduleViewportSync);
     window.addEventListener("resize", scheduleViewportSync);
     document.addEventListener("focusin", scheduleViewportSync);
-    document.addEventListener("focusout", scheduleViewportSync);
+    document.addEventListener("focusout", handleFocusOut);
     return () => {
       if (frame) window.cancelAnimationFrame(frame);
+      window.clearTimeout(blurTimer1);
+      window.clearTimeout(blurTimer2);
       viewport?.removeEventListener("resize", scheduleViewportSync);
       viewport?.removeEventListener("scroll", scheduleViewportSync);
       window.removeEventListener("resize", scheduleViewportSync);
       document.removeEventListener("focusin", scheduleViewportSync);
-      document.removeEventListener("focusout", scheduleViewportSync);
+      document.removeEventListener("focusout", handleFocusOut);
     };
   }, []);
   const close = (exit = null, afterClose = null) => {

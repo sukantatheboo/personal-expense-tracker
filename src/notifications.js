@@ -88,18 +88,23 @@ function resolveSoundUrl(tone) {
 function setupAudioUnlock() {
   if (typeof window === "undefined" || audioUnlocked) return;
   const unlock = () => {
-    if (
-      typeof navigator !== "undefined" &&
-      navigator.userActivation &&
-      !navigator.userActivation.isActive &&
-      !navigator.userActivation.hasBeenActive
-    ) {
-      return;
-    }
     audioUnlocked = true;
     const ctx = getSharedAudioContext();
-    if (ctx && ctx.state === "suspended") {
-      ctx.resume().catch(() => {});
+    if (ctx) {
+      if (ctx.state === "suspended" || ctx.state === "interrupted") {
+        ctx.resume().catch(() => {});
+      }
+      // iOS Safari WebKit requires playing a silent buffer inside a direct user
+      // gesture to fully unlock the AudioContext output channel.
+      try {
+        const buffer = ctx.createBuffer(1, 1, 22050);
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(ctx.destination);
+        source.start(0);
+      } catch {
+        // ignore
+      }
     }
     if (pendingBlockedTone && Date.now() - pendingBlockedToneAt < 15000) {
       const toneToPlay = pendingBlockedTone;
@@ -107,12 +112,22 @@ function setupAudioUnlock() {
       pendingBlockedToneAt = 0;
       playNotificationAudioTone(toneToPlay);
     }
-    window.removeEventListener("click", unlock, true);
+    window.removeEventListener("pointerdown", unlock, true);
+    window.removeEventListener("touchstart", unlock, true);
     window.removeEventListener("touchend", unlock, true);
+    window.removeEventListener("click", unlock, true);
     window.removeEventListener("keydown", unlock, true);
   };
-  window.addEventListener("click", unlock, { capture: true, passive: true });
+  window.addEventListener("pointerdown", unlock, {
+    capture: true,
+    passive: true,
+  });
+  window.addEventListener("touchstart", unlock, {
+    capture: true,
+    passive: true,
+  });
   window.addEventListener("touchend", unlock, { capture: true, passive: true });
+  window.addEventListener("click", unlock, { capture: true, passive: true });
   window.addEventListener("keydown", unlock, { capture: true, passive: true });
 }
 
@@ -128,7 +143,7 @@ async function synthesizeAudioTone(tone = "reminder") {
   try {
     const ctx = getSharedAudioContext();
     if (!ctx) return false;
-    if (ctx.state === "suspended") {
+    if (ctx.state === "suspended" || ctx.state === "interrupted") {
       await ctx.resume();
     }
     if (ctx.state !== "running") return false;
@@ -304,9 +319,18 @@ export async function requestNotificationPermission() {
       return false;
     }
   }
-  if (typeof window !== "undefined" && "Notification" in window) {
+  if (
+    typeof window !== "undefined" &&
+    "Notification" in window &&
+    typeof window.Notification?.requestPermission === "function"
+  ) {
     try {
-      const result = await window.Notification.requestPermission();
+      const result = await new Promise((resolve, reject) => {
+        const maybePromise = window.Notification.requestPermission(resolve);
+        if (maybePromise && typeof maybePromise.then === "function") {
+          maybePromise.then(resolve, reject);
+        }
+      });
       return result === "granted";
     } catch {
       return false;

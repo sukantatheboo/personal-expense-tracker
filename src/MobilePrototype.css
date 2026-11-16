@@ -11467,14 +11467,16 @@ html[data-theme="dark"]
   border-radius: 999px;
 }
 
-/* 3. SECTION CARDS (Borderless Tonal Elevation) */
+/* 3. SECTION CARDS (Flat Canvas Layout Matching Prototype) */
+.mobile-prototype .card.rec-section-card,
 .mobile-prototype .rec-section-card {
-  background: var(--rec-card-bg);
-  border: none;
-  border-radius: 24px;
-  padding: 16px 18px;
-  box-shadow: var(--rec-card-shadow);
-  margin-bottom: 14px;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  margin-top: 18px !important;
+  margin-bottom: 22px !important;
 }
 
 .mobile-prototype .rec-section-header {
@@ -11482,7 +11484,13 @@ html[data-theme="dark"]
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding-bottom: 10px;
+  padding: 0 0 11px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 88%, transparent);
+}
+
+:root[data-theme="dark"] .mobile-prototype .rec-section-header,
+.mobile-prototype[data-theme="dark"] .rec-section-header {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
 }
 
 .mobile-prototype .rec-section-title-group {
@@ -11491,38 +11499,61 @@ html[data-theme="dark"]
   gap: 8px;
 }
 
+.mobile-prototype .rec-section-dot {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 9px;
+  border-radius: 50%;
+  box-sizing: border-box;
+}
+
+.mobile-prototype .rec-section-dot.is-bills {
+  background: var(--rec-seg-bills, #cff558);
+  border: 1px solid rgba(15, 23, 42, 0.22);
+}
+
+:root[data-theme="dark"] .mobile-prototype .rec-section-dot.is-bills,
+.mobile-prototype[data-theme="dark"] .rec-section-dot.is-bills {
+  border-color: transparent;
+}
+
+.mobile-prototype .rec-section-dot.is-savings {
+  background: var(--rec-seg-savings, #38bdf8);
+}
+
 .mobile-prototype .rec-section-title {
-  font-size: 16px;
+  font-size: 16.5px;
   font-weight: 800;
+  letter-spacing: -0.02em;
   color: var(--ink);
   margin: 0;
 }
 
 .mobile-prototype .rec-section-count {
-  font-size: 11px;
+  font-size: 13.5px;
   font-weight: 700;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--rec-count-bg);
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--rec-muted-aa);
   font-variant-numeric: tabular-nums;
 }
 
 .mobile-prototype .rec-section-sum {
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 800;
   color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
 
 .mobile-prototype .rec-section-sum span {
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--rec-muted-aa);
-  margin-left: 1px;
+  margin-left: 2px;
 }
 
-/* 4. RECURRING ROWS (Min 44pt Tap Target, Tabular Numerals, Truncation) */
+/* 4. RECURRING ROWS (Flat on Canvas, Inset Divider Matching Prototype) */
 .mobile-prototype .rec-rows-list {
   display: flex;
   flex-direction: column;
@@ -11532,10 +11563,33 @@ html[data-theme="dark"]
   position: relative;
   overflow: hidden;
   isolation: isolate;
-  border-top: 1px solid var(--rec-row-divider);
+  border-top: none !important;
   background: transparent;
-  border-radius: 14px;
+  border-radius: 0;
   transition: background 0.18s ease;
+}
+
+.mobile-prototype .rec-row-swipe-wrap + .rec-row-swipe-wrap::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 58px;
+  right: 0;
+  height: 1px;
+  background: color-mix(in srgb, var(--line) 88%, transparent);
+  z-index: 3;
+  pointer-events: none;
+}
+
+:root[data-theme="dark"] .mobile-prototype .rec-row-swipe-wrap + .rec-row-swipe-wrap::before,
+.mobile-prototype[data-theme="dark"] .mobile-prototype .rec-row-swipe-wrap + .rec-row-swipe-wrap::before,
+.mobile-prototype[data-theme="dark"] .rec-row-swipe-wrap + .rec-row-swipe-wrap::before {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.mobile-prototype .rec-row-swipe-wrap.is-dragging,
+.mobile-prototype .rec-row-swipe-wrap.is-revealed {
+  border-radius: 14px;
 }
 
 .mobile-prototype .rec-row-swipe-wrap:first-child {
@@ -11618,7 +11672,7 @@ html[data-theme="dark"]
 .mobile-prototype .rec-row {
   position: relative;
   z-index: 2;
-  background: var(--rec-card-bg);
+  background: var(--bg);
   width: 100%;
   box-sizing: border-box;
   min-width: 0;
@@ -11626,10 +11680,10 @@ html[data-theme="dark"]
   display: flex;
   align-items: center;
   gap: 12px;
-  min-height: 60px; /* Guarantees >= 44pt tap target */
-  padding: 10px 14px 10px 4px;
+  min-height: 64px; /* Guarantees >= 44pt tap target */
+  padding: 13px 0;
   border: none;
-  border-radius: 14px;
+  border-radius: 0;
   font: inherit;
   color: inherit;
   text-align: left;
@@ -11649,7 +11703,7 @@ html[data-theme="dark"]
   display: flex;
   flex: 1 1 auto;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   min-width: 0;
 }
 
@@ -11659,7 +11713,7 @@ html[data-theme="dark"]
 }
 
 .mobile-prototype .rec-row:active {
-  background: color-mix(in srgb, var(--ink) 4%, var(--rec-card-bg));
+  background: color-mix(in srgb, var(--ink) 4%, var(--bg));
   scale: 0.985;
 }
 
@@ -11667,13 +11721,14 @@ html[data-theme="dark"]
   opacity: 0.5;
 }
 
-/* Sized and styled identically to app-wide category icons (.ic) */
+/* Sized and styled identically to prototype recurring icons */
+.mobile-prototype .rec-row .ic.rec-badge,
 .mobile-prototype .rec-badge {
-  width: 40px;
-  height: 40px;
-  min-width: 40px;
-  flex: 0 0 40px;
-  border-radius: 12px;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  flex: 0 0 44px;
+  border-radius: 14px;
   border: none;
   display: grid;
   place-items: center;
@@ -12706,18 +12761,60 @@ body {
   }
 }
 
-/* P0 #3: iOS Safari Input Auto-Zoom Prevention (16px minimum on text/search inputs,
-   while strictly preserving the 54px / 44px / 36px Hero Amount input typography) */
-.mobile-prototype .activity-search-input,
-.mobile-prototype .srch input,
-.mobile-prototype input.in,
-.mobile-prototype .add-card-search-input,
-.mobile-prototype .add-card-native-input:not(.add-card-balance-input),
-.mobile-prototype .card-options-field input:not(.add-card-balance-input),
-.mobile-prototype .auth-input-group > input,
-.mobile-prototype textarea,
-.mobile-prototype select {
-  font-size: 16px;
+/* P0 #3: Dynamic iOS-Only Input Auto-Zoom Prevention & Date/Time Normalization
+   Scoped strictly to iOS (`html[data-platform="ios"]` and `@supports (-webkit-touch-callout: none)`)
+   so Android and Desktop keep their exact original typography (e.g. 13px time pill, 15px auth inputs). */
+html[data-platform="ios"] .auth-input-group > input,
+html[data-platform="ios"] .auth-modal .auth-password-control input,
+html[data-platform="ios"] .mobile-prototype .activity-search-input,
+html[data-platform="ios"] .mobile-prototype .srch input,
+html[data-platform="ios"] .mobile-prototype input.in,
+html[data-platform="ios"] .mobile-prototype .settings-time-input,
+html[data-platform="ios"] .mobile-prototype .mfs-time-pill,
+html[data-platform="ios"] .mobile-prototype .mfs-app-settings-page .mfs-time-pill,
+html[data-platform="ios"] .mobile-prototype .add-card-search-input,
+html[data-platform="ios"] .mobile-prototype .add-card-native-input:not(.add-card-balance-input),
+html[data-platform="ios"] .mobile-prototype .card-options-field input:not(.add-card-balance-input),
+html[data-platform="ios"] .mobile-prototype textarea,
+html[data-platform="ios"] .mobile-prototype select {
+  font-size: 16px !important;
+}
+html[data-platform="ios"] .mobile-prototype input[type="date"],
+html[data-platform="ios"] .mobile-prototype input[type="time"] {
+  -webkit-appearance: none;
+  appearance: none;
+}
+html[data-platform="ios"] .mobile-prototype input[type="date"]::-webkit-date-and-time-value,
+html[data-platform="ios"] .mobile-prototype input[type="time"]::-webkit-date-and-time-value {
+  text-align: center;
+  margin: 0;
+}
+@supports (-webkit-touch-callout: none) {
+  .auth-input-group > input,
+  .auth-modal .auth-password-control input,
+  .mobile-prototype .activity-search-input,
+  .mobile-prototype .srch input,
+  .mobile-prototype input.in,
+  .mobile-prototype .settings-time-input,
+  .mobile-prototype .mfs-time-pill,
+  .mobile-prototype .mfs-app-settings-page .mfs-time-pill,
+  .mobile-prototype .add-card-search-input,
+  .mobile-prototype .add-card-native-input:not(.add-card-balance-input),
+  .mobile-prototype .card-options-field input:not(.add-card-balance-input),
+  .mobile-prototype textarea,
+  .mobile-prototype select {
+    font-size: 16px !important;
+  }
+  .mobile-prototype input[type="date"],
+  .mobile-prototype input[type="time"] {
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .mobile-prototype input[type="date"]::-webkit-date-and-time-value,
+  .mobile-prototype input[type="time"]::-webkit-date-and-time-value {
+    text-align: center;
+    margin: 0;
+  }
 }
 .mobile-prototype .amt.amt-hero-redesigned input,
 .mobile-prototype .amt.amt-hero-redesigned input.amt-hero-input {
