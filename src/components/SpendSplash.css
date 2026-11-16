@@ -1,0 +1,212 @@
+/* Universal Night theme */
+.sp-root {
+  --sp-t: clamp(72px, 24vmin, 116px);
+  --sp-bg: #161d2b;
+  --sp-tile: #d5f45b;
+  --sp-ink: #161d2b;
+  --sp-word: #f2f0ea;
+  --sp-glow: rgb(213 244 91 / .14);
+  color-scheme: dark;
+
+  position: fixed;
+  inset: -2px;
+  z-index: 2147483000;
+  width: calc(100vw + 4px);
+  height: calc(100dvh + 4px);
+  box-shadow: 0 0 0 4px var(--sp-bg);
+  background: var(--sp-bg);
+  font-family: var(--sp-font, "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+  overscroll-behavior: contain;
+}
+
+.sp-root[hidden] {
+  display: none;
+}
+
+.sp-stage {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: var(--sp-bg);
+  will-change: transform;
+}
+
+.sp-stage::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 50%, var(--sp-glow), transparent 55%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.sp-lockup {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+/* Tile + arrow: same geometry as favicon.svg (64 grid, 25% radius, 4.5 stroke) */
+.sp-tile {
+  width: var(--sp-t);
+  height: var(--sp-t);
+  flex: none;
+  background: var(--sp-tile);
+  border-radius: 50%;
+  transform: scale(0);
+  will-change: transform, border-radius;
+  backface-visibility: hidden;
+}
+
+.sp-tile svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.sp-tile path {
+  fill: none;
+  stroke: var(--sp-ink);
+  stroke-width: 4.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1 2;
+  opacity: 0;
+}
+
+/* Wordmark opens out from behind the tile, pushing it left */
+.sp-word {
+  display: grid;
+  grid-template-columns: 0fr;
+  margin-left: 0;
+  font-size: calc(var(--sp-t) * .6);
+  line-height: 1.2;
+}
+
+.sp-word span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  padding: .1em 0;
+}
+
+.sp-word b {
+  display: block;
+  padding-right: .04em;
+  font-weight: 800;
+  letter-spacing: -.03em;
+  color: var(--sp-word);
+  opacity: 0;
+}
+
+@keyframes sp-dot {
+  from { transform: scale(0); }
+  to { transform: scale(.16); }
+}
+
+@keyframes sp-grow {
+  from {
+    transform: scale(.16);
+    border-radius: 50%;
+  }
+  to {
+    transform: scale(1);
+    border-radius: 25%;
+  }
+}
+
+@keyframes sp-pulse {
+  50% { transform: scale(1.07); }
+}
+
+@keyframes sp-draw {
+  from {
+    opacity: 1;
+    stroke-dashoffset: 1;
+  }
+  to {
+    opacity: 1;
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes sp-open {
+  to {
+    grid-template-columns: 1fr;
+    margin-left: calc(var(--sp-t) * .26);
+  }
+}
+
+@keyframes sp-slide {
+  from {
+    opacity: 0;
+    transform: translateX(-40%);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes sp-glow {
+  to { opacity: 1; }
+}
+
+.sp-stage.play .sp-tile {
+  animation:
+    sp-dot .3s cubic-bezier(.3, 1.5, .5, 1) both,
+    sp-grow .55s cubic-bezier(.2, .9, .25, 1.15) .38s forwards,
+    sp-pulse .4s ease-in-out 1.65s;
+}
+
+.sp-stage.play .sp-shaft {
+  animation: sp-draw .42s cubic-bezier(.6, 0, .3, 1) .95s forwards;
+}
+
+.sp-stage.play .sp-head {
+  animation: sp-draw .3s cubic-bezier(.6, 0, .3, 1) 1.3s forwards;
+}
+
+.sp-stage.play .sp-word {
+  animation: sp-open .65s cubic-bezier(.65, 0, .25, 1) 1.75s forwards;
+}
+
+.sp-stage.play .sp-word b {
+  animation: sp-slide .6s cubic-bezier(.2, .8, .2, 1) 1.85s both;
+}
+
+.sp-stage.play::before {
+  animation: sp-glow 1s ease-out .4s forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sp-stage *,
+  .sp-stage::before {
+    animation: none !important;
+  }
+  .sp-stage::before {
+    opacity: 1 !important;
+  }
+  .sp-tile {
+    transform: none !important;
+    border-radius: 25% !important;
+  }
+  .sp-tile path {
+    opacity: 1 !important;
+    stroke-dashoffset: 0 !important;
+  }
+  .sp-word {
+    grid-template-columns: 1fr !important;
+    margin-left: calc(var(--sp-t) * .26) !important;
+  }
+  .sp-word b {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}

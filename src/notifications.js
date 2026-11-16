@@ -88,6 +88,14 @@ function resolveSoundUrl(tone) {
 function setupAudioUnlock() {
   if (typeof window === "undefined" || audioUnlocked) return;
   const unlock = () => {
+    if (
+      typeof navigator !== "undefined" &&
+      navigator.userActivation &&
+      !navigator.userActivation.isActive &&
+      !navigator.userActivation.hasBeenActive
+    ) {
+      return;
+    }
     audioUnlocked = true;
     const ctx = getSharedAudioContext();
     if (ctx && ctx.state === "suspended") {
@@ -99,12 +107,12 @@ function setupAudioUnlock() {
       pendingBlockedToneAt = 0;
       playNotificationAudioTone(toneToPlay);
     }
-    window.removeEventListener("pointerdown", unlock, true);
-    window.removeEventListener("touchstart", unlock, true);
+    window.removeEventListener("click", unlock, true);
+    window.removeEventListener("touchend", unlock, true);
     window.removeEventListener("keydown", unlock, true);
   };
-  window.addEventListener("pointerdown", unlock, { capture: true, passive: true });
-  window.addEventListener("touchstart", unlock, { capture: true, passive: true });
+  window.addEventListener("click", unlock, { capture: true, passive: true });
+  window.addEventListener("touchend", unlock, { capture: true, passive: true });
   window.addEventListener("keydown", unlock, { capture: true, passive: true });
 }
 
@@ -116,6 +124,7 @@ if (typeof window !== "undefined") {
  * Web Audio API synthesizer fallback.
  */
 async function synthesizeAudioTone(tone = "reminder") {
+  if (!audioUnlocked) return false;
   try {
     const ctx = getSharedAudioContext();
     if (!ctx) return false;
@@ -184,6 +193,12 @@ export function playNotificationAudioTone(tone = "reminder") {
         return Haptics.notification({ type: NotificationType.Warning });
       })
       .catch(() => {});
+  }
+
+  if (!audioUnlocked) {
+    pendingBlockedTone = tone;
+    pendingBlockedToneAt = Date.now();
+    return;
   }
 
   const soundUrl = resolveSoundUrl(tone);
