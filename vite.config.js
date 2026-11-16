@@ -1,5 +1,5 @@
 import { execSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { defineConfig } from "vite";
 
@@ -116,8 +116,17 @@ function spendBuildVersionPlugin() {
               const matches = html.matchAll(
                 /(?:src|href)=["'](?:\.\/|\/personal-expense-tracker\/|\/)?(assets\/[^"'?#]+)["']/g,
               );
+              const assetsDir = resolve(resolvedOutDir, "assets");
+              const fontAssets = existsSync(assetsDir)
+                ? readdirSync(assetsDir)
+                    .filter((f) => f.startsWith("manrope-latin") && f.endsWith(".woff2"))
+                    .map((f) => `assets/${f}`)
+                : [];
               precacheAssets = [
-                ...new Set(Array.from(matches, (m) => m[1]).filter(Boolean)),
+                ...new Set([
+                  ...Array.from(matches, (m) => m[1]).filter(Boolean),
+                  ...fontAssets,
+                ]),
               ];
             }
           } catch {

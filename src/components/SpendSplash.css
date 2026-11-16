@@ -15,7 +15,7 @@
   height: calc(100dvh + 4px);
   box-shadow: 0 0 0 4px var(--sp-bg);
   background: var(--sp-bg);
-  font-family: var(--sp-font, "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif);
+  font-family: var(--sp-font, "Manrope Variable", "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif);
   -webkit-font-smoothing: antialiased;
   user-select: none;
   -webkit-user-select: none;

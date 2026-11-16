@@ -1,20 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap");
-
-/* Android local @font-face definitions for offline reliability */
-@font-face {
-  font-family: "Manrope";
-  font-style: normal;
-  font-weight: 500 800;
-  font-display: swap;
-  src:
-    local("Manrope"),
-    local("Manrope-Regular"),
-    local("Manrope-Medium"),
-    local("Manrope-SemiBold"),
-    local("Manrope-Bold"),
-    local("Manrope-ExtraBold"),
-    local("Roboto");
-}
+/* Manrope Variable is bundled locally via @fontsource-variable/manrope in src/main.jsx */
 
 :root {
   color-scheme: light;
@@ -72,7 +56,8 @@ body {
   background: var(--page-bg);
   color: var(--ink);
   font-family:
-    Manrope,
+    "Manrope Variable",
+    "Manrope",
     -apple-system,
     BlinkMacSystemFont,
     "Segoe UI",
@@ -202,7 +187,8 @@ a:active,
   align-items: center;
   text-align: center;
   font-family:
-    Manrope,
+    "Manrope Variable",
+    "Manrope",
     system-ui,
     -apple-system,
     sans-serif;
@@ -1006,7 +992,8 @@ a:active,
   background: var(--bg);
   color: var(--ink);
   font:
-    600 15px/1.35 Manrope,
+    600 15px/1.35 "Manrope Variable",
+    "Manrope",
     -apple-system,
     BlinkMacSystemFont,
     "Segoe UI",
@@ -1763,7 +1750,8 @@ a:active,
     "Noto Sans Bengali",
     "Kohinoor Bangla",
     "Bangla Sangam MN",
-    Manrope,
+    "Manrope Variable",
+    "Manrope",
     -apple-system,
     BlinkMacSystemFont,
     "Segoe UI",
@@ -7899,7 +7887,8 @@ a:active,
   isolation: isolate;
   transform: translateZ(0);
   font-family:
-    "Inter",
+    "Manrope Variable",
+    "Manrope",
     system-ui,
     -apple-system,
     sans-serif;
@@ -8349,7 +8338,7 @@ a:active,
 }
 
 .mobile-prototype .tx-account-last4 {
-  font-family: ui-monospace, "SF Mono", Menlo, Manrope, monospace;
+  font-family: ui-monospace, "SF Mono", Menlo, "Manrope Variable", "Manrope", monospace;
   font-size: 12.5px;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -9886,7 +9875,8 @@ html[data-theme="dark"]
   align-items: center;
   text-align: center;
   font-family:
-    Manrope,
+    "Manrope Variable",
+    "Manrope",
     system-ui,
     -apple-system,
     sans-serif;

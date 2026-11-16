@@ -130,10 +130,14 @@ export default function WelcomeFlow({ onDone, theme, exiting = false }) {
   useEffect(() => {
     if (typeof document !== "undefined") {
       document.getElementById("initial-splash")?.remove();
-      document.documentElement.style.backgroundColor = "";
-      document.body.style.backgroundColor = "";
     }
-    if (exiting || finishedRef.current) return undefined;
+    if (exiting || finishedRef.current) {
+      if (typeof document !== "undefined") {
+        document.documentElement.style.backgroundColor = "";
+        document.body.style.backgroundColor = "";
+      }
+      return undefined;
+    }
     const reducedMotion =
       typeof window !== "undefined" &&
       Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches);
@@ -148,6 +152,15 @@ export default function WelcomeFlow({ onDone, theme, exiting = false }) {
     const splashTimer = window.setTimeout(() => {
       splashGoneRef.current = true;
       setSplashGone(true);
+      if (typeof document !== "undefined") {
+        document.documentElement.style.backgroundColor = "";
+        document.body.style.backgroundColor = "";
+        const isDark = document.documentElement.dataset.theme === "dark";
+        const color = isDark ? "#08080c" : "#f4f3ee";
+        document
+          .querySelectorAll('meta[name="theme-color"]')
+          .forEach((meta) => meta.setAttribute("content", color));
+      }
       if (reducedMotion) {
         setSlidesReady(true);
       } else {
@@ -160,6 +173,10 @@ export default function WelcomeFlow({ onDone, theme, exiting = false }) {
     return () => {
       window.clearTimeout(splashTimer);
       if (slideTimer) window.clearTimeout(slideTimer);
+      if (typeof document !== "undefined") {
+        document.documentElement.style.backgroundColor = "";
+        document.body.style.backgroundColor = "";
+      }
     };
   }, [exiting]);
 

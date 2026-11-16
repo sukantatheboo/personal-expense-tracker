@@ -11,7 +11,6 @@ const T = {
   reduceHold: 900,
   exit: 450,
   reduceExit: 200,
-  fontWait: 700,
 };
 
 const EASE_EXIT = "cubic-bezier(.4,0,1,1)";
@@ -49,16 +48,9 @@ function handoffStaticSplash() {
   if (staticSplash) staticSplash.remove();
 }
 
-const fUrlBase = "https://fonts.googleapis.com/css2?family=";
-
-function ensureAppFontsLoaded(fUrl) {
-  if (typeof document === "undefined" || !fUrl) return;
-  if (!document.querySelector("link[data-spend-splash-font]")) {
-    const link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.href = fUrl;
-    link.setAttribute("data-spend-splash-font", "");
-    document.head.appendChild(link);
+function ensureAppFontsLoaded() {
+  if (typeof document !== "undefined" && document.fonts?.load) {
+    document.fonts.load('800 1em "Manrope Variable"').catch(() => {});
   }
 }
 
@@ -67,8 +59,7 @@ export default function SpendSplash({
   canExit = true,
   once = false,
   storageKey = "spend-splash",
-  fontFamily = '"Manrope", system-ui, -apple-system, "Segoe UI", sans-serif',
-  fontUrl = fUrlBase + "Manrope:wght@500;600;700;800&display=swap",
+  fontFamily = '"Manrope Variable", "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif',
 }) {
   const rootRef = useRef(null);
   const firedSkip = useRef(false);
@@ -77,12 +68,12 @@ export default function SpendSplash({
 
   // Always-latest props, deliberately NOT effect dependencies.
   const live = useRef({});
-  live.current = { onDone, canExit, once, storageKey, fontFamily, fontUrl };
+  live.current = { onDone, canExit, once, storageKey, fontFamily };
 
   const [skip] = useState(() => alreadySeen(once, storageKey));
 
   useEffect(() => {
-    ensureAppFontsLoaded(live.current.fontUrl);
+    ensureAppFontsLoaded();
     if (!skip || firedSkip.current) return;
     firedSkip.current = true;
     handoffStaticSplash();
@@ -104,8 +95,13 @@ export default function SpendSplash({
     const root = rootRef.current;
     if (!root || skip) return undefined;
 
+    document.documentElement.style.backgroundColor = "#161d2b";
+    document.body.style.backgroundColor = "#161d2b";
+    document
+      .querySelectorAll('meta[name="theme-color"]')
+      .forEach((meta) => meta.setAttribute("content", "#161d2b"));
     handoffStaticSplash();
-    ensureAppFontsLoaded(live.current.fontUrl);
+    ensureAppFontsLoaded();
 
     const stage = root.querySelector(".sp-stage");
     const reduce = window.matchMedia(
@@ -238,18 +234,7 @@ export default function SpendSplash({
     } else {
       root.addEventListener("pointerdown", requestRelease);
       window.addEventListener("keydown", onKey);
-
-      if (reduce || isResume) {
-        startPlayback();
-      } else {
-        const fontReady = document.fonts?.load
-          ? document.fonts.load("800 1em Manrope").catch(() => {})
-          : Promise.resolve();
-        Promise.race([
-          fontReady,
-          new Promise((r) => setTimeout(r, T.fontWait)),
-        ]).then(startPlayback);
-      }
+      startPlayback();
     }
 
     return () => {

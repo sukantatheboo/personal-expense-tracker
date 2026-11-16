@@ -1,4 +1,4 @@
-const CACHE_NAME = "spend-shell-v13";
+const CACHE_NAME = "spend-shell-v14";
 const SW_BUILD_ID = "dev";
 const SW_VERSION = "2.0.0";
 const SW_COMMIT = "";

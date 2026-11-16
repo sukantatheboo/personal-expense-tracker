@@ -1,16 +1,3 @@
-@font-face {
-  font-family: "Plus Jakarta Sans";
-  font-style: normal;
-  font-weight: 500 800;
-  font-display: swap;
-  src:
-    local("Plus Jakarta Sans"),
-    local("PlusJakartaSans-Bold"),
-    local("PlusJakartaSans-ExtraBold"),
-    local("Roboto"),
-    local("sans-serif");
-}
-
 .welcome-flow {
   --bg: #f3f2ec;
   --ink: #151b28;
@@ -37,8 +24,8 @@
   background: var(--stage);
   color: var(--ink);
   font-family:
-    "Plus Jakarta Sans",
-    Manrope,
+    "Manrope Variable",
+    "Manrope",
     "Noto Sans Bengali",
     system-ui,
     -apple-system,

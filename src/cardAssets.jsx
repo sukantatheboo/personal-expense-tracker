@@ -36,7 +36,7 @@ export function BkashLogo({ className = "", height = 22 }) {
           fontSize: Math.round(height * 0.62),
           letterSpacing: "-0.03em",
           lineHeight: 1,
-          fontFamily: "Manrope, system-ui, -apple-system, sans-serif",
+          fontFamily: '"Manrope Variable", "Manrope", system-ui, -apple-system, sans-serif',
           textShadow: "0 1px 2px rgba(0,0,0,0.22)",
         }}
       >
@@ -372,7 +372,7 @@ export function CityBankLogo({ className = "", height = 22 }) {
           fontSize,
           letterSpacing: "0.04em",
           lineHeight: 1,
-          fontFamily: "Manrope, system-ui, -apple-system, sans-serif",
+          fontFamily: '"Manrope Variable", "Manrope", system-ui, -apple-system, sans-serif',
           textShadow: "0 1px 2px rgba(0,0,0,0.25)",
         }}
       >
@@ -430,7 +430,7 @@ export function EblLogo({ className = "", height = 22 }) {
           fontSize,
           letterSpacing: "0.04em",
           lineHeight: 1,
-          fontFamily: "Manrope, system-ui, -apple-system, sans-serif",
+          fontFamily: '"Manrope Variable", "Manrope", system-ui, -apple-system, sans-serif',
           textShadow: "0 1px 2px rgba(0,0,0,0.25)",
         }}
       >
@@ -488,7 +488,7 @@ export function DbblLogo({ className = "", height = 22 }) {
           fontSize,
           letterSpacing: "0.04em",
           lineHeight: 1,
-          fontFamily: "Manrope, system-ui, -apple-system, sans-serif",
+          fontFamily: '"Manrope Variable", "Manrope", system-ui, -apple-system, sans-serif',
           textShadow: "0 1px 2px rgba(0,0,0,0.25)",
         }}
       >
@@ -536,7 +536,7 @@ export function StandardCharteredLogo({ className = "", height = 22 }) {
           fontSize,
           letterSpacing: "0.04em",
           lineHeight: 1,
-          fontFamily: "Manrope, system-ui, -apple-system, sans-serif",
+          fontFamily: '"Manrope Variable", "Manrope", system-ui, -apple-system, sans-serif',
           textShadow: "0 1px 2px rgba(0,0,0,0.24)",
         }}
       >
@@ -574,7 +574,7 @@ export function AmazonLogo({ className = "", height = 21 }) {
         y="20"
         fill="#FFFFFF"
         stroke="none"
-        fontFamily="Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
+        fontFamily="'Manrope Variable', 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif"
         fontSize="21.5"
         fontWeight="850"
         letterSpacing="-0.04em"
@@ -635,7 +635,7 @@ export function CitiLogo({ className = "", height = 21 }) {
         y="26.5"
         fill="#FFFFFF"
         stroke="none"
-        fontFamily="Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
+        fontFamily="'Manrope Variable', 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif"
         fontSize="24.5"
         fontWeight="850"
         letterSpacing="-0.03em"
@@ -726,7 +726,7 @@ export function HdfcLogo({ className = "", height = 21 }) {
         y="20.5"
         fill="#FFFFFF"
         stroke="none"
-        fontFamily="Manrope, -apple-system, BlinkMacSystemFont, sans-serif"
+        fontFamily="'Manrope Variable', 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif"
         fontSize="16.5"
         fontWeight="850"
         letterSpacing="0.04em"

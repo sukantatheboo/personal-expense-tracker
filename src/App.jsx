@@ -110,7 +110,7 @@ class AppErrorBoundary extends Component {
             justifyContent: "center",
             padding: "24px",
             textAlign: "center",
-            fontFamily: "Manrope, system-ui, sans-serif",
+            fontFamily: '"Manrope Variable", "Manrope", system-ui, sans-serif',
             color: "var(--ink, #18201b)",
             background: "var(--bg, #f4f3ee)",
           }}
@@ -2123,17 +2123,19 @@ export default function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = resolvedTheme;
     document.documentElement.dataset.themeMode = theme;
-    const browserChromeColor =
-      resolvedTheme === "dark" ? "#08080c" : "#f4f3ee";
-    document
-      .querySelectorAll('meta[name="theme-color"]')
-      .forEach((meta) => meta.setAttribute("content", browserChromeColor));
+    if (ready && !sessionResolving) {
+      const browserChromeColor =
+        resolvedTheme === "dark" ? "#08080c" : "#f4f3ee";
+      document
+        .querySelectorAll('meta[name="theme-color"]')
+        .forEach((meta) => meta.setAttribute("content", browserChromeColor));
+    }
     try {
       localStorage.setItem(STORAGE_KEYS.theme, theme);
     } catch {
       // Keep the selected theme for this visit when storage is unavailable.
     }
-  }, [theme, resolvedTheme]);
+  }, [theme, resolvedTheme, ready, sessionResolving]);
 
   useEffect(() => {
     if (!isHydratedRef.current) return;
