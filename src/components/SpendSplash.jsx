@@ -177,6 +177,7 @@ export default function SpendSplash({
       if (since > 0) fade.currentTime = since;
       exitAnims.push(fade);
       fade.onfinish = finish;
+      window.setTimeout(finish, Math.max(0, d - since) + 50);
     };
 
     const onKey = (e) => {

@@ -1,4 +1,5 @@
 import {
+  Component,
   lazy,
   Suspense,
   useCallback,
@@ -84,14 +85,63 @@ import {
 } from "./notifications.js";
 
 import "./MobilePrototype.css";
+import MobilePrototype from "./MobilePrototype.jsx";
 
-let resolvedMobilePrototype = null;
-const loadMobilePrototype = () =>
-  import("./MobilePrototype").then((mod) => {
-    resolvedMobilePrototype = mod.default || mod;
-    return mod;
-  });
-const MobilePrototype = lazy(loadMobilePrototype);
+const resolvedMobilePrototype = MobilePrototype;
+const loadMobilePrototype = () => Promise.resolve(MobilePrototype);
+
+class AppErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div
+          style={{
+            minHeight: "100dvh",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "24px",
+            textAlign: "center",
+            fontFamily: "Manrope, system-ui, sans-serif",
+            color: "var(--ink, #18201b)",
+            background: "var(--bg, #f4f3ee)",
+          }}
+        >
+          <h2 style={{ margin: "0 0 8px", fontSize: "18px" }}>
+            Unable to open Spend
+          </h2>
+          <p style={{ margin: "0 0 16px", fontSize: "13px", opacity: 0.75, maxWidth: "320px" }}>
+            {this.state.error?.message || "A startup error occurred."}
+          </p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            style={{
+              padding: "10px 18px",
+              borderRadius: "12px",
+              border: "none",
+              background: "#161d2b",
+              color: "#fff",
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            Reload app
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function PrototypeMountSignal({ onMounted }) {
   useLayoutEffect(() => {
@@ -2445,10 +2495,14 @@ export default function App() {
     }
     let active = true;
     let sessionSubscription = null;
+    const resolveTimeout = window.setTimeout(() => {
+      if (active) setSessionResolving(false);
+    }, 1800);
     (supabase ? Promise.resolve(supabase) : getSupabase())
       .then((client) => {
         if (!active) return;
         if (!client) {
+          window.clearTimeout(resolveTimeout);
           setSessionResolving(false);
           return;
         }
@@ -2456,6 +2510,7 @@ export default function App() {
           .getSession()
           .then(({ data }) => {
             if (!active) return;
+            window.clearTimeout(resolveTimeout);
             const user = data?.session?.user || null;
             setSessionUser(user);
             if (user) {
@@ -2467,12 +2522,14 @@ export default function App() {
           })
           .catch(() => {
             if (!active) return;
+            window.clearTimeout(resolveTimeout);
             setSessionResolving(false);
           });
         const {
           data: { subscription },
         } = client.auth.onAuthStateChange((_event, session) => {
           if (!active) return;
+          window.clearTimeout(resolveTimeout);
           const user = session?.user || null;
           setSessionUser(user);
           if (user) {
@@ -2485,10 +2542,12 @@ export default function App() {
       })
       .catch(() => {
         if (!active) return;
+        window.clearTimeout(resolveTimeout);
         setSessionResolving(false);
       });
     return () => {
       active = false;
+      window.clearTimeout(resolveTimeout);
       sessionSubscription?.unsubscribe();
     };
   }, [initSupabaseAuth]);
@@ -5609,27 +5668,27 @@ export default function App() {
     }
   }
 
-  if (sessionResolving) {
-    return <SpendSplash canExit={false} onDone={() => setReady(true)} />;
-  }
-
   const ActivePrototype = resolvedMobilePrototype || MobilePrototype;
 
   return (
     <>
-      {!ready && !showWelcomeOverlay && (
-        <SpendSplash canExit={prototypeMounted} onDone={() => setReady(true)} />
+      {(sessionResolving || (!ready && !showWelcomeOverlay)) && (
+        <SpendSplash
+          canExit={!sessionResolving && prototypeMounted}
+          onDone={() => setReady(true)}
+        />
       )}
-      {showWelcomeOverlay && (
+      {!sessionResolving && showWelcomeOverlay && (
         <WelcomeFlow
           theme={resolvedTheme}
           exiting={welcomeExiting}
           onDone={handleWelcomeDone}
         />
       )}
-      <Suspense fallback={null}>
-        <PrototypeMountSignal onMounted={handlePrototypeMounted} />
-        <ActivePrototype
+      <AppErrorBoundary>
+        <Suspense fallback={null}>
+          <PrototypeMountSignal onMounted={handlePrototypeMounted} />
+          <ActivePrototype
           S={mobilePrototypeData}
           onUnlock={handleAppUnlock}
           onResetPin={handleResetForgottenPin}
@@ -5734,7 +5793,8 @@ export default function App() {
             showUpdateModal();
           }}
         />
-      </Suspense>
+        </Suspense>
+      </AppErrorBoundary>
       {authModalOpen &&
         (!pushUser || authMode === "update-password" || authModalClosing) &&
         createPortal(

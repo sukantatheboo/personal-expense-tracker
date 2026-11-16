@@ -78,8 +78,9 @@ import {
   AnimatedActivityIcon,
 } from "./components/AnimatedEmptyIcons.jsx";
 
+import SpendLogin from "./components/SpendLogin.jsx";
+
 const MonthEndBanner = lazy(() => import("./components/MonthEndBanner.jsx"));
-const SpendLogin = lazy(() => import("./components/SpendLogin.jsx"));
 
 // Dynamic runtime platform detection (Capacitor native shell + mobile browser / DevTools emulation)
 function detectMobilePlatform() {

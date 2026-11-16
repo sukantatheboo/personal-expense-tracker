@@ -683,7 +683,17 @@ if (typeof window !== "undefined") {
         });
     };
 
-    if (document.readyState === "complete") {
+    if (!import.meta.env.PROD) {
+      navigator.serviceWorker
+        .getRegistrations()
+        .then((registrations) => {
+          for (const registration of registrations) {
+            void registration.unregister();
+          }
+        })
+        .catch(() => {});
+      void cleanupLegacyShellCaches("");
+    } else if (document.readyState === "complete") {
       registerSw();
     } else {
       window.addEventListener("load", registerSw, { once: true });

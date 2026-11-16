@@ -169,7 +169,7 @@ export default defineConfig(({ command }) => ({
   },
   plugins: [spendBuildVersionPlugin()],
   optimizeDeps: {
-    include: ["lucide-react"],
+    include: ["lucide-react", "@capacitor/app"],
   },
   oxc: {
     jsx: {
