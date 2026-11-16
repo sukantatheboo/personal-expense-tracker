@@ -251,7 +251,7 @@ self.addEventListener("fetch", (event) => {
               if (response && (response.ok || response.type === "opaque")) {
                 const copy = response.clone();
                 caches
-                  .open(STATIC_CACHE)
+                  .open(CACHE_NAME)
                   .then((cache) => cache.put(request, copy))
                   .catch(() => {});
               }
