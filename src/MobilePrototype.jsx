@@ -71,12 +71,15 @@ import {
   FallbackIcons,
   StackedCardDeck,
   WalletCard,
+  formatCashMoney,
 } from "./AccountsCardDeck.jsx";
 import {
   VisaBadge,
   MastercardBadge,
   AmexBadge,
   MiniCardPreview,
+  CASH_CURRENCIES,
+  getCashCurrencyMeta,
 } from "./cardAssets.jsx";
 import {
   AnimatedRecurringIcon,
@@ -3784,14 +3787,13 @@ function Accounts({
               category: "cash",
               type: "cash",
               network: "none",
-              holderName: "CASH WALLET",
-              subtitle: "Cash in Hand · BDT",
+              holderName: "Cash wallet",
+              subtitle: "Cash in hand · BDT",
               last4: "CASH",
               number: "CASH-BDT",
               expiry: "",
-              color: "#0f766e",
-              gradient:
-                "linear-gradient(135deg, #115e59 0%, #0f766e 45%, #134e4a 80%, #042f2e 100%)",
+              color: "#23403C",
+              gradient: "#23403C",
               initialBalance: Number(S?.start?.cash) || 0,
             },
           ]
@@ -5405,6 +5407,10 @@ function AddSheet({
 }) {
   const nonSavingsCards = cards.filter(
     (c) =>
+      c.id !== "cash" &&
+      c.type !== "cash" &&
+      c.category !== "cash" &&
+      c.provider !== "cash" &&
       c.type !== "savings" &&
       c.category !== "savings" &&
       c.provider !== "savings",
@@ -5790,7 +5796,15 @@ function AddSheet({
 
 function getCardMaskedSubtitle(card) {
   if (!card) return "•••• 0000";
-  if (card.id === "cash" || card.type === "cash") return "Cash wallet";
+  if (
+    card.id === "cash" ||
+    card.type === "cash" ||
+    card.category === "cash" ||
+    card.provider === "cash"
+  ) {
+    const code = getCashCurrencyMeta(card.currency).code;
+    return `Cash wallet · ${code}`;
+  }
   const prov = CARD_PROVIDERS.find((p) => p.id === (card.provider || card.id));
   const raw =
     card.last4 ||
@@ -6388,7 +6402,7 @@ function AccountTxDetailSheet({
     date: tx.date || ld(),
     fromAccount: fallbackFrom,
     toAccount:
-      tx.to && tx.to !== "cash"
+      tx.to
         ? tx.to
         : cards.find((c) => c.id !== fallbackFrom)?.id || "",
   });
@@ -6400,16 +6414,14 @@ function AccountTxDetailSheet({
   const tr = g.type === "transfer";
   const customDate = g.date !== ld() && g.date !== ago(1);
   const allTransferOptions = ensureAccountOption(g.fromAccount, g.toAccount);
-  const normFrom =
-    !g.fromAccount || g.fromAccount === "cash"
-      ? allTransferOptions[0]?.[0] || ""
-      : g.fromAccount;
+  const normFrom = !g.fromAccount
+    ? allTransferOptions[0]?.[0] || ""
+    : g.fromAccount;
   const allToOptions = allTransferOptions.filter(([id]) => id !== normFrom);
   const singleAccountOptions = ensureAccountOption(g.acct);
-  const normTo =
-    !g.toAccount || g.toAccount === "cash"
-      ? allToOptions[0]?.[0] || ""
-      : g.toAccount;
+  const normTo = !g.toAccount
+    ? allToOptions[0]?.[0] || ""
+    : g.toAccount;
   const amtNum = parseAmount(g.amt);
   const hasValidAmt = Number.isFinite(amtNum) && amtNum > 0;
   const fromCardIsFrozen = Boolean(
@@ -6793,9 +6805,13 @@ function DetailSheet({
   const savingsId = getSavingsAccountId(cards);
   const hasSavingsAccount = Boolean(savingsId);
   const savingsCard = savingsId ? cards.find((c) => c.id === savingsId) : null;
-  const selectedCard = f.acct ? cards.find((c) => c.id === f.acct) : null;
+  const selectedCard = cards.find((c) => c.id === (f.acct || "cash")) || null;
   const nonSavingsCards = cards.filter(
     (c) =>
+      c.id !== "cash" &&
+      c.type !== "cash" &&
+      c.category !== "cash" &&
+      c.provider !== "cash" &&
       c.type !== "savings" &&
       c.category !== "savings" &&
       c.provider !== "savings",
@@ -7096,9 +7112,13 @@ function RecurringDetailSheet({
   const savingsId = getSavingsAccountId(cards);
   const hasSavingsAccount = Boolean(savingsId);
   const savingsCard = savingsId ? cards.find((c) => c.id === savingsId) : null;
-  const selectedCard = f.acct ? cards.find((c) => c.id === f.acct) : null;
+  const selectedCard = cards.find((c) => c.id === (f.acct || "cash")) || null;
   const nonSavingsCards = cards.filter(
     (c) =>
+      c.id !== "cash" &&
+      c.type !== "cash" &&
+      c.category !== "cash" &&
+      c.provider !== "cash" &&
       c.type !== "savings" &&
       c.category !== "savings" &&
       c.provider !== "savings",
@@ -7771,6 +7791,7 @@ function AddCardSheet({
     number: "",
     type: "credit",
     network: "visa",
+    currency: "BDT",
     expiry: "",
     initialBalance: "",
     color: "",
@@ -7820,12 +7841,26 @@ function AddCardSheet({
         return;
       }
     }
+    if (prov.category === "cash") {
+      const existingCash = cards.find(
+        (c) =>
+          (c.id === "cash" || c.provider === "cash" || c.category === "cash" || c.type === "cash") &&
+          Boolean(c.createdAt || c.updatedAt || c.isPrimary),
+      );
+      if (existingCash) {
+        triggerHaptic("warning");
+        onToast?.("You already have a Cash wallet in your deck.");
+        onOpenExistingCard?.(existingCash.id);
+        return;
+      }
+    }
     setSelectedProvider(prov);
     setFormData({
       name: "",
       holderName: "",
       type: prov.defaultType || "credit",
       network: prov.defaultNetwork || "visa",
+      currency: prov.currency || "BDT",
       last4: "",
       number: "",
       expiry: "",
@@ -7895,18 +7930,19 @@ function AddCardSheet({
         ? enteredLast4 || "CASH"
         : enteredLast4;
     const enteredPhoneDigits = formData.number.replace(/\D/g, "").slice(0, 11);
+    const cashMeta = isCash ? getCashCurrencyMeta(formData.currency) : null;
     const number = selectedProvider.isPhone
       ? enteredPhoneDigits
       : isSavings
         ? `SAV-${last4}`
         : isCash
-          ? "CASH-BDT"
+          ? `CASH-${cashMeta.code}`
           : last4
             ? `•••• •••• •••• ${last4}`
             : "";
     const holderName =
       formData.holderName.trim() ||
-      (isCash ? "CASH WALLET" : userProfileName || "Cardholder");
+      (isCash ? "Cash wallet" : userProfileName || "Cardholder");
     const network = isMfs
       ? "mfs"
       : isSavings || isCash
@@ -7930,13 +7966,14 @@ function AddCardSheet({
       category: selectedProvider.category,
       type,
       network,
+      currency: isCash ? cashMeta.code : selectedProvider.currency || "BDT",
       holderName,
       subtitle: isMfs
         ? "Personal"
         : isSavings
           ? "Personal Savings"
           : isCash
-            ? "Cash in Hand · BDT"
+            ? `Cash in hand · ${cashMeta.code}`
             : isCustom
               ? formData.name.trim()
                 ? `${name} ${network === "visa" ? "Visa" : network === "mastercard" ? "Mastercard" : "Amex"}`
@@ -7945,8 +7982,10 @@ function AddCardSheet({
       last4,
       number,
       expiry: isMfs || isSavings || isCash ? "" : formData.expiry.trim(),
-      color: formData.color || selectedProvider.color,
-      gradient: formData.gradient || selectedProvider.gradient,
+      color: isCash ? cashMeta.bg : formData.color || selectedProvider.color,
+      gradient: isCash
+        ? cashMeta.bg
+        : formData.gradient || selectedProvider.gradient,
       initialBalance: parseAmount(formData.initialBalance) || 0,
     };
 
@@ -7956,6 +7995,10 @@ function AddCardSheet({
   };
 
   const previewIsSavings = selectedProvider.category === "savings";
+  const previewIsCash = selectedProvider.category === "cash";
+  const previewCashMeta = previewIsCash
+    ? getCashCurrencyMeta(formData.currency)
+    : null;
   const previewCard = {
     id: "preview",
     name:
@@ -7965,22 +8008,29 @@ function AddCardSheet({
     category: selectedProvider.category,
     type: formData.type || selectedProvider.defaultType || "credit",
     network: formData.network || selectedProvider.defaultNetwork || "visa",
+    currency: previewIsCash
+      ? previewCashMeta.code
+      : selectedProvider.currency || "BDT",
     holderName:
       formData.holderName.trim() ||
-      (userProfileName
-        ? userProfileName.toUpperCase()
-        : isCustom
-          ? "CARDHOLDER"
-          : selectedProvider.id === "virtual_visa" ||
-              selectedProvider.id === "virtual_mc" ||
-              selectedProvider.id === "gold_mc"
-            ? selectedProvider.name
-            : selectedProvider.name.toUpperCase()),
-    subtitle: isCustom
-      ? formData.name.trim()
-        ? `${formData.name.trim()} ${formData.network === "visa" ? "Visa" : formData.network === "mastercard" ? "Mastercard" : "Amex"}`
-        : "Signature Edition"
-      : selectedProvider.subtitle,
+      (previewIsCash
+        ? "Cash wallet"
+        : userProfileName
+          ? userProfileName.toUpperCase()
+          : isCustom
+            ? "CARDHOLDER"
+            : selectedProvider.id === "virtual_visa" ||
+                selectedProvider.id === "virtual_mc" ||
+                selectedProvider.id === "gold_mc"
+              ? selectedProvider.name
+              : selectedProvider.name.toUpperCase()),
+    subtitle: previewIsCash
+      ? `Cash in hand · ${previewCashMeta.code}`
+      : isCustom
+        ? formData.name.trim()
+          ? `${formData.name.trim()} ${formData.network === "visa" ? "Visa" : formData.network === "mastercard" ? "Mastercard" : "Amex"}`
+          : "Signature Edition"
+        : selectedProvider.subtitle,
     last4: formData.last4 || (formData.number ? formData.number.slice(-4) : ""),
     number: previewIsSavings
       ? formData.last4
@@ -8146,6 +8196,7 @@ function AddCardSheet({
 
             {!selectedProvider.isPhone &&
               selectedProvider.category !== "savings" &&
+              selectedProvider.category !== "cash" &&
               selectedProvider.id !== "gold_mc" && (
                 <div className="add-card-field">
                   <label className="add-card-input-lbl">Card Network</label>
@@ -8190,7 +8241,8 @@ function AddCardSheet({
               )}
 
             {!selectedProvider.isPhone &&
-              selectedProvider.category !== "savings" && (
+              selectedProvider.category !== "savings" &&
+              selectedProvider.category !== "cash" && (
                 <div className="add-card-field">
                   <label className="add-card-input-lbl">Card Type</label>
                   <div className="add-card-type-toggle">
@@ -8217,6 +8269,48 @@ function AddCardSheet({
                   </div>
                 </div>
               )}
+
+            {selectedProvider.category === "cash" && (
+              <div className="add-card-field">
+                <label className="add-card-input-lbl">Currency</label>
+                <div className="cash-currency-grid">
+                  {CASH_CURRENCIES.map((curr) => {
+                    const isSelected =
+                      String(formData.currency || "BDT").toUpperCase() ===
+                      curr.code;
+                    return (
+                      <button
+                        key={curr.code}
+                        type="button"
+                        className={`cash-currency-pill ${isSelected ? "is-selected" : ""}`}
+                        onClick={() => {
+                          triggerHaptic("selection");
+                          setFormData((prev) => ({
+                            ...prev,
+                            currency: curr.code,
+                            color: curr.bg,
+                            gradient: curr.bg,
+                            number: `CASH-${curr.code}`,
+                            subtitle: `Cash in hand · ${curr.code}`,
+                          }));
+                        }}
+                      >
+                        <span
+                          className="cash-currency-swatch"
+                          style={{
+                            background: curr.bg,
+                            color: curr.accent,
+                          }}
+                        >
+                          {curr.symbol}
+                        </span>
+                        <span className="cash-currency-code">{curr.code}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {selectedProvider.id === "custom" && (
               <div className="add-card-field">
@@ -8271,12 +8365,20 @@ function AddCardSheet({
             )}
 
             <div className="add-card-field">
-              <label className="add-card-input-lbl">Card Holder Name</label>
+              <label className="add-card-input-lbl">
+                {selectedProvider.category === "cash"
+                  ? "Wallet Label"
+                  : "Card Holder Name"}
+              </label>
               <input
                 className="add-card-native-input"
                 type="text"
                 maxLength={30}
-                placeholder={userProfileName || "John Smith"}
+                placeholder={
+                  selectedProvider.category === "cash"
+                    ? "Cash wallet"
+                    : userProfileName || "John Smith"
+                }
                 value={formData.holderName}
                 onChange={(e) => handleFormChange("holderName", e.target.value)}
                 autoComplete="off"
@@ -8288,37 +8390,40 @@ function AddCardSheet({
               />
             </div>
 
-            <div className="add-card-field">
-              <label className="add-card-input-lbl">
-                {selectedProvider.isPhone ? "Mobile Number" : "Last 4 Digits"}
-              </label>
-              <input
-                className="add-card-native-input"
-                type="text"
-                inputMode="numeric"
-                maxLength={selectedProvider.isPhone ? 11 : 4}
-                placeholder={
-                  selectedProvider.isPhone
-                    ? (selectedProvider.numberPlaceholder || "01712345678").replace(/\s+/g, "")
-                    : "e.g. 9018"
-                }
-                value={
-                  selectedProvider.isPhone
-                    ? formData.number
-                    : formData.last4 || formData.number
-                }
-                onChange={(e) => handleCardNumberChange(e.target.value)}
-                autoComplete="off"
-                autoCorrect="off"
-                spellCheck="false"
-                data-lpignore="true"
-                data-1p-ignore="true"
-                data-form-type="other"
-              />
-            </div>
+            {selectedProvider.category !== "cash" && (
+              <div className="add-card-field">
+                <label className="add-card-input-lbl">
+                  {selectedProvider.isPhone ? "Mobile Number" : "Last 4 Digits"}
+                </label>
+                <input
+                  className="add-card-native-input"
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={selectedProvider.isPhone ? 11 : 4}
+                  placeholder={
+                    selectedProvider.isPhone
+                      ? (selectedProvider.numberPlaceholder || "01712345678").replace(/\s+/g, "")
+                      : "e.g. 9018"
+                  }
+                  value={
+                    selectedProvider.isPhone
+                      ? formData.number
+                      : formData.last4 || formData.number
+                  }
+                  onChange={(e) => handleCardNumberChange(e.target.value)}
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellCheck="false"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  data-form-type="other"
+                />
+              </div>
+            )}
 
             {!selectedProvider.isPhone &&
-              selectedProvider.category !== "savings" && (
+              selectedProvider.category !== "savings" &&
+              selectedProvider.category !== "cash" && (
                 <div className="add-card-field">
                   <label className="add-card-input-lbl">Expiry (MM/YY)</label>
                   <input
@@ -8342,7 +8447,11 @@ function AddCardSheet({
             <div className="add-card-field">
               <label className="add-card-input-lbl">Starting Balance</label>
               <div className="add-card-balance-input-wrap">
-                <span className="add-card-curr-prefix">৳</span>
+                <span className="add-card-curr-prefix">
+                  {selectedProvider.category === "cash"
+                    ? getCashCurrencyMeta(formData.currency).symbol
+                    : "৳"}
+                </span>
                 <input
                   type="text"
                   className="add-card-native-input add-card-balance-input"
@@ -8589,6 +8698,7 @@ function CardOptionsSheet({
   onDeleteCard,
   onAddCardClick,
   onAdjustBalance,
+  onSyncCashBalance,
   onSetPrimaryCard,
   onMoveCardToFront,
   onSelectCard,
@@ -8631,7 +8741,13 @@ function CardOptionsSheet({
     String(selectedCard?.number || "").startsWith("VAULT-") ||
     String(selectedCard?.number || "").startsWith("DPS-");
 
-  const isCard = !isMfs && !isSavings;
+  const isCash =
+    selectedCard?.id === "cash" ||
+    selectedCard?.category === "cash" ||
+    selectedCard?.type === "cash" ||
+    selectedCard?.provider === "cash";
+
+  const isCard = !isMfs && !isSavings && !isCash;
   const isGoldMc =
     selectedCard?.provider === "gold_mc" ||
     /^gold\s+master\s*card$/i.test(String(selectedCard?.name || "").trim());
@@ -8654,6 +8770,7 @@ function CardOptionsSheet({
     name: selectedCard?.name || "",
     holderName: selectedCard?.holderName || "Cardholder",
     subtitle: selectedCard?.subtitle || "",
+    currency: String(selectedCard?.currency || "BDT").toUpperCase(),
     last4:
       selectedCard?.last4 ||
       (selectedCard?.number
@@ -8676,6 +8793,7 @@ function CardOptionsSheet({
   const [showSecrets, setShowSecrets] = useState(false);
   const [isFrozen, setIsFrozen] = useState(() => Boolean(selectedCard?.frozen));
   const [copied, setCopied] = useState(false);
+  const [cashSyncInput, setCashSyncInput] = useState("");
   const copyTimerRef = useRef(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
@@ -8702,6 +8820,7 @@ function CardOptionsSheet({
         name: selectedCard.name || "",
         holderName: selectedCard.holderName || "Cardholder",
         subtitle: selectedCard.subtitle || "",
+        currency: String(selectedCard.currency || "BDT").toUpperCase(),
         last4:
           selectedCard.last4 ||
           (selectedCard.number
@@ -8719,6 +8838,7 @@ function CardOptionsSheet({
           cardBal !== undefined && cardBal !== null ? String(cardBal) : "",
       });
       setIsFrozen(Boolean(selectedCard.frozen));
+      setCashSyncInput("");
       setConfirmDeleteOpen(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -8731,6 +8851,9 @@ function CardOptionsSheet({
       name: formData.name || selectedCard.name,
       holderName: formData.holderName || selectedCard.holderName,
       subtitle: formData.subtitle || selectedCard.subtitle,
+      currency: isCash
+        ? String(formData.currency || "BDT").toUpperCase()
+        : selectedCard.currency,
       network: isGoldMc
         ? "mastercard"
         : formData.network || selectedCard.network,
@@ -8740,7 +8863,7 @@ function CardOptionsSheet({
       last4:
         formData.last4 || (formData.number ? formData.number.slice(-4) : ""),
       number:
-        isMfs || isSavings
+        isMfs || isSavings || isCash
           ? formData.number || selectedCard.number
           : formData.last4
             ? `•••• •••• •••• ${formData.last4}`
@@ -8748,7 +8871,7 @@ function CardOptionsSheet({
       expiry: formData.expiry,
       frozen: isFrozen,
     };
-  }, [selectedCard, formData, isFrozen, isMfs, isSavings]);
+  }, [selectedCard, formData, isFrozen, isMfs, isSavings, isCash]);
 
   const handleCardNumberChange = (raw) => {
     if (isMfs) {
@@ -8955,80 +9078,84 @@ function CardOptionsSheet({
           {/* Quick Action Badges Bar */}
           <div className="card-options-quick-bar">
             <div className="card-options-quick-row">
-              <button
-                type="button"
-                className={`card-options-bar-btn ${showSecrets ? "is-active" : ""}`}
-                onClick={() => {
-                  triggerHaptic("selection");
-                  setShowSecrets((prev) => !prev);
-                }}
-                aria-label={
-                  showSecrets ? "Hide card details" : "Show card details"
-                }
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  {showSecrets ? (
-                    <>
-                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
-                      <line x1="1" y1="1" x2="23" y2="23" />
-                    </>
-                  ) : (
-                    <>
-                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                      <circle cx="12" cy="12" r="3" />
-                    </>
-                  )}
-                </svg>
-                <span>{showSecrets ? "Hide" : "Details"}</span>
-              </button>
+              {!isCash && (
+                <>
+                  <button
+                    type="button"
+                    className={`card-options-bar-btn ${showSecrets ? "is-active" : ""}`}
+                    onClick={() => {
+                      triggerHaptic("selection");
+                      setShowSecrets((prev) => !prev);
+                    }}
+                    aria-label={
+                      showSecrets ? "Hide card details" : "Show card details"
+                    }
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      {showSecrets ? (
+                        <>
+                          <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                          <line x1="1" y1="1" x2="23" y2="23" />
+                        </>
+                      ) : (
+                        <>
+                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                          <circle cx="12" cy="12" r="3" />
+                        </>
+                      )}
+                    </svg>
+                    <span>{showSecrets ? "Hide" : "Details"}</span>
+                  </button>
 
-              <button
-                type="button"
-                className={`card-options-bar-btn ${copied ? "is-copied" : ""}`}
-                onClick={handleCopyNumber}
-                aria-label={
-                  copied
-                    ? "Copied card number"
-                    : "Copy card number to clipboard"
-                }
-              >
-                {copied ? (
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                    className="card-options-icon-check"
+                  <button
+                    type="button"
+                    className={`card-options-bar-btn ${copied ? "is-copied" : ""}`}
+                    onClick={handleCopyNumber}
+                    aria-label={
+                      copied
+                        ? "Copied card number"
+                        : "Copy card number to clipboard"
+                    }
                   >
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                ) : (
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                  </svg>
-                )}
-                <span>{copied ? "Copied" : "Copy"}</span>
-              </button>
+                    {copied ? (
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                        className="card-options-icon-check"
+                      >
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    ) : (
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                      </svg>
+                    )}
+                    <span>{copied ? "Copied" : "Copy"}</span>
+                  </button>
+                </>
+              )}
 
               <button
                 type="button"
@@ -9126,9 +9253,71 @@ function CardOptionsSheet({
 
         {/* Card Details & Editing Section */}
         <div className="card-options-edit-section">
-          <h4 className="card-options-section-title">Edit Card Details</h4>
+          <h4 className="card-options-section-title">
+            {isCash ? "Edit Cash Wallet" : "Edit Card Details"}
+          </h4>
 
           <div className="card-options-form-grid">
+            {isCash && (
+              <>
+                <div className="card-options-field">
+                  <label>Wallet Name</label>
+                  <input
+                    type="text"
+                    value={formData.holderName}
+                    placeholder="Cash wallet"
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        holderName: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+
+                <div className="card-options-field">
+                  <label>Currency</label>
+                  <div className="cash-currency-grid">
+                    {CASH_CURRENCIES.map((curr) => {
+                      const isSelected =
+                        String(formData.currency || "BDT").toUpperCase() ===
+                        curr.code;
+                      return (
+                        <button
+                          key={curr.code}
+                          type="button"
+                          className={`cash-currency-pill ${isSelected ? "is-selected" : ""}`}
+                          onClick={() => {
+                            triggerHaptic("selection");
+                            setFormData((prev) => ({
+                              ...prev,
+                              currency: curr.code,
+                              color: curr.bg,
+                              gradient: curr.bg,
+                              number: `CASH-${curr.code}`,
+                              subtitle: `Cash in hand · ${curr.code}`,
+                            }));
+                          }}
+                        >
+                          <span
+                            className="cash-currency-swatch"
+                            style={{
+                              background: curr.bg,
+                              color: curr.accent,
+                            }}
+                          >
+                            {curr.symbol}
+                          </span>
+                          <span className="cash-currency-code">
+                            {curr.code}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
+            )}
             {/* If regular card (Visa, Mastercard, Amex, Bank, Custom) */}
             {isCard && (
               <>
@@ -9452,38 +9641,44 @@ function CardOptionsSheet({
               </>
             )}
 
-            {/* Theme & Color Swatches */}
-            <div className="card-options-field">
-              <label>Card Theme &amp; Color</label>
-              <div className="card-options-theme-grid">
-                {CARD_THEMES.map((theme) => {
-                  const isSelected = formData.gradient === theme.gradient;
-                  return (
-                    <button
-                      key={theme.id}
-                      type="button"
-                      className={`card-options-theme-swatch ${isSelected ? "is-selected" : ""}`}
-                      style={{ background: theme.gradient }}
-                      title={theme.name}
-                      onClick={() => {
-                        triggerHaptic("selection");
-                        setFormData((prev) => ({
-                          ...prev,
-                          color: theme.color,
-                          gradient: theme.gradient,
-                        }));
-                      }}
-                    />
-                  );
-                })}
+            {/* Theme & Color Swatches (driven by currency for Cash) */}
+            {!isCash && (
+              <div className="card-options-field">
+                <label>Card Theme &amp; Color</label>
+                <div className="card-options-theme-grid">
+                  {CARD_THEMES.map((theme) => {
+                    const isSelected = formData.gradient === theme.gradient;
+                    return (
+                      <button
+                        key={theme.id}
+                        type="button"
+                        className={`card-options-theme-swatch ${isSelected ? "is-selected" : ""}`}
+                        style={{ background: theme.gradient }}
+                        title={theme.name}
+                        onClick={() => {
+                          triggerHaptic("selection");
+                          setFormData((prev) => ({
+                            ...prev,
+                            color: theme.color,
+                            gradient: theme.gradient,
+                          }));
+                        }}
+                      />
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Starting Balance Field */}
             <div className="card-options-field">
               <label>Opening Balance (Starting Balance)</label>
               <div className="add-card-balance-input-wrap">
-                <span className="add-card-curr-prefix">৳</span>
+                <span className="add-card-curr-prefix">
+                  {isCash
+                    ? getCashCurrencyMeta(formData.currency).symbol
+                    : "৳"}
+                </span>
                 <input
                   type="text"
                   className="add-card-native-input add-card-balance-input"
@@ -9523,12 +9718,70 @@ function CardOptionsSheet({
           </div>
         </div>
 
+        {/* Quick Set Cash on Hand Reconciliation Box */}
+        {isCash && (
+          <div
+            className={`cash-sync-box ${(balances[selectedCard?.id] || 0) < 0 ? "is-overdrawn" : ""}`}
+          >
+            <div className="card-options-balance-info">
+              <span className="card-options-balance-lbl">
+                {(balances[selectedCard?.id] || 0) < 0
+                  ? "Unreconciled Cash · Set Exact Cash on Hand"
+                  : "Set Exact Cash on Hand"}
+              </span>
+            </div>
+            <div className="cash-sync-input-row">
+              <input
+                type="text"
+                inputMode="decimal"
+                aria-label="Exact cash on hand"
+                placeholder={`Enter actual ${getCashCurrencyMeta(formData.currency).code} cash (e.g. 0)`}
+                value={cashSyncInput}
+                onChange={(e) => {
+                  const next = e.target.value
+                    .replace(/,/g, ".")
+                    .replace(/[^0-9.]/g, "");
+                  setCashSyncInput(next);
+                }}
+              />
+              <button
+                type="button"
+                className="card-options-adj-btn"
+                onClick={() => {
+                  const targetAmt = parseAmount(cashSyncInput);
+                  if (!Number.isFinite(targetAmt) || targetAmt < 0) {
+                    triggerHaptic("warning");
+                    onToast?.("Enter a valid non-negative cash amount.");
+                    return;
+                  }
+                  const currentBal = Number(balances[selectedCard?.id] || 0);
+                  const diff = Math.round((targetAmt - currentBal) * 100) / 100;
+                  if (Math.abs(diff) < 0.01) {
+                    onToast?.("Cash balance already matches.");
+                    return;
+                  }
+                  triggerHaptic("success");
+                  onSyncCashBalance?.(selectedCard.id, diff);
+                  setCashSyncInput("");
+                }}
+              >
+                Sync Cash
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Quick Balance Adjustment Shortcut */}
         <div className="card-options-balance-row">
           <div className="card-options-balance-info">
             <span className="card-options-balance-lbl">Available Balance</span>
             <b className="card-options-balance-num">
-              {formatMoney(balances[selectedCard?.id] || 0)}
+              {isCash
+                ? formatCashMoney(
+                    balances[selectedCard?.id] || 0,
+                    formData.currency,
+                  )
+                : formatMoney(balances[selectedCard?.id] || 0)}
             </b>
           </div>
           <button
@@ -11735,7 +11988,45 @@ export default function MobilePrototype({
   onOpenUpdateModal,
 }) {
   const [tab, setTab] = useState("home");
-  const cards = Array.isArray(S.cards) ? S.cards : [];
+  const rawCards = Array.isArray(S.cards) ? S.cards : [];
+  const explicitCashCard = rawCards.find(
+    (c) =>
+      c.id === "cash" ||
+      c.provider === "cash" ||
+      c.category === "cash" ||
+      c.type === "cash",
+  );
+  const hasCashActivity =
+    Boolean(explicitCashCard) ||
+    Number(S?.start?.cash) > 0 ||
+    (S?.exp || []).some((e) => !e.acct || e.acct === "cash") ||
+    (S?.tx || []).some((t) => t.acct === "cash" || t.to === "cash");
+  const cards = useMemo(
+    () =>
+      !explicitCashCard && (rawCards.length > 0 || hasCashActivity)
+        ? [
+            ...rawCards,
+            {
+              id: "cash",
+              name: "Cash",
+              provider: "cash",
+              category: "cash",
+              type: "cash",
+              network: "none",
+              currency: "BDT",
+              holderName: "Cash wallet",
+              subtitle: "Cash in hand · BDT",
+              last4: "CASH",
+              number: "CASH-BDT",
+              expiry: "",
+              color: "#23403C",
+              gradient: "#23403C",
+              initialBalance: Number(S?.start?.cash) || 0,
+            },
+          ]
+        : rawCards,
+    [rawCards, explicitCashCard, hasCashActivity, S?.start?.cash],
+  );
   const [preferredAccount, setPreferredAccount] = useState(() => {
     try {
       const stored = localStorage.getItem(
@@ -13595,6 +13886,20 @@ export default function MobilePrototype({
           onAdjustBalance={(cardId) =>
             openSheet({ type: "tx", t: "adjust", acct: cardId })
           }
+          onSyncCashBalance={(cardId, diff) => {
+            if (!cardId || !Number.isFinite(diff) || Math.abs(diff) < 0.01) return;
+            const res = onTransactionSave?.({
+              type: "adjust",
+              acct: cardId,
+              dir: diff > 0 ? "up" : "down",
+              amt: Math.abs(diff),
+              note: "Correction",
+              date: ld(),
+            });
+            if (res !== false) {
+              toast("Cash balance synced");
+            }
+          }}
           onSetPrimaryCard={(cardId) => {
             const res = onSetPrimaryCard?.(cardId);
             const isPrimary =

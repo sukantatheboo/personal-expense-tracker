@@ -25,6 +25,7 @@ import {
   EmvChip,
   ContactlessWaves,
   CARD_PROVIDERS,
+  getCashCurrencyMeta,
   getProviderMeta,
   resolveCardGradient,
   renderProviderLogo,
@@ -240,6 +241,14 @@ const moneyFormatterDec = new Intl.NumberFormat("en-IN", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
+const cashFormatterIntEn = new Intl.NumberFormat("en-US", {
+  maximumFractionDigits: 0,
+});
+const cashFormatterDecEn = new Intl.NumberFormat("en-US", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
 export const formatMoney = (n) => {
   const num = Number(n) || 0;
   const absNum = Math.abs(num);
@@ -248,6 +257,23 @@ export const formatMoney = (n) => {
     absNum,
   );
   return `${num < 0 ? "-৳" : "৳"}${formatted}`;
+};
+
+export const formatCashMoney = (n, currencyCode = "BDT") => {
+  const meta = getCashCurrencyMeta(currencyCode);
+  const num = Number(n) || 0;
+  const absNum = Math.abs(num);
+  const useSouthAsian = meta.code === "BDT" || meta.code === "INR";
+  const noDecimals = meta.code === "JPY";
+  const hasFraction = !noDecimals && Math.round(absNum * 100) % 100 !== 0;
+  const formatter = useSouthAsian
+    ? hasFraction
+      ? moneyFormatterDec
+      : moneyFormatterInt
+    : hasFraction
+      ? cashFormatterDecEn
+      : cashFormatterIntEn;
+  return `${num < 0 ? "-" : ""}${meta.symbol}${formatter.format(absNum)}`;
 };
 
 export function formatCardNumber(
@@ -316,7 +342,16 @@ const LEGACY_CARD_SUBTITLES = new Set([
   "Custom Card Visa",
   "Custom Card Mastercard",
   "Custom Card Card",
+  "Cash in Hand · BDT",
+  "CASH IN HAND · BDT",
 ]);
+
+const formatAbsMoneyNumber = (n) => {
+  const num = Number(n) || 0;
+  const absNum = Math.abs(num);
+  const hasFraction = Math.round(absNum * 100) % 100 !== 0;
+  return (hasFraction ? moneyFormatterDec : moneyFormatterInt).format(absNum);
+};
 
 export function WalletCard({
   card,
@@ -339,12 +374,19 @@ export function WalletCard({
     card.category === "savings" ||
     card.provider === "savings" ||
     provider?.category === "savings";
+  const isCash =
+    card.id === "cash" ||
+    card.type === "cash" ||
+    card.category === "cash" ||
+    card.provider === "cash" ||
+    provider?.category === "cash";
   const isVirtualVisa = card.provider === "virtual_visa";
   const isVirtualMc = card.provider === "virtual_mc";
   const isVirtual = isVirtualVisa || isVirtualMc;
   const isGold = card.provider === "gold_mc";
   const isCustom =
-    card.provider === "custom" || (!provider && !isSavings && !isMfs);
+    !isCash &&
+    (card.provider === "custom" || (!provider && !isSavings && !isMfs));
   const isFrozen = Boolean(card.frozen);
 
   const formattedNumber = formatCardNumber(
@@ -354,12 +396,6 @@ export function WalletCard({
     isSavings,
   );
 
-  const isCash =
-    card.id === "cash" ||
-    card.type === "cash" ||
-    card.category === "cash" ||
-    card.provider === "cash" ||
-    provider?.category === "cash";
   const isCredit =
     !isSavings &&
     !isMfs &&
@@ -375,14 +411,17 @@ export function WalletCard({
       (card.subtitle === "Visa Debit · USD" ||
         card.subtitle === "Visa Debit · BDT"));
 
+  const cashMeta = isCash ? getCashCurrencyMeta(card.currency) : null;
   const rawSubtitle =
     card.subtitle && !isLegacyProviderSubtitle
-      ? String(card.subtitle).replace(/\bUSD\b/gi, "BDT")
+      ? isCash
+        ? String(card.subtitle)
+        : String(card.subtitle).replace(/\bUSD\b/gi, "BDT")
       : "";
   const cardSubtitle =
-    rawSubtitle ||
+    (isCash ? `Cash in hand · ${cashMeta.code}` : rawSubtitle) ||
     (isCash
-      ? "Cash in Hand · BDT"
+      ? `Cash in hand · ${cashMeta.code}`
       : isMfs
         ? "Personal"
         : isSavings
@@ -398,6 +437,40 @@ export function WalletCard({
                   : isCredit
                     ? "Visa Credit · BDT"
                     : "Debit Card · BDT");
+
+  const resolvedHolderName = isCash
+    ? !card.holderName ||
+      /^(cash\s*wallet|cash)$/i.test(String(card.holderName).trim())
+      ? "Cash wallet"
+      : card.holderName
+    : card.holderName || card.name || "Cardholder";
+
+  const formattedBalanceStr = isCash
+    ? formatCashMoney(balance || 0, cashMeta.code)
+    : formatMoney(balance || 0);
+  const useSouthAsianCashFmt =
+    cashMeta?.code === "BDT" || cashMeta?.code === "INR";
+  const noCashDecimals = cashMeta?.code === "JPY";
+  const absCashVal = Math.abs(Number(balance) || 0);
+  const hasCashFraction =
+    !noCashDecimals && Math.round(absCashVal * 100) % 100 !== 0;
+  const formattedCashAbsStr = isCash
+    ? (useSouthAsianCashFmt
+        ? hasCashFraction
+          ? moneyFormatterDec
+          : moneyFormatterInt
+        : hasCashFraction
+          ? cashFormatterDecEn
+          : cashFormatterIntEn
+      ).format(absCashVal)
+    : formatAbsMoneyNumber(balance || 0);
+  const cashBalLengthClass = isCash
+    ? formattedBalanceStr.length > 12
+      ? " is-ultra-compact-cash"
+      : formattedBalanceStr.length > 9
+        ? " is-compact-cash"
+        : ""
+    : "";
 
   const rawSavingsStr = String(card.number || card.last4 || "").trim();
   const savingsRawDigits = rawSavingsStr.replace(/\D/g, "");
@@ -418,8 +491,9 @@ export function WalletCard({
     <div
       role={interactive ? "button" : undefined}
       tabIndex={interactive ? 0 : undefined}
-      aria-label={`${card.name}, ${cardSubtitle}, balance ${formatMoney(balance || 0)}${isFrozen ? ", locked" : ""}`}
-      className={`wallet-card ${isActive ? "is-active" : ""} ${isMfs ? "is-mfs" : ""} ${isSavings ? "is-savings" : ""} ${isGold ? "is-gold" : ""} ${isVirtual ? "is-virtual" : ""} ${isVirtualVisa ? "is-virtual-visa" : ""} ${isVirtualMc ? "is-virtual-mc" : ""} ${isCustom ? "is-custom" : ""} ${isFrozen ? "is-frozen" : ""} ${className}`}
+      data-currency={isCash ? cashMeta.code : undefined}
+      aria-label={`${card.name}, ${cardSubtitle}, balance ${formattedBalanceStr}${isFrozen ? ", locked" : ""}`}
+      className={`wallet-card ${isActive ? "is-active" : ""} ${isCash ? "is-cash" : ""} ${isMfs ? "is-mfs" : ""} ${isSavings ? "is-savings" : ""} ${isGold ? "is-gold" : ""} ${isVirtual ? "is-virtual" : ""} ${isVirtualVisa ? "is-virtual-visa" : ""} ${isVirtualMc ? "is-virtual-mc" : ""} ${isCustom ? "is-custom" : ""} ${isFrozen ? "is-frozen" : ""} ${className}`}
       onClick={interactive ? onClick : undefined}
       onKeyDown={
         interactive
@@ -433,343 +507,396 @@ export function WalletCard({
       }
       style={{
         "--card-gradient": gradient,
+        ...(isCash
+          ? {
+              "--cash-bg": cashMeta.bg,
+              "--cash-accent": cashMeta.accent,
+              "--cash-muted": cashMeta.muted,
+              "--cash-font": cashMeta.font,
+              "--cash-mark-font": cashMeta.markFont,
+            }
+          : {}),
         ...style,
       }}
     >
-      <div className="wallet-card-surface">
-        {/* Holographic light sheen & ambient pattern */}
-        <div className="wallet-card-sheen" aria-hidden="true" />
-        <div className="wallet-card-pattern" aria-hidden="true" />
-
-        {/* Bespoke Vector Surface Geometry — Each Card Type Has Its Own Unique Visual Language */}
-        {isSavings && (
-          <svg
-            className="wallet-card-artwork is-savings-art"
-            viewBox="0 0 326 206"
-            fill="none"
-            aria-hidden="true"
-          >
-            <circle
-              cx="268"
-              cy="56"
-              r="116"
-              fill="rgba(167, 243, 208, 0.045)"
-              stroke="rgba(167, 243, 208, 0.08)"
-              strokeWidth="1"
-            />
-            <circle
-              cx="268"
-              cy="56"
-              r="82"
-              fill="rgba(16, 185, 129, 0.06)"
-              stroke="rgba(167, 243, 208, 0.1)"
-              strokeWidth="1"
-            />
-            <circle cx="268" cy="56" r="48" fill="rgba(2, 44, 34, 0.34)" />
-          </svg>
-        )}
-        {isGold && (
-          <svg
-            className="wallet-card-artwork is-gold-art"
-            viewBox="0 0 326 206"
-            fill="none"
-            aria-hidden="true"
-          >
-            {/* Minimalist Bullion Nested Diamond Outline */}
-            <path
-              d="M254 54L302 103L254 152L206 103L254 54Z"
-              stroke="rgba(43, 30, 8, 0.16)"
-              strokeWidth="1"
-            />
-            <path
-              d="M254 76L280 103L254 130L228 103L254 76Z"
-              stroke="rgba(43, 30, 8, 0.14)"
-              strokeWidth="1"
-            />
-          </svg>
-        )}
-        {isVirtualVisa && (
-          <svg
-            className="wallet-card-artwork is-virtual-visa-art"
-            viewBox="0 0 326 206"
-            fill="none"
-            aria-hidden="true"
-          >
-            {/* Subtle Aero Dual Horizon Wave Lines */}
-            <path
-              d="M-10 148C86 132 198 158 336 138L336 216L-10 216Z"
-              fill="rgba(11, 107, 97, 0.035)"
-            />
-            <path
-              d="M-10 146C86 132 198 156 336 138"
-              stroke="rgba(11, 107, 97, 0.14)"
-              strokeWidth="1"
-            />
-            <path
-              d="M-10 156C94 142 204 166 336 148"
-              stroke="rgba(11, 107, 97, 0.1)"
-              strokeWidth="1"
-            />
-          </svg>
-        )}
-        {isVirtualMc && (
-          <svg
-            className="wallet-card-artwork is-virtual-mc-art"
-            viewBox="0 0 326 206"
-            fill="none"
-            aria-hidden="true"
-          >
-            {/* Clean Overlapping Translucent Stealth Planes */}
-            <rect
-              x="246"
-              y="48"
-              width="94"
-              height="68"
-              rx="12"
-              fill="rgba(165, 180, 252, 0.03)"
-              stroke="rgba(165, 180, 252, 0.16)"
-              strokeWidth="1"
-            />
-            <rect
-              x="262"
-              y="78"
-              width="94"
-              height="68"
-              rx="12"
-              fill="rgba(165, 180, 252, 0.035)"
-              stroke="rgba(165, 180, 252, 0.14)"
-              strokeWidth="1"
-            />
-          </svg>
-        )}
-
-        {/* Top Row: Card Title/Holder (Left) + Refined Brand Mark (Right) */}
-        <div className="wallet-card-header">
-          <div className="wallet-card-holder-info">
-            <span className="wallet-card-holder-name">
-              {card.holderName || card.name || "Cardholder"}
-            </span>
-            <span className="wallet-card-type-tag">
-              <span className="wallet-card-subtitle-text">{cardSubtitle}</span>
-              {card.isPrimary && (
-                <span className="wallet-card-primary-badge">PRIMARY</span>
-              )}
-              {isFrozen && (
-                <span className="wallet-card-locked-badge">LOCKED</span>
-              )}
-            </span>
-          </div>
-
-          <div className="wallet-card-brand-logo">
-            {renderProviderLogo(card.provider, {
-              height: isSavings ? 21 : 22,
-            })}
-          </div>
-        </div>
-
-        {/* Middle Section: Bespoke per-card-type geometry (No white HR on Savings) */}
-        {isSavings ? (
-          <div className="wallet-card-savings-mid">
-            <div className="wallet-card-savings-meta-row">
-              <span className="wallet-card-savings-status">
+      {isCash ? (
+        <>
+          <i className="cash-card-tk cash-card-tk-o" aria-hidden="true">
+            {cashMeta.symbol}
+          </i>
+          <i className="cash-card-tk cash-card-tk-f" aria-hidden="true">
+            {cashMeta.symbol}
+          </i>
+          <div className="cash-card-in">
+            <div className="cash-card-top">
+              <div>
+                <b>{resolvedHolderName}</b>
+                <span className="cash-card-sub">
+                  {cardSubtitle}
+                  {card.isPrimary && (
+                    <span className="wallet-card-primary-badge">PRIMARY</span>
+                  )}
+                  {isFrozen && (
+                    <span className="wallet-card-locked-badge">LOCKED</span>
+                  )}
+                </span>
+              </div>
+              {showBalance && (
                 <span
-                  className="wallet-card-savings-dot"
-                  aria-hidden="true"
-                />
-                {isFrozen ? "VAULT LOCKED" : "RESERVE VAULT"}
+                  className={`cash-card-st ${balance < 0 ? "is-overdrawn" : "is-available"}`}
+                >
+                  {balance < 0 ? "Overdrawn" : "Available"}
+                </span>
+              )}
+            </div>
+            {showBalance && (
+              <div>
+                <span className="cash-card-lbl">Cash on hand</span>
+                <div
+                  className={`cash-card-bal${balance < 0 ? " is-overdrawn" : ""}${cashBalLengthClass}`}
+                >
+                  {balance < 0 ? "−" : ""}
+                  <em>{cashMeta.symbol}</em>
+                  {formattedCashAbsStr}
+                </div>
+              </div>
+            )}
+          </div>
+        </>
+      ) : (
+        <div className="wallet-card-surface">
+          {/* Holographic light sheen & ambient pattern */}
+          <div className="wallet-card-sheen" aria-hidden="true" />
+          <div className="wallet-card-pattern" aria-hidden="true" />
+
+          {/* Bespoke Vector Surface Geometry — Each Card Type Has Its Own Unique Visual Language */}
+          {isSavings && (
+            <svg
+              className="wallet-card-artwork is-savings-art"
+              viewBox="0 0 326 206"
+              fill="none"
+              aria-hidden="true"
+            >
+              <circle
+                cx="268"
+                cy="56"
+                r="116"
+                fill="rgba(167, 243, 208, 0.045)"
+                stroke="rgba(167, 243, 208, 0.08)"
+                strokeWidth="1"
+              />
+              <circle
+                cx="268"
+                cy="56"
+                r="82"
+                fill="rgba(16, 185, 129, 0.06)"
+                stroke="rgba(167, 243, 208, 0.1)"
+                strokeWidth="1"
+              />
+              <circle cx="268" cy="56" r="48" fill="rgba(2, 44, 34, 0.34)" />
+            </svg>
+          )}
+          {isGold && (
+            <svg
+              className="wallet-card-artwork is-gold-art"
+              viewBox="0 0 326 206"
+              fill="none"
+              aria-hidden="true"
+            >
+              {/* Minimalist Bullion Nested Diamond Outline */}
+              <path
+                d="M254 54L302 103L254 152L206 103L254 54Z"
+                stroke="rgba(43, 30, 8, 0.16)"
+                strokeWidth="1"
+              />
+              <path
+                d="M254 76L280 103L254 130L228 103L254 76Z"
+                stroke="rgba(43, 30, 8, 0.14)"
+                strokeWidth="1"
+              />
+            </svg>
+          )}
+          {isVirtualVisa && (
+            <svg
+              className="wallet-card-artwork is-virtual-visa-art"
+              viewBox="0 0 326 206"
+              fill="none"
+              aria-hidden="true"
+            >
+              {/* Subtle Aero Dual Horizon Wave Lines */}
+              <path
+                d="M-10 148C86 132 198 158 336 138L336 216L-10 216Z"
+                fill="rgba(11, 107, 97, 0.035)"
+              />
+              <path
+                d="M-10 146C86 132 198 156 336 138"
+                stroke="rgba(11, 107, 97, 0.14)"
+                strokeWidth="1"
+              />
+              <path
+                d="M-10 156C94 142 204 166 336 148"
+                stroke="rgba(11, 107, 97, 0.1)"
+                strokeWidth="1"
+              />
+            </svg>
+          )}
+          {isVirtualMc && (
+            <svg
+              className="wallet-card-artwork is-virtual-mc-art"
+              viewBox="0 0 326 206"
+              fill="none"
+              aria-hidden="true"
+            >
+              {/* Clean Overlapping Translucent Stealth Planes */}
+              <rect
+                x="246"
+                y="48"
+                width="94"
+                height="68"
+                rx="12"
+                fill="rgba(165, 180, 252, 0.03)"
+                stroke="rgba(165, 180, 252, 0.16)"
+                strokeWidth="1"
+              />
+              <rect
+                x="262"
+                y="78"
+                width="94"
+                height="68"
+                rx="12"
+                fill="rgba(165, 180, 252, 0.035)"
+                stroke="rgba(165, 180, 252, 0.14)"
+                strokeWidth="1"
+              />
+            </svg>
+          )}
+
+          {/* Top Row: Card Title/Holder (Left) + Refined Brand Mark (Right) */}
+          <div className="wallet-card-header">
+            <div className="wallet-card-holder-info">
+              <span className="wallet-card-holder-name">
+                {resolvedHolderName}
               </span>
-              {(savingsLast4 || savingsRefFull) && (
-                <span className="wallet-card-savings-ref">
-                  {showFullDetails ? (
-                    savingsRefFull
-                  ) : savingsLast4 ? (
-                    <>
-                      <span
-                        className="wallet-card-savings-dots"
+              <span className="wallet-card-type-tag">
+                <span className="wallet-card-subtitle-text">{cardSubtitle}</span>
+                {card.isPrimary && (
+                  <span className="wallet-card-primary-badge">PRIMARY</span>
+                )}
+                {isFrozen && (
+                  <span className="wallet-card-locked-badge">LOCKED</span>
+                )}
+              </span>
+            </div>
+
+            <div className="wallet-card-brand-logo">
+              {renderProviderLogo(card.provider, {
+                height: isSavings ? 21 : 22,
+              })}
+            </div>
+          </div>
+
+          {/* Middle Section: Bespoke per-card-type geometry (No white HR on Savings) */}
+          {isSavings ? (
+            <div className="wallet-card-savings-mid">
+              <div className="wallet-card-savings-meta-row">
+                <span className="wallet-card-savings-status">
+                  <span
+                    className="wallet-card-savings-dot"
+                    aria-hidden="true"
+                  />
+                  {isFrozen ? "VAULT LOCKED" : "RESERVE VAULT"}
+                </span>
+                {(savingsLast4 || savingsRefFull) && (
+                  <span className="wallet-card-savings-ref">
+                    {showFullDetails ? (
+                      savingsRefFull
+                    ) : savingsLast4 ? (
+                      <>
+                        <span
+                          className="wallet-card-savings-dots"
+                          aria-hidden="true"
+                        >
+                          ••
+                        </span>
+                        <span>{savingsLast4}</span>
+                      </>
+                    ) : (
+                      savingsRefFull
+                    )}
+                  </span>
+                )}
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="wallet-card-mid">
+                {!isMfs && !isVirtual && (
+                  <div className="wallet-card-chip-cluster">
+                    <EmvChip
+                      size={32}
+                      variant={isCustom || isGold ? "wireframe" : "gold"}
+                      strokeColor={
+                        isGold
+                          ? "rgba(43, 30, 8, 0.5)"
+                          : isCustom
+                            ? "rgba(255, 255, 255, 0.36)"
+                            : undefined
+                      }
+                      fillColor={
+                        isGold
+                          ? "rgba(43, 30, 8, 0.06)"
+                          : "rgba(255, 255, 255, 0.075)"
+                      }
+                      centerFillColor={
+                        isGold
+                          ? "rgba(229, 193, 108, 0.55)"
+                          : "rgba(255, 255, 255, 0.04)"
+                      }
+                    />
+                    <ContactlessWaves
+                      size={15}
+                      tone={isGold ? "bronze" : "light"}
+                      className="wallet-card-contactless"
+                    />
+                  </div>
+                )}
+                {isVirtualVisa && (
+                  <div className="wallet-card-virtual-cluster is-visa-digital">
+                    <span className="wallet-card-virtual-pill is-aero">
+                      <svg
+                        width="11"
+                        height="11"
+                        style={{
+                          width: 11,
+                          height: 11,
+                          display: "block",
+                          stroke: "none",
+                        }}
+                        viewBox="0 0 24 24"
+                        fill="none"
                         aria-hidden="true"
                       >
-                        ••
-                      </span>
-                      <span>{savingsLast4}</span>
-                    </>
-                  ) : (
-                    savingsRefFull
-                  )}
-                </span>
-              )}
-            </div>
-          </div>
-        ) : (
-          <>
-            <div className="wallet-card-mid">
-              {!isMfs && !isVirtual && (
-                <div className="wallet-card-chip-cluster">
-                  <EmvChip
-                    size={32}
-                    variant={isCustom || isGold ? "wireframe" : "gold"}
-                    strokeColor={
-                      isGold
-                        ? "rgba(43, 30, 8, 0.5)"
-                        : isCustom
-                          ? "rgba(255, 255, 255, 0.36)"
-                          : undefined
-                    }
-                    fillColor={
-                      isGold
-                        ? "rgba(43, 30, 8, 0.06)"
-                        : "rgba(255, 255, 255, 0.075)"
-                    }
-                    centerFillColor={
-                      isGold
-                        ? "rgba(229, 193, 108, 0.55)"
-                        : "rgba(255, 255, 255, 0.04)"
-                    }
-                  />
-                  <ContactlessWaves
-                    size={15}
-                    tone={isGold ? "bronze" : "light"}
-                    className="wallet-card-contactless"
-                  />
-                </div>
-              )}
-              {isVirtualVisa && (
-                <div className="wallet-card-virtual-cluster is-visa-digital">
-                  <span className="wallet-card-virtual-pill is-aero">
-                    <svg
-                      width="11"
-                      height="11"
-                      style={{
-                        width: 11,
-                        height: 11,
-                        display: "block",
-                        stroke: "none",
-                      }}
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      aria-hidden="true"
-                    >
-                      <path
-                        d="M13 2L4.5 13.5H11.5L10.5 22L19.5 10.5H12.5L13 2Z"
-                        fill="#0B6B61"
-                      />
-                    </svg>
-                    <span>INSTANT DEBIT</span>
-                  </span>
-                  <ContactlessWaves
-                    size={14}
-                    tone="teal"
-                    className="wallet-card-contactless is-virtual-nfc"
-                  />
-                </div>
-              )}
-              {isVirtualMc && (
-                <div className="wallet-card-virtual-cluster is-mc-digital">
-                  <span className="wallet-card-virtual-pill is-stealth">
-                    <svg
-                      width="11"
-                      height="11"
-                      style={{
-                        width: 11,
-                        height: 11,
-                        display: "block",
-                        stroke: "none",
-                      }}
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      aria-hidden="true"
-                    >
-                      <path
-                        d="M12 2.5L19 5.8V11.5C19 16.4 15.9 20.6 12 22C8.1 20.6 5 16.4 5 11.5V5.8L12 2.5Z"
-                        stroke="#A5B4FC"
-                        strokeWidth="2"
-                        fill="rgba(165, 180, 252, 0.16)"
-                      />
-                    </svg>
-                    <span>DISPOSABLE KEY</span>
-                  </span>
-                  <ContactlessWaves
-                    size={14}
-                    className="wallet-card-contactless is-virtual-nfc"
-                  />
-                </div>
-              )}
-            </div>
-
-            {/* Card / Account Number in Refined Monospace */}
-            <div className="wallet-card-number">
-              {formattedNumber || (
-                <span className="wallet-card-num-placeholder">
-                  {isMfs ? "01712 345678" : "•••• •••• •••• ••••"}
-                </span>
-              )}
-            </div>
-          </>
-        )}
-
-        {/* Bottom Row: Balance & Expiry (Left) + Bank Network Emblem Only (Right) */}
-        <div className="wallet-card-footer">
-          <div className="wallet-card-footer-left">
-            {showBalance && (
-              <div className="wallet-card-balance-block">
-                <span className="wallet-card-meta-lbl">
-                  {isSavings
-                    ? "TOTAL SAVED"
-                    : isCredit
-                      ? "AMOUNT OWED"
-                      : isCash
-                        ? "CASH ON HAND"
-                        : "BALANCE"}
-                </span>
-                <b
-                  className={`wallet-card-balance-val${balance < 0 && !isCredit ? " is-overdrawn" : ""}`}
-                >
-                  {formatMoney(balance || 0)}
-                  {balance < 0 && !isCredit && (
-                    <span className="wallet-card-overdrawn-badge">
-                      OVERDRAWN
+                        <path
+                          d="M13 2L4.5 13.5H11.5L10.5 22L19.5 10.5H12.5L13 2Z"
+                          fill="#0B6B61"
+                        />
+                      </svg>
+                      <span>INSTANT DEBIT</span>
                     </span>
-                  )}
-                  {balance < 0 && isCredit && (
-                    <span className="wallet-card-overdrawn-badge">
-                      IN CREDIT
+                    <ContactlessWaves
+                      size={14}
+                      tone="teal"
+                      className="wallet-card-contactless is-virtual-nfc"
+                    />
+                  </div>
+                )}
+                {isVirtualMc && (
+                  <div className="wallet-card-virtual-cluster is-mc-digital">
+                    <span className="wallet-card-virtual-pill is-stealth">
+                      <svg
+                        width="11"
+                        height="11"
+                        style={{
+                          width: 11,
+                          height: 11,
+                          display: "block",
+                          stroke: "none",
+                        }}
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M12 2.5L19 5.8V11.5C19 16.4 15.9 20.6 12 22C8.1 20.6 5 16.4 5 11.5V5.8L12 2.5Z"
+                          stroke="#A5B4FC"
+                          strokeWidth="2"
+                          fill="rgba(165, 180, 252, 0.16)"
+                        />
+                      </svg>
+                      <span>DISPOSABLE KEY</span>
                     </span>
-                  )}
-                </b>
+                    <ContactlessWaves
+                      size={14}
+                      className="wallet-card-contactless is-virtual-nfc"
+                    />
+                  </div>
+                )}
               </div>
-            )}
-            {!isMfs && !isSavings && !isCash && (
-              <div className="wallet-card-expiry-block">
-                <span className="wallet-card-meta-lbl">VALID THRU</span>
-                <span className="wallet-card-meta-val">
-                  {formatExpiry(card.expiry) || "MM/YY"}
-                </span>
-              </div>
-            )}
-          </div>
 
-          {!isMfs && !isSavings && !isCash && (
-            <div className="wallet-card-network">
-              {!isGold && card.network === "visa" && (
-                <VisaBadge
-                  width={44}
-                  height={15}
-                  variant={isVirtualVisa ? "navy" : "auto"}
-                />
-              )}
-              {(isGold || card.network === "mastercard") && (
-                <MastercardBadge
-                  width={34}
-                  height={22}
-                  variant={isGold ? "bronze" : "default"}
-                />
-              )}
-              {!isGold && card.network === "amex" && (
-                <AmexBadge width={38} height={17} />
-              )}
-            </div>
+              {/* Card / Account Number in Refined Monospace */}
+              <div className="wallet-card-number">
+                {formattedNumber || (
+                  <span className="wallet-card-num-placeholder">
+                    {isMfs ? "01712 345678" : "•••• •••• •••• ••••"}
+                  </span>
+                )}
+              </div>
+            </>
           )}
+
+          {/* Bottom Row: Balance & Expiry (Left) + Bank Network Emblem Only (Right) */}
+          <div className="wallet-card-footer">
+            <div className="wallet-card-footer-left">
+              {showBalance && (
+                <div className="wallet-card-balance-block">
+                  <span className="wallet-card-meta-lbl">
+                    {isSavings
+                      ? "TOTAL SAVED"
+                      : isCredit
+                        ? "AMOUNT OWED"
+                        : "BALANCE"}
+                  </span>
+                  <b
+                    className={`wallet-card-balance-val${balance < 0 && !isCredit ? " is-overdrawn" : ""}`}
+                  >
+                    {formattedBalanceStr}
+                    {balance < 0 && !isCredit && (
+                      <span className="wallet-card-overdrawn-badge">
+                        OVERDRAWN
+                      </span>
+                    )}
+                    {balance < 0 && isCredit && (
+                      <span className="wallet-card-overdrawn-badge">
+                        IN CREDIT
+                      </span>
+                    )}
+                  </b>
+                </div>
+              )}
+              {!isMfs && !isSavings && (
+                <div className="wallet-card-expiry-block">
+                  <span className="wallet-card-meta-lbl">VALID THRU</span>
+                  <span className="wallet-card-meta-val">
+                    {formatExpiry(card.expiry) || "MM/YY"}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {!isMfs && !isSavings && (
+              <div className="wallet-card-network">
+                {!isGold && card.network === "visa" && (
+                  <VisaBadge
+                    width={44}
+                    height={15}
+                    variant={isVirtualVisa ? "navy" : "auto"}
+                  />
+                )}
+                {(isGold || card.network === "mastercard") && (
+                  <MastercardBadge
+                    width={34}
+                    height={22}
+                    variant={isGold ? "bronze" : "default"}
+                  />
+                )}
+                {!isGold && card.network === "amex" && (
+                  <AmexBadge width={38} height={17} />
+                )}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

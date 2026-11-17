@@ -276,13 +276,12 @@ export const CARD_PROVIDERS = [
     id: "cash",
     name: "Cash",
     category: "cash",
-    subtitle: "Cash in Hand · BDT",
+    subtitle: "Cash in hand · BDT",
     defaultType: "cash",
     defaultNetwork: "none",
     currency: "BDT",
-    color: "#0f766e",
-    gradient:
-      "linear-gradient(135deg, #115e59 0%, #0f766e 45%, #134e4a 80%, #042f2e 100%)",
+    color: "#23403C",
+    gradient: "#23403C",
     numberPrefix: "CASH",
     numberPlaceholder: "CASH-BDT",
     isPhone: false,
@@ -315,6 +314,12 @@ const LEGACY_PROVIDER_GRADIENTS = {
   savings: [
     "linear-gradient(135deg, #065f46 0%, #047857 35%, #064e3b 70%, #022c22 100%)",
   ],
+  cash: [
+    "linear-gradient(135deg, #115e59 0%, #0f766e 45%, #134e4a 80%, #042f2e 100%)",
+    "#0f766e",
+    "#1F3732",
+    "#1f3732",
+  ],
   gold_mc: [
     "linear-gradient(135deg, #b45309 0%, #92400e 50%, #78350f 100%)",
     "linear-gradient(135deg, #a67c37 0%, #785421 38%, #452e11 74%, #1f1407 100%)",
@@ -337,12 +342,85 @@ const LEGACY_PROVIDER_GRADIENTS = {
   ],
 };
 
+export const CASH_CURRENCIES = [
+  {
+    code: "BDT",
+    symbol: "৳",
+    name: "Bangladeshi Taka",
+    bg: "#23403C",
+    accent: "#F2F7F6",
+    muted: "#A9C2BD",
+    font: '"Space Grotesk", "Hind Siliguri", "Noto Sans", sans-serif',
+    markFont: '"Hind Siliguri", sans-serif',
+  },
+  {
+    code: "USD",
+    symbol: "$",
+    name: "US Dollar",
+    bg: "#1D2321",
+    accent: "#D4F27A",
+    muted: "#A8B3AD",
+    font: '"Space Grotesk", "Noto Sans", sans-serif',
+    markFont: '"Space Grotesk", "Noto Sans", sans-serif',
+  },
+  {
+    code: "EUR",
+    symbol: "€",
+    name: "Euro",
+    bg: "#14264B",
+    accent: "#FFD166",
+    muted: "#A9B8D9",
+    font: '"Fraunces", "Noto Sans", serif',
+    markFont: '"Fraunces", "Noto Sans", serif',
+  },
+  {
+    code: "GBP",
+    symbol: "£",
+    name: "British Pound",
+    bg: "#3A1530",
+    accent: "#F2B8C6",
+    muted: "#CBA6BE",
+    font: '"Playfair Display", "Noto Sans", serif',
+    markFont: '"Playfair Display", "Noto Sans", serif',
+  },
+  {
+    code: "JPY",
+    symbol: "¥",
+    name: "Japanese Yen",
+    bg: "#6B1A21",
+    accent: "#FFE3D3",
+    muted: "#F0B9B0",
+    font: '"Zen Kaku Gothic New", "Noto Sans", sans-serif',
+    markFont: '"Zen Kaku Gothic New", "Noto Sans", sans-serif',
+  },
+  {
+    code: "INR",
+    symbol: "₹",
+    name: "Indian Rupee",
+    bg: "#33210B",
+    accent: "#FFB347",
+    muted: "#D9BE92",
+    font: '"Poppins", "Noto Sans", sans-serif',
+    markFont: '"Poppins", "Noto Sans", sans-serif',
+  },
+];
+
+export function getCashCurrencyMeta(code) {
+  const upper = String(code || "BDT").trim().toUpperCase();
+  return CASH_CURRENCIES.find((c) => c.code === upper) || CASH_CURRENCIES[0];
+}
+
 export function resolveCardGradient(card, provider) {
   const provId =
     card?.provider ||
     (card?.type === "savings" || card?.category === "savings"
       ? "savings"
-      : card?.id);
+      : card?.type === "cash" || card?.category === "cash" || card?.id === "cash"
+        ? "cash"
+        : card?.id);
+  if (provId === "cash") {
+    return getCashCurrencyMeta(card?.currency).bg;
+  }
   const p = provider || (provId ? getProviderMeta(provId) : null);
   const rawGrad = card?.gradient;
   if (rawGrad) {
@@ -351,6 +429,9 @@ export function resolveCardGradient(card, provider) {
     }
     if (LEGACY_PROVIDER_GRADIENTS.savings.includes(rawGrad)) {
       return "linear-gradient(135deg, #227e60 0%, #10684c 40%, #074c38 75%, #032b20 100%)";
+    }
+    if (LEGACY_PROVIDER_GRADIENTS.cash.includes(rawGrad)) {
+      return "#23403C";
     }
     return rawGrad;
   }

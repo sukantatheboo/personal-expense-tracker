@@ -6376,6 +6376,136 @@ a:active,
   background: none;
   background-image: none;
 }
+.mobile-prototype .wallet-card.is-cash {
+  --u: calc(100cqw / 820);
+  --cash-bg: #23403c;
+  --cash-accent: #f2f7f6;
+  --cash-muted: #a9c2bd;
+  --cash-font: "Space Grotesk", "Hind Siliguri", "Noto Sans", sans-serif;
+  --cash-mark-font: "Hind Siliguri", sans-serif;
+  container-type: inline-size;
+  background: var(--cash-bg);
+  color: #ffffff;
+  font-family: var(--cash-font);
+  font-variant-numeric: lining-nums;
+  border: none;
+  border-radius: 5cqw;
+  box-shadow: 0 3cqw 6cqw -2cqw rgb(0 0 0 / 0.3);
+  padding: 0;
+  transition: background-color 220ms ease;
+}
+.mobile-prototype .wallet-card.is-cash .cash-card-tk {
+  position: absolute;
+  right: -7.5cqw;
+  bottom: -21cqw;
+  font-family: var(--cash-mark-font);
+  font-size: 80cqw;
+  line-height: 1;
+  font-weight: 700;
+  font-style: normal;
+  color: var(--cash-accent);
+  opacity: 0.14;
+  pointer-events: none;
+  user-select: none;
+  z-index: 1;
+}
+.mobile-prototype .wallet-card.is-cash .cash-card-tk-o {
+  right: -3.75cqw;
+  bottom: -17.5cqw;
+  color: transparent;
+  -webkit-text-stroke: max(1px, 0.25cqw) var(--cash-accent);
+  opacity: 0.4;
+}
+.mobile-prototype .wallet-card.is-cash .cash-card-in {
+  position: relative;
+  z-index: 2;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 6cqw;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.mobile-prototype .wallet-card.is-cash .cash-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+.mobile-prototype .wallet-card.is-cash .cash-card-top b {
+  display: block;
+  font-size: max(15px, 3.75cqw);
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.15;
+}
+.mobile-prototype .wallet-card.is-cash .cash-card-sub {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 0.75cqw;
+  font-size: max(11px, 2.125cqw);
+  font-weight: 500;
+  color: var(--cash-muted);
+  letter-spacing: 0.01em;
+  line-height: 1.15;
+}
+.mobile-prototype .wallet-card.is-cash .cash-card-st {
+  display: flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 1.25cqw;
+  padding-top: 0.5cqw;
+  color: var(--cash-accent);
+  font-size: max(11px, 2.125cqw);
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+}
+.mobile-prototype .wallet-card.is-cash .cash-card-st::before {
+  content: "";
+  width: max(6px, 1.5cqw);
+  height: max(6px, 1.5cqw);
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+.mobile-prototype .wallet-card.is-cash .cash-card-st.is-overdrawn {
+  color: #f6a9a9;
+}
+.mobile-prototype .wallet-card.is-cash .cash-card-lbl {
+  display: block;
+  margin: 0;
+  font-size: max(11px, 2.125cqw);
+  font-weight: 500;
+  color: var(--cash-muted);
+  line-height: 1.15;
+  text-transform: none;
+}
+.mobile-prototype .wallet-card.is-cash .cash-card-bal {
+  margin: 1cqw 0 0;
+  font-size: max(28px, 8.5cqw);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.0125em;
+  color: var(--cash-accent);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.mobile-prototype .wallet-card.is-cash .cash-card-bal.is-overdrawn {
+  color: #f6a9a9;
+}
+.mobile-prototype .wallet-card.is-cash .cash-card-bal.is-compact-cash {
+  font-size: max(22px, 6.8cqw);
+}
+.mobile-prototype .wallet-card.is-cash .cash-card-bal.is-ultra-compact-cash {
+  font-size: max(18px, 5.5cqw);
+}
+.mobile-prototype .wallet-card.is-cash .cash-card-bal em {
+  font-family: var(--cash-mark-font);
+  font-weight: 700;
+  font-style: normal;
+}
 .mobile-prototype .wallet-card-header {
   position: relative;
   z-index: 2;
@@ -6423,6 +6553,13 @@ a:active,
   font-weight: 850;
   letter-spacing: 0.04em;
 }
+.mobile-prototype .wallet-card.is-cash .wallet-card-holder-name {
+  font-size: 16.5px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  text-transform: none;
+  line-height: 1.18;
+}
 .mobile-prototype .wallet-card-type-tag {
   display: inline-flex;
   align-items: center;
@@ -6451,6 +6588,33 @@ a:active,
 }
 .mobile-prototype .wallet-card.is-custom .wallet-card-type-tag {
   color: rgba(255, 255, 255, 0.56);
+}
+.mobile-prototype .wallet-card.is-cash .wallet-card-type-tag {
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.005em;
+  color: rgba(255, 255, 255, 0.62);
+  text-transform: none;
+}
+.mobile-prototype .wallet-card-cash-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  line-height: 1;
+  padding-top: 3px;
+}
+.mobile-prototype .wallet-card-cash-status.is-overdrawn {
+  color: #f39a92;
+}
+.mobile-prototype .wallet-card-cash-status-dot {
+  width: 5.5px;
+  height: 5.5px;
+  border-radius: 999px;
+  background: currentColor;
+  flex-shrink: 0;
 }
 .mobile-prototype .wallet-card-subtitle-text {
   display: inline-block;
@@ -6717,6 +6881,17 @@ a:active,
 .mobile-prototype .wallet-card.is-custom .wallet-card-meta-lbl {
   color: rgba(255, 255, 255, 0.56);
 }
+.mobile-prototype .wallet-card.is-cash .wallet-card-balance-block {
+  gap: 5px;
+}
+.mobile-prototype .wallet-card.is-cash .wallet-card-meta-lbl {
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.005em;
+  color: rgba(255, 255, 255, 0.62);
+  text-transform: none;
+  line-height: 1.15;
+}
 .mobile-prototype .wallet-card-balance-val {
   font-size: 15.5px;
   font-weight: 850;
@@ -6737,6 +6912,22 @@ a:active,
   font-size: 20px;
   font-weight: 850;
   letter-spacing: -0.025em;
+}
+.mobile-prototype .wallet-card.is-cash .wallet-card-balance-val {
+  font-size: clamp(28px, 8.8vw, 34px);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.04;
+}
+.mobile-prototype .wallet-card.is-cash .wallet-card-balance-val.is-compact-cash {
+  font-size: clamp(23px, 7.2vw, 27px);
+  letter-spacing: -0.035em;
+}
+.mobile-prototype
+  .wallet-card.is-cash
+  .wallet-card-balance-val.is-ultra-compact-cash {
+  font-size: clamp(19px, 6vw, 22px);
+  letter-spacing: -0.04em;
 }
 .mobile-prototype .wallet-card-meta-val {
   font-size: 12px;
@@ -8032,6 +8223,121 @@ a:active,
   box-sizing: border-box;
   border: 1px solid currentColor;
   border-radius: 50%;
+}
+.mobile-prototype .mini-card-preview.is-cash {
+  background: var(--cash-bg, #23403c);
+  color: #ffffff;
+  font-family: var(--cash-font, "Space Grotesk", sans-serif);
+}
+.mobile-prototype .mini-card-preview.is-cash .cash-mini-tk {
+  position: absolute;
+  right: -2px;
+  bottom: -10px;
+  font-family: var(--cash-mark-font, "Hind Siliguri", sans-serif);
+  font-size: 42px;
+  font-weight: 700;
+  line-height: 1;
+  font-style: normal;
+  color: var(--cash-accent, #f2f7f6);
+  opacity: 0.18;
+  pointer-events: none;
+}
+.mobile-prototype .mini-card-preview.is-cash .cash-mini-tk-o {
+  right: 0;
+  bottom: -8.5px;
+  color: transparent;
+  -webkit-text-stroke: 0.6px var(--cash-accent, rgba(255, 255, 255, 0.5));
+  opacity: 0.45;
+}
+.mobile-prototype .mini-card-preview.is-cash .cash-mini-lbl {
+  position: absolute;
+  left: 4.5px;
+  top: 4.5px;
+  font-size: 4.6px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+.mobile-prototype .cash-currency-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.mobile-prototype .cash-currency-pill {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 10px;
+  border-radius: 13px;
+  border: 1.5px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 750;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 120ms ease, border-color 150ms ease, box-shadow 150ms ease;
+}
+.mobile-prototype .cash-currency-pill:active {
+  transform: scale(0.96);
+}
+.mobile-prototype .cash-currency-pill.is-selected {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 1px var(--ink), 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+:root[data-theme="dark"] .mobile-prototype .cash-currency-pill.is-selected,
+.mobile-prototype[data-theme="dark"] .cash-currency-pill.is-selected {
+  border-color: #f8fafc;
+  box-shadow: 0 0 0 1px #f8fafc, 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+.mobile-prototype .cash-currency-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+.mobile-prototype .cash-currency-code {
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+.mobile-prototype .cash-sync-box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--ink) 12%, var(--line));
+  background: color-mix(in srgb, var(--ink) 3%, var(--card));
+  margin-bottom: 14px;
+}
+.mobile-prototype .cash-sync-box.is-overdrawn {
+  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.07);
+}
+.mobile-prototype .cash-sync-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.mobile-prototype .cash-sync-input-row input {
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1.5px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 750;
+  outline: none;
 }
 
 /* ───────────── Prototype 2×2 Account Card Grid (Paid From, Income, Adjust & Transfer) ───────────── */
@@ -9392,6 +9698,9 @@ a:active,
 }
 .mobile-prototype .wallet-card-balance-val.is-overdrawn {
   color: #fca5a5 !important;
+}
+.mobile-prototype .wallet-card.is-cash .wallet-card-balance-val.is-overdrawn {
+  color: #f39a92 !important;
 }
 .mobile-prototype .card-options-bar-btn.is-primary-card {
   background: rgba(16, 185, 129, 0.12);

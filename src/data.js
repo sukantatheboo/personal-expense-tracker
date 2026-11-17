@@ -1017,6 +1017,12 @@ export function loadAccountData(
         storedNumber =
           String(card?.number || "").trim() ||
           (rawLast4 ? `SAV-${rawLast4}` : "");
+      } else if (isCashCard(card)) {
+        const cashCurr = String(card?.currency || "BDT").trim().toUpperCase();
+        storedNumber =
+          String(card?.number || "").trim().startsWith("CASH-")
+            ? String(card.number).trim()
+            : `CASH-${cashCurr}`;
       } else if (isMfs && rawNumber.length < 15) {
         storedNumber =
           String(card?.number || "").trim() ||
@@ -1060,10 +1066,13 @@ export function loadAccountData(
         holderName: card.holderName || "Cardholder",
         subtitle:
           typeof card.subtitle === "string"
-            ? card.subtitle.replace(/\bUSD\b/gi, "BDT")
+            ? isCashCard(card)
+              ? card.subtitle
+              : card.subtitle.replace(/\bUSD\b/gi, "BDT")
             : card.subtitle || "",
-        currency:
-          !card.currency || String(card.currency).toUpperCase() === "USD"
+        currency: isCashCard(card)
+          ? String(card.currency || "BDT").toUpperCase()
+          : !card.currency || String(card.currency).toUpperCase() === "USD"
             ? "BDT"
             : card.currency,
         type: isSavings

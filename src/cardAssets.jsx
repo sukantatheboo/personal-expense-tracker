@@ -1065,10 +1065,18 @@ export function ContactlessWaves({
 
 import {
   CARD_PROVIDERS,
+  CASH_CURRENCIES,
+  getCashCurrencyMeta,
   getProviderMeta,
   resolveCardGradient,
 } from "./cardProviders.js";
-export { CARD_PROVIDERS, getProviderMeta, resolveCardGradient };
+export {
+  CARD_PROVIDERS,
+  CASH_CURRENCIES,
+  getCashCurrencyMeta,
+  getProviderMeta,
+  resolveCardGradient,
+};
 
 export function renderProviderLogo(
   providerId,
@@ -1437,7 +1445,7 @@ const MINI_CARD_PROTOTYPE_SPECS = {
     digits: "9010",
     net: "visa",
   },
-  cash: { variant: "", a: "#1F6B5E", gl: "৳", mk: "Cash" },
+  cash: { variant: "", a: "#23403C", fg: "#F2F7F6", gl: "৳", mk: "Cash" },
 };
 
 /**
@@ -1575,35 +1583,59 @@ export function MiniCardPreview({ provider, card, className = "" }) {
     ? "৳"
     : spec.gl || (isMfs ? (p?.name || "W").charAt(0) : "");
 
+  const cashMeta = isCash ? getCashCurrencyMeta(card?.currency) : null;
   const styleVars = {
-    "--a": colorA,
+    "--a": cashMeta ? cashMeta.bg : colorA,
     ...(colorB ? { "--b": colorB } : {}),
     ...(spec.fg ? { "--fg": spec.fg } : {}),
+    ...(cashMeta
+      ? {
+          "--cash-bg": cashMeta.bg,
+          "--cash-accent": cashMeta.accent,
+          "--cash-font": cashMeta.font,
+          "--cash-mark-font": cashMeta.markFont,
+        }
+      : {}),
   };
 
   return (
     <div
       className={`mini-card-preview c ${variant ? variant : ""} ${isCash ? "is-cash" : ""} ${isSavings ? "is-savings" : ""} ${className}`.trim()}
+      data-currency={cashMeta ? cashMeta.code : undefined}
       style={styleVars}
       aria-hidden="true"
     >
-      {isSavings ? (
-        <i className="gl ring" />
-      ) : isMfs || isCash ? (
-        <i className="gl">{glyphChar}</i>
-      ) : (
-        <i className="ch" />
-      )}
-
-      <b className="mk">{markText}</b>
-
-      {displayDigits && <span className="n">{displayDigits}</span>}
-
-      {!isCash && !isMfs && !isSavings && (
+      {isCash ? (
         <>
-          {isMastercard && <i className="m" />}
-          {isVisa && <em className="v">VISA</em>}
-          {isAmex && <em className="amex">AMEX</em>}
+          <i className="cash-mini-tk cash-mini-tk-o" aria-hidden="true">
+            {cashMeta.symbol}
+          </i>
+          <i className="cash-mini-tk cash-mini-tk-f" aria-hidden="true">
+            {cashMeta.symbol}
+          </i>
+          <b className="cash-mini-lbl">Cash wallet</b>
+        </>
+      ) : (
+        <>
+          {isSavings ? (
+            <i className="gl ring" />
+          ) : isMfs ? (
+            <i className="gl">{glyphChar}</i>
+          ) : (
+            <i className="ch" />
+          )}
+
+          <b className="mk">{markText}</b>
+
+          {displayDigits && <span className="n">{displayDigits}</span>}
+
+          {!isMfs && !isSavings && (
+            <>
+              {isMastercard && <i className="m" />}
+              {isVisa && <em className="v">VISA</em>}
+              {isAmex && <em className="amex">AMEX</em>}
+            </>
+          )}
         </>
       )}
     </div>

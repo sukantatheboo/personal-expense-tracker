@@ -3451,9 +3451,8 @@ export default function App() {
       ? cards.find((c) => c.id === savingsId)
       : null;
     const isScheduleBlockedByFrozenCard = (schedule) => {
-      const targetCard = schedule.account
-        ? cards.find((c) => c.id === schedule.account)
-        : null;
+      const acctId = schedule.account || "cash";
+      const targetCard = cards.find((c) => c.id === acctId);
       if (targetCard?.frozen) return true;
       if (schedule.category === "Savings" && savingsCard?.frozen) return true;
       return false;
@@ -3589,9 +3588,8 @@ export default function App() {
     const cards = Array.isArray(accountData?.settings?.cards)
       ? accountData.settings.cards
       : [];
-    const targetCard = form.account
-      ? cards.find((c) => c.id === form.account)
-      : null;
+    const resolvedTargetId = form.account || "cash";
+    const targetCard = cards.find((c) => c.id === resolvedTargetId);
     if (targetCard?.frozen) return false;
     if (form.category === "Savings") {
       const savingsId = getSavingsAccountId(cards);
@@ -3702,9 +3700,8 @@ export default function App() {
     const cards = Array.isArray(accountData?.settings?.cards)
       ? accountData.settings.cards
       : [];
-    const targetCard = form.account
-      ? cards.find((c) => c.id === form.account)
-      : null;
+    const resolvedTargetId = form.account || "cash";
+    const targetCard = cards.find((c) => c.id === resolvedTargetId);
     if (targetCard?.frozen) return false;
     if (isSavings) {
       const savingsId = getSavingsAccountId(cards);
@@ -3899,9 +3896,17 @@ export default function App() {
       String(newCard?.number || "").startsWith("VAULT-") ||
       String(newCard?.number || "").startsWith("DPS-"),
     );
+    const isCash = Boolean(
+      cardId === "cash" ||
+      newCard?.category === "cash" ||
+      newCard?.type === "cash" ||
+      newCard?.provider === "cash",
+    );
 
     const rawNumber = String(newCard?.number || "").replace(/\D/g, "");
-    const last4 = newCard?.last4 || (rawNumber ? rawNumber.slice(-4) : "");
+    const last4 = isCash
+      ? "CASH"
+      : newCard?.last4 || (rawNumber ? rawNumber.slice(-4) : "");
 
     const { cvv: _cvv, number: _number, ...safeCard } = newCard || {};
 
@@ -3913,6 +3918,9 @@ export default function App() {
     if (isSavings) {
       storedNumber =
         String(newCard?.number || "").trim() || (last4 ? `SAV-${last4}` : "");
+    } else if (isCash) {
+      const cashCurr = String(newCard?.currency || "BDT").trim().toUpperCase();
+      storedNumber = `CASH-${cashCurr}`;
     } else if (isMfs && rawNumber.length < 15) {
       storedNumber =
         String(newCard?.number || "").trim() ||
@@ -4106,18 +4114,28 @@ export default function App() {
       String(updatedCard?.number || "").startsWith("VAULT-") ||
       String(updatedCard?.number || "").startsWith("DPS-"),
     );
+    const isCash = Boolean(
+      updatedCard?.id === "cash" ||
+      updatedCard?.category === "cash" ||
+      updatedCard?.type === "cash" ||
+      updatedCard?.provider === "cash",
+    );
 
     const rawNumber = String(updatedCard?.number || "").replace(/\D/g, "");
-    const last4 = isSavings
-      ? rawNumber
-        ? rawNumber.slice(-4)
-        : updatedCard?.last4 || ""
-      : updatedCard?.last4 || (rawNumber ? rawNumber.slice(-4) : "");
+    const last4 = isCash
+      ? "CASH"
+      : isSavings
+        ? rawNumber
+          ? rawNumber.slice(-4)
+          : updatedCard?.last4 || ""
+        : updatedCard?.last4 || (rawNumber ? rawNumber.slice(-4) : "");
 
     const { cvv: _cvv, number: _number, ...safeCard } = updatedCard || {};
 
     const hasNumberUpdate =
-      updatedCard?.last4 !== undefined || updatedCard?.number !== undefined;
+      isCash ||
+      updatedCard?.last4 !== undefined ||
+      updatedCard?.number !== undefined;
 
     let targetNumber = undefined;
     if (hasNumberUpdate) {
@@ -4125,6 +4143,11 @@ export default function App() {
         targetNumber =
           String(updatedCard?.number || "").trim() ||
           (last4 ? `SAV-${last4}` : "");
+      } else if (isCash) {
+        const cashCurr = String(updatedCard?.currency || "BDT")
+          .trim()
+          .toUpperCase();
+        targetNumber = `CASH-${cashCurr}`;
       } else if (isMfs && rawNumber.length < 15) {
         targetNumber =
           String(updatedCard?.number || "").trim() ||
@@ -4257,7 +4280,34 @@ export default function App() {
       const cardsList = Array.isArray(current.settings.cards)
         ? current.settings.cards
         : [];
-      const nextCards = cardsList.map((c) => ({
+      const hasCard = cardsList.some((c) => c.id === cardId);
+      const baseCards =
+        !hasCard && cardId === "cash" && nextPrimaryId === "cash"
+          ? [
+              ...cardsList,
+              {
+                id: "cash",
+                name: "Cash",
+                provider: "cash",
+                category: "cash",
+                type: "cash",
+                network: "none",
+                holderName: "Cash wallet",
+                subtitle: "Cash in hand · BDT",
+                currency: "BDT",
+                last4: "CASH",
+                number: "CASH-BDT",
+                expiry: "",
+                color: "#23403C",
+                gradient: "#23403C",
+                initialBalance: Number(current.settings?.balances?.cash) || 0,
+                isPrimary: true,
+                createdAt: now,
+                updatedAt: now,
+              },
+            ]
+          : cardsList;
+      const nextCards = baseCards.map((c) => ({
         ...c,
         isPrimary: c.id === nextPrimaryId,
         updatedAt:
@@ -4315,7 +4365,28 @@ export default function App() {
       const currentCards = Array.isArray(current.settings.cards)
         ? current.settings.cards
         : [];
-      const target = currentCards.find((c) => c.id === cardId);
+      let target = currentCards.find((c) => c.id === cardId);
+      if (!target && cardId === "cash") {
+        target = {
+          id: "cash",
+          name: "Cash",
+          provider: "cash",
+          category: "cash",
+          type: "cash",
+          network: "none",
+          currency: "BDT",
+          holderName: "Cash wallet",
+          subtitle: "Cash in hand · BDT",
+          last4: "CASH",
+          number: "CASH-BDT",
+          expiry: "",
+          color: "#23403C",
+          gradient: "#23403C",
+          initialBalance: Number(current.settings?.balances?.cash) || 0,
+          createdAt: now,
+          updatedAt: now,
+        };
+      }
       if (!target) return current;
       const rest = currentCards.filter((c) => c.id !== cardId);
       const nextCards = [{ ...target, updatedAt: now }, ...rest];
@@ -4389,7 +4460,8 @@ export default function App() {
     const cards = Array.isArray(accountData?.settings?.cards)
       ? accountData.settings.cards
       : [];
-    const targetCard = account ? cards.find((c) => c.id === account) : null;
+    const resolvedTargetId = account || "cash";
+    const targetCard = cards.find((c) => c.id === resolvedTargetId);
     if (targetCard?.frozen) return false;
     if (category === "Savings") {
       const savingsId = getSavingsAccountId(cards);
