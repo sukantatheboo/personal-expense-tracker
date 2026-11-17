@@ -4021,14 +4021,15 @@ function Accounts({
     }
 
     if (event.type === "adjust" || event.type === "adjustment") {
-      const before = runningBalances[event.account] || 0;
+      const before = Math.round((runningBalances[event.account] || 0) * 100) / 100;
       adjustmentBalances.set(event.id, {
         before,
-        after: before + changes[event.account],
+        after: Math.round((before + (changes[event.account] || 0)) * 100) / 100,
       });
     }
     for (const [accountId, change] of Object.entries(changes))
-      runningBalances[accountId] = (runningBalances[accountId] || 0) + change;
+      runningBalances[accountId] =
+        Math.round(((runningBalances[accountId] || 0) + change) * 100) / 100;
   }
 
   const filteredEvents = events

@@ -1,39 +1,80 @@
 import { getSupabase, supabase } from "./push.js";
 import {
+  CATEGORIES,
+  clampDayOfMonth,
+  cleanEnv,
   computeAccountBalances,
   emptyAccountData,
   isPhantomAutoReconstructedCard,
   isSavingsCard,
+  isValidDateString,
+  isValidUuid,
   loadAccountData,
   localDate,
   makeId,
+  normalizeDeletedRecords,
+  parseTimestampMs,
+  roundMoney,
 } from "./data.js";
 import { hasAppPin, isSessionUnlocked } from "./security.js";
 
 export const CLOUD_SYNC_USER_KEY = "spend-cloud-sync-user-v1";
 export const CLOUD_SYNC_OUTBOX_KEY = "spend-cloud-sync-outbox-v1";
 export const LOCAL_CHECKPOINTS_KEY = "spend-backup-checkpoints-v1";
+export const KEEPALIVE_AVATAR_SENTINEL = "__KEEP_EXISTING_AVATAR__";
 
 const MAX_LOCAL_DAILY_CHECKPOINTS = 14;
 const MAX_LOCAL_EVENT_CHECKPOINTS = 10;
 const KEEPALIVE_MAX_BYTES = 58_000;
+const JWT_EXPIRY_GRACE_SECONDS = 15;
 
-function cleanEnvValue(value) {
-  return typeof value === "string"
-    ? value.trim().replace(/^['"]|['"]$/g, "")
-    : "";
+let liveSessionAccessToken = "";
+let liveSessionExpiresAtSec = 0;
+
+function decodeJwtExpSeconds(token) {
+  if (typeof token !== "string") return 0;
+  const parts = token.trim().split(".");
+  if (parts.length !== 3) return 0;
+  try {
+    const base64 = parts[1].replaceAll("-", "+").replaceAll("_", "/");
+    const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
+    const json = atob(padded);
+    const payload = JSON.parse(json);
+    const exp = Number(payload?.exp);
+    return Number.isFinite(exp) && exp > 0 ? exp : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function isJwtFresh(token, expiresAtHintSec = 0, nowMs = Date.now()) {
+  if (typeof token !== "string" || !token.trim()) return false;
+  const expSec = Number(expiresAtHintSec) || decodeJwtExpSeconds(token);
+  if (!expSec) return true;
+  const nowSec = Math.floor(nowMs / 1000);
+  return expSec > nowSec + JWT_EXPIRY_GRACE_SECONDS;
+}
+
+export function setLiveSupabaseSessionToken(token = "", expiresAtSec = 0) {
+  liveSessionAccessToken = typeof token === "string" ? token.trim() : "";
+  liveSessionExpiresAtSec =
+    Number(expiresAtSec) || decodeJwtExpSeconds(liveSessionAccessToken);
 }
 
 function getSupabaseRestConfig() {
-  const url = cleanEnvValue(import.meta.env.VITE_SUPABASE_URL).replace(
-    /\/+$/,
-    "",
-  );
-  const anonKey = cleanEnvValue(import.meta.env.VITE_SUPABASE_ANON_KEY);
+  const url = cleanEnv(import.meta.env?.VITE_SUPABASE_URL).replace(/\/+$/, "");
+  const anonKey = cleanEnv(import.meta.env?.VITE_SUPABASE_ANON_KEY);
   return { url, anonKey };
 }
 
-function readSupabaseAccessTokenFromStorage() {
+export function readSupabaseAccessTokenFromStorage(nowMs = Date.now()) {
+  if (
+    liveSessionAccessToken &&
+    isJwtFresh(liveSessionAccessToken, liveSessionExpiresAtSec, nowMs)
+  ) {
+    return liveSessionAccessToken;
+  }
+
   if (typeof window === "undefined") return "";
   try {
     for (let i = 0; i < localStorage.length; i += 1) {
@@ -44,12 +85,17 @@ function readSupabaseAccessTokenFromStorage() {
       const raw = localStorage.getItem(key);
       if (!raw) continue;
       const parsed = JSON.parse(raw);
+      const sessionObj =
+        parsed?.currentSession || parsed?.session || parsed || {};
       const token =
-        parsed?.access_token ||
-        parsed?.currentSession?.access_token ||
-        parsed?.session?.access_token ||
-        "";
-      if (typeof token === "string" && token.trim()) {
+        sessionObj?.access_token || parsed?.access_token || "";
+      const expiresAt =
+        Number(sessionObj?.expires_at ?? parsed?.expires_at) || 0;
+      if (
+        typeof token === "string" &&
+        token.trim() &&
+        isJwtFresh(token.trim(), expiresAt, nowMs)
+      ) {
         return token.trim();
       }
     }
@@ -102,7 +148,6 @@ export function persistCloudSyncOutbox({
       snapshotLength: serializedSnapshot
         ? serializedSnapshot.length
         : existing?.snapshotLength || 0,
-      // Store full snapshot in outbox only when PIN encryption is not active
       ...(!pinProtected && snapshot && typeof snapshot === "object"
         ? { snapshot: sanitizeCloudPayload(snapshot) }
         : {}),
@@ -146,8 +191,9 @@ export function clearCloudSyncOutbox(
 }
 
 /**
- * #3 — Flushes pending cloud snapshot using fetch(..., { keepalive: true })
+ * Flushes pending cloud snapshot using fetch(..., { keepalive: true })
  * so mobile OS / browser swipe-close or pagehide does not abort in-flight syncs.
+ * Validates JWT freshness before dispatching so expired localStorage tokens are never sent.
  */
 export function flushCloudSyncKeepalive(
   userId,
@@ -164,7 +210,7 @@ export function flushCloudSyncKeepalive(
       : readCloudSyncOutbox(userId)?.snapshot || null;
   if (!snapshotToFlush) return false;
 
-  // Ensure outbox is marked dirty before firing keepalive request
+  // Always persist dirty outbox state before attempting network keepalive
   persistCloudSyncOutbox({
     userId,
     snapshot: snapshotToFlush,
@@ -186,9 +232,6 @@ export function flushCloudSyncKeepalive(
   };
   let body = JSON.stringify(rpcPayload);
 
-  // Browser keepalive requests have a 64 KiB body limit.
-  // Use sentinel token __KEEP_EXISTING_AVATAR__ so the server preserves the existing cloud avatar
-  // instead of wiping it if an inline base64 photo pushes the payload over 58 KB.
   if (
     body.length > KEEPALIVE_MAX_BYTES &&
     sanitized?.profileAvatar &&
@@ -196,7 +239,7 @@ export function flushCloudSyncKeepalive(
   ) {
     const compactData = {
       ...sanitized,
-      profileAvatar: "__KEEP_EXISTING_AVATAR__",
+      profileAvatar: KEEPALIVE_AVATAR_SENTINEL,
     };
     rpcPayload = {
       p_data: compactData,
@@ -207,8 +250,6 @@ export function flushCloudSyncKeepalive(
   }
 
   if (body.length > KEEPALIVE_MAX_BYTES) {
-    // Payload exceeds browser keepalive limit; outbox remains dirty in localStorage
-    // and will be drained automatically by standard fetch or on next app open.
     return false;
   }
 
@@ -234,7 +275,7 @@ export function flushCloudSyncKeepalive(
         }
       })
       .catch(() => {
-        // Keep outbox dirty so next launch retries cleanly
+        // Outbox remains dirty for retry on next launch
       });
     return true;
   } catch {
@@ -331,13 +372,15 @@ export function captureLocalBackupCheckpoint(
   } = {},
 ) {
   if (!data || typeof data !== "object") return null;
-  const normalizedType = ["daily", "pre_restore", "pre_overwrite", "manual"].includes(
-    type,
-  )
+  const normalizedType = [
+    "daily",
+    "pre_restore",
+    "pre_overwrite",
+    "manual",
+  ].includes(type)
     ? type
     : "daily";
   if (hasAppPin() && !isSessionUnlocked() && normalizedType !== "manual") {
-    // Do not write automatic local snapshots while the PIN session is locked
     return null;
   }
   if (normalizedType !== "manual" && !snapshotHasMeaningfulRecords(data)) {
@@ -542,7 +585,6 @@ export async function restoreBackupCheckpoint(
     throw new Error("Please select a backup checkpoint to restore.");
   }
 
-  // Always preserve a pre_restore checkpoint of the current state before rolling back
   if (currentData && snapshotHasMeaningfulRecords(currentData)) {
     captureLocalBackupCheckpoint(userId, currentData, {
       type: "pre_restore",
@@ -550,18 +592,19 @@ export async function restoreBackupCheckpoint(
     });
   }
 
-  // Build rollback tombstones for any records present in currentData but absent in target checkpoint
-  // so other connected devices immediately drop rolled-back transactions/expenses instead of resurrecting them.
   const buildRollbackDeletedRecords = (baseDeleted, targetData, beforeData) => {
     const nowMs = Date.now();
+    const normalizedBase = normalizeDeletedRecords(baseDeleted, nowMs);
     const mergedDel = {
-      expenses: { ...(baseDeleted?.expenses || {}) },
-      budgets: { ...(baseDeleted?.budgets || {}) },
-      recurringSchedules: { ...(baseDeleted?.recurringSchedules || {}) },
-      accountTransactions: { ...(baseDeleted?.accountTransactions || {}) },
-      cards: { ...(baseDeleted?.cards || {}) },
+      expenses: { ...(normalizedBase?.expenses || {}) },
+      budgets: { ...(normalizedBase?.budgets || {}) },
+      recurringSchedules: { ...(normalizedBase?.recurringSchedules || {}) },
+      accountTransactions: { ...(normalizedBase?.accountTransactions || {}) },
+      cards: { ...(normalizedBase?.cards || {}) },
     };
-    if (!beforeData || typeof beforeData !== "object") return mergedDel;
+    if (!beforeData || typeof beforeData !== "object") {
+      return normalizeDeletedRecords(mergedDel, nowMs);
+    }
 
     const targetTxIds = new Set(
       (targetData?.accountData?.transactions || [])
@@ -571,7 +614,7 @@ export async function restoreBackupCheckpoint(
     for (const tx of beforeData?.accountData?.transactions || []) {
       if (tx?.id && !targetTxIds.has(tx.id)) {
         const txTime =
-          parseRecordTime(tx.updatedAt) || parseRecordTime(tx.createdAt) || 0;
+          parseTimestampMs(tx.updatedAt) || parseTimestampMs(tx.createdAt) || 0;
         mergedDel.accountTransactions[tx.id] = {
           deleted: true,
           updatedAt: Math.max(nowMs, txTime + 1),
@@ -585,7 +628,9 @@ export async function restoreBackupCheckpoint(
     for (const exp of beforeData?.expenses || []) {
       if (exp?.id && !targetExpIds.has(exp.id)) {
         const expTime =
-          parseRecordTime(exp.updatedAt) || parseRecordTime(exp.createdAt) || 0;
+          parseTimestampMs(exp.updatedAt) ||
+          parseTimestampMs(exp.createdAt) ||
+          0;
         mergedDel.expenses[exp.id] = {
           deleted: true,
           updatedAt: Math.max(nowMs, expTime + 1),
@@ -599,7 +644,9 @@ export async function restoreBackupCheckpoint(
     for (const rec of beforeData?.recurringSchedules || []) {
       if (rec?.id && !targetRecIds.has(rec.id)) {
         const recTime =
-          parseRecordTime(rec.updatedAt) || parseRecordTime(rec.createdAt) || 0;
+          parseTimestampMs(rec.updatedAt) ||
+          parseTimestampMs(rec.createdAt) ||
+          0;
         mergedDel.recurringSchedules[rec.id] = {
           deleted: true,
           updatedAt: Math.max(nowMs, recTime + 1),
@@ -615,8 +662,8 @@ export async function restoreBackupCheckpoint(
     for (const card of beforeData?.accountData?.settings?.cards || []) {
       if (card?.id && !targetCardIds.has(card.id)) {
         const cardTime =
-          parseRecordTime(card.updatedAt) ||
-          parseRecordTime(card.createdAt) ||
+          parseTimestampMs(card.updatedAt) ||
+          parseTimestampMs(card.createdAt) ||
           0;
         mergedDel.cards[card.id] = {
           deleted: true,
@@ -631,14 +678,14 @@ export async function restoreBackupCheckpoint(
     for (const month of Object.keys(beforeData?.budgets || {})) {
       if (month && !targetBudgetMonths.has(month)) {
         const bTime =
-          parseRecordTime(beforeData?.budgetUpdatedAt?.[month]) || 0;
+          parseTimestampMs(beforeData?.budgetUpdatedAt?.[month]) || 0;
         mergedDel.budgets[month] = {
           deleted: true,
           updatedAt: Math.max(nowMs, bTime + 1),
         };
       }
     }
-    return mergedDel;
+    return normalizeDeletedRecords(mergedDel, nowMs);
   };
 
   const isLocalId = String(checkpointId).startsWith("local-");
@@ -671,13 +718,16 @@ export async function restoreBackupCheckpoint(
           },
         };
       }
-      if (rpcRes.error && rpcRes.error.code !== "42883" && rpcRes.error.code !== "PGRST202") {
+      if (
+        rpcRes.error &&
+        rpcRes.error.code !== "42883" &&
+        rpcRes.error.code !== "PGRST202"
+      ) {
         throw rpcRes.error;
       }
     }
   }
 
-  // Fallback to local checkpoint store
   const localMatch = readLocalCheckpointsRaw().find(
     (item) => String(item?.id) === String(checkpointId),
   );
@@ -863,62 +913,50 @@ function isLegacyDbCompatibleTransaction(tx) {
   return false;
 }
 
-function parseRecordTime(value) {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string") {
-    const num = Number(value);
-    if (Number.isFinite(num)) return num;
-    const parsed = Date.parse(value);
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  return 0;
-}
-
-function mergeAccountDataWithRawSnapshot(
+export function mergeAccountDataWithRawSnapshot(
   normalizedAccountData,
   rawSnapshotData,
 ) {
   const rawAccounts = rawSnapshotData?.accountData;
   const rawSettings = rawAccounts?.settings || {};
   const normSettings = normalizedAccountData?.settings || {};
-  const deletedRecords = rawSnapshotData?.deletedRecords || {};
+  const deletedRecords = normalizeDeletedRecords(
+    rawSnapshotData?.deletedRecords,
+  );
   const deletedCardTombstones = deletedRecords.cards || {};
   const deletedTxTombstones = deletedRecords.accountTransactions || {};
 
-  const rawUpdatedAt = parseRecordTime(rawSettings.updatedAt);
-  const normUpdatedAt = parseRecordTime(normSettings.updatedAt);
+  const rawUpdatedAt = parseTimestampMs(rawSettings.updatedAt);
+  const normUpdatedAt = parseTimestampMs(normSettings.updatedAt);
   const preferRaw = rawUpdatedAt >= normUpdatedAt;
-
-  const cardMap = new Map();
-  if (Array.isArray(normSettings.cards)) {
-    for (const c of normSettings.cards) {
-      if (!c?.id || isPhantomAutoReconstructedCard(c)) continue;
-      const tombstone = deletedCardTombstones[c.id];
-      const cTime = parseRecordTime(c.updatedAt) || parseRecordTime(c.createdAt);
-      if (tombstone?.deleted && tombstone.updatedAt >= cTime) continue;
-      cardMap.set(c.id, c);
-    }
-  }
-  if (Array.isArray(rawSettings.cards)) {
-    for (const c of rawSettings.cards) {
-      if (!c?.id || isPhantomAutoReconstructedCard(c)) continue;
-      const tombstone = deletedCardTombstones[c.id];
-      const cTime = parseRecordTime(c.updatedAt) || parseRecordTime(c.createdAt);
-      if (tombstone?.deleted && tombstone.updatedAt >= cTime) continue;
-      const existing = cardMap.get(c.id);
-      const exTime =
-        parseRecordTime(existing?.updatedAt) ||
-        parseRecordTime(existing?.createdAt);
-      if (!existing || cTime >= exTime) {
-        cardMap.set(c.id, c);
-      }
-    }
-  }
 
   const rawCards = Array.isArray(rawSettings.cards) ? rawSettings.cards : [];
   const normCards = Array.isArray(normSettings.cards) ? normSettings.cards : [];
   const primaryCards = preferRaw ? rawCards : normCards;
   const secondaryCards = preferRaw ? normCards : rawCards;
+
+  // Seed cardMap in primaryCards order first so Map key insertion order matches the newer snapshot
+  const cardMap = new Map();
+  for (const c of primaryCards) {
+    if (!c?.id || isPhantomAutoReconstructedCard(c)) continue;
+    const tombstone = deletedCardTombstones[c.id];
+    const cTime = parseTimestampMs(c.updatedAt) || parseTimestampMs(c.createdAt);
+    if (tombstone?.deleted && tombstone.updatedAt >= cTime) continue;
+    cardMap.set(c.id, c);
+  }
+  for (const c of secondaryCards) {
+    if (!c?.id || isPhantomAutoReconstructedCard(c)) continue;
+    const tombstone = deletedCardTombstones[c.id];
+    const cTime = parseTimestampMs(c.updatedAt) || parseTimestampMs(c.createdAt);
+    if (tombstone?.deleted && tombstone.updatedAt >= cTime) continue;
+    const existing = cardMap.get(c.id);
+    const exTime =
+      parseTimestampMs(existing?.updatedAt) ||
+      parseTimestampMs(existing?.createdAt);
+    if (!existing || cTime > exTime) {
+      cardMap.set(c.id, c);
+    }
+  }
 
   const orderedCardIds = [];
   const seenIds = new Set();
@@ -958,7 +996,8 @@ function mergeAccountDataWithRawSnapshot(
         ? normSettings.balances
         : {};
   const rawCurrentBalances =
-    rawSettings.currentBalances && typeof rawSettings.currentBalances === "object"
+    rawSettings.currentBalances &&
+    typeof rawSettings.currentBalances === "object"
       ? rawSettings.currentBalances
       : {};
   const normCurrentBalances =
@@ -977,12 +1016,12 @@ function mergeAccountDataWithRawSnapshot(
     const rawCard = rawCards.find((c) => c?.id === id);
     const normCard = normCards.find((c) => c?.id === id);
     const rawCardTime =
-      parseRecordTime(rawCard?.updatedAt) ||
-      parseRecordTime(rawCard?.createdAt) ||
+      parseTimestampMs(rawCard?.updatedAt) ||
+      parseTimestampMs(rawCard?.createdAt) ||
       rawUpdatedAt;
     const normCardTime =
-      parseRecordTime(normCard?.updatedAt) ||
-      parseRecordTime(normCard?.createdAt) ||
+      parseTimestampMs(normCard?.updatedAt) ||
+      parseTimestampMs(normCard?.createdAt) ||
       normUpdatedAt;
     const useRawForCard = rawCard && (!normCard || rawCardTime >= normCardTime);
 
@@ -1031,7 +1070,7 @@ function mergeAccountDataWithRawSnapshot(
 
     const cleanBal =
       Number.isFinite(resolvedBal) && resolvedBal >= 0
-        ? Math.round(resolvedBal * 100) / 100
+        ? roundMoney(resolvedBal)
         : 0;
     mergedBalances[id] = cleanBal;
 
@@ -1043,8 +1082,7 @@ function mergeAccountDataWithRawSnapshot(
       currentBalCandidate !== null &&
       Number.isFinite(Number(currentBalCandidate))
     ) {
-      mergedCurrentBalances[id] =
-        Math.round(Number(currentBalCandidate) * 100) / 100;
+      mergedCurrentBalances[id] = roundMoney(Number(currentBalCandidate));
     }
 
     return {
@@ -1064,14 +1102,13 @@ function mergeAccountDataWithRawSnapshot(
     };
   });
 
-  // Deduplicate singleton Savings Vault across normalized and raw snapshots
   const remappedSavingsIds = {};
   const savingsInMerged = mergedCards.filter(isSavingsCard);
   if (savingsInMerged.length > 1) {
     savingsInMerged.sort((a, b) => {
       const tDiff =
-        (parseRecordTime(b.updatedAt) || 0) -
-        (parseRecordTime(a.updatedAt) || 0);
+        (parseTimestampMs(b.updatedAt) || 0) -
+        (parseTimestampMs(a.updatedAt) || 0);
       if (tDiff !== 0) return tDiff;
       return (Number(b.initialBalance) || 0) - (Number(a.initialBalance) || 0);
     });
@@ -1114,11 +1151,11 @@ function mergeAccountDataWithRawSnapshot(
     const tombstone = deletedTxTombstones[tx.id];
     if (tombstone?.deleted === true) return;
     const txTime =
-      parseRecordTime(tx.updatedAt) || parseRecordTime(tx.createdAt);
+      parseTimestampMs(tx.updatedAt) || parseTimestampMs(tx.createdAt);
     const existing = txMap.get(tx.id);
     const exTime =
-      parseRecordTime(existing?.updatedAt) ||
-      parseRecordTime(existing?.createdAt);
+      parseTimestampMs(existing?.updatedAt) ||
+      parseTimestampMs(existing?.createdAt);
     if (!existing || txTime >= exTime) {
       txMap.set(tx.id, tx);
     }
@@ -1294,7 +1331,6 @@ async function loadLegacyCloudData(client, userId) {
       : {}),
   };
 
-  // Only map legacy table columns onto cards that explicitly use those legacy IDs
   if (settingsResult.data) {
     if (
       rawCards.some((c) => c?.id === "bkash") &&
@@ -1399,14 +1435,18 @@ export async function loadCloudData(userId) {
       const effectiveRpcData = rpcData.data ?? null;
       const effectiveUpdatedAt = rpcData.updated_at ?? null;
       if (effectiveRpcData) {
+        const normalizedDeleted = normalizeDeletedRecords(
+          effectiveRpcData.deletedRecords,
+        );
         return {
           ...rpcData,
           updated_at: effectiveUpdatedAt,
           data: {
             ...effectiveRpcData,
+            deletedRecords: normalizedDeleted,
             accountData: loadAccountData(
               effectiveRpcData.accountData ?? emptyAccountData(),
-              effectiveRpcData.deletedRecords,
+              normalizedDeleted,
               effectiveRpcData.expenses,
             ),
           },
@@ -1425,9 +1465,145 @@ export async function loadCloudData(userId) {
   return loadLegacyCloudData(client, userId);
 }
 
-function sanitizeCloudPayload(data) {
+/**
+ * Sanitizes all top-level collections (expenses, budgets, recurringSchedules,
+ * accountData.settings.cards, accountData.transactions, deletedRecords) before
+ * persisting to Supabase or local backup checkpoints.
+ */
+export function sanitizeCloudPayload(data) {
   if (!data || typeof data !== "object") return data;
-  if (!data.accountData || typeof data.accountData !== "object") return data;
+
+  const sanitizedExpenses = Array.isArray(data.expenses)
+    ? data.expenses.flatMap((exp) => {
+        if (!exp || typeof exp !== "object") return [];
+        const id = typeof exp.id === "string" ? exp.id.trim().slice(0, 120) : "";
+        const date =
+          typeof exp.date === "string" && isValidDateString(exp.date)
+            ? exp.date
+            : "";
+        const rawDesc =
+          typeof exp.description === "string"
+            ? exp.description.trim().slice(0, 160)
+            : "";
+        if (!id || !date || !rawDesc) return [];
+
+        let cleanAmount = null;
+        if (exp.amount !== null && exp.amount !== undefined && exp.amount !== "") {
+          const num = Number(exp.amount);
+          if (!Number.isFinite(num) || num <= 0) return [];
+          cleanAmount = roundMoney(num);
+        }
+
+        const category = CATEGORIES.includes(exp.category)
+          ? exp.category
+          : "Other";
+        const account =
+          typeof exp.account === "string"
+            ? exp.account.trim().slice(0, 120)
+            : "";
+        const recurringId =
+          typeof exp.recurringId === "string" && exp.recurringId.trim()
+            ? exp.recurringId.trim().slice(0, 120)
+            : undefined;
+        const createdAt = parseTimestampMs(exp.createdAt);
+        const updatedAt = parseTimestampMs(exp.updatedAt) || createdAt;
+
+        return [
+          {
+            ...exp,
+            id,
+            description: rawDesc,
+            amount: cleanAmount,
+            category,
+            date,
+            account,
+            ...(recurringId ? { recurringId } : {}),
+            ...(createdAt > 0 ? { createdAt } : {}),
+            ...(updatedAt > 0 ? { updatedAt } : {}),
+          },
+        ];
+      })
+    : undefined;
+
+  const sanitizedBudgets =
+    data.budgets &&
+    typeof data.budgets === "object" &&
+    !Array.isArray(data.budgets)
+      ? Object.fromEntries(
+          Object.entries(data.budgets).flatMap(([month, amt]) => {
+            if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return [];
+            const num = Number(amt);
+            if (!Number.isFinite(num) || num <= 0) return [];
+            return [[month, roundMoney(num)]];
+          }),
+        )
+      : undefined;
+
+  const sanitizedRecurring = Array.isArray(data.recurringSchedules)
+    ? data.recurringSchedules.flatMap((rec) => {
+        if (!rec || typeof rec !== "object") return [];
+        const id = typeof rec.id === "string" ? rec.id.trim().slice(0, 120) : "";
+        const description =
+          typeof rec.description === "string"
+            ? rec.description.trim().slice(0, 160)
+            : "";
+        const numAmt = Number(rec.amount);
+        const nextDate =
+          typeof rec.nextDate === "string" && isValidDateString(rec.nextDate)
+            ? rec.nextDate
+            : "";
+        if (!id || !description || !Number.isFinite(numAmt) || numAmt <= 0 || !nextDate) {
+          return [];
+        }
+        const category = CATEGORIES.includes(rec.category)
+          ? rec.category
+          : "Other";
+        const interval = rec.interval === "weekly" ? "weekly" : "monthly";
+        const dayOfMonth = clampDayOfMonth(
+          rec.dayOfMonth || Number(nextDate.slice(-2)),
+        );
+        const account =
+          typeof rec.account === "string"
+            ? rec.account.trim().slice(0, 120)
+            : "";
+        const createdAt = parseTimestampMs(rec.createdAt);
+        const updatedAt = parseTimestampMs(rec.updatedAt) || createdAt;
+        return [
+          {
+            ...rec,
+            id,
+            description,
+            amount: roundMoney(numAmt),
+            category,
+            interval,
+            dayOfMonth,
+            nextDate,
+            account,
+            active: Boolean(rec.active),
+            ...(createdAt > 0 ? { createdAt } : {}),
+            ...(updatedAt > 0 ? { updatedAt } : {}),
+          },
+        ];
+      })
+    : undefined;
+
+  const sanitizedDeleted = data.deletedRecords
+    ? normalizeDeletedRecords(data.deletedRecords)
+    : undefined;
+
+  if (!data.accountData || typeof data.accountData !== "object") {
+    return {
+      ...data,
+      ...(sanitizedExpenses !== undefined ? { expenses: sanitizedExpenses } : {}),
+      ...(sanitizedBudgets !== undefined ? { budgets: sanitizedBudgets } : {}),
+      ...(sanitizedRecurring !== undefined
+        ? { recurringSchedules: sanitizedRecurring }
+        : {}),
+      ...(sanitizedDeleted !== undefined
+        ? { deletedRecords: sanitizedDeleted }
+        : {}),
+    };
+  }
 
   const rawTx = Array.isArray(data.accountData.transactions)
     ? data.accountData.transactions
@@ -1437,11 +1613,9 @@ function sanitizeCloudPayload(data) {
   for (const tx of rawTx) {
     if (!tx || typeof tx !== "object") continue;
     const id = typeof tx.id === "string" ? tx.id.trim().slice(0, 120) : "";
-    const amount = Math.round(Number(tx.amount) * 100) / 100;
+    const amount = roundMoney(Number(tx.amount));
     const date =
-      typeof tx.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(tx.date)
-        ? tx.date
-        : "";
+      typeof tx.date === "string" && isValidDateString(tx.date) ? tx.date : "";
     if (!id || !Number.isFinite(amount) || amount <= 0 || !date) continue;
 
     let type = tx.type;
@@ -1499,10 +1673,49 @@ function sanitizeCloudPayload(data) {
     });
   }
 
+  const rawSettings = data.accountData.settings;
+  let sanitizedSettings = rawSettings;
+  if (rawSettings && typeof rawSettings === "object") {
+    const rawCards = Array.isArray(rawSettings.cards) ? rawSettings.cards : [];
+    const sanitizedCards = rawCards.flatMap((c) => {
+      if (!c || typeof c !== "object" || typeof c.id !== "string" || !c.id.trim()) {
+        return [];
+      }
+      const { cvv: _cvv, ...restCard } = c;
+      const initBal = Number(c.initialBalance);
+      const currBal = Number(c.currentBalance);
+      return [
+        {
+          ...restCard,
+          id: c.id.trim().slice(0, 120),
+          name: String(c.name || c.id).slice(0, 80),
+          initialBalance:
+            Number.isFinite(initBal) && initBal >= 0 ? roundMoney(initBal) : 0,
+          ...(Number.isFinite(currBal)
+            ? { currentBalance: roundMoney(currBal) }
+            : {}),
+        },
+      ];
+    });
+    sanitizedSettings = {
+      ...rawSettings,
+      cards: sanitizedCards,
+    };
+  }
+
   return {
     ...data,
+    ...(sanitizedExpenses !== undefined ? { expenses: sanitizedExpenses } : {}),
+    ...(sanitizedBudgets !== undefined ? { budgets: sanitizedBudgets } : {}),
+    ...(sanitizedRecurring !== undefined
+      ? { recurringSchedules: sanitizedRecurring }
+      : {}),
+    ...(sanitizedDeleted !== undefined
+      ? { deletedRecords: sanitizedDeleted }
+      : {}),
     accountData: {
       ...data.accountData,
+      ...(sanitizedSettings ? { settings: sanitizedSettings } : {}),
       transactions: sanitizedTx,
     },
   };
@@ -1529,9 +1742,10 @@ async function executeSaveQuery(client, userId, payload, expectedUpdatedAt) {
 
     if (checkError) return { data: null, error: checkError };
     if (!existing) {
+      // Use strict insert (not upsert) so a concurrent initial insert fails with 23505 rather than clobbering
       return await client
         .from("spend_user_data")
-        .upsert({ user_id: userId, data: payload }, { onConflict: "user_id" })
+        .insert({ user_id: userId, data: payload })
         .select("updated_at")
         .single();
     }
@@ -1584,9 +1798,12 @@ export async function saveCloudData(
       const mergedData = rpcRes.data.data
         ? {
             ...rpcRes.data.data,
+            deletedRecords: normalizeDeletedRecords(
+              rpcRes.data.data.deletedRecords,
+            ),
             accountData: loadAccountData(
               rpcRes.data.data.accountData ?? emptyAccountData(),
-              rpcRes.data.data.deletedRecords,
+              normalizeDeletedRecords(rpcRes.data.data.deletedRecords),
               rpcRes.data.data.expenses,
             ),
           }
@@ -1666,15 +1883,16 @@ export function subscribeToCloudChanges(
   onStatus,
   includeNormalizedAccounts = false,
 ) {
-  if (!supabase) return () => {};
+  if (!supabase || !isValidUuid(userId)) return () => {};
+  const safeUserId = userId.trim();
 
-  let channel = supabase.channel(`spend-live-${userId}`).on(
+  let channel = supabase.channel(`spend-live-${safeUserId}`).on(
     "postgres_changes",
     {
       event: "*",
       schema: "public",
       table: "spend_user_data",
-      filter: `user_id=eq.${userId}`,
+      filter: `user_id=eq.${safeUserId}`,
     },
     (payload) => onChange?.(payload),
   );
@@ -1687,7 +1905,7 @@ export function subscribeToCloudChanges(
           event: "*",
           schema: "public",
           table: "spend_account_settings",
-          filter: `user_id=eq.${userId}`,
+          filter: `user_id=eq.${safeUserId}`,
         },
         (payload) => onChange?.(payload),
       )
@@ -1697,7 +1915,7 @@ export function subscribeToCloudChanges(
           event: "*",
           schema: "public",
           table: "spend_account_transactions",
-          filter: `user_id=eq.${userId}`,
+          filter: `user_id=eq.${safeUserId}`,
         },
         (payload) => onChange?.(payload),
       );

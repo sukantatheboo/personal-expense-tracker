@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "test": "node --test tests/backend-qa.test.mjs",
     "build:ios": "vite build --base=./",
     "sync:ios": "npm run build:ios && cap sync ios",
     "open:ios": "npm run sync:ios && cap open ios",

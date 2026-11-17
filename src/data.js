@@ -24,6 +24,169 @@ export const STORAGE_KEYS = {
   preferredAccount: "spend-preferred-account-v1",
 };
 
+export const TOMBSTONE_MAX_AGE_MS = 60 * 24 * 60 * 60 * 1000; // 60 days
+export const MAX_TOMBSTONES_PER_COLLECTION = 500;
+
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function isValidUuid(value) {
+  return typeof value === "string" && UUID_REGEX.test(value.trim());
+}
+
+export function cleanEnv(value) {
+  return typeof value === "string"
+    ? value.trim().replace(/^['"]|['"]$/g, "")
+    : "";
+}
+
+export function parseTimestampMs(value) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return 0;
+    const num = Number(trimmed);
+    if (Number.isFinite(num)) return num;
+    const parsed = Date.parse(trimmed);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return 0;
+}
+
+export function recordUpdatedAt(record) {
+  return parseTimestampMs(record?.updatedAt ?? record?.updated_at);
+}
+
+export function clampDayOfMonth(dayOrYear, month, day) {
+  if (month !== undefined && day !== undefined) {
+    const y = Number(dayOrYear);
+    const m = Number(month);
+    const d = Math.max(1, Math.min(31, Math.round(Number(day) || 1)));
+    if (!Number.isFinite(y) || !Number.isFinite(m) || m < 1 || m > 12) {
+      return d;
+    }
+    const lastDay = new Date(y, m, 0).getDate();
+    return Math.min(d, lastDay);
+  }
+  const num = Number(dayOrYear);
+  if (!Number.isFinite(num)) return 1;
+  return Math.max(1, Math.min(31, Math.round(num)));
+}
+
+export function addDaysToDateString(dateStr, days) {
+  const [y, m, d] = String(dateStr || "")
+    .split("-")
+    .map(Number);
+  if (!y || !m || !d) return localDate();
+  return localDate(new Date(y, m - 1, d + (Number(days) || 0)));
+}
+
+export function toPoisha(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return 0;
+  return Math.round(num * 100);
+}
+
+export function fromPoisha(poisha) {
+  const intVal = Math.round(Number(poisha) || 0);
+  const result = intVal / 100;
+  return Object.is(result, -0) ? 0 : Number(result.toFixed(2));
+}
+
+export function roundMoney(value) {
+  return fromPoisha(toPoisha(value));
+}
+
+export function emptyDeletedRecords() {
+  return {
+    expenses: {},
+    budgets: {},
+    recurringSchedules: {},
+    accountTransactions: {},
+    cards: {},
+  };
+}
+
+export function normalizeDeletedRecords(value, now = Date.now()) {
+  const safeNow = Number.isFinite(Number(now)) && Number(now) > 0 ? Number(now) : Date.now();
+  const cutoff = safeNow - TOMBSTONE_MAX_AGE_MS;
+
+  const cleanChanges = (changes) => {
+    let entries = [];
+    if (Array.isArray(changes)) {
+      const uniqueIds = [
+        ...new Set(
+          changes.filter((id) => typeof id === "string" && id.trim()),
+        ),
+      ];
+      entries = uniqueIds.map((id) => [
+        id.trim().slice(0, 120),
+        { deleted: true, updatedAt: safeNow },
+      ]);
+    } else if (changes && typeof changes === "object") {
+      for (const [rawId, change] of Object.entries(changes)) {
+        const id = typeof rawId === "string" ? rawId.trim().slice(0, 120) : "";
+        if (
+          !id ||
+          !change ||
+          typeof change !== "object" ||
+          typeof change.deleted !== "boolean"
+        ) {
+          continue;
+        }
+        const rawUpdatedAt = parseTimestampMs(change.updatedAt);
+        // Legacy entries with updatedAt: 0 are stamped so they can age out cleanly instead of persisting forever
+        const updatedAt = rawUpdatedAt > 0 ? rawUpdatedAt : safeNow - TOMBSTONE_MAX_AGE_MS + 24 * 60 * 60 * 1000;
+        if (updatedAt < cutoff) continue;
+        entries.push([
+          id,
+          {
+            deleted: change.deleted,
+            updatedAt,
+            ...(typeof change.name === "string"
+              ? { name: change.name.slice(0, 80) }
+              : {}),
+            ...(typeof change.color === "string"
+              ? { color: change.color.slice(0, 32) }
+              : {}),
+          },
+        ]);
+      }
+    }
+
+    if (entries.length > MAX_TOMBSTONES_PER_COLLECTION) {
+      entries.sort((a, b) => (b[1].updatedAt || 0) - (a[1].updatedAt || 0));
+      entries = entries.slice(0, MAX_TOMBSTONES_PER_COLLECTION);
+    }
+
+    return Object.fromEntries(entries);
+  };
+
+  return {
+    expenses: cleanChanges(value?.expenses),
+    budgets: cleanChanges(value?.budgets),
+    recurringSchedules: cleanChanges(value?.recurringSchedules),
+    accountTransactions: cleanChanges(value?.accountTransactions),
+    cards: cleanChanges(value?.cards),
+  };
+}
+
+export function mergeDeletedRecords(...values) {
+  const now = Date.now();
+  const merged = emptyDeletedRecords();
+  for (const value of values) {
+    const normalized = normalizeDeletedRecords(value, now);
+    for (const key of Object.keys(merged)) {
+      for (const [id, change] of Object.entries(normalized[key])) {
+        if (!merged[key][id] || change.updatedAt >= merged[key][id].updatedAt) {
+          merged[key][id] = change;
+        }
+      }
+    }
+  }
+  return normalizeDeletedRecords(merged, now);
+}
+
 let hapticsEnabledCache = null;
 
 export function isHapticsEnabled() {
@@ -116,7 +279,8 @@ export function localDate(date = new Date()) {
 export function isValidDateString(value) {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value))
     return false;
-  const date = new Date(`${value}T00:00:00`);
+  const [y, m, d] = value.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
   return !Number.isNaN(date.getTime()) && localDate(date) === value;
 }
 
@@ -238,17 +402,22 @@ export function isCashCard(card) {
   );
 }
 
+export function isMfsCard(card) {
+  if (!card || typeof card !== "object") return false;
+  return Boolean(
+    card.isPhone ||
+      card.category === "mfs" ||
+      card.type === "mfs" ||
+      card.network === "mfs" ||
+      ["bkash", "nagad", "rocket", "upay"].includes(
+        String(card.provider || "").toLowerCase(),
+      ),
+  );
+}
+
 export function isCreditCard(card) {
   if (!card || typeof card !== "object") return false;
-  if (isSavingsCard(card) || isCashCard(card)) return false;
-  if (
-    card.category === "mfs" ||
-    card.type === "mfs" ||
-    card.network === "mfs" ||
-    card.isPhone
-  ) {
-    return false;
-  }
+  if (isSavingsCard(card) || isCashCard(card) || isMfsCard(card)) return false;
   return String(card.type || "").toLowerCase() === "credit";
 }
 
@@ -288,6 +457,7 @@ export function loadExpenses(
           if (
             !item ||
             typeof item.id !== "string" ||
+            !item.id.trim() ||
             typeof item.description !== "string" ||
             !isValidDateString(item.date) ||
             !(
@@ -297,7 +467,8 @@ export function loadExpenses(
           ) {
             return false;
           }
-          if (deletedExpenseTombstones[item.id]?.deleted === true) {
+          const id = item.id.trim();
+          if (deletedExpenseTombstones[id]?.deleted === true) {
             return false;
           }
           if (
@@ -313,14 +484,25 @@ export function loadExpenses(
           const rawAcct =
             typeof item.account === "string" ? item.account.trim() : "";
           const mappedAcct = remappedAccounts[rawAcct] || rawAcct;
+          const createdAt = parseTimestampMs(item.createdAt);
+          const updatedAt = parseTimestampMs(item.updatedAt) || createdAt;
           return {
             ...item,
+            id: item.id.trim().slice(0, 120),
+            description: item.description.trim().slice(0, 160),
+            amount:
+              item.amount === null ? null : roundMoney(Number(item.amount)),
             category: CATEGORIES.includes(item.category)
               ? item.category
               : "Other",
             account: isAccountId(mappedAcct, accountData, deletedRecords)
-              ? mappedAcct
+              ? mappedAcct.slice(0, 120)
               : "",
+            ...(item.recurringId
+              ? { recurringId: String(item.recurringId).trim().slice(0, 120) }
+              : {}),
+            ...(createdAt > 0 ? { createdAt } : {}),
+            ...(updatedAt > 0 ? { updatedAt } : {}),
           };
         })
     : [];
@@ -329,12 +511,14 @@ export function loadExpenses(
 export function loadBudgets(saved = readStorage(STORAGE_KEYS.budgets, {})) {
   if (!saved || typeof saved !== "object" || Array.isArray(saved)) return {};
   return Object.fromEntries(
-    Object.entries(saved).filter(
-      ([month, amount]) =>
-        /^\d{4}-\d{2}$/.test(month) &&
-        Number.isFinite(Number(amount)) &&
-        Number(amount) > 0,
-    ),
+    Object.entries(saved)
+      .filter(
+        ([month, amount]) =>
+          /^\d{4}-(0[1-9]|1[0-2])$/.test(month) &&
+          Number.isFinite(Number(amount)) &&
+          Number(amount) > 0,
+      )
+      .map(([month, amount]) => [month, roundMoney(Number(amount))]),
   );
 }
 
@@ -380,7 +564,9 @@ export function isAccountId(value, accountData = null, deletedRecords = null) {
       Object.hasOwn(saved.settings.balances, trimmed)
     )
       return true;
-  } catch {}
+  } catch (err) {
+    console.warn("Could not inspect fallback account storage:", err);
+  }
   return false;
 }
 
@@ -388,6 +574,7 @@ function isValidRecurringSchedule(schedule) {
   return (
     schedule &&
     typeof schedule.id === "string" &&
+    Boolean(schedule.id.trim()) &&
     typeof schedule.description === "string" &&
     Number.isFinite(Number(schedule.amount)) &&
     Number(schedule.amount) > 0 &&
@@ -408,29 +595,23 @@ export function loadRecurringSchedules(
         const rawAcct =
           typeof schedule.account === "string" ? schedule.account.trim() : "";
         const mappedAcct = remappedAccounts[rawAcct] || rawAcct;
+        const createdAt = parseTimestampMs(schedule.createdAt);
+        const updatedAt = parseTimestampMs(schedule.updatedAt) || createdAt;
+        const rawDay = Number(schedule.dayOfMonth);
         return {
           ...schedule,
-          ...(typeof schedule.createdAt === "number" &&
-          Number.isFinite(schedule.createdAt)
-            ? { createdAt: schedule.createdAt }
-            : typeof schedule.createdAt === "string" &&
-                Number.isFinite(Date.parse(schedule.createdAt))
-              ? { createdAt: Date.parse(schedule.createdAt) }
-              : {}),
-          ...(typeof schedule.updatedAt === "number" &&
-          Number.isFinite(schedule.updatedAt)
-            ? { updatedAt: schedule.updatedAt }
-            : typeof schedule.updatedAt === "string" &&
-                Number.isFinite(Date.parse(schedule.updatedAt))
-              ? { updatedAt: Date.parse(schedule.updatedAt) }
-              : {}),
-          account: isAccountId(mappedAcct, accountData) ? mappedAcct : "",
+          id: schedule.id.trim().slice(0, 120),
+          description: schedule.description.trim().slice(0, 160),
+          amount: roundMoney(Number(schedule.amount)),
+          ...(createdAt > 0 ? { createdAt } : {}),
+          ...(updatedAt > 0 ? { updatedAt } : {}),
+          account: isAccountId(mappedAcct, accountData)
+            ? mappedAcct.slice(0, 120)
+            : "",
           dayOfMonth:
-            Number.isInteger(schedule.dayOfMonth) &&
-            schedule.dayOfMonth >= 1 &&
-            schedule.dayOfMonth <= 31
-              ? schedule.dayOfMonth
-              : Number(schedule.nextDate.slice(-2)),
+            Number.isInteger(rawDay) && rawDay >= 1 && rawDay <= 31
+              ? rawDay
+              : clampDayOfMonth(Number(schedule.nextDate.slice(-2))),
         };
       })
     : [];
@@ -452,20 +633,10 @@ export function emptyAccountData() {
   };
 }
 
-function parseTimestampMs(value) {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string") {
-    const num = Number(value);
-    if (Number.isFinite(num)) return num;
-    const parsed = Date.parse(value);
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  return 0;
-}
-
 /**
  * Deterministic MFS-grade balance engine shared across App state,
  * MobilePrototype UI, backups, CSV exports, and mirrored in SQL.
+ * Uses integer poisha arithmetic internally to prevent IEEE-754 float drift.
  */
 export function computeAccountBalances(
   cards = [],
@@ -492,17 +663,18 @@ export function computeAccountBalances(
     return trimmed;
   };
 
-  const openingMap = {};
-  const creditsByAccount = {};
-  const debitsByAccount = {};
+  const openingPoishaMap = {};
+  const creditsPoishaByAccount = {};
+  const debitsPoishaByAccount = {};
+
   for (const [k, v] of Object.entries(rawOpening)) {
     if (k === "date") continue;
     const key = k === "cash" ? cashAccountId : k;
     const num = Number(v);
     if (Number.isFinite(num) && num >= 0) {
-      openingMap[key] = roundMoney(num);
-      creditsByAccount[key] = 0;
-      debitsByAccount[key] = 0;
+      openingPoishaMap[key] = toPoisha(num);
+      creditsPoishaByAccount[key] = 0;
+      debitsPoishaByAccount[key] = 0;
     }
   }
   for (const card of safeCards) {
@@ -513,41 +685,39 @@ export function computeAccountBalances(
       card.initialBalance ??
       0;
     const num = Number(rawVal);
-    openingMap[card.id] =
-      Number.isFinite(num) && num >= 0 ? roundMoney(num) : 0;
-    creditsByAccount[card.id] = 0;
-    debitsByAccount[card.id] = 0;
+    openingPoishaMap[card.id] =
+      Number.isFinite(num) && num >= 0 ? toPoisha(num) : 0;
+    creditsPoishaByAccount[card.id] = 0;
+    debitsPoishaByAccount[card.id] = 0;
   }
 
   const ensureAccountInitialized = (acctId) => {
     if (!acctId || acctId === "date") return;
-    if (!Object.hasOwn(openingMap, acctId)) {
-      openingMap[acctId] = 0;
+    if (!Object.hasOwn(openingPoishaMap, acctId)) {
+      openingPoishaMap[acctId] = 0;
     }
-    if (!Object.hasOwn(creditsByAccount, acctId)) {
-      creditsByAccount[acctId] = 0;
+    if (!Object.hasOwn(creditsPoishaByAccount, acctId)) {
+      creditsPoishaByAccount[acctId] = 0;
     }
-    if (!Object.hasOwn(debitsByAccount, acctId)) {
-      debitsByAccount[acctId] = 0;
+    if (!Object.hasOwn(debitsPoishaByAccount, acctId)) {
+      debitsPoishaByAccount[acctId] = 0;
     }
   };
 
-  const addCredit = (acctId, amount) => {
+  const addCreditPoisha = (acctId, amountPoisha) => {
     if (!acctId || acctId === "date") return;
     ensureAccountInitialized(acctId);
-    creditsByAccount[acctId] = roundMoney(
-      (Number(creditsByAccount[acctId]) || 0) + amount,
-    );
+    creditsPoishaByAccount[acctId] =
+      (creditsPoishaByAccount[acctId] || 0) + amountPoisha;
   };
-  const addDebit = (acctId, amount) => {
+  const addDebitPoisha = (acctId, amountPoisha) => {
     if (!acctId || acctId === "date") return;
     ensureAccountInitialized(acctId);
-    debitsByAccount[acctId] = roundMoney(
-      (Number(debitsByAccount[acctId]) || 0) + amount,
-    );
+    debitsPoishaByAccount[acctId] =
+      (debitsPoishaByAccount[acctId] || 0) + amountPoisha;
   };
 
-  const runningBalances = { ...openingMap };
+  const runningPoishaBalances = { ...openingPoishaMap };
   const rawEvents = [];
 
   if (Array.isArray(expenses)) {
@@ -555,6 +725,8 @@ export function computeAccountBalances(
       if (!exp || typeof exp !== "object") continue;
       const amt = Number(exp.amount ?? exp.amt);
       if (!Number.isFinite(amt) || amt <= 0) continue;
+      const amountPoisha = toPoisha(amt);
+      if (amountPoisha <= 0) continue;
       const date = exp.date ?? exp.d ?? "";
       const rawAcct =
         typeof (exp.account ?? exp.acct) === "string"
@@ -574,7 +746,8 @@ export function computeAccountBalances(
         date: String(date),
         createdAt,
         updatedAt,
-        amount: roundMoney(amt),
+        amountPoisha,
+        amount: fromPoisha(amountPoisha),
         description: String(exp.description ?? exp.desc ?? cat ?? "Expense"),
         category: String(cat),
         recurringId: exp.recurringId || (exp.rec ? "recurring" : ""),
@@ -591,6 +764,8 @@ export function computeAccountBalances(
       if (!tx || typeof tx !== "object") continue;
       const amt = Number(tx.amount ?? tx.amt);
       if (!Number.isFinite(amt) || amt <= 0) continue;
+      const amountPoisha = toPoisha(amt);
+      if (amountPoisha <= 0) continue;
       const rawType = tx.type === "adjust" ? "adjustment" : tx.type;
       if (!["income", "adjustment", "transfer"].includes(rawType)) continue;
       const date = tx.date ?? tx.d ?? "";
@@ -622,7 +797,8 @@ export function computeAccountBalances(
         date: String(date),
         createdAt,
         updatedAt,
-        amount: roundMoney(amt),
+        amountPoisha,
+        amount: fromPoisha(amountPoisha),
         description: String(tx.description ?? tx.note ?? ""),
         category:
           rawType === "income"
@@ -639,6 +815,7 @@ export function computeAccountBalances(
     }
   }
 
+  // Strictly sort by chronological creation order (date ASC, createdAt ASC, id ASC)
   rawEvents.sort(
     (a, b) =>
       a.date.localeCompare(b.date) ||
@@ -648,13 +825,14 @@ export function computeAccountBalances(
 
   const ledgerById = new Map();
   const ledgerEvents = [];
-  let totalExpenses = 0;
-  let totalIncome = 0;
-  let totalSavingsTransfers = 0;
-  let totalAccountTransfers = 0;
-  let totalAdjustmentsNet = 0;
+  let totalExpensesPoisha = 0;
+  let totalIncomePoisha = 0;
+  let totalSavingsTransfersPoisha = 0;
+  let totalAccountTransfersPoisha = 0;
+  let totalAdjustmentsNetPoisha = 0;
 
   for (const ev of rawEvents) {
+    const pAmt = ev.amountPoisha;
     let balanceBefore = null;
     let balanceAfter = null;
     let fromBalanceBefore = null;
@@ -663,116 +841,122 @@ export function computeAccountBalances(
     let toBalanceAfter = null;
 
     if (ev.type === "expense") {
-      totalExpenses = roundMoney(totalExpenses + ev.amount);
+      totalExpensesPoisha += pAmt;
       if (ev.account) {
         ensureAccountInitialized(ev.account);
-        balanceBefore = roundMoney(Number(runningBalances[ev.account]) || 0);
+        const beforeP = runningPoishaBalances[ev.account] || 0;
+        const afterP = creditCardIds.has(ev.account)
+          ? beforeP + pAmt
+          : beforeP - pAmt;
+        runningPoishaBalances[ev.account] = afterP;
         if (creditCardIds.has(ev.account)) {
-          // Credit card expense increases liability owed
-          balanceAfter = roundMoney(balanceBefore + ev.amount);
-          runningBalances[ev.account] = balanceAfter;
-          addCredit(ev.account, ev.amount);
+          addCreditPoisha(ev.account, pAmt);
         } else {
-          balanceAfter = roundMoney(balanceBefore - ev.amount);
-          runningBalances[ev.account] = balanceAfter;
-          addDebit(ev.account, ev.amount);
+          addDebitPoisha(ev.account, pAmt);
         }
+        balanceBefore = fromPoisha(beforeP);
+        balanceAfter = fromPoisha(afterP);
       }
     } else if (ev.type === "income") {
-      totalIncome = roundMoney(totalIncome + ev.amount);
+      totalIncomePoisha += pAmt;
       if (ev.account) {
         ensureAccountInitialized(ev.account);
-        balanceBefore = roundMoney(Number(runningBalances[ev.account]) || 0);
+        const beforeP = runningPoishaBalances[ev.account] || 0;
+        const afterP = creditCardIds.has(ev.account)
+          ? beforeP - pAmt
+          : beforeP + pAmt;
+        runningPoishaBalances[ev.account] = afterP;
         if (creditCardIds.has(ev.account)) {
-          // Credit/refund to a credit card reduces liability owed
-          balanceAfter = roundMoney(balanceBefore - ev.amount);
-          runningBalances[ev.account] = balanceAfter;
-          addDebit(ev.account, ev.amount);
+          addDebitPoisha(ev.account, pAmt);
         } else {
-          balanceAfter = roundMoney(balanceBefore + ev.amount);
-          runningBalances[ev.account] = balanceAfter;
-          addCredit(ev.account, ev.amount);
+          addCreditPoisha(ev.account, pAmt);
         }
+        balanceBefore = fromPoisha(beforeP);
+        balanceAfter = fromPoisha(afterP);
       }
     } else if (ev.type === "adjustment") {
-      const delta = ev.direction === "increase" ? ev.amount : -ev.amount;
-      totalAdjustmentsNet = roundMoney(totalAdjustmentsNet + delta);
+      const deltaP = ev.direction === "increase" ? pAmt : -pAmt;
+      totalAdjustmentsNetPoisha += deltaP;
       if (ev.account) {
         ensureAccountInitialized(ev.account);
-        balanceBefore = roundMoney(Number(runningBalances[ev.account]) || 0);
-        balanceAfter = roundMoney(balanceBefore + delta);
-        runningBalances[ev.account] = balanceAfter;
+        const beforeP = runningPoishaBalances[ev.account] || 0;
+        const afterP = beforeP + deltaP;
+        runningPoishaBalances[ev.account] = afterP;
         if (ev.direction === "increase") {
-          addCredit(ev.account, ev.amount);
+          addCreditPoisha(ev.account, pAmt);
         } else {
-          addDebit(ev.account, ev.amount);
+          addDebitPoisha(ev.account, pAmt);
         }
+        balanceBefore = fromPoisha(beforeP);
+        balanceAfter = fromPoisha(afterP);
       }
     } else if (ev.type === "savings") {
-      totalSavingsTransfers = roundMoney(totalSavingsTransfers + ev.amount);
+      totalSavingsTransfersPoisha += pAmt;
       const hasValidFunding =
         Boolean(ev.fromAccount) && ev.fromAccount !== ev.toAccount;
       if (hasValidFunding) {
         ensureAccountInitialized(ev.fromAccount);
-        fromBalanceBefore = roundMoney(
-          Number(runningBalances[ev.fromAccount]) || 0,
-        );
+        const fromBeforeP = runningPoishaBalances[ev.fromAccount] || 0;
+        const fromAfterP = creditCardIds.has(ev.fromAccount)
+          ? fromBeforeP + pAmt
+          : fromBeforeP - pAmt;
+        runningPoishaBalances[ev.fromAccount] = fromAfterP;
         if (creditCardIds.has(ev.fromAccount)) {
-          fromBalanceAfter = roundMoney(fromBalanceBefore + ev.amount);
-          addCredit(ev.fromAccount, ev.amount);
+          addCreditPoisha(ev.fromAccount, pAmt);
         } else {
-          fromBalanceAfter = roundMoney(fromBalanceBefore - ev.amount);
-          addDebit(ev.fromAccount, ev.amount);
+          addDebitPoisha(ev.fromAccount, pAmt);
         }
-        runningBalances[ev.fromAccount] = fromBalanceAfter;
+        fromBalanceBefore = fromPoisha(fromBeforeP);
+        fromBalanceAfter = fromPoisha(fromAfterP);
         balanceBefore = fromBalanceBefore;
         balanceAfter = fromBalanceAfter;
       }
       if (ev.toAccount && hasValidFunding) {
         ensureAccountInitialized(ev.toAccount);
-        toBalanceBefore = roundMoney(
-          Number(runningBalances[ev.toAccount]) || 0,
-        );
-        toBalanceAfter = roundMoney(toBalanceBefore + ev.amount);
-        runningBalances[ev.toAccount] = toBalanceAfter;
+        const toBeforeP = runningPoishaBalances[ev.toAccount] || 0;
+        const toAfterP = toBeforeP + pAmt;
+        runningPoishaBalances[ev.toAccount] = toAfterP;
+        addCreditPoisha(ev.toAccount, pAmt);
+        toBalanceBefore = fromPoisha(toBeforeP);
+        toBalanceAfter = fromPoisha(toAfterP);
         if (balanceBefore === null) {
           balanceBefore = toBalanceBefore;
           balanceAfter = toBalanceAfter;
         }
-        addCredit(ev.toAccount, ev.amount);
       }
     } else if (ev.type === "transfer") {
-      totalAccountTransfers = roundMoney(totalAccountTransfers + ev.amount);
+      totalAccountTransfersPoisha += pAmt;
       if (ev.fromAccount && ev.fromAccount !== ev.toAccount) {
         ensureAccountInitialized(ev.fromAccount);
-        fromBalanceBefore = roundMoney(
-          Number(runningBalances[ev.fromAccount]) || 0,
-        );
+        const fromBeforeP = runningPoishaBalances[ev.fromAccount] || 0;
+        const fromAfterP = creditCardIds.has(ev.fromAccount)
+          ? fromBeforeP + pAmt
+          : fromBeforeP - pAmt;
+        runningPoishaBalances[ev.fromAccount] = fromAfterP;
         if (creditCardIds.has(ev.fromAccount)) {
-          fromBalanceAfter = roundMoney(fromBalanceBefore + ev.amount);
-          addCredit(ev.fromAccount, ev.amount);
+          addCreditPoisha(ev.fromAccount, pAmt);
         } else {
-          fromBalanceAfter = roundMoney(fromBalanceBefore - ev.amount);
-          addDebit(ev.fromAccount, ev.amount);
+          addDebitPoisha(ev.fromAccount, pAmt);
         }
-        runningBalances[ev.fromAccount] = fromBalanceAfter;
+        fromBalanceBefore = fromPoisha(fromBeforeP);
+        fromBalanceAfter = fromPoisha(fromAfterP);
         balanceBefore = fromBalanceBefore;
         balanceAfter = fromBalanceAfter;
       }
       if (ev.toAccount && ev.toAccount !== ev.fromAccount) {
         ensureAccountInitialized(ev.toAccount);
-        toBalanceBefore = roundMoney(
-          Number(runningBalances[ev.toAccount]) || 0,
-        );
+        const toBeforeP = runningPoishaBalances[ev.toAccount] || 0;
+        const toAfterP = creditCardIds.has(ev.toAccount)
+          ? toBeforeP - pAmt
+          : toBeforeP + pAmt;
+        runningPoishaBalances[ev.toAccount] = toAfterP;
         if (creditCardIds.has(ev.toAccount)) {
-          // Transferring to a credit card pays down credit card liability
-          toBalanceAfter = roundMoney(toBalanceBefore - ev.amount);
-          addDebit(ev.toAccount, ev.amount);
+          addDebitPoisha(ev.toAccount, pAmt);
         } else {
-          toBalanceAfter = roundMoney(toBalanceBefore + ev.amount);
-          addCredit(ev.toAccount, ev.amount);
+          addCreditPoisha(ev.toAccount, pAmt);
         }
-        runningBalances[ev.toAccount] = toBalanceAfter;
+        toBalanceBefore = fromPoisha(toBeforeP);
+        toBalanceAfter = fromPoisha(toAfterP);
         if (balanceBefore === null) {
           balanceBefore = toBalanceBefore;
           balanceAfter = toBalanceAfter;
@@ -780,8 +964,9 @@ export function computeAccountBalances(
       }
     }
 
+    const { amountPoisha: _amountPoisha, ...restEvent } = ev;
     const enriched = {
-      ...ev,
+      ...restEvent,
       balanceBefore,
       balanceAfter,
       fromBalanceBefore,
@@ -795,16 +980,36 @@ export function computeAccountBalances(
     }
   }
 
-  // Also keep "cash" alias synchronized if cashCard has a custom ID
-  if (cashAccountId !== "cash" && Object.hasOwn(runningBalances, cashAccountId)) {
-    openingMap.cash = openingMap[cashAccountId];
-    runningBalances.cash = runningBalances[cashAccountId];
+  // Keep "cash" alias synchronized if cashCard has a custom ID
+  if (
+    cashAccountId !== "cash" &&
+    Object.hasOwn(runningPoishaBalances, cashAccountId)
+  ) {
+    openingPoishaMap.cash = openingPoishaMap[cashAccountId];
+    runningPoishaBalances.cash = runningPoishaBalances[cashAccountId];
   }
 
-  // #2 Ledger Reconciliation Check: opening + credits - debits == current_balance
+  const openingMap = {};
+  const runningBalances = {};
+  const creditsByAccount = {};
+  const debitsByAccount = {};
+  for (const [k, v] of Object.entries(openingPoishaMap)) {
+    openingMap[k] = fromPoisha(v);
+  }
+  for (const [k, v] of Object.entries(runningPoishaBalances)) {
+    runningBalances[k] = fromPoisha(v);
+  }
+  for (const [k, v] of Object.entries(creditsPoishaByAccount)) {
+    creditsByAccount[k] = fromPoisha(v);
+  }
+  for (const [k, v] of Object.entries(debitsPoishaByAccount)) {
+    debitsByAccount[k] = fromPoisha(v);
+  }
+
+  // Ledger Reconciliation Check: opening + credits - debits == current_balance (in integer poisha)
   const accountIds = new Set([
-    ...Object.keys(openingMap),
-    ...Object.keys(runningBalances),
+    ...Object.keys(openingPoishaMap),
+    ...Object.keys(runningPoishaBalances),
     ...safeCards.map((c) => c?.id).filter(Boolean),
   ]);
   const cardNameMap = new Map(
@@ -815,39 +1020,39 @@ export function computeAccountBalances(
   }
   const reconciliationAccounts = {};
   let discrepancyCount = 0;
-  let totalOpening = 0;
-  let totalCredits = 0;
-  let totalDebits = 0;
-  let totalExpectedBalance = 0;
-  let totalCurrentBalance = 0;
-  let totalDiscrepancy = 0;
+  let totalOpeningPoisha = 0;
+  let totalCreditsPoisha = 0;
+  let totalDebitsPoisha = 0;
+  let totalExpectedPoisha = 0;
+  let totalCurrentPoisha = 0;
+  let totalDiscrepancyPoisha = 0;
 
   for (const acctId of accountIds) {
     if (!acctId || acctId === "date") continue;
     if (acctId === "cash" && cashAccountId !== "cash") continue;
-    const opening = roundMoney(Number(openingMap[acctId]) || 0);
-    const credits = roundMoney(Number(creditsByAccount[acctId]) || 0);
-    const debits = roundMoney(Number(debitsByAccount[acctId]) || 0);
-    const expectedBalance = roundMoney(opening + credits - debits);
+    const openP = openingPoishaMap[acctId] || 0;
+    const credP = creditsPoishaByAccount[acctId] || 0;
+    const debP = debitsPoishaByAccount[acctId] || 0;
+    const expectedP = openP + credP - debP;
     const hasReported =
       reportedBalances &&
       typeof reportedBalances === "object" &&
       Object.hasOwn(reportedBalances, acctId) &&
       Number.isFinite(Number(reportedBalances[acctId]));
-    const currentBalance = hasReported
-      ? roundMoney(Number(reportedBalances[acctId]))
-      : roundMoney(Number(runningBalances[acctId]) || 0);
-    const discrepancy = roundMoney(currentBalance - expectedBalance);
-    const isBalanced = Math.abs(discrepancy) < 0.01;
+    const currentP = hasReported
+      ? toPoisha(reportedBalances[acctId])
+      : runningPoishaBalances[acctId] || 0;
+    const diffP = currentP - expectedP;
+    const isBalanced = diffP === 0;
     if (!isBalanced) {
       discrepancyCount += 1;
     }
-    totalOpening = roundMoney(totalOpening + opening);
-    totalCredits = roundMoney(totalCredits + credits);
-    totalDebits = roundMoney(totalDebits + debits);
-    totalExpectedBalance = roundMoney(totalExpectedBalance + expectedBalance);
-    totalCurrentBalance = roundMoney(totalCurrentBalance + currentBalance);
-    totalDiscrepancy = roundMoney(totalDiscrepancy + Math.abs(discrepancy));
+    totalOpeningPoisha += openP;
+    totalCreditsPoisha += credP;
+    totalDebitsPoisha += debP;
+    totalExpectedPoisha += expectedP;
+    totalCurrentPoisha += currentP;
+    totalDiscrepancyPoisha += Math.abs(diffP);
 
     reconciliationAccounts[acctId] = {
       id: acctId,
@@ -857,12 +1062,12 @@ export function computeAccountBalances(
         : acctId === cashAccountId || acctId === "cash"
           ? "cash"
           : "asset",
-      opening,
-      credits,
-      debits,
-      expectedBalance,
-      currentBalance,
-      discrepancy,
+      opening: fromPoisha(openP),
+      credits: fromPoisha(credP),
+      debits: fromPoisha(debP),
+      expectedBalance: fromPoisha(expectedP),
+      currentBalance: fromPoisha(currentP),
+      discrepancy: fromPoisha(diffP),
       isBalanced,
     };
   }
@@ -871,12 +1076,12 @@ export function computeAccountBalances(
     isBalanced: discrepancyCount === 0,
     accountCount: Object.keys(reconciliationAccounts).length,
     discrepancyCount,
-    totalOpening,
-    totalCredits,
-    totalDebits,
-    totalExpectedBalance,
-    totalCurrentBalance,
-    totalDiscrepancy,
+    totalOpening: fromPoisha(totalOpeningPoisha),
+    totalCredits: fromPoisha(totalCreditsPoisha),
+    totalDebits: fromPoisha(totalDebitsPoisha),
+    totalExpectedBalance: fromPoisha(totalExpectedPoisha),
+    totalCurrentBalance: fromPoisha(totalCurrentPoisha),
+    totalDiscrepancy: fromPoisha(totalDiscrepancyPoisha),
     accounts: reconciliationAccounts,
   };
 
@@ -889,11 +1094,11 @@ export function computeAccountBalances(
     ledgerEvents,
     ledgerById,
     summary: {
-      totalExpenses,
-      totalIncome,
-      totalSavingsTransfers,
-      totalAccountTransfers,
-      totalAdjustmentsNet,
+      totalExpenses: fromPoisha(totalExpensesPoisha),
+      totalIncome: fromPoisha(totalIncomePoisha),
+      totalSavingsTransfers: fromPoisha(totalSavingsTransfersPoisha),
+      totalAccountTransfers: fromPoisha(totalAccountTransfersPoisha),
+      totalAdjustmentsNet: fromPoisha(totalAdjustmentsNetPoisha),
     },
   };
 }
@@ -962,9 +1167,7 @@ export function loadAccountData(
         : {};
   const cleanBalance = (value) => {
     const amount = Number(value);
-    return Number.isFinite(amount) && amount >= 0
-      ? Math.round(amount * 100) / 100
-      : 0;
+    return Number.isFinite(amount) && amount >= 0 ? roundMoney(amount) : 0;
   };
 
   const deletedCardTombstones = deletedRecords?.cards || {};
@@ -979,35 +1182,26 @@ export function loadAccountData(
       typeof card.id === "string" &&
       card.id.trim()
     ) {
-      const id = card.id.trim();
+      const id = card.id.trim().slice(0, 120);
       if (isPhantomAutoReconstructedCard(card)) {
         continue;
       }
       const tombstone = deletedCardTombstones[id];
-      const createdAt =
-        typeof card.createdAt === "number"
-          ? card.createdAt
-          : Date.parse(card.createdAt) || 0;
-      const updatedAt =
-        typeof card.updatedAt === "number"
-          ? card.updatedAt
-          : Date.parse(card.updatedAt) || createdAt || 0;
+      const createdAt = parseTimestampMs(card.createdAt);
+      const updatedAt = parseTimestampMs(card.updatedAt) || createdAt;
 
       // Skip tombstoned cards unless card was explicitly updated after deletion
       if (tombstone?.deleted && tombstone.updatedAt >= updatedAt) {
         continue;
       }
 
-      const isMfs = Boolean(
-        card?.isPhone ||
-          card?.category === "mfs" ||
-          card?.type === "mfs" ||
-          card?.network === "mfs",
-      );
+      const isMfs = isMfsCard(card);
       const isSavings = isSavingsCard(card);
 
       const rawNumber = String(card?.number || "").replace(/\D/g, "");
-      const rawLast4 = card?.last4 || (rawNumber ? rawNumber.slice(-4) : "");
+      const rawLast4 = String(
+        card?.last4 || (rawNumber ? rawNumber.slice(-4) : ""),
+      ).slice(0, 8);
 
       // Explicitly delete full card number and CVV before saving / loading
       const { cvv: _cvv, number: _number, ...safeCard } = card || {};
@@ -1015,17 +1209,20 @@ export function loadAccountData(
       let storedNumber = "";
       if (isSavings) {
         storedNumber =
-          String(card?.number || "").trim() ||
+          String(card?.number || "").trim().slice(0, 32) ||
           (rawLast4 ? `SAV-${rawLast4}` : "");
       } else if (isCashCard(card)) {
-        const cashCurr = String(card?.currency || "BDT").trim().toUpperCase();
+        const cashCurr = String(card?.currency || "BDT")
+          .trim()
+          .toUpperCase()
+          .slice(0, 8);
         storedNumber =
           String(card?.number || "").trim().startsWith("CASH-")
-            ? String(card.number).trim()
+            ? String(card.number).trim().slice(0, 32)
             : `CASH-${cashCurr}`;
       } else if (isMfs && rawNumber.length < 15) {
         storedNumber =
-          String(card?.number || "").trim() ||
+          String(card?.number || "").trim().slice(0, 32) ||
           (rawLast4 ? `01••• •••${rawLast4}` : "");
       } else {
         storedNumber = rawLast4 ? `•••• •••• •••• ${rawLast4}` : "";
@@ -1062,19 +1259,20 @@ export function loadAccountData(
       cardMap.set(id, {
         ...safeCard,
         id,
-        name: card.name || id,
-        holderName: card.holderName || "Cardholder",
+        name: String(card.name || id).slice(0, 80),
+        holderName: String(card.holderName || "Cardholder").slice(0, 80),
         subtitle:
           typeof card.subtitle === "string"
-            ? isCashCard(card)
-              ? card.subtitle
-              : card.subtitle.replace(/\bUSD\b/gi, "BDT")
-            : card.subtitle || "",
+            ? (isCashCard(card)
+                ? card.subtitle
+                : card.subtitle.replace(/\bUSD\b/gi, "BDT")
+              ).slice(0, 120)
+            : "",
         currency: isCashCard(card)
-          ? String(card.currency || "BDT").toUpperCase()
+          ? String(card.currency || "BDT").toUpperCase().slice(0, 8)
           : !card.currency || String(card.currency).toUpperCase() === "USD"
             ? "BDT"
-            : card.currency,
+            : String(card.currency).slice(0, 8),
         type: isSavings
           ? "savings"
           : isCashCard(card)
@@ -1085,9 +1283,12 @@ export function loadAccountData(
         ...(isCashCard(card) ? { category: "cash" } : {}),
         last4: rawLast4,
         number: storedNumber,
-        expiry: isSavings || isMfs || isCashCard(card) ? "" : card.expiry || "",
-        color: card.color || "#1e293b",
-        gradient: card.gradient || "",
+        expiry:
+          isSavings || isMfs || isCashCard(card)
+            ? ""
+            : String(card.expiry || "").slice(0, 16),
+        color: String(card.color || "#1e293b").slice(0, 32),
+        gradient: String(card.gradient || "").slice(0, 160),
         initialBalance: resolvedBalance,
         createdAt,
         updatedAt,
@@ -1163,8 +1364,6 @@ export function loadAccountData(
         .filter((item) => {
           if (!item || typeof item !== "object" || !item.id) return false;
           const tombstone = deletedTxTombstones[item.id];
-          // Transaction IDs are unique makeId() values; once deleted:true (and not undone via deleted:false),
-          // strictly exclude it even if a legacy DB trigger bumped updated_at on spend_account_transactions.
           return tombstone?.deleted !== true;
         })
         .map((item) => {
@@ -1186,40 +1385,49 @@ export function loadAccountData(
         .filter((item) =>
           isValidAccountTransaction(item, normalizedAccountContext),
         )
-        .map((item) => ({
-          ...item,
-          ...(item.account || item.accountId
-            ? { account: item.account || item.accountId }
-            : {}),
-          ...(item.fromAccount || item.from_account
-            ? { fromAccount: item.fromAccount || item.from_account }
-            : {}),
-          ...(item.toAccount || item.to_account
-            ? { toAccount: item.toAccount || item.to_account }
-            : {}),
-          type: item.type === "adjust" ? "adjustment" : item.type,
-          direction:
-            item.direction === "up"
-              ? "increase"
-              : item.direction === "down"
-                ? "decrease"
-                : item.direction,
-          amount: Math.round(Number(item.amount) * 100) / 100,
-          description:
-            typeof item.description === "string"
-              ? item.description.slice(0, 80)
-              : typeof item.note === "string"
-                ? item.note.slice(0, 80)
-                : "",
-          createdAt:
-            typeof item.createdAt === "number"
-              ? item.createdAt
-              : Date.parse(item.createdAt) || Date.now(),
-          updatedAt:
-            typeof item.updatedAt === "number"
-              ? item.updatedAt
-              : Date.parse(item.updatedAt) || Date.now(),
-        }))
+        .map((item) => {
+          const createdAt = parseTimestampMs(item.createdAt) || Date.now();
+          const updatedAt = parseTimestampMs(item.updatedAt) || createdAt;
+          return {
+            ...item,
+            id: String(item.id).trim().slice(0, 120),
+            ...(item.account || item.accountId
+              ? { account: String(item.account || item.accountId).trim().slice(0, 120) }
+              : {}),
+            ...(item.fromAccount || item.from_account
+              ? {
+                  fromAccount: String(
+                    item.fromAccount || item.from_account,
+                  )
+                    .trim()
+                    .slice(0, 120),
+                }
+              : {}),
+            ...(item.toAccount || item.to_account
+              ? {
+                  toAccount: String(item.toAccount || item.to_account)
+                    .trim()
+                    .slice(0, 120),
+                }
+              : {}),
+            type: item.type === "adjust" ? "adjustment" : item.type,
+            direction:
+              item.direction === "up"
+                ? "increase"
+                : item.direction === "down"
+                  ? "decrease"
+                  : item.direction,
+            amount: roundMoney(Number(item.amount)),
+            description:
+              typeof item.description === "string"
+                ? item.description.slice(0, 80)
+                : typeof item.note === "string"
+                  ? item.note.slice(0, 80)
+                  : "",
+            createdAt,
+            updatedAt,
+          };
+        })
     : [];
 
   const expensesForBalance = Array.isArray(expenses)
@@ -1273,14 +1481,7 @@ export function loadAccountData(
       configured: settings.configured === true || syncedCards.length > 0,
       cardsConfigured:
         settings.cardsConfigured === true || syncedCards.length > 0,
-      updatedAt:
-        typeof settings.updatedAt === "number" &&
-        Number.isFinite(settings.updatedAt)
-          ? settings.updatedAt
-          : typeof settings.updatedAt === "string" &&
-              Number.isFinite(Date.parse(settings.updatedAt))
-            ? Date.parse(settings.updatedAt)
-            : 0,
+      updatedAt: parseTimestampMs(settings.updatedAt),
     },
     ...(Object.keys(remappedAccountIds).length > 0
       ? { remappedAccountIds }
@@ -1313,10 +1514,6 @@ export function parseAmount(val) {
   return Number.isFinite(num) ? num : NaN;
 }
 
-export function roundMoney(value) {
-  return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
-}
-
 export function formatDate(value) {
   if (!isValidDateString(value)) return value;
   const [year, month, day] = value.split("-").map(Number);
@@ -1328,12 +1525,21 @@ export function formatDate(value) {
 }
 
 export function nextOccurrenceDate(dateValue, interval, dayOfMonth) {
-  const [year, month, day] = dateValue.split("-").map(Number);
+  const [year, month, day] = String(dateValue || "")
+    .split("-")
+    .map(Number);
+  if (!year || !month || !day) return localDate();
   if (interval === "weekly") {
-    const date = new Date(year, month - 1, day);
-    date.setDate(date.getDate() + 7);
+    const date = new Date(year, month - 1, day + 7);
     return localDate(date);
   }
+  const anchorDay =
+    dayOfMonth !== undefined &&
+    dayOfMonth !== null &&
+    Number.isFinite(Number(dayOfMonth)) &&
+    Number(dayOfMonth) >= 1
+      ? clampDayOfMonth(dayOfMonth)
+      : clampDayOfMonth(day);
   const nextMonth = new Date(year, month, 1);
   const lastDay = new Date(
     nextMonth.getFullYear(),
@@ -1344,7 +1550,7 @@ export function nextOccurrenceDate(dateValue, interval, dayOfMonth) {
     new Date(
       nextMonth.getFullYear(),
       nextMonth.getMonth(),
-      Math.min(dayOfMonth || day, lastDay),
+      Math.min(anchorDay, lastDay),
     ),
   );
 }

@@ -150,6 +150,9 @@ function zonedTimeToUtc(date: string, time: string, timeZone: string) {
 }
 
 Deno.serve(async (req) => {
+  if (req.method !== "POST") {
+    return new Response("Method Not Allowed", { status: 405 });
+  }
   const cronSecret = Deno.env.get("CRON_SECRET");
   const providedSecret = req.headers.get("x-cron-secret") || "";
   if (!cronSecret || !providedSecret || !timingSafeEqualStr(providedSecret, cronSecret)) {

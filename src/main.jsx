@@ -148,6 +148,7 @@ if (typeof window !== "undefined") {
         localStorage.getItem("spend:welcome-seen") === "1" ||
         Boolean(localStorage.getItem("spend-local-data-owner-v1")) ||
         Boolean(localStorage.getItem("spend-expenses-v1")) ||
+        Boolean(localStorage.getItem("spend-account-balances-v1")) ||
         Boolean(localStorage.getItem("spend-accounts-v1"))
       );
     } catch {

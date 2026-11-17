@@ -1,9 +1,23 @@
-import { formatDate, localDate, nextOccurrenceDate } from "./data.js";
+import {
+  addDaysToDateString,
+  formatDate,
+  fromPoisha,
+  localDate,
+  nextOccurrenceDate,
+  toPoisha,
+} from "./data.js";
 
 const LAST_NOTIFIED_MONTH_KEY = "spend-notified-month-v2";
 const WELCOME_NOTIFIED_PREFIX = "spend-welcome-notified-v2-";
 const HEADS_UP_NOTIFIED_KEY = "spend-notified-heads-up-v1";
 const LAST_WEEKLY_SUMMARY_KEY = "spend-last-weekly-summary-v1";
+
+// Distinct ID ranges so scheduled background notifications ([20002, 899999999])
+// never collide with or cancel immediate/foreground notifications ([900000000, 1999999999]).
+export const SCHEDULED_NOTIF_ID_MIN = 20002;
+export const SCHEDULED_NOTIF_ID_MAX = 899999999;
+export const IMMEDIATE_NOTIF_ID_MIN = 900000000;
+export const IMMEDIATE_NOTIF_ID_MAX = 1999999999;
 
 let channelsConfigured = false;
 
@@ -25,14 +39,6 @@ async function getNativeHaptics() {
   return import("@capacitor/haptics");
 }
 
-function addDaysToDateString(dateStr, days) {
-  const [y, m, d] = String(dateStr || "")
-    .split("-")
-    .map(Number);
-  if (!y || !m || !d) return localDate();
-  return localDate(new Date(y, m - 1, d + days));
-}
-
 function formatTaka(amount) {
   const num = Number(amount) || 0;
   return `৳${num.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
@@ -41,19 +47,19 @@ function formatTaka(amount) {
 export function getWeeklySpendSummary(expenses = [], now = new Date()) {
   const todayStr = localDate(now);
   const weekStartStr = addDaysToDateString(todayStr, -6);
-  let total = 0;
+  let totalPoisha = 0;
   let count = 0;
   for (const exp of expenses) {
     if (!exp || exp.category === "Savings" || exp.cat === "Savings") continue;
     const d = exp.date || "";
     const amt = Number(exp.amount ?? exp.amt);
     if (d >= weekStartStr && d <= todayStr && Number.isFinite(amt) && amt > 0) {
-      total += amt;
+      totalPoisha += toPoisha(amt);
       count += 1;
     }
   }
   return {
-    total: Math.round(total * 100) / 100,
+    total: fromPoisha(totalPoisha),
     count,
     weekStartStr,
     todayStr,
@@ -76,10 +82,13 @@ function getSharedAudioContext() {
 }
 
 function resolveSoundUrl(tone) {
-  const base = import.meta.env.BASE_URL || "./";
-  const fileName = tone === "welcome" ? "sounds/welcome.wav" : "sounds/reminder.wav";
+  const base = import.meta.env?.BASE_URL || "./";
+  const fileName =
+    tone === "welcome" ? "sounds/welcome.wav" : "sounds/reminder.wav";
   if (typeof window !== "undefined") {
-    const originBase = base.startsWith("/") ? window.location.origin : window.location.href;
+    const originBase = base.startsWith("/")
+      ? window.location.origin
+      : window.location.href;
     return new URL(`${base}${fileName}`, originBase).href;
   }
   return `./${fileName}`;
@@ -88,7 +97,8 @@ function resolveSoundUrl(tone) {
 function isIosWebKitAudio() {
   if (typeof navigator === "undefined") return false;
   const ua = navigator.userAgent || "";
-  const platform = navigator.userAgentData?.platform || navigator.platform || "";
+  const platform =
+    navigator.userAgentData?.platform || navigator.platform || "";
   return (
     /iPhone|iPad|iPod/i.test(ua) ||
     /iPhone|iPad|iPod/i.test(platform) ||
@@ -154,9 +164,6 @@ if (typeof window !== "undefined") {
   setupAudioUnlock();
 }
 
-/**
- * Web Audio API synthesizer fallback.
- */
 async function synthesizeAudioTone(tone = "reminder") {
   if (!audioUnlocked) return false;
   try {
@@ -212,9 +219,6 @@ async function synthesizeAudioTone(tone = "reminder") {
   }
 }
 
-/**
- * Play foreground notification tone and trigger haptics.
- */
 export function playNotificationAudioTone(tone = "reminder") {
   if (isNativePlatform()) {
     void getNativeHaptics()
@@ -259,9 +263,6 @@ export function playNotificationAudioTone(tone = "reminder") {
   }
 }
 
-/**
- * Configure Android notification channels with distinct sounds, vibrations, and importance levels.
- */
 export async function setupNativeNotificationChannels() {
   if (!isNativePlatform() || channelsConfigured) return;
   try {
@@ -303,9 +304,6 @@ export async function setupNativeNotificationChannels() {
   }
 }
 
-/**
- * Check notification permissions across iOS, Android, and Web platforms.
- */
 export async function checkNotificationPermission() {
   if (isNativePlatform()) {
     try {
@@ -323,9 +321,6 @@ export async function checkNotificationPermission() {
   return "unsupported";
 }
 
-/**
- * Request notification permissions across iOS, Android, and Web platforms.
- */
 export async function requestNotificationPermission() {
   if (isNativePlatform()) {
     try {
@@ -358,19 +353,35 @@ export async function requestNotificationPermission() {
   return false;
 }
 
-function hashNotificationId(str, min = 100000, max = 1999999999) {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = (hash << 5) - hash + str.charCodeAt(i);
-    hash |= 0;
+/**
+ * Generates a collision-resistant 32-bit integer notification ID within [min, max]
+ * using FNV-1a + MurmurHash3 finalizer avalanche mixing.
+ * Defaults to [900000000, 1999999999] so immediate notifications never overlap
+ * the scheduled background cancellation range [20002, 899999999].
+ */
+export function hashNotificationId(
+  str,
+  min = IMMEDIATE_NOTIF_ID_MIN,
+  max = IMMEDIATE_NOTIF_ID_MAX,
+) {
+  const input = String(str || "");
+  let h = 0x811c9dc5;
+  for (let i = 0; i < input.length; i += 1) {
+    h ^= input.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
   }
-  const span = max - min;
-  return min + (Math.abs(hash) % span);
+  // MurmurHash3 32-bit avalanche finalizer
+  h ^= h >>> 16;
+  h = Math.imul(h, 0x85ebca6b);
+  h ^= h >>> 13;
+  h = Math.imul(h, 0xc2b2ae35);
+  h ^= h >>> 16;
+
+  const unsigned = h >>> 0;
+  const span = Math.max(1, max - min);
+  return min + (unsigned % span);
 }
 
-/**
- * Send an immediate native built-in notification for iOS and Android (with web fallback).
- */
 export async function sendNativeBuiltinNotification({
   title,
   body,
@@ -383,7 +394,11 @@ export async function sendNativeBuiltinNotification({
   const notifId =
     typeof id === "number"
       ? id
-      : hashNotificationId(tag || `${title}-${Date.now()}`);
+      : hashNotificationId(
+          tag || `${title}-${Date.now()}`,
+          IMMEDIATE_NOTIF_ID_MIN,
+          IMMEDIATE_NOTIF_ID_MAX,
+        );
 
   if (!scheduleAt) {
     playNotificationAudioTone(tone);
@@ -429,8 +444,10 @@ export async function sendNativeBuiltinNotification({
       return false;
     }
 
-    const base = import.meta.env.BASE_URL || "./";
-    const originBase = base.startsWith("/") ? window.location.origin : window.location.href;
+    const base = import.meta.env?.BASE_URL || "./";
+    const originBase = base.startsWith("/")
+      ? window.location.origin
+      : window.location.href;
     const iconHref = new URL(`${base}icons/icon-192.png`, originBase).href;
     const options = {
       body,
@@ -453,27 +470,22 @@ export async function sendNativeBuiltinNotification({
           await reg.showNotification(title, options);
           return true;
         }
-      } catch {}
+      } catch {
+        // Fall through to window.Notification
+      }
     }
 
     try {
       new window.Notification(title, options);
       return true;
-    } catch {}
+    } catch {
+      return false;
+    }
   }
 
   return false;
 }
 
-/**
- * Synchronize all OS-level background scheduled notifications on iOS and Android
- * AND sync upcoming 24h timers to the Service Worker on Web/PWA:
- * 1. 1st-of-the-month spend overview
- * 2. Weekly spending summary (upcoming Sundays)
- * 3. Daily expense tracking reminders (next 14 days)
- * 4. Upcoming recurring bill heads-up (1 day before due date)
- * 5. Recurring expense due-day reminders (on due date)
- */
 export async function syncNativeScheduledNotifications({
   recurringSchedules = [],
   expenses = [],
@@ -501,9 +513,22 @@ export async function syncNativeScheduledNotifications({
     dailyAlreadyFiredForThisTime =
       localStorage.getItem("spend-last-daily-reminder-date-v1") ===
       `${todayStr}:${safeTime}`;
-  } catch {}
+  } catch {
+    dailyAlreadyFiredForThisTime = false;
+  }
 
   const notifications = [];
+  const usedIds = new Set();
+  const allocateUniqueScheduledId = (candidateId, minRange, maxRange) => {
+    let resolved = candidateId;
+    let probe = 1;
+    while (usedIds.has(resolved)) {
+      resolved = minRange + ((resolved - minRange + probe) % (maxRange - minRange));
+      probe += 1;
+    }
+    usedIds.add(resolved);
+    return resolved;
+  };
 
   // 1. 1st-of-the-month spend overview (next 2 months)
   for (let mOffset = 0; mOffset <= 2; mOffset += 1) {
@@ -516,8 +541,9 @@ export async function syncNativeScheduledNotifications({
       0,
     );
     if (candidate.getTime() > nowMs + 2000) {
+      const id = allocateUniqueScheduledId(20002 + mOffset, 20002, 20999);
       notifications.push({
-        id: 20002 + mOffset,
+        id,
         title: "Previous month's spend overview is ready",
         body: "A new month has begun! Open Spend to review your previous month's spend overview and recap.",
         channelId: "spend_monthly",
@@ -553,8 +579,9 @@ export async function syncNativeScheduledNotifications({
         ? `You've tracked ${formatTaka(weeklyStats.total)} across ${weeklyStats.count} ${weeklyStats.count === 1 ? "expense" : "expenses"} this week. Open Spend to review your weekly pace.`
         : "Your weekly spending recap is ready. Open Spend to review this week's activity and budget pace.";
 
+    const id = allocateUniqueScheduledId(21001 + w, 21001, 21999);
     notifications.push({
-      id: 21001 + w,
+      id,
       title: "Weekly spending summary",
       body,
       channelId: "spend_reminders",
@@ -582,8 +609,9 @@ export async function syncNativeScheduledNotifications({
     );
     if (targetDay.getTime() <= nowMs + 2000) continue;
     const dateStr = localDate(targetDay);
+    const id = allocateUniqueScheduledId(30001 + dOffset, 30001, 30999);
     notifications.push({
-      id: 30001 + dOffset,
+      id,
       title: "Daily expense reminder",
       body: "Don’t forget to track today's expenses to keep your budget on target.",
       channelId: "spend_reminders",
@@ -623,12 +651,18 @@ export async function syncNativeScheduledNotifications({
       const headsUpAt = new Date(hy, hm - 1, hd, hours, minutes, 0);
 
       if (headsUpAt.getTime() > nowMs + 2000) {
+        const rawHeadsUpId = hashNotificationId(
+          `heads-up:${schedule.id}:${occDate}`,
+          40000,
+          499999999,
+        );
+        const headsUpId = allocateUniqueScheduledId(
+          rawHeadsUpId,
+          40000,
+          499999999,
+        );
         notifications.push({
-          id: hashNotificationId(
-            `heads-up:${schedule.id}:${occDate}`,
-            40000,
-            499999999,
-          ),
+          id: headsUpId,
           title: "Upcoming bill tomorrow",
           body: `${schedule.description}${amtText} is due tomorrow (${formatDate(occDate)}).`,
           channelId: "spend_reminders",
@@ -644,12 +678,18 @@ export async function syncNativeScheduledNotifications({
       }
 
       if (dueAt.getTime() > nowMs + 2000) {
+        const rawDueId = hashNotificationId(
+          `due:${schedule.id}:${occDate}`,
+          500000000,
+          SCHEDULED_NOTIF_ID_MAX,
+        );
+        const dueId = allocateUniqueScheduledId(
+          rawDueId,
+          500000000,
+          SCHEDULED_NOTIF_ID_MAX,
+        );
         notifications.push({
-          id: hashNotificationId(
-            `due:${schedule.id}:${occDate}`,
-            500000000,
-            899999999,
-          ),
+          id: dueId,
           title: "Recurring expense due",
           body: `${schedule.description}${amtText} is due today.`,
           channelId: "spend_reminders",
@@ -674,7 +714,6 @@ export async function syncNativeScheduledNotifications({
     }
   }
 
-  // Sync near-term (next 24h) notifications to Service Worker for Web/PWA background execution
   if (
     typeof window !== "undefined" &&
     "serviceWorker" in navigator &&
@@ -717,19 +756,26 @@ export async function syncNativeScheduledNotifications({
 
     await setupNativeNotificationChannels();
 
-    // Cancel previously queued background reminders (IDs >= 20002) before rescheduling fresh ones
+    // Only cancel scheduled background notifications ([20002, 899999999]),
+    // leaving immediate notifications (>= 900000000) untouched.
     try {
       const pending = await LocalNotifications.getPending();
       const toCancel = (pending?.notifications || []).filter((n) => {
         const numId = Number(n.id);
-        return Number.isFinite(numId) && numId >= 20002 && numId < 900000000;
+        return (
+          Number.isFinite(numId) &&
+          numId >= SCHEDULED_NOTIF_ID_MIN &&
+          numId <= SCHEDULED_NOTIF_ID_MAX
+        );
       });
       if (toCancel.length > 0) {
         await LocalNotifications.cancel({
           notifications: toCancel.map((n) => ({ id: Number(n.id) })),
         });
       }
-    } catch {}
+    } catch {
+      // ignore cancellation query failure
+    }
 
     if (notifications.length > 0) {
       await LocalNotifications.schedule({ notifications });
@@ -741,10 +787,6 @@ export async function syncNativeScheduledNotifications({
   }
 }
 
-/**
- * When a new month comes, send a reminder notification:
- * "Previous month's spend overview is ready"
- */
 export async function checkAndNotifyNewMonth(currentMonthStr) {
   const now = new Date();
   const thisMonth =
@@ -754,7 +796,9 @@ export async function checkAndNotifyNewMonth(currentMonthStr) {
   let lastNotifiedMonth = "";
   try {
     lastNotifiedMonth = localStorage.getItem(LAST_NOTIFIED_MONTH_KEY) || "";
-  } catch {}
+  } catch {
+    lastNotifiedMonth = "";
+  }
 
   const shouldNotify = !lastNotifiedMonth
     ? now.getDate() <= 7
@@ -763,10 +807,12 @@ export async function checkAndNotifyNewMonth(currentMonthStr) {
   if (shouldNotify) {
     try {
       localStorage.setItem(LAST_NOTIFIED_MONTH_KEY, thisMonth);
-    } catch {}
+    } catch {
+      // ignore
+    }
 
     await sendNativeBuiltinNotification({
-      id: 20001,
+      id: 900020001,
       title: "Previous month's spend overview is ready",
       body: "A new month has begun! Open Spend to review your previous month's spend overview and recap.",
       tag: `spend-new-month-${thisMonth}`,
@@ -776,13 +822,12 @@ export async function checkAndNotifyNewMonth(currentMonthStr) {
   } else if (!lastNotifiedMonth) {
     try {
       localStorage.setItem(LAST_NOTIFIED_MONTH_KEY, thisMonth);
-    } catch {}
+    } catch {
+      // ignore
+    }
   }
 }
 
-/**
- * Check and notify for recurring bills due tomorrow (1-day-before heads-up).
- */
 export async function checkAndNotifyUpcomingBills(
   recurringSchedules = [],
   reminderTime = "09:00",
@@ -796,7 +841,9 @@ export async function checkAndNotifyUpcomingBills(
   try {
     const raw = JSON.parse(localStorage.getItem(HEADS_UP_NOTIFIED_KEY) || "[]");
     if (Array.isArray(raw)) notifiedSet = new Set(raw);
-  } catch {}
+  } catch {
+    notifiedSet = new Set();
+  }
 
   const dueTomorrow = (recurringSchedules || []).filter(
     (s) =>
@@ -815,7 +862,9 @@ export async function checkAndNotifyUpcomingBills(
       HEADS_UP_NOTIFIED_KEY,
       JSON.stringify([...notifiedSet].slice(-100)),
     );
-  } catch {}
+  } catch {
+    // ignore
+  }
 
   const title =
     dueTomorrow.length === 1
@@ -829,15 +878,12 @@ export async function checkAndNotifyUpcomingBills(
   await sendNativeBuiltinNotification({
     title,
     body,
-    tag: `heads-up:${dueTomorrow[0].id}:${ localDate(now) }`,
+    tag: `heads-up:${dueTomorrow[0].id}:${localDate(now)}`,
     tab: "plans",
     tone: "reminder",
   });
 }
 
-/**
- * Check and notify for weekly spending summary on Sundays at/after reminderTime.
- */
 export async function checkAndNotifyWeeklySummary(
   expenses = [],
   reminderTime = "09:00",
@@ -851,14 +897,18 @@ export async function checkAndNotifyWeeklySummary(
   const stamp = `${todayStr}:${reminderTime}`;
   try {
     if (localStorage.getItem(LAST_WEEKLY_SUMMARY_KEY) === stamp) return;
-  } catch {}
+  } catch {
+    // ignore
+  }
 
   const summary = getWeeklySpendSummary(expenses, now);
   if (summary.count === 0) return;
 
   try {
     localStorage.setItem(LAST_WEEKLY_SUMMARY_KEY, stamp);
-  } catch {}
+  } catch {
+    // ignore
+  }
 
   await sendNativeBuiltinNotification({
     title: "Weekly spending summary",
@@ -869,17 +919,15 @@ export async function checkAndNotifyWeeklySummary(
   });
 }
 
-/**
- * When a new user signed in, send a native built-in notification with a distinct welcome tone:
- * "Welcome to Spend! Start tracking"
- */
 export async function notifyNewUserSignedIn(user) {
   if (!user || !user.id) return;
   const key = `${WELCOME_NOTIFIED_PREFIX}${user.id}`;
   try {
     if (localStorage.getItem(key)) return;
     localStorage.setItem(key, "true");
-  } catch {}
+  } catch {
+    // ignore
+  }
 
   const metadata = user.user_metadata || {};
   const rawName =
@@ -893,7 +941,7 @@ export async function notifyNewUserSignedIn(user) {
   const greeting = displayName ? `, ${displayName}` : "";
 
   await sendNativeBuiltinNotification({
-    id: 10001,
+    id: 900010001,
     title: "Welcome to Spend! Start tracking",
     body: `Welcome to Spend${greeting}! Start your expense tracking with Spend and take control of your financial journey.`,
     tag: `spend-welcome-${user.id}`,
@@ -902,9 +950,6 @@ export async function notifyNewUserSignedIn(user) {
   });
 }
 
-/**
- * Setup notification action listeners.
- */
 export function setupNotificationListeners(onNavigate) {
   let removeNative = null;
   let removeSw = null;

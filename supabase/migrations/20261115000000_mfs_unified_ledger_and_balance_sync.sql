@@ -988,6 +988,7 @@ grant execute on function public.load_spend_user_snapshot() to authenticated;
 -- 5. Strict Atomic Snapshot Save RPC (public.save_spend_user_snapshot)
 -- ─────────────────────────────────────────────────────────────────────────────
 drop function if exists public.save_spend_user_snapshot(jsonb, text);
+drop function if exists public.save_spend_user_snapshot(jsonb, text, boolean);
 
 create or replace function public.save_spend_user_snapshot(
   p_data jsonb,

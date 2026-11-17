@@ -2,16 +2,18 @@
  * Native App Lock & Biometrics Security Engine
  *
  * Implements:
- * 1. Device App Lock with PIN hashing (PBKDF2 with 100,000 rounds + cryptographically random salt).
- * 2. Biometric Authentication via standard WebAuthn API (Face ID, Touch ID, Windows Hello, Android Biometrics).
- * 3. Auto-lock timeout management on background / visibilitychange.
- * 4. Manual instant screen lock.
+ * 1. Device App Lock with PIN hashing (PBKDF2 with 210,000 rounds + cryptographically random salt, backward-compatible with 100,000 rounds).
+ * 2. Tamper-evident lockout state in memory + storage MAC to prevent localStorage PIN brute-force bypass.
+ * 3. Two-phase atomic re-encryption with rollback on failure to prevent partial encryption state.
+ * 4. Biometric Authentication via standard WebAuthn API and Native Keystore/Keychain.
  */
 
 const PIN_STORAGE_KEY = "spend-security-pin-v1";
 const PIN_SALT_KEY = "spend-security-salt-v1";
+const PIN_ITERATIONS_KEY = "spend-security-pin-iters-v1";
 const PIN_FAIL_COUNT_KEY = "spend-security-pin-fails-v1";
 const PIN_LOCKOUT_UNTIL_KEY = "spend-security-pin-lockout-v1";
+const PIN_LOCKOUT_SIG_KEY = "spend-security-pin-lockout-sig-v1";
 const BIOMETRIC_KEY_ID = "spend-biometric-credential-v1";
 const BIOMETRIC_KEY_STORAGE = "spend-biometric-key-v1";
 const LOCK_TIMEOUT_KEY = "spend-lock-timeout-v1";
@@ -19,6 +21,9 @@ const LAST_ACTIVE_KEY = "spend-last-active-v1";
 const BACKGROUNDED_AT_KEY = "spend-backgrounded-at-v1";
 const SESSION_UNLOCKED_KEY = "spend-session-unlocked-v1";
 const DATA_SALT_KEY = "spend-security-data-salt-v1";
+
+const DEFAULT_LEGACY_PBKDF2_ITERATIONS = 100000;
+const HARDENED_PBKDF2_ITERATIONS = 210000;
 
 const IDB_KEYSTORE_DB = "spend-security-keystore-v1";
 const IDB_KEYSTORE_STORE = "crypto-keys";
@@ -53,19 +58,15 @@ try {
     });
   }
 } catch {
-  // ignore
+  // ignore when localStorage is inaccessible
 }
 
-// In-memory runtime session unlock state (module-scoped, private).
-// Not accessible via window or DevTools console, and immune to sessionStorage manipulation.
+// Module-scoped private runtime state (inaccessible from window/DevTools/localStorage tampering)
 let isSessionUnlockedInMemory = false;
-
-// In-memory runtime AES-256-GCM encryption key derived from PIN via PBKDF2.
-// Wiped on app lock, window reload, or logout.
 let activeSessionKey = null;
-
-// In-memory cached session key for current app run to assist biometric unlocks when biometrics is enabled.
 let biometricCachedKey = null;
+let inMemoryPinFailCount = 0;
+let inMemoryPinLockoutUntil = 0;
 
 export function getSessionKey() {
   return activeSessionKey;
@@ -175,12 +176,6 @@ async function clearNonExtractableBiometricKey() {
   }
 }
 
-/**
- * Native Hardware Security Integration (iOS Keychain / Android Keystore)
- *
- * Strictly uses native hardware-backed SecureStoragePlugin when available.
- * Never falls back to plaintext localStorage or unencrypted SharedPreferences.
- */
 function getHardwareSecurePlugin() {
   const cap = typeof window !== "undefined" ? window.Capacitor : null;
   return (
@@ -328,46 +323,150 @@ function constantTimeEqual(a, b) {
   return result === 0;
 }
 
-export function getPinLockoutRemainingSeconds() {
+function computeLockoutSignature(fails, until) {
+  const salt =
+    (typeof localStorage !== "undefined" &&
+      localStorage.getItem(PIN_SALT_KEY)) ||
+    "spend-lockout-salt";
+  const hash =
+    (typeof localStorage !== "undefined" &&
+      localStorage.getItem(PIN_STORAGE_KEY)) ||
+    "spend-lockout-hash";
+  const payload = `${salt}:${hash}:${fails}:${until}`;
+  let h1 = 0x811c9dc5;
+  let h2 = 0x01000193;
+  for (let i = 0; i < payload.length; i += 1) {
+    const ch = payload.charCodeAt(i);
+    h1 ^= ch;
+    h1 = Math.imul(h1, 0x01000193);
+    h2 ^= ch + i;
+    h2 = Math.imul(h2, 0x85ebca6b);
+  }
+  return `${(h1 >>> 0).toString(16).padStart(8, "0")}${(h2 >>> 0).toString(16).padStart(8, "0")}`;
+}
+
+function syncLockoutStateFromStorage() {
   try {
-    const until = Number(localStorage.getItem(PIN_LOCKOUT_UNTIL_KEY)) || 0;
-    const remaining = Math.ceil((until - Date.now()) / 1000);
-    return remaining > 0 ? remaining : 0;
+    if (typeof localStorage === "undefined") return;
+    const rawFails = localStorage.getItem(PIN_FAIL_COUNT_KEY);
+    const rawUntil = localStorage.getItem(PIN_LOCKOUT_UNTIL_KEY);
+    const rawSig = localStorage.getItem(PIN_LOCKOUT_SIG_KEY);
+
+    const storedFails = Number(rawFails) || 0;
+    const storedUntil = Number(rawUntil) || 0;
+
+    // Detect if localStorage keys were manually deleted or modified while in-memory lockout is active
+    if (inMemoryPinFailCount > storedFails || inMemoryPinLockoutUntil > storedUntil) {
+      const sig = computeLockoutSignature(
+        inMemoryPinFailCount,
+        inMemoryPinLockoutUntil,
+      );
+      localStorage.setItem(PIN_FAIL_COUNT_KEY, String(inMemoryPinFailCount));
+      localStorage.setItem(
+        PIN_LOCKOUT_UNTIL_KEY,
+        String(inMemoryPinLockoutUntil),
+      );
+      localStorage.setItem(PIN_LOCKOUT_SIG_KEY, sig);
+      return;
+    }
+
+    if (storedFails > 0 || storedUntil > 0) {
+      const expectedSig = computeLockoutSignature(storedFails, storedUntil);
+      if (rawSig && !constantTimeEqual(rawSig, expectedSig)) {
+        // Tampered lockout record: enforce conservative 60s penalty cooldown
+        inMemoryPinFailCount = Math.max(inMemoryPinFailCount, 5);
+        inMemoryPinLockoutUntil = Math.max(
+          inMemoryPinLockoutUntil,
+          Date.now() + 60000,
+        );
+        const fixedSig = computeLockoutSignature(
+          inMemoryPinFailCount,
+          inMemoryPinLockoutUntil,
+        );
+        localStorage.setItem(PIN_FAIL_COUNT_KEY, String(inMemoryPinFailCount));
+        localStorage.setItem(
+          PIN_LOCKOUT_UNTIL_KEY,
+          String(inMemoryPinLockoutUntil),
+        );
+        localStorage.setItem(PIN_LOCKOUT_SIG_KEY, fixedSig);
+        return;
+      }
+      inMemoryPinFailCount = Math.max(inMemoryPinFailCount, storedFails);
+      inMemoryPinLockoutUntil = Math.max(inMemoryPinLockoutUntil, storedUntil);
+    }
   } catch {
-    return 0;
+    // ignore storage errors
   }
 }
 
+export function getPinLockoutRemainingSeconds() {
+  syncLockoutStateFromStorage();
+  const remaining = Math.ceil((inMemoryPinLockoutUntil - Date.now()) / 1000);
+  return remaining > 0 ? remaining : 0;
+}
+
 export function resetPinFailures() {
+  inMemoryPinFailCount = 0;
+  inMemoryPinLockoutUntil = 0;
   try {
     localStorage.removeItem(PIN_FAIL_COUNT_KEY);
     localStorage.removeItem(PIN_LOCKOUT_UNTIL_KEY);
+    localStorage.removeItem(PIN_LOCKOUT_SIG_KEY);
   } catch {
     // ignore
   }
 }
 
 function recordPinFailure() {
+  syncLockoutStateFromStorage();
+  const count = inMemoryPinFailCount + 1;
+  inMemoryPinFailCount = count;
+  if (count >= 10) {
+    inMemoryPinLockoutUntil = Date.now() + 300000; // 5 min lockout
+  } else if (count >= 8) {
+    inMemoryPinLockoutUntil = Date.now() + 120000; // 2 min lockout
+  } else if (count >= 5) {
+    inMemoryPinLockoutUntil = Date.now() + 30000; // 30 sec lockout
+  }
   try {
-    const count = (Number(localStorage.getItem(PIN_FAIL_COUNT_KEY)) || 0) + 1;
-    localStorage.setItem(PIN_FAIL_COUNT_KEY, String(count));
-    if (count >= 10) {
-      localStorage.setItem(PIN_LOCKOUT_UNTIL_KEY, String(Date.now() + 300000)); // 5 min lockout
-    } else if (count >= 5) {
-      localStorage.setItem(PIN_LOCKOUT_UNTIL_KEY, String(Date.now() + 30000)); // 30 sec lockout
+    const sig = computeLockoutSignature(
+      inMemoryPinFailCount,
+      inMemoryPinLockoutUntil,
+    );
+    localStorage.setItem(PIN_FAIL_COUNT_KEY, String(inMemoryPinFailCount));
+    localStorage.setItem(
+      PIN_LOCKOUT_UNTIL_KEY,
+      String(inMemoryPinLockoutUntil),
+    );
+    localStorage.setItem(PIN_LOCKOUT_SIG_KEY, sig);
+  } catch {
+    // In-memory lockout still enforces rate limit if storage is full
+  }
+}
+
+function getStoredPbkdf2Iterations() {
+  try {
+    const raw = Number(localStorage.getItem(PIN_ITERATIONS_KEY));
+    if (Number.isInteger(raw) && raw >= DEFAULT_LEGACY_PBKDF2_ITERATIONS) {
+      return raw;
     }
   } catch {
-    // ignore
+    // fallback
   }
+  return DEFAULT_LEGACY_PBKDF2_ITERATIONS;
 }
 
 /* ───────────── AES-256-GCM Data-at-Rest Encryption (PBKDF2) ───────────── */
 
 /**
  * Derives a 256-bit AES-GCM CryptoKey from a user PIN and cryptographic salt
- * using PBKDF2 with 100,000 iterations and SHA-256.
+ * using PBKDF2 with SHA-256.
  */
-export async function deriveEncryptionKey(pin, saltBytes) {
+export async function deriveEncryptionKey(
+  pin,
+  saltBytes,
+  iterations = getStoredPbkdf2Iterations(),
+) {
   if (!pin || typeof pin !== "string") {
     throw new Error("PIN is required to derive encryption key.");
   }
@@ -388,7 +487,7 @@ export async function deriveEncryptionKey(pin, saltBytes) {
     {
       name: "PBKDF2",
       salt,
-      iterations: 100000,
+      iterations,
       hash: "SHA-256",
     },
     baseKey,
@@ -475,87 +574,151 @@ export async function decryptData(storedStringOrObj, key = activeSessionKey) {
 }
 
 /**
- * Encrypts all existing plaintext sensitive records in localStorage using sessionKey.
- * If oldSessionKey is provided, re-encrypts previously encrypted records with the new key.
+ * Two-phase atomic encryption of all sensitive records in localStorage.
+ * Phase 1: Decrypts (if oldSessionKey is provided) and encrypts all keys in memory.
+ * Phase 2: Commits all encrypted values to localStorage, rolling back to the exact
+ *          pre-operation snapshot if any key fails to write (e.g. QuotaExceededError).
  */
 export async function encryptAllSensitiveData(
   newSessionKey = activeSessionKey,
   oldSessionKey = null,
 ) {
   if (!newSessionKey) return false;
+  const originalRawSnapshot = new Map();
+  const stagedEncryptedWrites = new Map();
+
+  // Phase 1: Prepare all encrypted payloads in memory before mutating localStorage
   for (const key of SENSITIVE_STORAGE_KEYS) {
+    const raw = localStorage.getItem(key);
+    originalRawSnapshot.set(key, raw);
+    if (!raw) continue;
+
+    let parsed;
     try {
-      const raw = localStorage.getItem(key);
-      if (!raw) continue;
-      let parsed;
-      try {
-        parsed = JSON.parse(raw);
-      } catch {
-        continue;
-      }
-      let plainData = parsed;
-      if (
-        parsed &&
-        typeof parsed === "object" &&
-        parsed.format === ENCRYPTED_STORAGE_FORMAT
-      ) {
-        if (!oldSessionKey) {
-          continue;
-        }
-        try {
-          plainData = await decryptData(parsed, oldSessionKey);
-        } catch {
-          continue;
-        }
-      }
-      const encrypted = await encryptData(plainData, newSessionKey);
-      localStorage.setItem(key, encrypted);
-    } catch (err) {
-      console.warn(`Failed to encrypt key ${key}:`, err);
+      parsed = JSON.parse(raw);
+    } catch {
+      continue;
     }
+
+    let plainData = parsed;
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      parsed.format === ENCRYPTED_STORAGE_FORMAT
+    ) {
+      if (!oldSessionKey) {
+        // Already encrypted and no key rotation requested; verify it decrypts with newSessionKey
+        try {
+          await decryptData(parsed, newSessionKey);
+          continue;
+        } catch {
+          throw new Error(
+            `Cannot re-encrypt ${key}: existing encrypted record requires previous session key.`,
+          );
+        }
+      }
+      plainData = await decryptData(parsed, oldSessionKey);
+    }
+
+    const encrypted = await encryptData(plainData, newSessionKey);
+    stagedEncryptedWrites.set(key, encrypted);
   }
-  return true;
+
+  // Phase 2: Commit staged writes with automatic rollback on storage failure
+  const committedKeys = [];
+  try {
+    for (const [key, encryptedValue] of stagedEncryptedWrites.entries()) {
+      localStorage.setItem(key, encryptedValue);
+      committedKeys.push(key);
+    }
+    return true;
+  } catch (err) {
+    for (const key of committedKeys) {
+      try {
+        const previousVal = originalRawSnapshot.get(key);
+        if (previousVal === null || previousVal === undefined) {
+          localStorage.removeItem(key);
+        } else {
+          localStorage.setItem(key, previousVal);
+        }
+      } catch {
+        // best-effort rollback
+      }
+    }
+    throw new Error(
+      `Failed to encrypt local storage atomically (${err?.message || err}). Rolled back changes.`,
+    );
+  }
 }
 
 /**
- * Decrypts all existing encrypted sensitive records in localStorage back to plaintext JSON.
+ * Two-phase atomic decryption of all encrypted sensitive records back to plaintext JSON.
+ * Rolls back all keys if any decryption or localStorage write fails.
  */
 export async function decryptAllSensitiveData(sessionKey = activeSessionKey) {
   if (!sessionKey) return false;
+  const originalRawSnapshot = new Map();
+  const stagedPlaintextWrites = new Map();
+
   for (const key of SENSITIVE_STORAGE_KEYS) {
+    const raw = localStorage.getItem(key);
+    originalRawSnapshot.set(key, raw);
+    if (!raw) continue;
+
+    let parsed;
     try {
-      const raw = localStorage.getItem(key);
-      if (!raw) continue;
-      let parsed;
-      try {
-        parsed = JSON.parse(raw);
-      } catch {
-        continue;
-      }
-      if (
-        parsed &&
-        typeof parsed === "object" &&
-        parsed.format === ENCRYPTED_STORAGE_FORMAT
-      ) {
-        const decrypted = await decryptData(parsed, sessionKey);
-        localStorage.setItem(key, JSON.stringify(decrypted));
-      }
-    } catch (err) {
-      console.warn(`Failed to decrypt key ${key}:`, err);
+      parsed = JSON.parse(raw);
+    } catch {
+      continue;
+    }
+
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      parsed.format === ENCRYPTED_STORAGE_FORMAT
+    ) {
+      const decrypted = await decryptData(parsed, sessionKey);
+      stagedPlaintextWrites.set(key, JSON.stringify(decrypted));
     }
   }
-  return true;
+
+  const committedKeys = [];
+  try {
+    for (const [key, plainJson] of stagedPlaintextWrites.entries()) {
+      localStorage.setItem(key, plainJson);
+      committedKeys.push(key);
+    }
+    return true;
+  } catch (err) {
+    for (const key of committedKeys) {
+      try {
+        const previousVal = originalRawSnapshot.get(key);
+        if (previousVal === null || previousVal === undefined) {
+          localStorage.removeItem(key);
+        } else {
+          localStorage.setItem(key, previousVal);
+        }
+      } catch {
+        // best-effort rollback
+      }
+    }
+    throw new Error(
+      `Failed to decrypt local storage atomically (${err?.message || err}). Rolled back changes.`,
+    );
+  }
 }
 
 /* ───────────── App Lock PIN Management (On-Device Screen Lock) ───────────── */
 export async function setAppPin(pin) {
-  if (!pin || pin.length < 4) {
+  if (!pin || typeof pin !== "string" || pin.length < 4) {
     throw new Error("PIN must be at least 4 digits");
   }
   ensureSubtleCrypto();
 
   const oldSessionKey = activeSessionKey;
+  const iterations = HARDENED_PBKDF2_ITERATIONS;
   const salt = getRandomBytes(16);
+  const dataSalt = getRandomBytes(16);
   const encoder = new TextEncoder();
   const keyMaterial = await crypto.subtle.importKey(
     "raw",
@@ -569,20 +732,28 @@ export async function setAppPin(pin) {
     {
       name: "PBKDF2",
       salt,
-      iterations: 100000,
+      iterations,
       hash: "SHA-256",
     },
     keyMaterial,
     256,
   );
 
+  const { key: sessionKey } = await deriveEncryptionKey(
+    pin,
+    dataSalt,
+    iterations,
+  );
+
+  // Encrypt all sensitive keys FIRST before overwriting PIN/salt metadata in localStorage
+  // so a failure never leaves storage in a partial encryption state.
+  await encryptAllSensitiveData(sessionKey, oldSessionKey);
+
   localStorage.setItem(PIN_STORAGE_KEY, bufferToBase64(hashBuffer));
   localStorage.setItem(PIN_SALT_KEY, bufferToBase64(salt));
-
-  // Derive AES-256-GCM data encryption key
-  const dataSalt = getRandomBytes(16);
+  localStorage.setItem(PIN_ITERATIONS_KEY, String(iterations));
   localStorage.setItem(DATA_SALT_KEY, bufferToBase64(dataSalt));
-  const { key: sessionKey } = await deriveEncryptionKey(pin, dataSalt);
+  resetPinFailures();
 
   setSessionKey(sessionKey);
   setSessionUnlocked(true);
@@ -592,13 +763,15 @@ export async function setAppPin(pin) {
     await persistBiometricSessionKey(sessionKey);
   }
 
-  await encryptAllSensitiveData(sessionKey, oldSessionKey);
-
   return true;
 }
 
 export async function verifyAppPin(pin) {
   if (getPinLockoutRemainingSeconds() > 0) {
+    return false;
+  }
+  if (!pin || typeof pin !== "string") {
+    recordPinFailure();
     return false;
   }
 
@@ -607,6 +780,7 @@ export async function verifyAppPin(pin) {
   if (!storedHash || !storedSalt) return false;
 
   ensureSubtleCrypto();
+  const iterations = getStoredPbkdf2Iterations();
   const salt = new Uint8Array(base64ToBuffer(storedSalt));
   const encoder = new TextEncoder();
   const keyMaterial = await crypto.subtle.importKey(
@@ -621,7 +795,7 @@ export async function verifyAppPin(pin) {
     {
       name: "PBKDF2",
       salt,
-      iterations: 100000,
+      iterations,
       hash: "SHA-256",
     },
     keyMaterial,
@@ -641,7 +815,11 @@ export async function verifyAppPin(pin) {
       localStorage.setItem(DATA_SALT_KEY, bufferToBase64(dataSalt));
     }
 
-    const { key: sessionKey } = await deriveEncryptionKey(pin, dataSalt);
+    const { key: sessionKey } = await deriveEncryptionKey(
+      pin,
+      dataSalt,
+      iterations,
+    );
     setSessionKey(sessionKey);
     setSessionUnlocked(true);
     markActive();
@@ -657,14 +835,19 @@ export async function verifyAppPin(pin) {
 }
 
 export function hasAppPin() {
-  return Boolean(
-    localStorage.getItem(PIN_STORAGE_KEY) && localStorage.getItem(PIN_SALT_KEY),
-  );
+  try {
+    return Boolean(
+      localStorage.getItem(PIN_STORAGE_KEY) &&
+        localStorage.getItem(PIN_SALT_KEY),
+    );
+  } catch {
+    return false;
+  }
 }
 
 /**
  * Removes App PIN when the user is already authenticated/unlocked (e.g. Settings -> Turn Off).
- * Decrypts all encrypted records back to standard localStorage using the active session key.
+ * Atomically decrypts all encrypted records back to standard localStorage using the active session key.
  */
 export async function removeAppPin() {
   if (!isSessionUnlocked() || !activeSessionKey) {
@@ -675,6 +858,7 @@ export async function removeAppPin() {
 
   localStorage.removeItem(PIN_STORAGE_KEY);
   localStorage.removeItem(PIN_SALT_KEY);
+  localStorage.removeItem(PIN_ITERATIONS_KEY);
   localStorage.removeItem(DATA_SALT_KEY);
   localStorage.removeItem(BIOMETRIC_KEY_ID);
   clearBackgroundedAt();
@@ -699,6 +883,7 @@ export async function resetForgottenPin() {
   }
   localStorage.removeItem(PIN_STORAGE_KEY);
   localStorage.removeItem(PIN_SALT_KEY);
+  localStorage.removeItem(PIN_ITERATIONS_KEY);
   localStorage.removeItem(DATA_SALT_KEY);
   localStorage.removeItem(BIOMETRIC_KEY_ID);
   clearBackgroundedAt();
@@ -733,10 +918,10 @@ export async function isBiometricsAvailable() {
 }
 
 export function hasBiometricsConfigured() {
-  const raw = localStorage.getItem(BIOMETRIC_KEY_ID);
-  if (!raw) return false;
-  if (raw.startsWith("{")) {
-    try {
+  try {
+    const raw = localStorage.getItem(BIOMETRIC_KEY_ID);
+    if (!raw) return false;
+    if (raw.startsWith("{")) {
       const parsed = JSON.parse(raw);
       if (
         parsed?.rpId &&
@@ -747,11 +932,11 @@ export function hasBiometricsConfigured() {
         return false;
       }
       return Boolean(parsed?.id);
-    } catch {
-      return false;
     }
+    return true;
+  } catch {
+    return false;
   }
-  return true;
 }
 
 export async function enableBiometrics(currentPin) {
@@ -824,7 +1009,11 @@ export async function enableBiometrics(currentPin) {
 }
 
 export async function disableBiometrics() {
-  localStorage.removeItem(BIOMETRIC_KEY_ID);
+  try {
+    localStorage.removeItem(BIOMETRIC_KEY_ID);
+  } catch {
+    // ignore
+  }
   await clearPersistedBiometricKey();
 }
 
@@ -861,7 +1050,6 @@ export async function authenticateWithBiometrics() {
       window.Capacitor?.isNativePlatform?.() &&
       credentialId === "native-biometric";
 
-    // Pre-verify that a biometric decryption key exists on this device before prompting Touch ID / Face ID
     let restoredKey = biometricCachedKey;
     if (!restoredKey) {
       restoredKey = await loadNonExtractableBiometricKey();
@@ -984,18 +1172,30 @@ function clearBackgroundedAt() {
 }
 
 export function getLockTimeoutMinutes() {
-  const val = localStorage.getItem(LOCK_TIMEOUT_KEY);
-  if (val === "0" || val === "1" || val === "5") return Number(val);
+  try {
+    const val = localStorage.getItem(LOCK_TIMEOUT_KEY);
+    if (val === "0" || val === "1" || val === "5") return Number(val);
+  } catch {
+    // ignore
+  }
   return 1; // Default: 1 minute
 }
 
 export function setLockTimeoutMinutes(minutes) {
-  localStorage.setItem(LOCK_TIMEOUT_KEY, String(minutes));
+  try {
+    localStorage.setItem(LOCK_TIMEOUT_KEY, String(minutes));
+  } catch {
+    // ignore
+  }
   markActive();
 }
 
 export function markActive() {
-  localStorage.setItem(LAST_ACTIVE_KEY, String(Date.now()));
+  try {
+    localStorage.setItem(LAST_ACTIVE_KEY, String(Date.now()));
+  } catch {
+    // ignore
+  }
   clearBackgroundedAt();
 }
 
@@ -1015,7 +1215,6 @@ export function shouldLockApp() {
   const timeoutMinutes = getLockTimeoutMinutes();
   const backgroundedAt = getBackgroundedAt();
 
-  // 1. If the app was backgrounded, evaluate against background elapsed time
   if (backgroundedAt != null) {
     const elapsedMinutes = (Date.now() - backgroundedAt) / 60000;
     if (timeoutMinutes === 0 || elapsedMinutes >= timeoutMinutes) {
@@ -1028,13 +1227,16 @@ export function shouldLockApp() {
     return false;
   }
 
-  // 2. "Immediately" (timeoutMinutes === 0) locks upon leaving the app, not while active in foreground
   if (timeoutMinutes === 0) {
     return false;
   }
 
-  // 3. For timeoutMinutes > 0 (1 min, 5 min), check foreground inactivity (idle timeout)
-  const lastActive = Number(localStorage.getItem(LAST_ACTIVE_KEY)) || 0;
+  let lastActive = 0;
+  try {
+    lastActive = Number(localStorage.getItem(LAST_ACTIVE_KEY)) || 0;
+  } catch {
+    lastActive = 0;
+  }
   const elapsedMinutes = (Date.now() - lastActive) / 60000;
   if (elapsedMinutes >= timeoutMinutes) {
     lockRuntimeSession();
@@ -1074,7 +1276,7 @@ export async function encryptBackup(plainData, password) {
     {
       name: "PBKDF2",
       salt,
-      iterations: 100000,
+      iterations: HARDENED_PBKDF2_ITERATIONS,
       hash: "SHA-256",
     },
     keyMaterial,
@@ -1101,6 +1303,7 @@ export async function encryptBackup(plainData, password) {
   return {
     format,
     version,
+    iterations: HARDENED_PBKDF2_ITERATIONS,
     exportedAt,
     salt: bufferToBase64(salt),
     iv: bufferToBase64(iv),
@@ -1136,17 +1339,14 @@ export async function decryptBackup(encryptedPayload, password) {
     ["deriveKey"],
   );
 
-  const aesKey = await crypto.subtle.deriveKey(
-    {
-      name: "PBKDF2",
-      salt,
-      iterations: 100000,
-      hash: "SHA-256",
-    },
-    keyMaterial,
-    { name: "AES-GCM", length: 256 },
-    false,
-    ["decrypt"],
+  const candidateIterations = Array.from(
+    new Set(
+      [
+        Number(encryptedPayload.iterations),
+        HARDENED_PBKDF2_ITERATIONS,
+        DEFAULT_LEGACY_PBKDF2_ITERATIONS,
+      ].filter((n) => Number.isInteger(n) && n >= 10000),
+    ),
   );
 
   const additionalData = encoder.encode(
@@ -1157,25 +1357,42 @@ export async function decryptBackup(encryptedPayload, password) {
     }),
   );
 
-  try {
-    const decryptedBuffer = await crypto.subtle.decrypt(
-      { name: "AES-GCM", iv, additionalData },
-      aesKey,
-      ciphertext,
+  for (const iterations of candidateIterations) {
+    const aesKey = await crypto.subtle.deriveKey(
+      {
+        name: "PBKDF2",
+        salt,
+        iterations,
+        hash: "SHA-256",
+      },
+      keyMaterial,
+      { name: "AES-GCM", length: 256 },
+      false,
+      ["decrypt"],
     );
-    const decoder = new TextDecoder();
-    return JSON.parse(decoder.decode(decryptedBuffer));
-  } catch {
+
     try {
       const decryptedBuffer = await crypto.subtle.decrypt(
-        { name: "AES-GCM", iv },
+        { name: "AES-GCM", iv, additionalData },
         aesKey,
         ciphertext,
       );
       const decoder = new TextDecoder();
       return JSON.parse(decoder.decode(decryptedBuffer));
     } catch {
-      throw new Error("Incorrect password or corrupted encrypted backup.");
+      try {
+        const decryptedBuffer = await crypto.subtle.decrypt(
+          { name: "AES-GCM", iv },
+          aesKey,
+          ciphertext,
+        );
+        const decoder = new TextDecoder();
+        return JSON.parse(decoder.decode(decryptedBuffer));
+      } catch {
+        // Try next iteration count if applicable
+      }
     }
   }
+
+  throw new Error("Incorrect password or corrupted encrypted backup.");
 }

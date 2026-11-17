@@ -1282,6 +1282,81 @@ $$;
 revoke all on function public.verify_spend_sql_installation() from public, anon;
 grant execute on function public.verify_spend_sql_installation() to authenticated, service_role;
 
+-- 7. Harden preserve_push_reminder_progress trigger so expired claim leases never block schedule edits
+create or replace function public.preserve_push_reminder_progress()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+declare
+  v_tz text := coalesce(nullif(btrim(new.timezone), ''), 'UTC');
+begin
+  if tg_op = 'INSERT' then
+    begin
+      new.next_notify_at := (new.next_date + new.reminder_time::time) at time zone v_tz;
+    exception when others then
+      new.next_notify_at := (new.next_date + new.reminder_time::time) at time zone 'UTC';
+    end;
+    new.updated_at := timezone('utc', now());
+    return new;
+  end if;
+
+  -- Case 1: Occurrence advanced forward (after successful push or skip)
+  if new.next_date > old.next_date then
+    new.pending_notification := false;
+    new.claim_until := null;
+    if new.next_notify_at is not distinct from old.next_notify_at then
+      begin
+        new.next_notify_at := (new.next_date + new.reminder_time::time) at time zone v_tz;
+      exception when others then
+        new.next_notify_at := (new.next_date + new.reminder_time::time) at time zone 'UTC';
+      end;
+    end if;
+    new.updated_at := timezone('utc', now());
+    return new;
+  end if;
+
+  -- Case 2: Claim lease acquisition or renewal (claim_until explicitly changed, schedule unchanged)
+  if new.claim_until is not null
+     and new.claim_until is distinct from old.claim_until
+     and new.next_date = old.next_date
+     and new.reminder_time is not distinct from old.reminder_time
+     and new.timezone is not distinct from old.timezone then
+    new.next_notify_at := old.next_notify_at;
+    new.updated_at := timezone('utc', now());
+    return new;
+  end if;
+
+  -- Case 3: Releasing an expired/failed claim without advancing next_date
+  if old.claim_until is not null
+     and new.claim_until is null
+     and new.next_date = old.next_date
+     and new.reminder_time is not distinct from old.reminder_time
+     and new.timezone is not distinct from old.timezone then
+    new.next_notify_at := old.next_notify_at;
+    new.pending_notification := false;
+    new.updated_at := timezone('utc', now());
+    return new;
+  end if;
+
+  -- Case 4: General schedule or reminder_time edits (clear any stale claim lease)
+  new.claim_until := null;
+  begin
+    new.next_notify_at := (new.next_date + new.reminder_time::time) at time zone v_tz;
+  exception when others then
+    new.next_notify_at := (new.next_date + new.reminder_time::time) at time zone 'UTC';
+  end;
+
+  new.updated_at := timezone('utc', now());
+  return new;
+end;
+$$;
+
+drop trigger if exists preserve_push_reminder_progress_trigger on public.push_reminders;
+create trigger preserve_push_reminder_progress_trigger
+  before insert or update on public.push_reminders
+  for each row execute function public.preserve_push_reminder_progress();
+
 -- Re-run snapshot sync for all existing users so credit card and cash balances reconcile immediately
 update public.spend_user_data
 set data = data

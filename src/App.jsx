@@ -13,13 +13,18 @@ import { createPortal } from "react-dom";
 import SpendSplash from "./components/SpendSplash.jsx";
 import WelcomeFlow from "./components/WelcomeFlow.jsx";
 import {
+  clampDayOfMonth,
   computeAccountBalances,
   emptyAccountData,
+  emptyDeletedRecords,
+  fromPoisha,
   STORAGE_KEYS,
   currentMonth,
   formatDate,
   getSavingsAccountId,
   isAccountId,
+  isCashCard,
+  isMfsCard,
   isPhantomAutoReconstructedCard,
   isSavingsCard,
   isValidDateString,
@@ -29,11 +34,15 @@ import {
   loadRecurringSchedules,
   localDate,
   makeId,
+  mergeDeletedRecords,
   nextOccurrenceDate,
+  normalizeDeletedRecords,
   parseAmount,
   readStorage,
   readStorageAsync,
+  recordUpdatedAt,
   roundMoney,
+  toPoisha,
   writeStorage,
   writeStorageAsync,
 } from "./data.js";
@@ -345,84 +354,6 @@ function shiftMonth(monthValue, offset) {
   return localDate(shifted).slice(0, 7);
 }
 
-function emptyDeletedRecords() {
-  return {
-    expenses: {},
-    budgets: {},
-    recurringSchedules: {},
-    accountTransactions: {},
-    cards: {},
-  };
-}
-
-const TOMBSTONE_MAX_AGE_MS = 60 * 24 * 60 * 60 * 1000; // 60 days
-
-function normalizeDeletedRecords(value, now = Date.now()) {
-  const cutoff = now - TOMBSTONE_MAX_AGE_MS;
-  const cleanChanges = (changes) => {
-    if (Array.isArray(changes))
-      return Object.fromEntries(
-        [...new Set(changes.filter((id) => typeof id === "string" && id))].map(
-          (id) => [id, { deleted: true, updatedAt: 0 }],
-        ),
-      );
-    if (!changes || typeof changes !== "object") return {};
-    return Object.fromEntries(
-      Object.entries(changes).flatMap(([id, change]) => {
-        if (
-          typeof id === "string" &&
-          id &&
-          change &&
-          typeof change === "object" &&
-          typeof change.deleted === "boolean"
-        ) {
-          const updatedAt = Number.isFinite(Number(change.updatedAt))
-            ? Number(change.updatedAt)
-            : 0;
-          if (updatedAt > 0 && updatedAt < cutoff) return [];
-          return [
-            [
-              id,
-              {
-                deleted: change.deleted,
-                updatedAt,
-                ...(typeof change.name === "string"
-                  ? { name: change.name }
-                  : {}),
-                ...(typeof change.color === "string"
-                  ? { color: change.color }
-                  : {}),
-              },
-            ],
-          ];
-        }
-        return [];
-      }),
-    );
-  };
-  return {
-    expenses: cleanChanges(value?.expenses),
-    budgets: cleanChanges(value?.budgets),
-    recurringSchedules: cleanChanges(value?.recurringSchedules),
-    accountTransactions: cleanChanges(value?.accountTransactions),
-    cards: cleanChanges(value?.cards),
-  };
-}
-
-function mergeDeletedRecords(...values) {
-  const merged = emptyDeletedRecords();
-  for (const value of values) {
-    const normalized = normalizeDeletedRecords(value);
-    for (const key of Object.keys(merged)) {
-      for (const [id, change] of Object.entries(normalized[key])) {
-        if (!merged[key][id] || change.updatedAt >= merged[key][id].updatedAt)
-          merged[key][id] = change;
-      }
-    }
-  }
-  return merged;
-}
-
 function isRecordDeleted(changes, id) {
   return changes?.[id]?.deleted === true;
 }
@@ -431,16 +362,6 @@ function csvCell(value) {
   let text = String(value ?? "");
   if (/^[\t\r ]*[=+@-]/.test(text)) text = `'${text}`;
   return `"${text.replaceAll('"', '""')}"`;
-}
-
-function recordUpdatedAt(record) {
-  const value = record?.updatedAt ?? record?.updated_at;
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value !== "string") return 0;
-  const numeric = Number(value);
-  if (Number.isFinite(numeric)) return numeric;
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function preferLocalRecord(local, cloud, preferLocalOnTie = true) {
@@ -720,34 +641,61 @@ function mergeAccountSettings(
     }
   }
 
-  const cardMap = new Map();
-  for (const card of cloudCards) {
-    if (!card?.id) continue;
-    if (remappedAccountIds[card.id]) continue;
-    const tombstone = deletedCardTombstones[card.id];
-    const cardTime = recordUpdatedAt(card);
-    if (tombstone?.deleted && tombstone.updatedAt >= cardTime) continue;
-    cardMap.set(card.id, card);
-  }
+  const localSettingsTime = recordUpdatedAt(localSettings);
   const cloudSettingsTime = recordUpdatedAt(cloudSettings);
-  for (const card of localCards) {
-    if (!card?.id) continue;
-    if (remappedAccountIds[card.id]) continue;
-    const tombstone = deletedCardTombstones[card.id];
-    const cardTime = recordUpdatedAt(card);
-    if (tombstone?.deleted && tombstone.updatedAt >= cardTime) continue;
-    const cloudCard = cardMap.get(card.id);
-    if (!cloudCard) {
-      // Keep local-only cards when local changes are preferred, cloud has no cards yet, or card was created newer than cloud settings
-      if (
-        preferLocal ||
-        !cloudHasConfiguredCards ||
-        (cardTime > 0 && cardTime > cloudSettingsTime)
-      ) {
+  const seedLocalFirst = preferLocal
+    ? localSettingsTime >= cloudSettingsTime || !cloudHasConfiguredCards
+    : false;
+  const cardMap = new Map();
+  if (seedLocalFirst) {
+    for (const card of localCards) {
+      if (!card?.id) continue;
+      if (remappedAccountIds[card.id]) continue;
+      const tombstone = deletedCardTombstones[card.id];
+      const cardTime = recordUpdatedAt(card);
+      if (tombstone?.deleted && tombstone.updatedAt >= cardTime) continue;
+      cardMap.set(card.id, card);
+    }
+    for (const card of cloudCards) {
+      if (!card?.id) continue;
+      if (remappedAccountIds[card.id]) continue;
+      const tombstone = deletedCardTombstones[card.id];
+      const cardTime = recordUpdatedAt(card);
+      if (tombstone?.deleted && tombstone.updatedAt >= cardTime) continue;
+      const localCard = cardMap.get(card.id);
+      if (!localCard) {
+        cardMap.set(card.id, card);
+      } else if (!preferLocalRecord(localCard, card, preferLocal)) {
         cardMap.set(card.id, card);
       }
-    } else if (preferLocalRecord(card, cloudCard, preferLocal)) {
+    }
+  } else {
+    for (const card of cloudCards) {
+      if (!card?.id) continue;
+      if (remappedAccountIds[card.id]) continue;
+      const tombstone = deletedCardTombstones[card.id];
+      const cardTime = recordUpdatedAt(card);
+      if (tombstone?.deleted && tombstone.updatedAt >= cardTime) continue;
       cardMap.set(card.id, card);
+    }
+    for (const card of localCards) {
+      if (!card?.id) continue;
+      if (remappedAccountIds[card.id]) continue;
+      const tombstone = deletedCardTombstones[card.id];
+      const cardTime = recordUpdatedAt(card);
+      if (tombstone?.deleted && tombstone.updatedAt >= cardTime) continue;
+      const cloudCard = cardMap.get(card.id);
+      if (!cloudCard) {
+        if (
+          preferLocal ||
+          !cloudHasConfiguredCards ||
+          (cardTime > 0 && cardTime > cloudSettingsTime)
+        ) {
+          cardMap.set(card.id, card);
+        }
+      } else if (preferLocalRecord(card, cloudCard, preferLocal)) {
+        cardMap.set(card.id, card);
+      }
     }
   }
 
@@ -3213,12 +3161,13 @@ export default function App() {
   );
   const monthlyTotal = useMemo(
     () =>
-      roundMoney(
+      fromPoisha(
         monthExpenses
           .filter((expense) => expense.category !== "Savings")
           .reduce(
-            (sum, expense) =>
-              sum + (expense.amount === null ? 0 : Number(expense.amount)),
+            (sumPoisha, expense) =>
+              sumPoisha +
+              (expense.amount === null ? 0 : toPoisha(expense.amount)),
             0,
           ),
       ),
@@ -3882,26 +3831,9 @@ export default function App() {
   function handleAddCard(newCard) {
     const cardId = newCard?.id || makeId();
     const now = Date.now();
-    const isMfs = Boolean(
-      newCard?.isPhone ||
-      newCard?.category === "mfs" ||
-      newCard?.type === "mfs" ||
-      newCard?.network === "mfs",
-    );
-    const isSavings = Boolean(
-      newCard?.category === "savings" ||
-      newCard?.type === "savings" ||
-      newCard?.provider === "savings" ||
-      String(newCard?.number || "").startsWith("SAV-") ||
-      String(newCard?.number || "").startsWith("VAULT-") ||
-      String(newCard?.number || "").startsWith("DPS-"),
-    );
-    const isCash = Boolean(
-      cardId === "cash" ||
-      newCard?.category === "cash" ||
-      newCard?.type === "cash" ||
-      newCard?.provider === "cash",
-    );
+    const isMfs = isMfsCard(newCard);
+    const isSavings = isSavingsCard(newCard);
+    const isCash = isCashCard({ ...newCard, id: cardId });
 
     const rawNumber = String(newCard?.number || "").replace(/\D/g, "");
     const last4 = isCash
@@ -3934,17 +3866,8 @@ export default function App() {
       const currentCards = Array.isArray(current.settings.cards)
         ? current.settings.cards
         : [];
-      const isCardSavings = (c) =>
-        Boolean(
-          c?.category === "savings" ||
-            c?.type === "savings" ||
-            c?.provider === "savings" ||
-            String(c?.number || "").startsWith("SAV-") ||
-            String(c?.number || "").startsWith("VAULT-") ||
-            String(c?.number || "").startsWith("DPS-"),
-        );
       const isFirstNonSavings =
-        !isSavings && !currentCards.some((c) => !isCardSavings(c));
+        !isSavings && !currentCards.some((c) => !isSavingsCard(c));
       const isPrimary = isSavings
         ? false
         : Boolean(newCard?.isPrimary ?? isFirstNonSavings);
@@ -4004,18 +3927,9 @@ export default function App() {
       const remainingCards = currentCards.filter((c) => c.id !== cardId);
       const wasPrimary =
         existingCard?.isPrimary || current.settings.primaryCardId === cardId;
-      const isCardSavings = (c) =>
-        Boolean(
-          c?.category === "savings" ||
-            c?.type === "savings" ||
-            c?.provider === "savings" ||
-            String(c?.number || "").startsWith("SAV-") ||
-            String(c?.number || "").startsWith("VAULT-") ||
-            String(c?.number || "").startsWith("DPS-"),
-        );
       const promoteCandidate =
-        remainingCards.find((c) => !isCardSavings(c) && !c.frozen) ||
-        remainingCards.find((c) => !isCardSavings(c)) ||
+        remainingCards.find((c) => !isSavingsCard(c) && !c.frozen) ||
+        remainingCards.find((c) => !isSavingsCard(c)) ||
         null;
       const nextCards = remainingCards.map((c) =>
         wasPrimary && promoteCandidate && c.id === promoteCandidate.id
@@ -4100,26 +4014,9 @@ export default function App() {
   function handleUpdateCard(updatedCard) {
     if (!updatedCard?.id) return updatedCard;
     const now = Date.now();
-    const isMfs = Boolean(
-      updatedCard?.isPhone ||
-      updatedCard?.category === "mfs" ||
-      updatedCard?.type === "mfs" ||
-      updatedCard?.network === "mfs",
-    );
-    const isSavings = Boolean(
-      updatedCard?.category === "savings" ||
-      updatedCard?.type === "savings" ||
-      updatedCard?.provider === "savings" ||
-      String(updatedCard?.number || "").startsWith("SAV-") ||
-      String(updatedCard?.number || "").startsWith("VAULT-") ||
-      String(updatedCard?.number || "").startsWith("DPS-"),
-    );
-    const isCash = Boolean(
-      updatedCard?.id === "cash" ||
-      updatedCard?.category === "cash" ||
-      updatedCard?.type === "cash" ||
-      updatedCard?.provider === "cash",
-    );
+    const isMfs = isMfsCard(updatedCard);
+    const isSavings = isSavingsCard(updatedCard);
+    const isCash = isCashCard(updatedCard);
 
     const rawNumber = String(updatedCard?.number || "").replace(/\D/g, "");
     const last4 = isCash
@@ -4482,9 +4379,21 @@ export default function App() {
               ? Boolean(form.on)
               : schedule.active;
         const nextDateChanged = nextDate !== schedule.nextDate;
-        const dayOfMonth = nextDateChanged
-          ? Number(nextDate.slice(-2))
-          : schedule.dayOfMonth || Number(nextDate.slice(-2));
+        const explicitDayOfMonth = Number(form.dayOfMonth);
+        const parsedNextDay = Number(nextDate.slice(-2));
+        const [ny, nm] = nextDate.split("-").map(Number);
+        const existingPreserveEndOfMonth =
+          !Number.isFinite(explicitDayOfMonth) &&
+          schedule.dayOfMonth > parsedNextDay &&
+          clampDayOfMonth(ny, nm, schedule.dayOfMonth) === parsedNextDay;
+        const dayOfMonth =
+          Number.isInteger(explicitDayOfMonth) &&
+          explicitDayOfMonth >= 1 &&
+          explicitDayOfMonth <= 31
+            ? explicitDayOfMonth
+            : nextDateChanged && !existingPreserveEndOfMonth
+              ? parsedNextDay
+              : schedule.dayOfMonth || parsedNextDay;
         let resolvedNextDate = nextDate;
         if (!schedule.active && nextActive && !nextDateChanged) {
           let skipped = 0;

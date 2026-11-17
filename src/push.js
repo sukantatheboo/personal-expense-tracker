@@ -1,12 +1,16 @@
-import { localDate, nextOccurrenceDate } from "./data.js";
+import {
+  addDaysToDateString,
+  clampDayOfMonth,
+  cleanEnv,
+  localDate,
+  nextOccurrenceDate,
+} from "./data.js";
+import { setLiveSupabaseSessionToken } from "./cloud-sync.js";
 import { getWeeklySpendSummary } from "./notifications.js";
 
-const cleanEnv = (value) =>
-  typeof value === "string" ? value.trim().replace(/^["']|["']$/g, "") : "";
-
-const supabaseUrl = cleanEnv(import.meta.env.VITE_SUPABASE_URL);
-const supabaseAnonKey = cleanEnv(import.meta.env.VITE_SUPABASE_ANON_KEY);
-export const vapidPublicKey = cleanEnv(import.meta.env.VITE_VAPID_PUBLIC_KEY);
+const supabaseUrl = cleanEnv(import.meta.env?.VITE_SUPABASE_URL);
+const supabaseAnonKey = cleanEnv(import.meta.env?.VITE_SUPABASE_ANON_KEY);
+export const vapidPublicKey = cleanEnv(import.meta.env?.VITE_VAPID_PUBLIC_KEY);
 
 export const supabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 export const pushBackendConfigured = Boolean(
@@ -14,6 +18,11 @@ export const pushBackendConfigured = Boolean(
 );
 
 export const PUSH_DISABLED_BY_USER_KEY = "spend-push-disabled-by-user-v1";
+export const PUSH_DEVICE_ID_KEY = "spend-push-device-id-v1";
+export const DAILY_SCHEDULE_PREFIX = "__daily_";
+export const WEEKLY_SUMMARY_SCHEDULE_ID = "__weekly_summary__";
+export const MONTHLY_OVERVIEW_SCHEDULE_ID = "__monthly_overview__";
+export const HEADS_UP_SCHEDULE_PREFIX = "heads-up:";
 
 export let supabase = null;
 let supabaseInitPromise = null;
@@ -22,8 +31,8 @@ let registerPushRpcUnavailable = false;
 const FALLBACK_RPC_CODES = new Set([
   "42883", // undefined_function
   "PGRST202", // function not found in PostgREST schema cache
-  "42703", // undefined_column (e.g. unmigrated push_devices.updated_at)
-  "42804", // datatype_mismatch (e.g. unmigrated text vs uuid device_id)
+  "42703", // undefined_column
+  "42804", // datatype_mismatch
 ]);
 
 async function upsertPushDeviceWithFallback(
@@ -71,6 +80,22 @@ export async function getSupabase() {
     supabaseInitPromise = import("@supabase/supabase-js").then(
       ({ createClient }) => {
         supabase = createClient(supabaseUrl, supabaseAnonKey);
+        supabase.auth
+          .getSession()
+          .then(({ data }) => {
+            const session = data?.session;
+            setLiveSupabaseSessionToken(
+              session?.access_token || "",
+              session?.expires_at || 0,
+            );
+          })
+          .catch(() => {});
+        supabase.auth.onAuthStateChange((_event, session) => {
+          setLiveSupabaseSessionToken(
+            session?.access_token || "",
+            session?.expires_at || 0,
+          );
+        });
         return supabase;
       },
     );
@@ -79,39 +104,31 @@ export async function getSupabase() {
 }
 
 function getDeviceId() {
-  const key = "spend-push-device-id-v1";
-  let id = localStorage.getItem(key);
+  let id = null;
+  try {
+    id = localStorage.getItem(PUSH_DEVICE_ID_KEY);
+  } catch {
+    id = null;
+  }
   if (!id) {
     id = globalThis.crypto?.randomUUID?.();
     if (!id) throw new Error("This browser cannot create a secure device ID.");
-    localStorage.setItem(key, id);
+    try {
+      localStorage.setItem(PUSH_DEVICE_ID_KEY, id);
+    } catch {
+      // Return volatile UUID if storage is restricted
+    }
   }
   return id;
 }
 
 function vapidKeyBytes(value) {
-  const clean = String(value || "")
-    .trim()
-    .replace(/^["']|["']$/g, "");
+  const clean = cleanEnv(value);
   const padding = "=".repeat((4 - (clean.length % 4)) % 4);
   const decoded = atob(
     (clean + padding).replaceAll("-", "+").replaceAll("_", "/"),
   );
   return Uint8Array.from(decoded, (character) => character.charCodeAt(0));
-}
-
-function addDaysToDateStr(dateStr, days) {
-  const [y, m, d] = String(dateStr || "")
-    .split("-")
-    .map(Number);
-  if (!y || !m || !d) return localDate();
-  return localDate(new Date(y, m - 1, d + days));
-}
-
-function clampDayOfMonth(day) {
-  const num = Number(day);
-  if (!Number.isFinite(num)) return 1;
-  return Math.max(1, Math.min(31, Math.round(num)));
 }
 
 async function getActiveServiceWorkerRegistration() {
@@ -121,7 +138,9 @@ async function getActiveServiceWorkerRegistration() {
   try {
     return await Promise.race([
       navigator.serviceWorker.ready,
-      new Promise((resolve) => setTimeout(() => resolve(existing || null), 4000)),
+      new Promise((resolve) =>
+        setTimeout(() => resolve(existing || null), 4000),
+      ),
     ]);
   } catch {
     return existing || null;
@@ -158,7 +177,6 @@ export async function enableBackgroundPush(userId) {
     throw new Error("The browser returned an invalid push subscription.");
   }
 
-  // Ensure this subscription endpoint is detached from any older user on this browser via SECURITY DEFINER RPC
   const deviceId = getDeviceId();
   await upsertPushDeviceWithFallback(client, {
     userId,
@@ -168,7 +186,9 @@ export async function enableBackgroundPush(userId) {
   });
   try {
     localStorage.removeItem(PUSH_DISABLED_BY_USER_KEY);
-  } catch {}
+  } catch {
+    // ignore storage errors
+  }
   return { registration, subscription };
 }
 
@@ -207,7 +227,7 @@ export async function disableBackgroundPush(userId) {
     );
   }
   try {
-    localStorage.removeItem("spend-push-device-id-v1");
+    localStorage.removeItem(PUSH_DEVICE_ID_KEY);
     localStorage.setItem(PUSH_DISABLED_BY_USER_KEY, "true");
   } catch {
     // Ignore storage errors on cleanup
@@ -238,8 +258,6 @@ export async function syncBackgroundSchedules(
   const deviceId = getDeviceId();
   const [hours, minutes] = reminderTime.split(":").map(Number);
 
-  // Ensure push_devices row is always present and synced for this (user_id, device_id)
-  // so send-due-reminders never deletes push_reminders as orphaned
   let deviceSynced = false;
   if ("serviceWorker" in navigator && "PushManager" in window) {
     try {
@@ -308,7 +326,9 @@ export async function syncBackgroundSchedules(
     dailyAlreadyFiredForThisTime =
       localStorage.getItem("spend-last-daily-reminder-date-v1") ===
       `${todayStr}:${reminderTime}`;
-  } catch {}
+  } catch {
+    dailyAlreadyFiredForThisTime = false;
+  }
 
   const reminders = [];
 
@@ -316,12 +336,10 @@ export async function syncBackgroundSchedules(
   for (const schedule of schedules) {
     if (!schedule?.id || !schedule?.nextDate) continue;
     const interval = schedule.interval === "weekly" ? "weekly" : "monthly";
-    const dayOfMonth = clampDayOfMonth(
+    const anchorDayOfMonth = clampDayOfMonth(
       schedule.dayOfMonth || Number(schedule.nextDate.slice(-2)),
     );
 
-    // If an expense for this recurring schedule was generated today AND today's reminderTime is still in the future,
-    // allow today's reminder to fire at reminderTime rather than skipping to next month/week.
     const generatedToday = expenses.some(
       (e) =>
         (e?.recurringId === schedule.id || e?.recId === schedule.id) &&
@@ -334,7 +352,7 @@ export async function syncBackgroundSchedules(
     let notifyDate = new Date(year, month - 1, day, hours, minutes);
     let guard = 0;
     while (notifyDate.getTime() <= nowMs && guard < 240) {
-      targetDate = nextOccurrenceDate(targetDate, interval, dayOfMonth);
+      targetDate = nextOccurrenceDate(targetDate, interval, anchorDayOfMonth);
       [year, month, day] = targetDate.split("-").map(Number);
       notifyDate = new Date(year, month - 1, day, hours, minutes);
       guard += 1;
@@ -349,7 +367,7 @@ export async function syncBackgroundSchedules(
         80,
       ),
       interval,
-      day_of_month: dayOfMonth,
+      day_of_month: anchorDayOfMonth,
       next_date: targetDate,
       next_notify_at: notifyDate.toISOString(),
       timezone,
@@ -357,15 +375,15 @@ export async function syncBackgroundSchedules(
       active: Boolean(schedule.active),
     });
 
-    // 1-day-before heads-up reminder
+    // 1-day-before heads-up reminder (always anchored to billOccDate - 1 day so dayOfMonth=31 never oscillates)
     let billOccDate = schedule.nextDate;
-    let headsUpDate = addDaysToDateStr(billOccDate, -1);
+    let headsUpDate = addDaysToDateString(billOccDate, -1);
     let [hy, hm, hd] = headsUpDate.split("-").map(Number);
     let headsUpNotify = new Date(hy, hm - 1, hd, hours, minutes);
     let headsUpGuard = 0;
     while (headsUpNotify.getTime() <= nowMs && headsUpGuard < 240) {
-      billOccDate = nextOccurrenceDate(billOccDate, interval, dayOfMonth);
-      headsUpDate = addDaysToDateStr(billOccDate, -1);
+      billOccDate = nextOccurrenceDate(billOccDate, interval, anchorDayOfMonth);
+      headsUpDate = addDaysToDateString(billOccDate, -1);
       [hy, hm, hd] = headsUpDate.split("-").map(Number);
       headsUpNotify = new Date(hy, hm - 1, hd, hours, minutes);
       headsUpGuard += 1;
@@ -374,13 +392,13 @@ export async function syncBackgroundSchedules(
     reminders.push({
       user_id: userId,
       device_id: deviceId,
-      schedule_id: `heads-up:${schedule.id}`,
+      schedule_id: `${HEADS_UP_SCHEDULE_PREFIX}${schedule.id}`,
       description: String(schedule.description || "Recurring expense").slice(
         0,
         80,
       ),
       interval,
-      day_of_month: dayOfMonth,
+      day_of_month: anchorDayOfMonth,
       next_date: headsUpDate,
       next_notify_at: headsUpNotify.toISOString(),
       timezone,
@@ -418,7 +436,7 @@ export async function syncBackgroundSchedules(
     reminders.push({
       user_id: userId,
       device_id: deviceId,
-      schedule_id: `__daily_${dow}__`,
+      schedule_id: `${DAILY_SCHEDULE_PREFIX}${dow}__`,
       description: "Daily expense reminder",
       interval: "weekly",
       day_of_month: clampDayOfMonth(Number(nextDateStr.slice(-2))),
@@ -461,7 +479,7 @@ export async function syncBackgroundSchedules(
   reminders.push({
     user_id: userId,
     device_id: deviceId,
-    schedule_id: "__weekly_summary__",
+    schedule_id: WEEKLY_SUMMARY_SCHEDULE_ID,
     description: weeklyDesc.slice(0, 80),
     interval: "weekly",
     day_of_month: clampDayOfMonth(Number(sundayDateStr.slice(-2))),
@@ -495,7 +513,7 @@ export async function syncBackgroundSchedules(
   reminders.push({
     user_id: userId,
     device_id: deviceId,
-    schedule_id: "__monthly_overview__",
+    schedule_id: MONTHLY_OVERVIEW_SCHEDULE_ID,
     description: "Previous month's spend overview",
     interval: "monthly",
     day_of_month: 1,
@@ -506,8 +524,6 @@ export async function syncBackgroundSchedules(
     active: true,
   });
 
-  // Fetch existing rows first so we can delete any row whose next_date or reminder_time changed
-  // (bypassing any BEFORE UPDATE trigger restrictions and clearing stale claims)
   const { data: existing, error: loadError } = await client
     .from("push_reminders")
     .select(
