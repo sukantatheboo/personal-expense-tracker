@@ -325,6 +325,13 @@ const ICONS = {
       <path d="M14 3v5h4M9 12h6M9 16h6" />
     </>
   ),
+  insights: (
+    <>
+      <path d="M18 20V10" />
+      <path d="M12 20V4" />
+      <path d="M6 20v-6" />
+    </>
+  ),
 };
 const Icon = ({ n }) => <svg viewBox="0 0 24 24">{ICONS[n]}</svg>;
 
@@ -4865,6 +4872,21 @@ function RecurringRow({
   );
 }
 
+const plansScrollStore = {
+  budget: 0,
+  rec: 0,
+};
+
+const PLANS_COLLAPSE_RANGE_PX = 48;
+const PLANS_COLLAPSE_DELTA_PX = 12;
+
+function computePlansCollapse(scrollTop) {
+  return Math.min(
+    1,
+    Math.max(0, (Number(scrollTop) || 0) / PLANS_COLLAPSE_RANGE_PX),
+  );
+}
+
 function RecurringPlansView({
   schedules = [],
   cards = [],
@@ -4874,11 +4896,13 @@ function RecurringPlansView({
   onToggle,
 }) {
   const billsAll = useMemo(
-    () => sortRecurringSection(schedules.filter((item) => item.cat !== "Savings")),
+    () =>
+      sortRecurringSection(schedules.filter((item) => item.cat !== "Savings")),
     [schedules],
   );
   const savingsAll = useMemo(
-    () => sortRecurringSection(schedules.filter((item) => item.cat === "Savings")),
+    () =>
+      sortRecurringSection(schedules.filter((item) => item.cat === "Savings")),
     [schedules],
   );
   const activeBills = useMemo(
@@ -4903,7 +4927,8 @@ function RecurringPlansView({
   );
   const totalMonthly = billsMonthly + savingsMonthly;
   const billsShare = totalMonthly > 0 ? (billsMonthly / totalMonthly) * 100 : 0;
-  const savingsShare = totalMonthly > 0 ? (savingsMonthly / totalMonthly) * 100 : 0;
+  const savingsShare =
+    totalMonthly > 0 ? (savingsMonthly / totalMonthly) * 100 : 0;
   const activeItems = [...activeBills, ...activeSavings];
   const nextItem = sortRecurringSection(activeItems)[0];
   const nextDays = nextItem ? getDaysUntilDue(nextItem.next) : null;
@@ -4931,7 +4956,9 @@ function RecurringPlansView({
     return (
       <div className="plans-recurring-scroll">
         <div className="rec-screen-bar">
-          <span className="rec-screen-subtitle">Automated bills &amp; savings</span>
+          <span className="rec-screen-subtitle">
+            Automated bills &amp; savings
+          </span>
         </div>
         <section className="card rec-empty-card">
           <div className="emp-illustrated-icon" aria-hidden="true">
@@ -4939,12 +4966,14 @@ function RecurringPlansView({
           </div>
           <h2 className="rec-empty-title">No recurring plans yet</h2>
           <p className="rec-empty-sub">
-            Track rent, subscriptions, and recurring savings transfers in one place.
+            Track rent, subscriptions, and recurring savings transfers in one
+            place.
           </p>
           <button type="button" className="rec-empty-cta" onClick={onAdd}>
             + Add recurring
           </button>
         </section>
+        <div className="plans-scroll-spacer" aria-hidden="true" />
       </div>
     );
   }
@@ -4953,20 +4982,15 @@ function RecurringPlansView({
     <div className="plans-recurring-scroll">
       <div className="rec-screen-bar">
         <span className="rec-screen-subtitle">Scheduled commitments</span>
-        <button
-          type="button"
-          className="rec-new-pill-btn"
-          onClick={onAdd}
-        >
-          + New
-        </button>
       </div>
 
       <section className="rec-hero-card">
         <div className="rec-hero-top">
           <div className="rec-hero-label-group">
             <span className="rec-hero-label">Monthly commitment</span>
-            <span className="rec-active-count-chip">{activeItems.length} active</span>
+            <span className="rec-active-count-chip">
+              {activeItems.length} active
+            </span>
           </div>
         </div>
         <div className="rec-hero-total-row">
@@ -5013,7 +5037,9 @@ function RecurringPlansView({
               Next: {nextItem.desc || nextItem.cat || "Payment"} · {nextLabel}
             </span>
           ) : (
-            <span className="rec-all-paused-pill">All recurring items paused</span>
+            <span className="rec-all-paused-pill">
+              All recurring items paused
+            </span>
           )}
         </div>
       </section>
@@ -5026,7 +5052,9 @@ function RecurringPlansView({
                 className={`rec-section-dot is-${section.id}`}
                 aria-hidden="true"
               />
-              <h2 className="section-title rec-section-title">{section.title}</h2>
+              <h2 className="section-title rec-section-title">
+                {section.title}
+              </h2>
               <span className="rec-section-count">{section.items.length}</span>
             </div>
             <div className="rec-section-sum">
@@ -5042,7 +5070,9 @@ function RecurringPlansView({
                 key={item.id}
                 item={item}
                 fmt={M}
-                accountLabel={getAccountDisplay(item.acct, cards, deletedCards)[0]}
+                accountLabel={
+                  getAccountDisplay(item.acct, cards, deletedCards)[0]
+                }
                 onSelect={(selected) => {
                   triggerHaptic("selection");
                   onOpen(selected.id);
@@ -5056,6 +5086,7 @@ function RecurringPlansView({
           </div>
         </section>
       ))}
+      <div className="plans-scroll-spacer" aria-hidden="true" />
     </div>
   );
 }
@@ -5064,6 +5095,7 @@ function Plans({
   S,
   plan,
   setPlan,
+  isActive = true,
   onShift,
   onBudget,
   onAddRec,
@@ -5139,255 +5171,610 @@ function Plans({
       ? "orange"
       : "lime";
 
-  const budget = (
-    <>
-      <div className="plans-budget-scroll">
-        <div className="plans-month-header">
-          <h1 className="plans-month-title">
-            {monthLabel} {yearLabel}
-          </h1>
-          <div className="plans-month-nav">
+  const shellRef = useRef(null);
+  const headerRef = useRef(null);
+  const segRowRef = useRef(null);
+  const budgetScrollerRef = useRef(null);
+  const recScrollerRef = useRef(null);
+  const ringCardRef = useRef(null);
+  const budgetTabBtnRef = useRef(null);
+  const recTabBtnRef = useRef(null);
+  const rafIdRef = useRef(0);
+  const collapseValRef = useRef(0);
+
+  // Threshold-only React states (no per-frame setState)
+  const [hasScrolled, setHasScrolled] = useState(
+    () => (plansScrollStore[plan] || 0) > 2,
+  );
+  const hasScrolledRef = useRef(hasScrolled);
+  const [ringVisible, setRingVisible] = useState(true);
+  const ringVisibleRef = useRef(true);
+  const [collapsedHeaderPx, setCollapsedHeaderPx] = useState(106);
+
+  const getActivePlanScroller = useCallback(
+    (targetPlan = plan) =>
+      targetPlan === "rec" ? recScrollerRef.current : budgetScrollerRef.current,
+    [plan],
+  );
+
+  const applyScrollMetrics = useCallback((scrollTop) => {
+    const progress = computePlansCollapse(scrollTop);
+    collapseValRef.current = progress;
+    if (shellRef.current) {
+      shellRef.current.style.setProperty("--collapse", progress.toFixed(4));
+    }
+    const nextScrolled = scrollTop > 2;
+    if (hasScrolledRef.current !== nextScrolled) {
+      hasScrolledRef.current = nextScrolled;
+      setHasScrolled(nextScrolled);
+    }
+  }, []);
+
+  const syncRingVisibilityManual = useCallback(
+    (activePlan = plan) => {
+      if (activePlan !== "budget" || b <= 0) {
+        if (!ringVisibleRef.current) {
+          ringVisibleRef.current = true;
+          setRingVisible(true);
+        }
+        return;
+      }
+      const scroller = budgetScrollerRef.current;
+      const ringEl = ringCardRef.current;
+      if (!scroller || !ringEl) return;
+      const scrollerRect = scroller.getBoundingClientRect();
+      const ringRect = ringEl.getBoundingClientRect();
+      if (scrollerRect.height === 0 && ringRect.height === 0) return;
+      const headerBottom = scrollerRect.top + collapsedHeaderPx;
+      const isVisible = ringRect.bottom > headerBottom;
+      if (ringVisibleRef.current !== isVisible) {
+        ringVisibleRef.current = isVisible;
+        setRingVisible(isVisible);
+      }
+    },
+    [plan, b, collapsedHeaderPx],
+  );
+
+  // Keep --header-expanded-h and --header-collapsed-h synced with actual header geometry
+  // Observe segRowRef (and window resize) rather than headerRef so ResizeObserver never fires during scroll collapse
+  useEffect(() => {
+    if (!isActive) return undefined;
+    const headerEl = headerRef.current;
+    const segRowEl = segRowRef.current;
+    const shellEl = shellRef.current;
+    if (!headerEl || !shellEl) return undefined;
+
+    const updateHeaderHeights = () => {
+      const currentH = headerEl.offsetHeight;
+      if (!currentH) return;
+      const rootFontPx =
+        parseFloat(
+          window.getComputedStyle(document.documentElement).fontSize,
+        ) || 16;
+      const deltaPx = Math.round((PLANS_COLLAPSE_DELTA_PX / 16) * rootFontPx);
+      const currentCollapse = collapseValRef.current || 0;
+      const expandedH = Math.round(currentH + currentCollapse * deltaPx);
+      const collapsedH = Math.max(72, expandedH - deltaPx);
+      shellEl.style.setProperty("--header-expanded-h", `${expandedH}px`);
+      shellEl.style.setProperty("--header-collapsed-h", `${collapsedH}px`);
+      setCollapsedHeaderPx((prev) =>
+        Math.abs(prev - collapsedH) > 1 ? collapsedH : prev,
+      );
+    };
+
+    updateHeaderHeights();
+    const ro =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(updateHeaderHeights)
+        : null;
+    if (ro && segRowEl) ro.observe(segRowEl);
+    window.addEventListener("resize", updateHeaderHeights);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener("resize", updateHeaderHeights);
+    };
+  }, [isActive]);
+
+  // Restore active tab's scrollTop before paint & derive header state strictly from ACTIVE tab
+  // Re-runs both when switching Budget <-> Recurring and when returning from Home/Activity/Accounts (isActive)
+  useLayoutEffect(() => {
+    if (!isActive) return;
+    const scroller = getActivePlanScroller(plan);
+    if (!scroller) return;
+    const savedTop = plansScrollStore[plan] ?? 0;
+    if (Math.abs(scroller.scrollTop - savedTop) > 1) {
+      void scroller.offsetHeight;
+      scroller.scrollTop = savedTop;
+    }
+    applyScrollMetrics(scroller.scrollTop);
+    syncRingVisibilityManual(plan);
+  }, [
+    plan,
+    isActive,
+    S.m,
+    b,
+    getActivePlanScroller,
+    applyScrollMetrics,
+    syncRingVisibilityManual,
+  ]);
+
+  // Passive scroll listener wrapped in requestAnimationFrame on the active tab container
+  useEffect(() => {
+    if (!isActive) return undefined;
+    const scroller = getActivePlanScroller(plan);
+    if (!scroller) return undefined;
+
+    let ticking = false;
+    const update = () => {
+      ticking = false;
+      // Guard against browser scroll-to-0 resets when outer tab panel becomes display: none
+      if (!scroller.offsetParent && scroller.scrollTop === 0) return;
+      const top = scroller.scrollTop;
+      plansScrollStore[plan] = top;
+      applyScrollMetrics(top);
+    };
+
+    const onScroll = () => {
+      if (!ticking) {
+        ticking = true;
+        rafIdRef.current = window.requestAnimationFrame(update);
+      }
+    };
+
+    applyScrollMetrics(scroller.scrollTop);
+    scroller.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      if (rafIdRef.current) {
+        window.cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = 0;
+      }
+      scroller.removeEventListener("scroll", onScroll);
+    };
+  }, [plan, isActive, getActivePlanScroller, applyScrollMetrics]);
+
+  // IntersectionObserver on the ring card with active Budget scroll container as root
+  useEffect(() => {
+    if (!isActive || plan !== "budget" || b <= 0) {
+      if (!ringVisibleRef.current) {
+        ringVisibleRef.current = true;
+        setRingVisible(true);
+      }
+      return undefined;
+    }
+    const scroller = budgetScrollerRef.current;
+    const ringEl = ringCardRef.current;
+    if (!scroller || !ringEl || typeof IntersectionObserver === "undefined") {
+      return undefined;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (!entry) return;
+        const rootTop =
+          entry.rootBounds?.top ??
+          scroller.getBoundingClientRect().top + collapsedHeaderPx;
+        const nextVisible =
+          entry.isIntersecting || entry.boundingClientRect.top >= rootTop;
+        if (ringVisibleRef.current !== nextVisible) {
+          ringVisibleRef.current = nextVisible;
+          setRingVisible(nextVisible);
+        }
+      },
+      {
+        root: scroller,
+        rootMargin: `-${collapsedHeaderPx}px 0px 0px 0px`,
+        threshold: 0,
+      },
+    );
+
+    observer.observe(ringEl);
+    return () => observer.disconnect();
+  }, [isActive, plan, b, S.m, collapsedHeaderPx]);
+
+  const scrollActiveTabToTop = useCallback(() => {
+    const scroller = getActivePlanScroller(plan);
+    if (!scroller) return;
+    plansScrollStore[plan] = 0;
+    const prefersReducedMotion =
+      window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
+    scroller.scrollTo({
+      top: 0,
+      behavior: prefersReducedMotion ? "auto" : "smooth",
+    });
+    if (prefersReducedMotion || scroller.scrollTop === 0) {
+      applyScrollMetrics(0);
+      syncRingVisibilityManual(plan);
+    }
+  }, [plan, getActivePlanScroller, applyScrollMetrics, syncRingVisibilityManual]);
+
+  const selectPlanTab = useCallback(
+    (nextPlan, focusTarget = false) => {
+      if (nextPlan !== plan) {
+        triggerHaptic("selection");
+        setPlan(nextPlan);
+      }
+      if (focusTarget) {
+        const btn =
+          nextPlan === "budget"
+            ? budgetTabBtnRef.current
+            : recTabBtnRef.current;
+        btn?.focus();
+      }
+    },
+    [plan, setPlan],
+  );
+
+  const handleSegKeyDown = (e) => {
+    if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+      e.preventDefault();
+      const next = plan === "budget" ? "rec" : "budget";
+      selectPlanTab(next, true);
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      selectPlanTab("budget", true);
+    } else if (e.key === "End") {
+      e.preventDefault();
+      selectPlanTab("rec", true);
+    }
+  };
+
+  const ringSummaryChipText =
+    b > 0
+      ? `${overBudget ? `${fmt(t - b)} over` : `${fmt(b - t)} left`} · ${pctUsed > 999 ? ">999%" : `${Math.round(pctUsed)}%`}`
+      : "";
+  const showRingChip = plan === "budget" && b > 0 && !ringVisible;
+
+  return (
+    <div
+      ref={shellRef}
+      className="plans-screen-shell"
+      data-active-plan={plan}
+    >
+      <header
+        ref={headerRef}
+        className={`plans-shared-header${hasScrolled ? " is-scrolled" : ""}`}
+      >
+        <div
+          className="plans-header-top-row"
+          onClick={(e) => {
+            if (e.target.closest("button, a, [role='tab']")) return;
+            scrollActiveTabToTop();
+          }}
+        >
+          <h1 className="plans-header-title">Plans</h1>
+
+          <div
+            className={`plans-header-chip-slot${showRingChip ? " is-visible" : ""}`}
+            aria-hidden={!showRingChip}
+          >
+            {ringSummaryChipText && (
+              <span
+                className={`plans-header-ring-chip${overBudget ? " is-over" : pctUsed >= 85 ? " is-warn" : ""}`}
+                title={ringSummaryChipText}
+              >
+                {ringSummaryChipText}
+              </span>
+            )}
+          </div>
+
+          <div
+            className="plans-header-action-slot"
+            onClick={(e) => e.stopPropagation()}
+          >
             <button
               type="button"
-              className="icon-btn"
+              className={`prototype-header-action plans-header-action-item${plan === "budget" ? " is-active" : ""}`}
+              aria-label="Budget insights and limit"
+              title="Budget insights and limit"
+              tabIndex={plan === "budget" ? 0 : -1}
+              aria-hidden={plan !== "budget"}
               onClick={() => {
-                triggerHaptic("selection");
-                onShift(-1);
+                triggerHaptic("light");
+                onBudget?.();
               }}
-              aria-label="Previous month"
             >
-              ‹
+              <Icon n="insights" />
             </button>
             <button
               type="button"
-              className="icon-btn"
+              className={`rec-new-pill-btn plans-header-new-btn plans-header-action-item${plan === "rec" ? " is-active" : ""}`}
+              aria-label="Add new recurring plan"
+              tabIndex={plan === "rec" ? 0 : -1}
+              aria-hidden={plan !== "rec"}
               onClick={() => {
-                if (isCurrentOrFutureMonth) return;
-                triggerHaptic("selection");
-                onShift(1);
+                triggerHaptic("light");
+                onAddRec?.();
               }}
-              disabled={isCurrentOrFutureMonth}
-              aria-label="Next month"
             >
-              ›
+              + New
             </button>
           </div>
         </div>
 
-        <section className="card plans-hero-card">
-          <div className="plans-hero-top">
-            <span className="plans-hero-label">Monthly budget</span>
-            <div className="plans-hero-actions">
-              <button type="button" className="hero-chip-btn" onClick={onBudget}>
-                {b ? "Edit budget" : "Set budget"}
-              </button>
-            </div>
+        <div ref={segRowRef} className="plans-header-seg-row">
+          <div
+            className="seg plans-seg"
+            role="tablist"
+            aria-label="Plans views"
+            data-active={plan}
+            onKeyDown={handleSegKeyDown}
+          >
+            <button
+              ref={budgetTabBtnRef}
+              id="plans-tab-budget"
+              type="button"
+              role="tab"
+              aria-selected={plan === "budget"}
+              aria-controls="plans-panel-budget"
+              tabIndex={plan === "budget" ? 0 : -1}
+              className={plan === "budget" ? "on" : ""}
+              onClick={() => selectPlanTab("budget")}
+            >
+              Budget
+            </button>
+            <button
+              ref={recTabBtnRef}
+              id="plans-tab-rec"
+              type="button"
+              role="tab"
+              aria-selected={plan === "rec"}
+              aria-controls="plans-panel-rec"
+              tabIndex={plan === "rec" ? 0 : -1}
+              className={plan === "rec" ? "on" : ""}
+              onClick={() => selectPlanTab("rec")}
+            >
+              Recurring
+            </button>
           </div>
+        </div>
+      </header>
 
-          {b > 0 ? (
-            <>
-              <div
-                className="plans-ring-wrap"
-              >
-                <svg
-                  className="plans-ring-svg"
-                  viewBox="0 0 180 180"
-                  aria-hidden="true"
+      <div className="plans-panels-stage">
+        <div
+          ref={budgetScrollerRef}
+          id="plans-panel-budget"
+          role="tabpanel"
+          aria-labelledby="plans-tab-budget"
+          aria-hidden={plan !== "budget"}
+          inert={plan !== "budget" ? true : undefined}
+          className={`plans-tab-scroller${plan === "budget" ? " is-active" : " is-inactive"}`}
+        >
+          <div className="plans-budget-scroll">
+            <div className="plans-month-header">
+              <h2 className="plans-month-title">
+                {monthLabel} {yearLabel}
+              </h2>
+              <div className="plans-month-nav">
+                <button
+                  type="button"
+                  className="icon-btn"
+                  onClick={() => {
+                    triggerHaptic("selection");
+                    onShift(-1);
+                  }}
+                  aria-label="Previous month"
                 >
-                  <circle
-                    className="plans-ring-track"
-                    cx="90"
-                    cy="90"
-                    r="84"
-                    fill="none"
-                    strokeWidth="12"
-                  />
-                  <circle
-                    className="plans-ring-arc"
-                    cx="90"
-                    cy="90"
-                    r="84"
-                    fill="none"
-                    stroke={ringStrokeColor}
-                    strokeWidth="12"
-                    strokeLinecap="round"
-                    strokeDasharray={2 * Math.PI * 84}
-                    strokeDashoffset={
-                      2 * Math.PI * 84 * (1 - Math.min(1, spentPct / 100))
-                    }
-                  />
-                </svg>
-                <div className="plans-ring-center">
-                  <div className="plans-ring-val-row">
-                    <strong
-                      className={`plans-ring-amount${
-                        (overBudget ? fmt(t - b) : fmt(b - t)).length > 11
-                          ? " is-ultra-compact"
-                          : (overBudget ? fmt(t - b) : fmt(b - t)).length > 8
-                            ? " is-extra-compact"
-                            : (overBudget ? fmt(t - b) : fmt(b - t)).length > 6
-                              ? " is-compact"
-                              : ""
-                      }`}
+                  ‹
+                </button>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  onClick={() => {
+                    if (isCurrentOrFutureMonth) return;
+                    triggerHaptic("selection");
+                    onShift(1);
+                  }}
+                  disabled={isCurrentOrFutureMonth}
+                  aria-label="Next month"
+                >
+                  ›
+                </button>
+              </div>
+            </div>
+
+            <div key={S.m} className="plans-budget-month-stage">
+              <section ref={ringCardRef} className="card plans-hero-card">
+                <div className="plans-hero-top">
+                  <span className="plans-hero-label">Monthly budget</span>
+                  <div className="plans-hero-actions">
+                    <button
+                      type="button"
+                      className="hero-chip-btn"
+                      onClick={onBudget}
                     >
-                      {overBudget
-                        ? fmt(t - b)
-                        : fmt(b - t)}
-                    </strong>
-                    <span className="plans-ring-unit">
-                      {overBudget ? "over" : "left"}
+                      {b ? "Edit budget" : "Set budget"}
+                    </button>
+                  </div>
+                </div>
+
+                {b > 0 ? (
+                  <>
+                    <div className="plans-ring-wrap">
+                      <svg
+                        className="plans-ring-svg"
+                        viewBox="0 0 180 180"
+                        aria-hidden="true"
+                      >
+                        <circle
+                          className="plans-ring-track"
+                          cx="90"
+                          cy="90"
+                          r="84"
+                          fill="none"
+                          strokeWidth="12"
+                        />
+                        <circle
+                          className="plans-ring-arc"
+                          cx="90"
+                          cy="90"
+                          r="84"
+                          fill="none"
+                          stroke={ringStrokeColor}
+                          strokeWidth="12"
+                          strokeLinecap="round"
+                          strokeDasharray={2 * Math.PI * 84}
+                          strokeDashoffset={
+                            2 * Math.PI * 84 * (1 - Math.min(1, spentPct / 100))
+                          }
+                        />
+                      </svg>
+                      <div className="plans-ring-center">
+                        <div className="plans-ring-val-row">
+                          <strong
+                            className={`plans-ring-amount${
+                              (overBudget ? fmt(t - b) : fmt(b - t)).length > 11
+                                ? " is-ultra-compact"
+                                : (overBudget ? fmt(t - b) : fmt(b - t))
+                                      .length > 8
+                                  ? " is-extra-compact"
+                                  : (overBudget ? fmt(t - b) : fmt(b - t))
+                                        .length > 6
+                                    ? " is-compact"
+                                    : ""
+                            }`}
+                          >
+                            {overBudget ? fmt(t - b) : fmt(b - t)}
+                          </strong>
+                          <span className="plans-ring-unit">
+                            {overBudget ? "over" : "left"}
+                          </span>
+                        </div>
+                        <span className="plans-ring-sub">
+                          {pctUsed > 999 ? ">999%" : `${Math.round(pctUsed)}%`}{" "}
+                          used
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="plans-saved-style-rows">
+                      <div className="plans-saved-row">
+                        <span className="plans-saved-label">Spent</span>
+                        <span className="plans-saved-val">{fmt(t)}</span>
+                      </div>
+                      <div className="plans-saved-row">
+                        <span className="plans-saved-label">Limit</span>
+                        <span className="plans-saved-val">{fmt(b)}</span>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="plans-no-budget">
+                    <div className="emp-illustrated-icon" aria-hidden="true">
+                      <AnimatedBudgetIcon />
+                    </div>
+                    <div className="plans-no-budget-copy">
+                      <strong>No budget set for {monthLabel}</strong>
+                      <span>
+                        Set a monthly spending limit to track your pace.
+                      </span>
+                    </div>
+                    {t > 0 && (
+                      <div className="plans-no-budget-spent">
+                        <span>Spent so far</span>
+                        <b>{fmt(t)}</b>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </section>
+
+              {b > 0 && velocity && (
+                <section className="card plans-pace-card">
+                  <div className="plans-pace-header">
+                    <div>
+                      <h2 className="section-title">Budget pace</h2>
+                      <p className="plans-pace-subtitle">
+                        Actual vs. expected spend
+                      </p>
+                    </div>
+                    <span className={`pace-pill is-${paceStatusTone}`}>
+                      {velocity.isOverPace
+                        ? "Over pace"
+                        : velocity.isUnderPace
+                          ? "✓ Under pace"
+                          : "On pace"}
                     </span>
                   </div>
-                  <span className="plans-ring-sub">
-                    {pctUsed > 999 ? ">999%" : `${Math.round(pctUsed)}%`} used
-                  </span>
-                </div>
-              </div>
 
-              <div className="plans-saved-style-rows">
-                <div className="plans-saved-row">
-                  <span className="plans-saved-label">Spent</span>
-                  <span className="plans-saved-val">
-                    {fmt(t)}
-                  </span>
-                </div>
-                <div className="plans-saved-row">
-                  <span className="plans-saved-label">Limit</span>
-                  <span className="plans-saved-val">
-                    {fmt(b)}
-                  </span>
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="plans-no-budget">
-              <div className="emp-illustrated-icon" aria-hidden="true">
-                <AnimatedBudgetIcon />
-              </div>
-              <div className="plans-no-budget-copy">
-                <strong>No budget set for {monthLabel}</strong>
-                <span>Set a monthly spending limit to track your pace.</span>
-              </div>
-              {t > 0 && (
-                <div className="plans-no-budget-spent">
-                  <span>Spent so far</span>
-                  <b>{fmt(t)}</b>
-                </div>
+                  <div className="plans-pace-variance">
+                    <strong className="plans-pace-hero-num">
+                      {fmt(paceDiffAbs)}
+                    </strong>
+                    <span className="plans-pace-hero-label">
+                      {velocity.paceDiff > 0
+                        ? "ahead of expected spend"
+                        : velocity.paceDiff < 0
+                          ? "under expected spend by today"
+                          : "right on expected pace"}
+                    </span>
+                  </div>
+
+                  <div className="plans-pace-bar-block">
+                    <div className="plans-pace-track">
+                      <div
+                        className={`plans-pace-fill is-${paceStatusTone}`}
+                        style={{ width: `${spentPct}%` }}
+                      />
+                      <div
+                        className="plans-pace-marker"
+                        style={{ left: `${expectedPct}%` }}
+                        title={`Expected by today: ${fmt(expectedByToday)}`}
+                      />
+                    </div>
+                    <div className="plans-pace-captions">
+                      <span>Spent {fmt(t)}</span>
+                      <span>Expected by today · {fmt(expectedByToday)}</span>
+                    </div>
+                  </div>
+
+                  <div className="plans-burn-grid">
+                    <div className="plans-burn-tile">
+                      <span className="plans-burn-label">
+                        Actual daily burn
+                      </span>
+                      <strong className="plans-burn-val">
+                        {fmt(Math.round(velocity.actualDailyBurn))}
+                        <small>/day</small>
+                      </strong>
+                    </div>
+                    <div className="plans-burn-tile">
+                      <span className="plans-burn-label">
+                        Target daily pace
+                      </span>
+                      <strong className="plans-burn-val">
+                        {fmt(Math.round(velocity.targetDailyPace))}
+                        <small>/day</small>
+                      </strong>
+                    </div>
+                  </div>
+                </section>
               )}
             </div>
-          )}
-        </section>
+            <div className="plans-scroll-spacer" aria-hidden="true" />
+          </div>
+        </div>
 
-        {b > 0 && velocity && (
-          <section className="card plans-pace-card">
-            <div className="plans-pace-header">
-              <div>
-                <h2 className="section-title">Budget pace</h2>
-                <p className="plans-pace-subtitle">
-                  Actual vs. expected spend
-                </p>
-              </div>
-              <span className={`pace-pill is-${paceStatusTone}`}>
-                {velocity.isOverPace
-                  ? "Over pace"
-                  : velocity.isUnderPace
-                    ? "✓ Under pace"
-                    : "On pace"}
-              </span>
-            </div>
-
-            <div className="plans-pace-variance">
-              <strong className="plans-pace-hero-num">
-                {fmt(paceDiffAbs)}
-              </strong>
-              <span className="plans-pace-hero-label">
-                {velocity.paceDiff > 0
-                  ? "ahead of expected spend"
-                  : velocity.paceDiff < 0
-                    ? "under expected spend by today"
-                    : "right on expected pace"}
-              </span>
-            </div>
-
-            <div className="plans-pace-bar-block">
-              <div className="plans-pace-track">
-                <div
-                  className={`plans-pace-fill is-${paceStatusTone}`}
-                  style={{ width: `${spentPct}%` }}
-                />
-                <div
-                  className="plans-pace-marker"
-                  style={{ left: `${expectedPct}%` }}
-                  title={`Expected by today: ${fmt(expectedByToday)}`}
-                />
-              </div>
-              <div className="plans-pace-captions">
-                <span>Spent {fmt(t)}</span>
-                <span>
-                  Expected by today · {fmt(expectedByToday)}
-                </span>
-              </div>
-            </div>
-
-            <div className="plans-burn-grid">
-              <div className="plans-burn-tile">
-                <span className="plans-burn-label">Actual daily burn</span>
-                <strong className="plans-burn-val">
-                  {fmt(Math.round(velocity.actualDailyBurn))}
-                  <small>/day</small>
-                </strong>
-              </div>
-              <div className="plans-burn-tile">
-                <span className="plans-burn-label">Target daily pace</span>
-                <strong className="plans-burn-val">
-                  {fmt(Math.round(velocity.targetDailyPace))}
-                  <small>/day</small>
-                </strong>
-              </div>
-            </div>
-          </section>
-        )}
-      </div>
-    </>
-  );
-
-  const recurring = (
-    <RecurringPlansView
-      schedules={S.rec || []}
-      cards={S.cards || []}
-      deletedCards={S.deletedCards || {}}
-      onAdd={onAddRec}
-      onOpen={onOpenRec}
-      onToggle={onToggleRec}
-    />
-  );
-
-  return (
-    <>
-      <div className="seg plans-seg" style={{ marginBottom: 14 }}>
-        <button
-          type="button"
-          className={plan === "budget" ? "on" : ""}
-          onClick={() => {
-            triggerHaptic("selection");
-            setPlan("budget");
-          }}
+        <div
+          ref={recScrollerRef}
+          id="plans-panel-rec"
+          role="tabpanel"
+          aria-labelledby="plans-tab-rec"
+          aria-hidden={plan !== "rec"}
+          inert={plan !== "rec" ? true : undefined}
+          className={`plans-tab-scroller${plan === "rec" ? " is-active" : " is-inactive"}`}
         >
-          Budget
-        </button>
-        <button
-          type="button"
-          className={plan === "rec" ? "on" : ""}
-          onClick={() => {
-            triggerHaptic("selection");
-            setPlan("rec");
-          }}
-        >
-          Recurring
-        </button>
+          <RecurringPlansView
+            schedules={S.rec || []}
+            cards={S.cards || []}
+            deletedCards={S.deletedCards || {}}
+            onAdd={onAddRec}
+            onOpen={onOpenRec}
+            onToggle={onToggleRec}
+          />
+        </div>
       </div>
-      {plan === "budget" ? budget : recurring}
-    </>
+    </div>
   );
 }
 
@@ -11717,7 +12104,15 @@ function useCollapsingHeader({ activeTab, enableSnap = true }) {
   }, []);
 
   const getActiveScroller = React.useCallback(() => {
-    return scrollerMapRef.current.get(activeTab) || null;
+    const panel = scrollerMapRef.current.get(activeTab) || null;
+    if (!panel) return null;
+    if (activeTab === "plans") {
+      return panel.querySelector(".plans-tab-scroller.is-active") || panel;
+    }
+    if (activeTab === "activity") {
+      return panel.querySelector(".activity-scroll-feed") || panel;
+    }
+    return panel;
   }, [activeTab]);
 
   // Register each persistent tab panel's scroll container with stable ref callback per tab
@@ -11739,15 +12134,26 @@ function useCollapsingHeader({ activeTab, enableSnap = true }) {
 
   // Smooth scroll-to-top for header tap & re-tapping active tab
   const scrollToTop = React.useCallback(() => {
-    const scroller = getActiveScroller();
-    if (!scroller) return;
-    // Activity tab: the tab panel itself no longer scrolls; the inner
-    // .activity-scroll-feed does. Scroll that element instead.
+    const panel = scrollerMapRef.current.get(activeTab) || null;
+    if (!panel) return;
     const target =
-      scroller.querySelector(".activity-scroll-feed") || scroller;
+      panel.querySelector(
+        ".activity-scroll-feed, .plans-tab-scroller.is-active",
+      ) || panel;
     tabScrollTopRef.current[activeTab] = 0;
-    target.scrollTo({ top: 0, behavior: "smooth" });
-  }, [activeTab, getActiveScroller]);
+    if (activeTab === "plans") {
+      const activePlanShell = panel.querySelector(".plans-screen-shell");
+      const activePlanKey =
+        activePlanShell?.getAttribute("data-active-plan") || "budget";
+      plansScrollStore[activePlanKey] = 0;
+    }
+    const prefersReducedMotion =
+      window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
+    target.scrollTo({
+      top: 0,
+      behavior: prefersReducedMotion ? "auto" : "smooth",
+    });
+  }, [activeTab]);
 
   // Restore saved scrollTop & sync --collapse before paint when switching tabs
   React.useLayoutEffect(() => {
@@ -11842,7 +12248,7 @@ const CollapsibleTopBar = React.memo(function CollapsibleTopBar({
   onBack,
   settingsTitle,
 }) {
-  if (activeTab === "activity" && !settingsRoute) {
+  if ((activeTab === "activity" || activeTab === "plans") && !settingsRoute) {
     return null;
   }
 
@@ -13736,15 +14142,15 @@ export default function MobilePrototype({
             <div
               ref={registerTabScroller("plans")}
               data-tab="plans"
-              className={`prototype-tab-panel ${tab === "plans" ? `is-active${animateScreen ? ` ${slideDirection === "forward" ? "slides-from-right" : "slides-from-left"}` : ""}` : "is-inactive"}`}
+              className={`prototype-tab-panel is-plans ${tab === "plans" ? `is-active${animateScreen ? ` ${slideDirection === "forward" ? "slides-from-right" : "slides-from-left"}` : ""}` : "is-inactive"}`}
               inert={tab !== "plans" ? true : undefined}
               hidden={tab !== "plans"}
             >
-              <ScreenLargeTitle title="Plans" />
               <Plans
                 S={S}
                 plan={plan}
                 setPlan={setPlan}
+                isActive={tab === "plans" && !settingsRoute}
                 onShift={onShift}
                 onBudget={openBudget}
                 onAddRec={() => openSheet({ type: "add", iv: "monthly" })}

@@ -873,6 +873,8 @@ a:active,
   --collapse: 0;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --tab-bar-h: 68px;
+  --fab-overhang: 32px;
   --bar-h: 52px;
   --header-bar-h: var(--bar-h);
   --header-base-top-pad: 12px;
@@ -4066,11 +4068,11 @@ a:active,
 }
 /* ---------- Notched Dock ---------- */
 .mobile-prototype .dock {
-  --dock-h: 68px;
+  --dock-h: var(--tab-bar-h, 68px);
   --notch-w: 122px;
   --notch-d: 35px;
   --fab: 56px;
-  --fab-top: -32px;
+  --fab-top: calc(-1 * var(--fab-overhang, 32px));
   --radius: 0px;
   position: fixed;
   left: 0;
@@ -10998,10 +11000,9 @@ html[data-theme="dark"]
 }
 
 /* Plans budget overview */
-/* Bottom clearance sized so Budget pace card sits comfortably above the floating + button */
 .mobile-prototype .plans-budget-scroll,
 .mobile-prototype .plans-recurring-scroll {
-  padding-bottom: calc(116px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: 0;
 }
 
 /* Header: Single unified color matching Home ("November 2026") */
@@ -11426,8 +11427,10 @@ html[data-theme="dark"]
 
 .mobile-prototype .plans-month-nav .icon-btn {
   display: grid;
-  width: 38px;
-  height: 38px;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
   padding: 0;
   place-items: center;
   border: 1px solid var(--line, #e5e7eb);
@@ -11791,14 +11794,24 @@ html[data-theme="dark"]
   box-shadow: none !important;
   margin-top: 18px !important;
   margin-bottom: 22px !important;
+  contain: none !important;
+  overflow: visible !important;
 }
 
 .mobile-prototype .rec-section-header {
+  position: sticky;
+  top: calc(
+    var(--header-collapsed-h, calc(env(safe-area-inset-top, 0px) + 106px)) -
+      1px
+  );
+  z-index: 15;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 0 0 11px;
+  margin: 0 -18px;
+  padding: 11px 18px;
+  background: var(--bg);
   border-bottom: 1px solid color-mix(in srgb, var(--line) 88%, transparent);
 }
 
@@ -12312,13 +12325,12 @@ html[data-theme="dark"]
 }
 
 /* 4. Paint/Layout Containment on Cards & Content-Visibility on Transaction Rows */
-.mobile-prototype .card,
+.mobile-prototype .card:not(.rec-section-card),
 .mobile-prototype .hero,
 .mobile-prototype .bento-card,
 .mobile-prototype .plans-hero-card,
 .mobile-prototype .plans-pace-card,
-.mobile-prototype .rec-hero-card,
-.mobile-prototype .rec-section-card {
+.mobile-prototype .rec-hero-card {
   contain: layout paint;
 }
 
@@ -13280,5 +13292,365 @@ html[data-platform="ios"] .mobile-prototype input[type="time"]::-webkit-date-and
   opacity: 0.45;
   pointer-events: none;
   cursor: not-allowed;
+}
+
+/* ==========================================================================
+   PLANS SCREEN — SHARED COLLAPSIBLE HEADER + INDEPENDENT TAB SCROLLERS
+   ========================================================================== */
+
+.mobile-prototype .prototype-tab-panel[data-tab="plans"].is-active,
+.mobile-prototype .prototype-tab-panel.is-plans.is-active,
+.mobile-prototype .prototype-tab-panel:has(.plans-screen-shell).is-active {
+  height: 100% !important;
+  max-height: 100% !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.mobile-prototype .prototype-tab-panel[data-tab="plans"].is-inactive,
+.mobile-prototype .prototype-tab-panel[data-tab="plans"][hidden],
+.mobile-prototype .prototype-tab-panel.is-plans.is-inactive,
+.mobile-prototype .prototype-tab-panel.is-plans[hidden] {
+  display: none !important;
+}
+
+.mobile-prototype:has(.prototype-tab-panel[data-tab="plans"].is-active) .prototype-header {
+  display: none !important;
+}
+
+.mobile-prototype .plans-screen-shell {
+  --collapse: 0;
+  --plans-safe-top: env(safe-area-inset-top, 0px);
+  --plans-title-expanded-h: 3.25rem;
+  --plans-title-collapsed-h: 2.5rem;
+  --plans-collapse-delta: 0.75rem;
+  --header-expanded-h: calc(var(--plans-safe-top) + 7.375rem);
+  --header-collapsed-h: calc(var(--plans-safe-top) + 6.625rem);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.mobile-prototype .plans-shared-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  padding: calc(var(--plans-safe-top) + 8px) 18px 12px;
+  background: var(--bg);
+  background: color-mix(in srgb, var(--bg) 94%, transparent);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-bottom: 1px solid transparent;
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.mobile-prototype .plans-shared-header.is-scrolled {
+  border-bottom-color: color-mix(in srgb, var(--line) 88%, transparent);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+}
+
+:root[data-theme="dark"] .mobile-prototype .plans-shared-header.is-scrolled,
+.mobile-prototype[data-theme="dark"] .plans-shared-header.is-scrolled {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.28);
+}
+
+.mobile-prototype .plans-header-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: calc(
+    var(--plans-title-expanded-h) -
+      (var(--collapse, 0) * var(--plans-collapse-delta))
+  );
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+
+.mobile-prototype .plans-header-title {
+  margin: 0;
+  flex: 0 0 auto;
+  font-size: calc(1.875rem - (var(--collapse, 0) * 0.6875rem));
+  font-weight: 800;
+  letter-spacing: calc(-0.03em + (var(--collapse, 0) * 0.01em));
+  line-height: 1.15;
+  color: var(--ink);
+  transform-origin: left center;
+}
+
+/* Compact Ring Summary Chip (fades in when ring card scrolls out of view) */
+.mobile-prototype .plans-header-chip-slot {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0 4px;
+  overflow: hidden;
+  opacity: 0;
+  transform: translate3d(0, 4px, 0);
+  pointer-events: none;
+  transition:
+    opacity 180ms ease,
+    transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.mobile-prototype .plans-header-chip-slot.is-visible {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+}
+
+.mobile-prototype .plans-header-ring-chip {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+  background: color-mix(in srgb, var(--ink) 8%, var(--card));
+  border: 1px solid color-mix(in srgb, var(--line) 90%, transparent);
+  color: var(--ink);
+}
+
+.mobile-prototype .plans-header-ring-chip.is-warn {
+  background: rgba(249, 115, 22, 0.14);
+  border-color: rgba(249, 115, 22, 0.32);
+  color: #ea580c;
+}
+
+:root[data-theme="dark"] .mobile-prototype .plans-header-ring-chip.is-warn,
+.mobile-prototype[data-theme="dark"] .plans-header-ring-chip.is-warn {
+  color: #fdba74;
+}
+
+.mobile-prototype .plans-header-ring-chip.is-over {
+  background: rgba(225, 29, 72, 0.14);
+  border-color: rgba(225, 29, 72, 0.32);
+  color: #e11d48;
+}
+
+:root[data-theme="dark"] .mobile-prototype .plans-header-ring-chip.is-over,
+.mobile-prototype[data-theme="dark"] .plans-header-ring-chip.is-over {
+  color: #fda4af;
+}
+
+@media (max-width: 300px) {
+  .mobile-prototype .plans-header-chip-slot {
+    display: none;
+  }
+}
+
+/* Top-Right Pinned Action Slot (cross-fades Budget insights icon <-> Recurring + New) */
+.mobile-prototype .plans-header-action-slot {
+  position: relative;
+  flex: 0 0 auto;
+  min-width: 78px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.mobile-prototype .plans-header-action-item {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translate3d(0, -50%, 0) scale(0.94);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 160ms ease,
+    transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    visibility 0s linear 160ms;
+}
+
+.mobile-prototype .plans-header-action-item.is-active {
+  transform: translate3d(0, -50%, 0) scale(1);
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition:
+    opacity 160ms ease,
+    transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    visibility 0s linear 0s;
+}
+
+.mobile-prototype .plans-header-action-item.prototype-header-action {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.mobile-prototype .plans-header-new-btn {
+  min-height: 44px;
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+/* Pinned Segmented Control with Unified --card Pill Token */
+.mobile-prototype .plans-header-seg-row {
+  width: 100%;
+}
+
+.mobile-prototype .plans-seg {
+  position: relative;
+  margin: 0;
+  background: color-mix(in srgb, var(--ink) 5.5%, var(--bg));
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 4px;
+  gap: 4px;
+  isolation: isolate;
+}
+
+:root[data-theme="dark"] .mobile-prototype .plans-seg,
+.mobile-prototype[data-theme="dark"] .plans-seg {
+  background: color-mix(in srgb, var(--card) 55%, var(--bg));
+  border-color: var(--line);
+}
+
+.mobile-prototype .plans-seg::before {
+  content: "";
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  width: calc((100% - 12px) / 2);
+  border-radius: 11px;
+  background-color: var(--card);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  box-shadow:
+    0 1.5px 5px rgba(0, 0, 0, 0.08),
+    0 0.5px 1.5px rgba(0, 0, 0, 0.03);
+  transform: translate3d(0, 0, 0);
+  transition: transform 200ms cubic-bezier(0.25, 1, 0.5, 1);
+  z-index: 0;
+  pointer-events: none;
+}
+
+.mobile-prototype .plans-seg[data-active="rec"]::before {
+  transform: translate3d(calc(100% + 4px), 0, 0);
+}
+
+:root[data-theme="dark"] .mobile-prototype .plans-seg::before,
+.mobile-prototype[data-theme="dark"] .plans-seg::before {
+  background-color: var(--card);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.4),
+    0 0.5px 1.5px rgba(255, 255, 255, 0.05);
+}
+
+.mobile-prototype .plans-seg button,
+.mobile-prototype .plans-seg button.on {
+  position: relative;
+  z-index: 1;
+  min-height: 44px;
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  transition: color 160ms ease, transform 160ms cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* Per-Tab Scroll Containers */
+.mobile-prototype .plans-panels-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.mobile-prototype .plans-tab-scroller {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: var(--header-expanded-h) 18px 0;
+  box-sizing: border-box;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.mobile-prototype .plans-tab-scroller::-webkit-scrollbar {
+  display: none;
+}
+
+.mobile-prototype .plans-tab-scroller.is-inactive {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.mobile-prototype .plans-tab-scroller.is-active {
+  visibility: visible;
+  pointer-events: auto;
+}
+
+/* Month Switch Content Animation (Header Stays Still) */
+.mobile-prototype .plans-budget-month-stage {
+  animation: plans-month-fade-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes plans-month-fade-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 6px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+/* Trailing Bottom Clearance Spacer: tab bar + center '+' overhang + 24px + safe-area-inset-bottom */
+.mobile-prototype .plans-scroll-spacer {
+  width: 100%;
+  height: calc(
+    var(--tab-bar-h, 68px) + var(--fab-overhang, 32px) + 24px +
+      env(safe-area-inset-bottom, 0px)
+  );
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mobile-prototype .plans-shared-header,
+  .mobile-prototype .plans-header-chip-slot,
+  .mobile-prototype .plans-header-action-item,
+  .mobile-prototype .plans-seg::before,
+  .mobile-prototype .plans-seg button {
+    transition: none !important;
+  }
+  .mobile-prototype .plans-budget-month-stage {
+    animation: none !important;
+  }
 }
 
