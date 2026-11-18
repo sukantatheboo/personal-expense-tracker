@@ -2,3 +2,6 @@ project_id = "eipexdfsblfyegycbigd"
 
 [functions.send-due-reminders]
 verify_jwt = false
+
+[functions.send-activity-push]
+verify_jwt = false

@@ -2,6 +2,9 @@ import {
   addDaysToDateString,
   formatDate,
   fromPoisha,
+  isCashCard,
+  isMfsCard,
+  isSavingsCard,
   localDate,
   nextOccurrenceDate,
   toPoisha,
@@ -11,6 +14,8 @@ const LAST_NOTIFIED_MONTH_KEY = "spend-notified-month-v2";
 const WELCOME_NOTIFIED_PREFIX = "spend-welcome-notified-v2-";
 const HEADS_UP_NOTIFIED_KEY = "spend-notified-heads-up-v1";
 const LAST_WEEKLY_SUMMARY_KEY = "spend-last-weekly-summary-v1";
+const ACTIVITY_NOTIFIED_KEY = "spend-notified-activity-v1";
+const activityNotifiedMemory = new Set();
 
 // Distinct ID ranges so scheduled background notifications ([20002, 899999999])
 // never collide with or cancel immediate/foreground notifications ([900000000, 1999999999]).
@@ -298,6 +303,16 @@ export async function setupNativeNotificationChannels() {
       vibration: true,
       visibility: 1,
     });
+    await LocalNotifications.createChannel({
+      id: "spend_activity",
+      name: "Activity Alerts",
+      description:
+        "Instant alerts when transactions, expenses, or cards are added",
+      importance: 4,
+      sound: "reminder.wav",
+      vibration: true,
+      visibility: 1,
+    });
     channelsConfigured = true;
   } catch {
     // Non-Android platforms ignore createChannel
@@ -388,6 +403,7 @@ export async function sendNativeBuiltinNotification({
   tag,
   tab = "activity",
   tone = "reminder",
+  channelId: explicitChannelId,
   id,
   scheduleAt,
 }) {
@@ -410,11 +426,14 @@ export async function sendNativeBuiltinNotification({
       const LocalNotifications = await getLocalNotifications();
       if (LocalNotifications) {
         const channelId =
-          tone === "welcome"
+          explicitChannelId ||
+          (tone === "welcome"
             ? "spend_welcome"
-            : tag && tag.includes("month")
-              ? "spend_monthly"
-              : "spend_reminders";
+            : tag && tag.startsWith("spend-activity-")
+              ? "spend_activity"
+              : tag && tag.includes("month")
+                ? "spend_monthly"
+                : "spend_reminders");
 
         const sound = tone === "welcome" ? "welcome.wav" : "reminder.wav";
 
@@ -948,6 +967,225 @@ export async function notifyNewUserSignedIn(user) {
     tab: "home",
     tone: "welcome",
   });
+}
+
+function hasActivityBeenNotified(tag) {
+  if (!tag) return false;
+  if (activityNotifiedMemory.has(tag)) return true;
+  try {
+    const raw = JSON.parse(localStorage.getItem(ACTIVITY_NOTIFIED_KEY) || "[]");
+    if (Array.isArray(raw) && raw.includes(tag)) {
+      activityNotifiedMemory.add(tag);
+      return true;
+    }
+  } catch {
+    // ignore storage errors
+  }
+  return false;
+}
+
+function markActivityNotified(tag) {
+  if (!tag) return;
+  activityNotifiedMemory.add(tag);
+  try {
+    const raw = JSON.parse(localStorage.getItem(ACTIVITY_NOTIFIED_KEY) || "[]");
+    const list = Array.isArray(raw) ? raw.filter((item) => item !== tag) : [];
+    list.push(tag);
+    localStorage.setItem(ACTIVITY_NOTIFIED_KEY, JSON.stringify(list.slice(-200)));
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function resolveAccountLabel(accountId, cards = []) {
+  if (!accountId || accountId === "cash") return "Cash";
+  const match = Array.isArray(cards)
+    ? cards.find((c) => c?.id === accountId)
+    : null;
+  if (match?.name && String(match.name).trim()) {
+    return String(match.name).trim();
+  }
+  return String(accountId);
+}
+
+export function buildTransactionNotification(transaction, cards = []) {
+  if (!transaction) return null;
+  const type =
+    transaction.type === "adjust" ? "adjustment" : transaction.type || "";
+  const amt = formatTaka(transaction.amount);
+  const note = String(transaction.description || transaction.note || "").trim();
+  const dateStr = transaction.date ? formatDate(transaction.date) : "";
+  const tag = `spend-activity-tx-${transaction.id || Date.now()}`;
+
+  if (type === "transfer") {
+    const fromName = resolveAccountLabel(
+      transaction.fromAccount || transaction.acct,
+      cards,
+    );
+    const toName = resolveAccountLabel(
+      transaction.toAccount || transaction.to,
+      cards,
+    );
+    const parts = [note, `${fromName} → ${toName}`, dateStr].filter(Boolean);
+    return {
+      title: `Transfer · ${amt}`,
+      body: parts.join(" · "),
+      tag,
+      tab: "activity",
+      tone: "reminder",
+      channelId: "spend_activity",
+    };
+  }
+
+  if (type === "income") {
+    const acctName = resolveAccountLabel(
+      transaction.account || transaction.acct,
+      cards,
+    );
+    const parts = [note, `Added to ${acctName}`, dateStr].filter(Boolean);
+    return {
+      title: `Income · +${amt}`,
+      body: parts.join(" · "),
+      tag,
+      tab: "activity",
+      tone: "reminder",
+      channelId: "spend_activity",
+    };
+  }
+
+  if (type === "adjustment") {
+    const acctName = resolveAccountLabel(
+      transaction.account || transaction.acct,
+      cards,
+    );
+    const isUp =
+      transaction.direction === "increase" ||
+      transaction.direction === "up" ||
+      transaction.dir === "up" ||
+      transaction.dir === "increase";
+    const sign = isUp ? "+" : "-";
+    const parts = [note, `${acctName} (${sign}${amt})`, dateStr].filter(Boolean);
+    return {
+      title: `Balance Adjusted · ${amt}`,
+      body: parts.join(" · "),
+      tag,
+      tab: "activity",
+      tone: "reminder",
+      channelId: "spend_activity",
+    };
+  }
+
+  return null;
+}
+
+export function buildExpenseNotification(expense, cards = []) {
+  if (!expense) return null;
+  const name = String(expense.description || expense.desc || "Expense").trim();
+  const category = String(expense.category || expense.cat || "Other").trim();
+  const rawAmt = expense.amount ?? expense.amt;
+  const hasAmt =
+    rawAmt !== null && rawAmt !== undefined && Number.isFinite(Number(rawAmt));
+  const paidFrom = resolveAccountLabel(expense.account || expense.acct, cards);
+  const title = hasAmt ? `Expense · ${formatTaka(rawAmt)}` : "Expense added";
+  const body = `${name} · ${category} · Paid from ${paidFrom}`;
+  return {
+    title,
+    body,
+    tag: `spend-activity-exp-${expense.id || Date.now()}`,
+    tab: "activity",
+    tone: "reminder",
+    channelId: "spend_activity",
+  };
+}
+
+export function buildCardAddedNotification(card) {
+  if (!card) return null;
+  const name = String(card.name || "New card").trim();
+  const tag = `spend-activity-card-${card.id || Date.now()}`;
+
+  if (isSavingsCard(card)) {
+    return {
+      title: "Account Added",
+      body: `Your ${name} account has been added to Accounts.`,
+      tag,
+      tab: "accounts",
+      tone: "reminder",
+      channelId: "spend_activity",
+    };
+  }
+
+  if (isCashCard(card)) {
+    return {
+      title: "Wallet Added",
+      body: `Your ${name} wallet has been added to Accounts.`,
+      tag,
+      tab: "accounts",
+      tone: "reminder",
+      channelId: "spend_activity",
+    };
+  }
+
+  if (isMfsCard(card)) {
+    return {
+      title: "Wallet Added",
+      body: `Your ${name} wallet has been added to Accounts.`,
+      tag,
+      tab: "accounts",
+      tone: "reminder",
+      channelId: "spend_activity",
+    };
+  }
+
+  const rawType = String(card.type || "").trim().toLowerCase();
+  const typeLabel =
+    rawType === "credit"
+      ? "Credit"
+      : rawType === "debit"
+        ? "Debit"
+        : rawType === "prepaid"
+          ? "Prepaid"
+          : rawType === "virtual"
+            ? "Virtual"
+            : "";
+  const lowerName = name.toLowerCase();
+  const hasTypeInName = typeLabel && lowerName.includes(typeLabel.toLowerCase());
+  const hasCardInName = /\bcard\b/i.test(name);
+  const labelParts = [name];
+  if (typeLabel && !hasTypeInName) labelParts.push(typeLabel);
+  if (!hasCardInName) labelParts.push("card");
+
+  return {
+    title: "Card Added",
+    body: `Your ${labelParts.join(" ")} has been added to Accounts.`,
+    tag,
+    tab: "accounts",
+    tone: "reminder",
+    channelId: "spend_activity",
+  };
+}
+
+export async function notifyTransactionCreated(transaction, cards = []) {
+  const payload = buildTransactionNotification(transaction, cards);
+  if (!payload || hasActivityBeenNotified(payload.tag)) return null;
+  markActivityNotified(payload.tag);
+  await sendNativeBuiltinNotification(payload);
+  return payload;
+}
+
+export async function notifyExpenseCreated(expense, cards = []) {
+  const payload = buildExpenseNotification(expense, cards);
+  if (!payload || hasActivityBeenNotified(payload.tag)) return null;
+  markActivityNotified(payload.tag);
+  await sendNativeBuiltinNotification(payload);
+  return payload;
+}
+
+export async function notifyCardAdded(card) {
+  const payload = buildCardAddedNotification(card);
+  if (!payload || hasActivityBeenNotified(payload.tag)) return null;
+  markActivityNotified(payload.tag);
+  await sendNativeBuiltinNotification(payload);
+  return payload;
 }
 
 export function setupNotificationListeners(onNavigate) {

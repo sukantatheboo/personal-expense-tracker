@@ -71,6 +71,9 @@ import {
 } from "../src/cloud-sync.js";
 
 import {
+  buildCardAddedNotification,
+  buildExpenseNotification,
+  buildTransactionNotification,
   getWeeklySpendSummary,
   hashNotificationId,
   IMMEDIATE_NOTIF_ID_MAX,
@@ -489,4 +492,114 @@ test("7. Security: Tamper-Evident PIN Lockout, Two-Phase Atomic Encryption Rollb
     "correct-horse-battery-staple",
   );
   assert.deepEqual(restored, { expenses: [{ id: "e1", amount: 500 }] });
+});
+
+test("8. Instant Activity Notifications: Transaction, Expense & Card Added Formatting", () => {
+  const cards = [
+    { id: "brac-1", name: "BRAC Bank", type: "debit", category: "bank" },
+    { id: "bkash-1", name: "bKash", type: "mfs", category: "mfs" },
+    { id: "sav-1", name: "Savings", type: "savings", category: "savings" },
+    { id: "cash", name: "Cash", type: "cash", category: "cash" },
+  ];
+
+  const transferNotif = buildTransactionNotification(
+    {
+      id: "tx-100",
+      type: "transfer",
+      description: "Rent split",
+      fromAccount: "brac-1",
+      toAccount: "bkash-1",
+      amount: 2500,
+      date: "2026-11-18",
+    },
+    cards,
+  );
+  assert.equal(transferNotif.title, "Transfer · ৳2,500");
+  assert.ok(transferNotif.body.includes("Rent split"));
+  assert.ok(transferNotif.body.includes("BRAC Bank → bKash"));
+  assert.equal(transferNotif.tone, "reminder");
+  assert.equal(transferNotif.channelId, "spend_activity");
+  assert.equal(transferNotif.tab, "activity");
+
+  const incomeNotif = buildTransactionNotification(
+    {
+      id: "tx-101",
+      type: "income",
+      description: "Salary",
+      account: "brac-1",
+      amount: 50000,
+      date: "2026-11-18",
+    },
+    cards,
+  );
+  assert.equal(incomeNotif.title, "Income · +৳50,000");
+  assert.ok(incomeNotif.body.includes("Salary"));
+  assert.ok(incomeNotif.body.includes("Added to BRAC Bank"));
+
+  const adjustNotif = buildTransactionNotification(
+    {
+      id: "tx-102",
+      type: "adjustment",
+      direction: "increase",
+      description: "Correction",
+      account: "bkash-1",
+      amount: 500,
+      date: "2026-11-18",
+    },
+    cards,
+  );
+  assert.equal(adjustNotif.title, "Balance Adjusted · ৳500");
+  assert.ok(adjustNotif.body.includes("Correction"));
+  assert.ok(adjustNotif.body.includes("bKash (+৳500)"));
+
+  const expenseNotif = buildExpenseNotification(
+    {
+      id: "exp-200",
+      description: "Lunch",
+      category: "Food",
+      amount: 450,
+      account: "bkash-1",
+      date: "2026-11-18",
+    },
+    cards,
+  );
+  assert.equal(expenseNotif.title, "Expense · ৳450");
+  assert.equal(expenseNotif.body, "Lunch · Food · Paid from bKash");
+  assert.equal(expenseNotif.tone, "reminder");
+
+  const noAmtExpenseNotif = buildExpenseNotification(
+    {
+      id: "exp-201",
+      description: "Groceries",
+      category: "Food",
+      amount: null,
+      account: "",
+      date: "2026-11-18",
+    },
+    cards,
+  );
+  assert.equal(noAmtExpenseNotif.title, "Expense added");
+  assert.equal(noAmtExpenseNotif.body, "Groceries · Food · Paid from Cash");
+
+  const bankCardNotif = buildCardAddedNotification(cards[0]);
+  assert.equal(bankCardNotif.title, "Card Added");
+  assert.equal(
+    bankCardNotif.body,
+    "Your BRAC Bank Debit card has been added to Accounts.",
+  );
+  assert.equal(bankCardNotif.tab, "accounts");
+
+  const mfsCardNotif = buildCardAddedNotification(cards[1]);
+  assert.equal(mfsCardNotif.title, "Wallet Added");
+  assert.equal(
+    mfsCardNotif.body,
+    "Your bKash wallet has been added to Accounts.",
+  );
+
+  const savingsCardNotif = buildCardAddedNotification(cards[2]);
+  assert.equal(savingsCardNotif.title, "Account Added");
+  assert.equal(
+    savingsCardNotif.body,
+    "Your Savings account has been added to Accounts.",
+  );
 });

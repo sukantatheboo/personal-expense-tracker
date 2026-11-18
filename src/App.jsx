@@ -52,6 +52,7 @@ import {
   getSupabase,
   PUSH_DISABLED_BY_USER_KEY,
   pushBackendConfigured,
+  sendCrossDeviceActivityPush,
   supabase,
   supabaseConfigured,
   syncBackgroundSchedules,
@@ -85,7 +86,10 @@ import {
   checkAndNotifyUpcomingBills,
   checkAndNotifyWeeklySummary,
   checkNotificationPermission,
+  notifyCardAdded,
+  notifyExpenseCreated,
   notifyNewUserSignedIn,
+  notifyTransactionCreated,
   requestNotificationPermission,
   sendNativeBuiltinNotification,
   setupNativeNotificationChannels,
@@ -2037,6 +2041,64 @@ export default function App() {
             ? "Cloud data updated live."
             : "Cloud data refreshed from Supabase.",
         );
+        if (source === "live" && previousCloud) {
+          const recentCutoff = Date.now() - 5 * 60 * 1000;
+          const knownTxIds = new Set([
+            ...(previousCloud.accountData?.transactions || []).map((t) => t?.id),
+            ...(rawLocal.accountData?.transactions || []).map((t) => t?.id),
+          ]);
+          const knownExpIds = new Set([
+            ...(previousCloud.expenses || []).map((e) => e?.id),
+            ...(rawLocal.expenses || []).map((e) => e?.id),
+          ]);
+          const knownCardIds = new Set([
+            ...(previousCloud.accountData?.settings?.cards || []).map((c) => c?.id),
+            ...(rawLocal.accountData?.settings?.cards || []).map((c) => c?.id),
+          ]);
+          const refreshedCards = Array.isArray(
+            refreshed.accountData?.settings?.cards,
+          )
+            ? refreshed.accountData.settings.cards
+            : [];
+          const isRecent = (item) => {
+            const ts = Number(item?.createdAt || item?.updatedAt || 0);
+            return !ts || ts >= recentCutoff;
+          };
+          const newRemoteEvents = [
+            ...(remoteSnapshot.accountData?.transactions || [])
+              .filter((t) => t?.id && !knownTxIds.has(t.id) && isRecent(t))
+              .map((t) => ({
+                kind: "tx",
+                item: t,
+                ts: Number(t.createdAt || t.updatedAt || 0),
+              })),
+            ...(remoteSnapshot.expenses || [])
+              .filter((e) => e?.id && !knownExpIds.has(e.id) && isRecent(e))
+              .map((e) => ({
+                kind: "exp",
+                item: e,
+                ts: Number(e.createdAt || e.updatedAt || 0),
+              })),
+            ...(remoteSnapshot.accountData?.settings?.cards || [])
+              .filter((c) => c?.id && !knownCardIds.has(c.id) && isRecent(c))
+              .map((c) => ({
+                kind: "card",
+                item: c,
+                ts: Number(c.createdAt || c.updatedAt || 0),
+              })),
+          ]
+            .sort((a, b) => b.ts - a.ts)
+            .slice(0, 3);
+          for (const evt of newRemoteEvents) {
+            if (evt.kind === "tx") {
+              void notifyTransactionCreated(evt.item, refreshedCards);
+            } else if (evt.kind === "exp") {
+              void notifyExpenseCreated(evt.item, refreshedCards);
+            } else if (evt.kind === "card") {
+              void notifyCardAdded(evt.item);
+            }
+          }
+        }
         if (!areCloudSnapshotsEqual(local, refreshed)) {
           applyCloudSnapshot(refreshed);
         }
@@ -3564,6 +3626,11 @@ export default function App() {
       };
       createdExpenseId = newExpense.id;
       setExpenses((current) => [...current, newExpense]);
+      void notifyExpenseCreated(newExpense, cards).then((payload) => {
+        if (payload && pushUser?.id && cloudSyncEnabled) {
+          void sendCrossDeviceActivityPush(payload);
+        }
+      });
     } else {
       const scheduleId = makeId();
       let nextDate = form.date;
@@ -3612,14 +3679,17 @@ export default function App() {
       ]);
       if (generatedExpenses.length) {
         didGenerateExpenses = true;
-        createdExpenseId = generatedExpenses[generatedExpenses.length - 1].id;
+        const latestGenerated = generatedExpenses[generatedExpenses.length - 1];
+        createdExpenseId = latestGenerated.id;
         setExpenses((current) => [...current, ...generatedExpenses]);
-        notifyDueExpenses(
-          generatedExpenses.map((expense) => ({
-            description: expense.description,
-            date: expense.date,
-          })),
+        generatedExpenses.forEach((expense) =>
+          saveNotifiedRecurringKey(`${expense.description}:${expense.date}`),
         );
+        void notifyExpenseCreated(latestGenerated, cards).then((payload) => {
+          if (payload && pushUser?.id && cloudSyncEnabled) {
+            void sendCrossDeviceActivityPush(payload);
+          }
+        });
       }
     }
     if (form.interval === "none" || didGenerateExpenses) {
@@ -3720,6 +3790,9 @@ export default function App() {
     } else {
       return false;
     }
+    const cardsList = Array.isArray(accountData?.settings?.cards)
+      ? accountData.settings.cards
+      : [];
     setAccountData((current) => ({
       ...current,
       settings: {
@@ -3728,6 +3801,11 @@ export default function App() {
       },
       transactions: [...current.transactions, transaction],
     }));
+    void notifyTransactionCreated(transaction, cardsList).then((payload) => {
+      if (payload && pushUser?.id && cloudSyncEnabled) {
+        void sendCrossDeviceActivityPush(payload);
+      }
+    });
     if (txDate && isValidDateString(txDate)) {
       const targetMonth = txDate.slice(0, 7);
       const currMonth = currentMonth();
@@ -3861,6 +3939,11 @@ export default function App() {
       storedNumber = last4 ? `•••• •••• •••• ${last4}` : "";
     }
 
+    const existingCards = Array.isArray(accountData?.settings?.cards)
+      ? accountData.settings.cards
+      : [];
+    const isAlreadyExistingCard = existingCards.some((c) => c.id === cardId);
+
     setRecordDeleted("cards", cardId, false);
     setAccountData((current) => {
       const currentCards = Array.isArray(current.settings.cards)
@@ -3901,13 +3984,21 @@ export default function App() {
         },
       };
     });
-    return {
+    const createdCard = {
       ...safeCard,
       id: cardId,
       last4,
       number: storedNumber,
       initialBalance,
     };
+    if (!isAlreadyExistingCard) {
+      void notifyCardAdded(createdCard).then((payload) => {
+        if (payload && pushUser?.id && cloudSyncEnabled) {
+          void sendCrossDeviceActivityPush(payload);
+        }
+      });
+    }
+    return createdCard;
   }
 
   function handleDeleteCard(cardId) {

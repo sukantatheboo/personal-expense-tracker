@@ -569,3 +569,33 @@ export async function syncBackgroundSchedules(
     if (error) throw error;
   }
 }
+
+export async function sendCrossDeviceActivityPush(payload) {
+  if (!supabaseConfigured || !payload?.title || !payload?.body) return false;
+  try {
+    const client = await getSupabase();
+    if (!client) return false;
+    const { data } = await client.auth.getSession();
+    const accessToken = data?.session?.access_token;
+    if (!accessToken) return false;
+    let excludeDeviceId = "";
+    try {
+      excludeDeviceId = getDeviceId();
+    } catch {
+      excludeDeviceId = "";
+    }
+    const { error } = await client.functions.invoke("send-activity-push", {
+      body: {
+        title: payload.title,
+        body: payload.body,
+        tag: payload.tag,
+        tab: payload.tab || "activity",
+        tone: payload.tone || "reminder",
+        excludeDeviceId,
+      },
+    });
+    return !error;
+  } catch {
+    return false;
+  }
+}
