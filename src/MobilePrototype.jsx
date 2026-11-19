@@ -605,6 +605,70 @@ function isRowClickLocked() {
   return Date.now() < swipeDeleteClickLockUntil;
 }
 const ANDROID_RIGHT_EDGE_DEADZONE_PX = 32;
+const ROW_SWIPE_REVEAL_OFFSET = 84;
+const ROW_SWIPE_REVEAL_THRESHOLD = 42;
+const ROW_SWIPE_LOCK_DISTANCE = 10;
+const ROW_SWIPE_LOCK_RATIO = 1.35;
+const ROW_SWIPE_SPRING_TRANSITION =
+  "transform 300ms cubic-bezier(0.22, 1, 0.36, 1)";
+
+function getRowSwipeFullThresholds(width) {
+  const rowWidth = Math.max(240, Number(width) || 320);
+  return {
+    left: Math.max(185, Math.round(rowWidth * 0.6)),
+    right: Math.max(170, Math.round(rowWidth * 0.56)),
+  };
+}
+
+function applyRowSwipeResistance(rawOffset, canLeft, canRight, width) {
+  const { left: leftFull, right: rightFull } = getRowSwipeFullThresholds(width);
+  if (rawOffset < 0) {
+    if (!canLeft) return rawOffset * 0.16;
+    const abs = -rawOffset;
+    if (abs <= ROW_SWIPE_REVEAL_OFFSET) return rawOffset;
+    const damped =
+      ROW_SWIPE_REVEAL_OFFSET + (abs - ROW_SWIPE_REVEAL_OFFSET) * 0.78;
+    if (damped <= leftFull) return -damped;
+    return -(leftFull + (damped - leftFull) * 0.22);
+  }
+  if (rawOffset > 0) {
+    if (!canRight) return rawOffset * 0.16;
+    if (rawOffset <= ROW_SWIPE_REVEAL_OFFSET) return rawOffset;
+    const damped =
+      ROW_SWIPE_REVEAL_OFFSET + (rawOffset - ROW_SWIPE_REVEAL_OFFSET) * 0.78;
+    if (damped <= rightFull) return damped;
+    return rightFull + (damped - rightFull) * 0.22;
+  }
+  return 0;
+}
+
+function getRowSwipeSpringDuration(distancePx) {
+  return Math.round(
+    Math.min(310, Math.max(180, 170 + Math.abs(distancePx) * 0.6)),
+  );
+}
+
+function updateRowSwipeVisuals(shell, offset, isPastThreshold) {
+  if (!shell) return;
+  const abs = Math.abs(offset);
+  const progress = Math.min(1, abs / ROW_SWIPE_REVEAL_OFFSET);
+  shell.style.setProperty("--swipe-p", progress.toFixed(3));
+  let tx = 0;
+  if (offset < 0) {
+    if (isPastThreshold) {
+      tx = -(abs - ROW_SWIPE_REVEAL_OFFSET);
+    } else if (abs < ROW_SWIPE_REVEAL_OFFSET) {
+      tx = (ROW_SWIPE_REVEAL_OFFSET - abs) / 2;
+    }
+  } else if (offset > 0) {
+    if (isPastThreshold) {
+      tx = abs - ROW_SWIPE_REVEAL_OFFSET;
+    } else if (abs < ROW_SWIPE_REVEAL_OFFSET) {
+      tx = -(ROW_SWIPE_REVEAL_OFFSET - abs) / 2;
+    }
+  }
+  shell.style.setProperty("--swipe-tx", `${tx.toFixed(1)}px`);
+}
 
 function HeroAmountField({
   value,
@@ -746,6 +810,7 @@ function ExpenseRow({
   const holdTimerRef = useRef();
   const swipeTimerRef = useRef();
   const collapseTimerRef = useRef();
+  const closeTimerRef = useRef();
   const duplicatePressTimerRef = useRef();
   const suppressClickTimerRef = useRef();
   const suppressClickRef = useRef(false);
@@ -778,13 +843,42 @@ function ExpenseRow({
   };
 
   const springRowClosed = useCallback(() => {
-    updateSwipe({ offset: 0, phase: "idle" });
-    shellRef.current?.removeAttribute("data-swipe-dir");
+    clearTimeout(closeTimerRef.current);
+    const prevOffset = pendingOffsetRef.current || swipeRef.current.offset || 0;
+    const hasOffset = Math.abs(prevOffset) > 1;
+    const duration = getRowSwipeSpringDuration(prevOffset);
+    pendingOffsetRef.current = 0;
     shellRef.current?.removeAttribute("data-threshold");
+    shellRef.current?.classList.remove("is-dragging", "is-swipe-dragging");
+    shellRef.current?.style.setProperty("--swipe-tx", "0px");
     if (rowRef.current) {
-      rowRef.current.style.transition =
-        "transform 260ms cubic-bezier(0.2, 0.9, 0.28, 1)";
+      rowRef.current.style.transition = `transform ${duration}ms cubic-bezier(0.22, 1, 0.36, 1)`;
       rowRef.current.style.transform = "translate3d(0, 0, 0)";
+    }
+    if (hasOffset) {
+      shellRef.current?.classList.add("is-closing");
+      updateSwipe({ offset: 0, phase: "closing" });
+      closeTimerRef.current = setTimeout(() => {
+        shellRef.current?.classList.remove("is-closing");
+        shellRef.current?.removeAttribute("data-swipe-dir");
+        shellRef.current?.style.removeProperty("--swipe-p");
+        shellRef.current?.style.removeProperty("--swipe-tx");
+        updateSwipe({ offset: 0, phase: "idle" });
+        if (rowRef.current) {
+          rowRef.current.style.transition = "";
+          rowRef.current.style.transform = "";
+        }
+      }, duration);
+    } else {
+      shellRef.current?.classList.remove("is-closing");
+      shellRef.current?.removeAttribute("data-swipe-dir");
+      shellRef.current?.style.removeProperty("--swipe-p");
+      shellRef.current?.style.removeProperty("--swipe-tx");
+      updateSwipe({ offset: 0, phase: "idle" });
+      if (rowRef.current) {
+        rowRef.current.style.transition = "";
+        rowRef.current.style.transform = "";
+      }
     }
   }, []);
 
@@ -843,10 +937,12 @@ function ExpenseRow({
       triggerHaptic("delete");
 
       // Phase 1: Fluid slide out of viewport
+      shellRef.current?.setAttribute("data-swipe-dir", "left");
+      shellRef.current?.style.setProperty("--swipe-p", "1");
       updateSwipe({ offset: -350, phase: "deleting" });
       if (rowRef.current) {
         rowRef.current.style.transition =
-          "transform 220ms cubic-bezier(0.2, 0.9, 0.28, 1)";
+          "transform 260ms cubic-bezier(0.22, 1, 0.36, 1)";
         rowRef.current.style.transform = "translate3d(-105%, 0, 0)";
       }
 
@@ -860,8 +956,8 @@ function ExpenseRow({
         collapseTimerRef.current = setTimeout(() => {
           lockRowClicksAfterDelete(320);
           commit(e.id);
-        }, 220);
-      }, 190);
+        }, 260);
+      }, 220);
     },
     [e.id, e.rec, isTx, onDelete, onDeleteTransaction, onSkip],
   );
@@ -871,6 +967,7 @@ function ExpenseRow({
       clearHoldTimer();
       clearTimeout(swipeTimerRef.current);
       clearTimeout(collapseTimerRef.current);
+      clearTimeout(closeTimerRef.current);
       clearTimeout(duplicatePressTimerRef.current);
       clearTimeout(suppressClickTimerRef.current);
       if (dragFrameRef.current) {
@@ -918,6 +1015,7 @@ function ExpenseRow({
     clearHoldTimer();
     clearTimeout(swipeTimerRef.current);
     clearTimeout(collapseTimerRef.current);
+    clearTimeout(closeTimerRef.current);
     if (dragFrameRef.current) {
       cancelAnimationFrame(dragFrameRef.current);
       dragFrameRef.current = null;
@@ -928,22 +1026,28 @@ function ExpenseRow({
     }
     const width = rowRef.current?.offsetWidth || 320;
 
+    const now = performance.now();
     pointerRef.current = {
       startX: event.clientX,
       startY: event.clientY,
+      lockOriginX: event.clientX,
       lastX: event.clientX,
       lastY: event.clientY,
-      startedAt: performance.now(),
+      lastTime: now,
+      velocityX: 0,
+      startedAt: now,
       width,
       moved: false,
       longPressTriggered: false,
       horizontal: false,
+      vertical: false,
       draggingStateApplied: false,
       initialOffset,
       pointerId: event.pointerId,
       pointerType: event.pointerType,
       passedHaptic: false,
     };
+    pendingOffsetRef.current = initialOffset;
     suppressClickRef.current = false;
 
     if (onDuplicate && !isTx) {
@@ -968,7 +1072,7 @@ function ExpenseRow({
 
   const moveGesture = (event) => {
     const gesture = pointerRef.current;
-    if (!gesture || gesture.longPressTriggered) return;
+    if (!gesture || gesture.longPressTriggered || gesture.vertical) return;
     if (gesture.pointerId !== event.pointerId) return;
 
     const dx = event.clientX - gesture.startX;
@@ -982,15 +1086,30 @@ function ExpenseRow({
     }
 
     if (!gesture.horizontal && (canDelete || canSwipeRight)) {
+      if (
+        gesture.initialOffset === 0 &&
+        absDy > ROW_SWIPE_LOCK_DISTANCE &&
+        absDy > absDx
+      ) {
+        gesture.vertical = true;
+        return;
+      }
+
       const isHorizontalIntent =
-        (absDx > 6 && absDx > absDy * 1.1) ||
-        (gesture.initialOffset !== 0 && absDx > 5);
+        (absDx > ROW_SWIPE_LOCK_DISTANCE &&
+          absDx > absDy * ROW_SWIPE_LOCK_RATIO) ||
+        (gesture.initialOffset !== 0 && absDx > 6);
 
       if (isHorizontalIntent) {
         gesture.horizontal = true;
+        gesture.lockOriginX = event.clientX;
+        gesture.lastX = event.clientX;
+        gesture.lastTime = performance.now();
+        gesture.velocityX = 0;
         suppressNextClick();
         rowRef.current?.classList.add("is-swipe-dragging");
-        shellRef.current?.classList.add("is-swipe-dragging");
+        shellRef.current?.classList.remove("is-closing");
+        shellRef.current?.classList.add("is-dragging", "is-swipe-dragging");
         try {
           event.currentTarget.setPointerCapture(gesture.pointerId);
         } catch {}
@@ -1005,37 +1124,38 @@ function ExpenseRow({
     }
 
     if (gesture.horizontal) {
+      const now = performance.now();
+      const dt = Math.max(1, now - gesture.lastTime);
+      const instantVelocity = (event.clientX - gesture.lastX) / dt;
+      gesture.velocityX = gesture.velocityX * 0.4 + instantVelocity * 0.6;
       gesture.lastX = event.clientX;
       gesture.lastY = event.clientY;
+      gesture.lastTime = now;
 
-      let targetOffset = gesture.initialOffset + dx;
+      const effectiveDx = event.clientX - gesture.lockOriginX;
+      const targetOffset = applyRowSwipeResistance(
+        gesture.initialOffset + effectiveDx,
+        canDelete,
+        canSwipeRight,
+        gesture.width,
+      );
 
-      if (targetOffset < 0) {
-        if (!canDelete) {
-          targetOffset = targetOffset * 0.2;
-        } else if (targetOffset < -140) {
-          targetOffset = -140 + (targetOffset - -140) * 0.25;
-        }
+      if (targetOffset < -1) {
         shellRef.current?.setAttribute("data-swipe-dir", "left");
-      } else if (targetOffset > 0) {
-        if (!canSwipeRight) {
-          targetOffset = targetOffset * 0.25;
-        } else if (targetOffset > 125) {
-          targetOffset = 125 + (targetOffset - 125) * 0.25;
-        }
+      } else if (targetOffset > 1) {
         shellRef.current?.setAttribute("data-swipe-dir", "right");
       } else {
         shellRef.current?.removeAttribute("data-swipe-dir");
       }
 
-      const deleteThreshold = Math.max(92, gesture.width * 0.32);
-      const rightThreshold = Math.max(84, gesture.width * 0.28);
+      const { left: deleteThreshold, right: rightThreshold } =
+        getRowSwipeFullThresholds(gesture.width);
       const isPastThreshold =
         (canDelete && targetOffset <= -deleteThreshold) ||
         (canSwipeRight && targetOffset >= rightThreshold);
       if (isPastThreshold && !gesture.passedHaptic) {
         gesture.passedHaptic = true;
-        triggerHaptic("selection");
+        triggerHaptic("medium");
         shellRef.current?.setAttribute("data-threshold", "true");
       } else if (!isPastThreshold && gesture.passedHaptic) {
         gesture.passedHaptic = false;
@@ -1052,6 +1172,11 @@ function ExpenseRow({
           if (rowRef.current) {
             rowRef.current.style.transform = `translate3d(${offset}px, 0, 0)`;
           }
+          updateRowSwipeVisuals(
+            shellRef.current,
+            offset,
+            Boolean(pointerRef.current?.passedHaptic),
+          );
         });
       }
     }
@@ -1075,73 +1200,80 @@ function ExpenseRow({
     } catch {}
 
     rowRef.current?.classList.remove("is-swipe-dragging");
-    shellRef.current?.classList.remove("is-swipe-dragging");
+    shellRef.current?.classList.remove("is-dragging", "is-swipe-dragging");
     shellRef.current?.removeAttribute("data-threshold");
 
-    if (event?.type === "pointercancel") {
-      const resetOffset =
-        gesture.initialOffset === -80 || gesture.initialOffset === 80
-          ? gesture.initialOffset
-          : 0;
-      if (resetOffset < 0) {
-        shellRef.current?.setAttribute("data-swipe-dir", "left");
-      } else if (resetOffset > 0) {
-        shellRef.current?.setAttribute("data-swipe-dir", "right");
-      } else {
-        shellRef.current?.removeAttribute("data-swipe-dir");
-      }
-      updateSwipe({
-        offset: resetOffset,
-        phase: resetOffset === 0 ? "idle" : "revealed",
-      });
+    const snapToRevealed = (dir) => {
+      const target = dir === "left" ? -ROW_SWIPE_REVEAL_OFFSET : ROW_SWIPE_REVEAL_OFFSET;
+      const duration = getRowSwipeSpringDuration(pendingOffsetRef.current - target);
+      pendingOffsetRef.current = target;
+      shellRef.current?.setAttribute("data-swipe-dir", dir);
+      shellRef.current?.style.setProperty("--swipe-p", "1");
+      shellRef.current?.style.setProperty("--swipe-tx", "0px");
+      updateSwipe({ offset: target, phase: "revealed" });
       if (rowRef.current) {
-        rowRef.current.style.transition =
-          "transform 240ms cubic-bezier(0.2, 0.9, 0.28, 1)";
-        rowRef.current.style.transform = `translate3d(${resetOffset}px, 0, 0)`;
+        rowRef.current.style.transition = `transform ${duration}ms cubic-bezier(0.22, 1, 0.36, 1)`;
+        rowRef.current.style.transform = `translate3d(${target}px, 0, 0)`;
+      }
+    };
+
+    if (event?.type === "pointercancel") {
+      if (gesture.initialOffset === -ROW_SWIPE_REVEAL_OFFSET) {
+        snapToRevealed("left");
+      } else if (gesture.initialOffset === ROW_SWIPE_REVEAL_OFFSET) {
+        snapToRevealed("right");
+      } else {
+        springRowClosed();
       }
       return;
     }
 
     if (gesture.horizontal && (canDelete || canSwipeRight)) {
-      const dx = (event?.clientX ?? gesture.lastX) - gesture.startX;
+      const effectiveDx = (event?.clientX ?? gesture.lastX) - gesture.lockOriginX;
       const currentOffset = pendingOffsetRef.current;
-      const elapsed = Math.max(1, performance.now() - gesture.startedAt);
-      const velocity = dx / elapsed;
-      const deleteThreshold = Math.max(95, gesture.width * 0.32);
-      const rightThreshold = Math.max(86, gesture.width * 0.28);
-      const revealThreshold = 40;
+      const isRecentMove = performance.now() - gesture.lastTime < 90;
+      const velocity = isRecentMove ? gesture.velocityX : 0;
+      const { left: deleteThreshold, right: rightThreshold } =
+        getRowSwipeFullThresholds(gesture.width);
 
       suppressNextClick();
 
-      // Left-swipe (negative offset): Delete or Skip
-      const shouldFullDelete =
-        canDelete &&
-        (currentOffset <= -deleteThreshold || (dx < -36 && velocity < -0.42));
-      // Right-swipe (positive offset): Duplicate or Edit
+      // Full-swipe commit ONLY when intentionally dragged past the deep threshold
+      // (quick flicks reveal the action button cleanly, like native iOS/Android lists)
+      const shouldFullDelete = canDelete && currentOffset <= -deleteThreshold;
       const shouldFullRightAction =
-        canSwipeRight &&
-        (currentOffset >= rightThreshold || (dx > 36 && velocity > 0.42));
+        canSwipeRight && currentOffset >= rightThreshold;
 
       if (shouldFullDelete) {
         executeDeleteAnimation();
       } else if (shouldFullRightAction) {
         executeRightSwipeAction();
-      } else if (canDelete && currentOffset <= -revealThreshold) {
-        shellRef.current?.setAttribute("data-swipe-dir", "left");
-        updateSwipe({ offset: -80, phase: "revealed" });
-        if (rowRef.current) {
-          rowRef.current.style.transition =
-            "transform 260ms cubic-bezier(0.2, 0.9, 0.28, 1)";
-          rowRef.current.style.transform = "translate3d(-80px, 0, 0)";
+      } else if (gesture.initialOffset < 0) {
+        const closingFlick = effectiveDx > 16 && velocity > 0.25;
+        if (closingFlick || currentOffset > -52) {
+          springRowClosed();
+        } else {
+          snapToRevealed("left");
         }
-      } else if (canSwipeRight && currentOffset >= revealThreshold) {
-        shellRef.current?.setAttribute("data-swipe-dir", "right");
-        updateSwipe({ offset: 80, phase: "revealed" });
-        if (rowRef.current) {
-          rowRef.current.style.transition =
-            "transform 260ms cubic-bezier(0.2, 0.9, 0.28, 1)";
-          rowRef.current.style.transform = "translate3d(80px, 0, 0)";
+      } else if (gesture.initialOffset > 0) {
+        const closingFlick = effectiveDx < -16 && velocity < -0.25;
+        if (closingFlick || currentOffset < 52) {
+          springRowClosed();
+        } else {
+          snapToRevealed("right");
         }
+      } else if (
+        canDelete &&
+        (currentOffset <= -ROW_SWIPE_REVEAL_THRESHOLD ||
+          (effectiveDx < -24 && velocity < -0.32))
+      ) {
+        snapToRevealed("left");
+      } else if (
+        canSwipeRight &&
+        (currentOffset >= ROW_SWIPE_REVEAL_THRESHOLD ||
+          (effectiveDx > 24 && velocity > 0.32))
+      ) {
+        snapToRevealed("right");
       } else {
         springRowClosed();
       }
@@ -1207,11 +1339,6 @@ function ExpenseRow({
       ref={rowRef}
       className={rowClasses}
       type="button"
-      style={
-        (canDelete || canSwipeRight) && swipe.offset !== 0
-          ? { transform: `translate3d(${swipe.offset}px, 0, 0)` }
-          : undefined
-      }
       aria-label={
         isTx
           ? `${title}, ${amountPrefix}${M(e?.amt || 0)}. ${gestureHint}`
@@ -1338,7 +1465,7 @@ function ExpenseRow({
   return (
     <div
       ref={shellRef}
-      className={`expense-swipe-shell${swipe.phase === "dragging" ? " is-dragging" : ""}${swipe.phase === "revealed" ? " is-revealed" : ""}${["deleting", "collapsing"].includes(swipe.phase) ? " is-deleting" : ""}${swipe.phase === "collapsing" ? " is-collapsing" : ""}${e.rec ? " is-skip-shell" : ""}${swipe.offset > 0 ? " is-right-swipe" : ""}`}
+      className={`expense-swipe-shell${swipe.phase === "dragging" ? " is-dragging" : ""}${swipe.phase === "revealed" ? " is-revealed" : ""}${swipe.phase === "closing" ? " is-closing" : ""}${["deleting", "collapsing"].includes(swipe.phase) ? " is-deleting" : ""}${swipe.phase === "collapsing" ? " is-collapsing" : ""}${e.rec ? " is-skip-shell" : ""}${swipe.offset > 0 ? " is-right-swipe" : ""}`}
     >
       {/* Left-to-Right Swipe Action Button (Duplicate / Edit) */}
       {canSwipeRight && (
@@ -4403,6 +4530,7 @@ function RecurringRow({ item, fmt, accountLabel, onSelect, onTogglePause }) {
   const pointerRef = useRef(null);
   const rowRef = useRef(null);
   const shellRef = useRef(null);
+  const closeTimerRef = useRef();
   const suppressClickTimerRef = useRef();
   const suppressClickRef = useRef(false);
   const dragFrameRef = useRef(null);
@@ -4424,13 +4552,42 @@ function RecurringRow({ item, fmt, accountLabel, onSelect, onTogglePause }) {
   };
 
   const springRowClosed = useCallback(() => {
-    updateSwipe({ offset: 0, phase: "idle" });
-    shellRef.current?.removeAttribute("data-swipe-dir");
+    clearTimeout(closeTimerRef.current);
+    const prevOffset = pendingOffsetRef.current || swipeRef.current.offset || 0;
+    const hasOffset = Math.abs(prevOffset) > 1;
+    const duration = getRowSwipeSpringDuration(prevOffset);
+    pendingOffsetRef.current = 0;
     shellRef.current?.removeAttribute("data-threshold");
+    shellRef.current?.classList.remove("is-dragging", "is-swipe-dragging");
+    shellRef.current?.style.setProperty("--swipe-tx", "0px");
     if (rowRef.current) {
-      rowRef.current.style.transition =
-        "transform 260ms cubic-bezier(0.2, 0.9, 0.28, 1)";
+      rowRef.current.style.transition = `transform ${duration}ms cubic-bezier(0.22, 1, 0.36, 1)`;
       rowRef.current.style.transform = "translate3d(0, 0, 0)";
+    }
+    if (hasOffset) {
+      shellRef.current?.classList.add("is-closing");
+      updateSwipe({ offset: 0, phase: "closing" });
+      closeTimerRef.current = setTimeout(() => {
+        shellRef.current?.classList.remove("is-closing");
+        shellRef.current?.removeAttribute("data-swipe-dir");
+        shellRef.current?.style.removeProperty("--swipe-p");
+        shellRef.current?.style.removeProperty("--swipe-tx");
+        updateSwipe({ offset: 0, phase: "idle" });
+        if (rowRef.current) {
+          rowRef.current.style.transition = "";
+          rowRef.current.style.transform = "";
+        }
+      }, duration);
+    } else {
+      shellRef.current?.classList.remove("is-closing");
+      shellRef.current?.removeAttribute("data-swipe-dir");
+      shellRef.current?.style.removeProperty("--swipe-p");
+      shellRef.current?.style.removeProperty("--swipe-tx");
+      updateSwipe({ offset: 0, phase: "idle" });
+      if (rowRef.current) {
+        rowRef.current.style.transition = "";
+        rowRef.current.style.transform = "";
+      }
     }
   }, []);
 
@@ -4458,6 +4615,7 @@ function RecurringRow({ item, fmt, accountLabel, onSelect, onTogglePause }) {
 
   useEffect(
     () => () => {
+      clearTimeout(closeTimerRef.current);
       clearTimeout(suppressClickTimerRef.current);
       if (dragFrameRef.current) {
         cancelAnimationFrame(dragFrameRef.current);
@@ -4491,6 +4649,7 @@ function RecurringRow({ item, fmt, accountLabel, onSelect, onTogglePause }) {
     ) {
       return;
     }
+    clearTimeout(closeTimerRef.current);
     if (dragFrameRef.current) {
       cancelAnimationFrame(dragFrameRef.current);
       dragFrameRef.current = null;
@@ -4501,27 +4660,33 @@ function RecurringRow({ item, fmt, accountLabel, onSelect, onTogglePause }) {
     }
     const width = rowRef.current?.offsetWidth || 320;
 
+    const now = performance.now();
     pointerRef.current = {
       startX: event.clientX,
       startY: event.clientY,
+      lockOriginX: event.clientX,
       lastX: event.clientX,
       lastY: event.clientY,
-      startedAt: performance.now(),
+      lastTime: now,
+      velocityX: 0,
+      startedAt: now,
       width,
       moved: false,
       horizontal: false,
+      vertical: false,
       draggingStateApplied: false,
       initialOffset,
       pointerId: event.pointerId,
       pointerType: event.pointerType,
       passedHaptic: false,
     };
+    pendingOffsetRef.current = initialOffset;
     suppressClickRef.current = false;
   };
 
   const moveGesture = (event) => {
     const gesture = pointerRef.current;
-    if (!gesture) return;
+    if (!gesture || gesture.vertical) return;
     if (gesture.pointerId !== event.pointerId) return;
 
     const dx = event.clientX - gesture.startX;
@@ -4534,15 +4699,30 @@ function RecurringRow({ item, fmt, accountLabel, onSelect, onTogglePause }) {
     }
 
     if (!gesture.horizontal) {
+      if (
+        gesture.initialOffset === 0 &&
+        absDy > ROW_SWIPE_LOCK_DISTANCE &&
+        absDy > absDx
+      ) {
+        gesture.vertical = true;
+        return;
+      }
+
       const isHorizontalIntent =
-        (absDx > 6 && absDx > absDy * 1.1) ||
-        (gesture.initialOffset !== 0 && absDx > 5);
+        (absDx > ROW_SWIPE_LOCK_DISTANCE &&
+          absDx > absDy * ROW_SWIPE_LOCK_RATIO) ||
+        (gesture.initialOffset !== 0 && absDx > 6);
 
       if (isHorizontalIntent) {
         gesture.horizontal = true;
+        gesture.lockOriginX = event.clientX;
+        gesture.lastX = event.clientX;
+        gesture.lastTime = performance.now();
+        gesture.velocityX = 0;
         suppressNextClick();
         rowRef.current?.classList.add("is-swipe-dragging");
-        shellRef.current?.classList.add("is-swipe-dragging");
+        shellRef.current?.classList.remove("is-closing");
+        shellRef.current?.classList.add("is-dragging", "is-swipe-dragging");
         try {
           event.currentTarget.setPointerCapture(gesture.pointerId);
         } catch {}
@@ -4557,32 +4737,37 @@ function RecurringRow({ item, fmt, accountLabel, onSelect, onTogglePause }) {
     }
 
     if (gesture.horizontal) {
+      const now = performance.now();
+      const dt = Math.max(1, now - gesture.lastTime);
+      const instantVelocity = (event.clientX - gesture.lastX) / dt;
+      gesture.velocityX = gesture.velocityX * 0.4 + instantVelocity * 0.6;
       gesture.lastX = event.clientX;
       gesture.lastY = event.clientY;
+      gesture.lastTime = now;
 
-      let targetOffset = gesture.initialOffset + dx;
+      const effectiveDx = event.clientX - gesture.lockOriginX;
+      const targetOffset = applyRowSwipeResistance(
+        gesture.initialOffset + effectiveDx,
+        true,
+        true,
+        gesture.width,
+      );
 
-      if (targetOffset < 0) {
-        if (targetOffset < -140) {
-          targetOffset = -140 + (targetOffset - -140) * 0.25;
-        }
+      if (targetOffset < -1) {
         shellRef.current?.setAttribute("data-swipe-dir", "left");
-      } else if (targetOffset > 0) {
-        if (targetOffset > 125) {
-          targetOffset = 125 + (targetOffset - 125) * 0.25;
-        }
+      } else if (targetOffset > 1) {
         shellRef.current?.setAttribute("data-swipe-dir", "right");
       } else {
         shellRef.current?.removeAttribute("data-swipe-dir");
       }
 
-      const leftThreshold = Math.max(84, gesture.width * 0.28);
-      const rightThreshold = Math.max(84, gesture.width * 0.28);
+      const { left: leftThreshold, right: rightThreshold } =
+        getRowSwipeFullThresholds(gesture.width);
       const isPastThreshold =
         targetOffset <= -leftThreshold || targetOffset >= rightThreshold;
       if (isPastThreshold && !gesture.passedHaptic) {
         gesture.passedHaptic = true;
-        triggerHaptic("selection");
+        triggerHaptic("medium");
         shellRef.current?.setAttribute("data-threshold", "true");
       } else if (!isPastThreshold && gesture.passedHaptic) {
         gesture.passedHaptic = false;
@@ -4599,6 +4784,11 @@ function RecurringRow({ item, fmt, accountLabel, onSelect, onTogglePause }) {
           if (rowRef.current) {
             rowRef.current.style.transform = `translate3d(${offset}px, 0, 0)`;
           }
+          updateRowSwipeVisuals(
+            shellRef.current,
+            offset,
+            Boolean(pointerRef.current?.passedHaptic),
+          );
         });
       }
     }
@@ -4621,49 +4811,47 @@ function RecurringRow({ item, fmt, accountLabel, onSelect, onTogglePause }) {
     } catch {}
 
     rowRef.current?.classList.remove("is-swipe-dragging");
-    shellRef.current?.classList.remove("is-swipe-dragging");
+    shellRef.current?.classList.remove("is-dragging", "is-swipe-dragging");
     shellRef.current?.removeAttribute("data-threshold");
 
-    if (event?.type === "pointercancel") {
-      const resetOffset =
-        gesture.initialOffset === -80 || gesture.initialOffset === 80
-          ? gesture.initialOffset
-          : 0;
-      if (resetOffset < 0) {
-        shellRef.current?.setAttribute("data-swipe-dir", "left");
-      } else if (resetOffset > 0) {
-        shellRef.current?.setAttribute("data-swipe-dir", "right");
-      } else {
-        shellRef.current?.removeAttribute("data-swipe-dir");
-      }
-      updateSwipe({
-        offset: resetOffset,
-        phase: resetOffset === 0 ? "idle" : "revealed",
-      });
+    const snapToRevealed = (dir) => {
+      const target = dir === "left" ? -ROW_SWIPE_REVEAL_OFFSET : ROW_SWIPE_REVEAL_OFFSET;
+      const duration = getRowSwipeSpringDuration(pendingOffsetRef.current - target);
+      pendingOffsetRef.current = target;
+      shellRef.current?.setAttribute("data-swipe-dir", dir);
+      shellRef.current?.style.setProperty("--swipe-p", "1");
+      shellRef.current?.style.setProperty("--swipe-tx", "0px");
+      updateSwipe({ offset: target, phase: "revealed" });
       if (rowRef.current) {
-        rowRef.current.style.transition =
-          "transform 240ms cubic-bezier(0.2, 0.9, 0.28, 1)";
-        rowRef.current.style.transform = `translate3d(${resetOffset}px, 0, 0)`;
+        rowRef.current.style.transition = `transform ${duration}ms cubic-bezier(0.22, 1, 0.36, 1)`;
+        rowRef.current.style.transform = `translate3d(${target}px, 0, 0)`;
+      }
+    };
+
+    if (event?.type === "pointercancel") {
+      if (gesture.initialOffset === -ROW_SWIPE_REVEAL_OFFSET) {
+        snapToRevealed("left");
+      } else if (gesture.initialOffset === ROW_SWIPE_REVEAL_OFFSET) {
+        snapToRevealed("right");
+      } else {
+        springRowClosed();
       }
       return;
     }
 
     if (gesture.horizontal) {
-      const dx = (event?.clientX ?? gesture.lastX) - gesture.startX;
+      const effectiveDx = (event?.clientX ?? gesture.lastX) - gesture.lockOriginX;
       const currentOffset = pendingOffsetRef.current;
-      const elapsed = Math.max(1, performance.now() - gesture.startedAt);
-      const velocity = dx / elapsed;
-      const leftThreshold = Math.max(90, gesture.width * 0.3);
-      const rightThreshold = Math.max(84, gesture.width * 0.28);
-      const revealThreshold = 40;
+      const isRecentMove = performance.now() - gesture.lastTime < 90;
+      const velocity = isRecentMove ? gesture.velocityX : 0;
+      const { left: leftThreshold, right: rightThreshold } =
+        getRowSwipeFullThresholds(gesture.width);
 
       suppressNextClick();
 
-      // Full action threshold executions
-      const shouldFullLeftAction =
-        currentOffset <= -leftThreshold || (dx < -36 && velocity < -0.42);
-      const shouldFullRightAction =
-        currentOffset >= rightThreshold || (dx > 36 && velocity > 0.42);
+      // Full-swipe commit ONLY when intentionally dragged past the deep threshold
+      const shouldFullLeftAction = currentOffset <= -leftThreshold;
+      const shouldFullRightAction = currentOffset >= rightThreshold;
 
       if (shouldFullLeftAction) {
         springRowClosed();
@@ -4671,22 +4859,30 @@ function RecurringRow({ item, fmt, accountLabel, onSelect, onTogglePause }) {
         onTogglePause(item);
       } else if (shouldFullRightAction) {
         executeRightSwipeAction();
-      } else if (currentOffset <= -revealThreshold) {
-        shellRef.current?.setAttribute("data-swipe-dir", "left");
-        updateSwipe({ offset: -80, phase: "revealed" });
-        if (rowRef.current) {
-          rowRef.current.style.transition =
-            "transform 260ms cubic-bezier(0.2, 0.9, 0.28, 1)";
-          rowRef.current.style.transform = "translate3d(-80px, 0, 0)";
+      } else if (gesture.initialOffset < 0) {
+        const closingFlick = effectiveDx > 16 && velocity > 0.25;
+        if (closingFlick || currentOffset > -52) {
+          springRowClosed();
+        } else {
+          snapToRevealed("left");
         }
-      } else if (currentOffset >= revealThreshold) {
-        shellRef.current?.setAttribute("data-swipe-dir", "right");
-        updateSwipe({ offset: 80, phase: "revealed" });
-        if (rowRef.current) {
-          rowRef.current.style.transition =
-            "transform 260ms cubic-bezier(0.2, 0.9, 0.28, 1)";
-          rowRef.current.style.transform = "translate3d(80px, 0, 0)";
+      } else if (gesture.initialOffset > 0) {
+        const closingFlick = effectiveDx < -16 && velocity < -0.25;
+        if (closingFlick || currentOffset < 52) {
+          springRowClosed();
+        } else {
+          snapToRevealed("right");
         }
+      } else if (
+        currentOffset <= -ROW_SWIPE_REVEAL_THRESHOLD ||
+        (effectiveDx < -24 && velocity < -0.32)
+      ) {
+        snapToRevealed("left");
+      } else if (
+        currentOffset >= ROW_SWIPE_REVEAL_THRESHOLD ||
+        (effectiveDx > 24 && velocity > 0.32)
+      ) {
+        snapToRevealed("right");
       } else {
         springRowClosed();
       }
@@ -4731,6 +4927,7 @@ function RecurringRow({ item, fmt, accountLabel, onSelect, onTogglePause }) {
     swipe.phase === "dragging" && "is-swipe-dragging",
     swipe.phase === "revealed" && "is-revealed",
     swipe.phase === "revealed" && "is-swipe-revealed",
+    swipe.phase === "closing" && "is-closing",
     swipe.offset > 0 && "is-right-swipe",
     paused && "is-paused-item",
   ]
@@ -4795,11 +4992,6 @@ function RecurringRow({ item, fmt, accountLabel, onSelect, onTogglePause }) {
         role="button"
         tabIndex={0}
         className={rowClasses}
-        style={
-          swipe.offset !== 0
-            ? { transform: `translate3d(${swipe.offset}px, 0, 0)` }
-            : undefined
-        }
         onPointerDown={startGesture}
         onPointerMove={moveGesture}
         onPointerUp={endGesture}
