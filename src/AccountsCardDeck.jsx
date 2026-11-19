@@ -198,7 +198,7 @@ export const QuickActionsRow = React.memo(function QuickActionsRow({
           onPress: onCardOptions,
         },
       ],
-    [actions, onAddMoney, onSend, onAdjust, onCardOptions, highlightSend]
+    [actions, onAddMoney, onSend, onAdjust, onCardOptions, highlightSend],
   );
 
   return (
@@ -253,9 +253,9 @@ export const formatMoney = (n) => {
   const num = Number(n) || 0;
   const absNum = Math.abs(num);
   const hasFraction = Math.round(absNum * 100) % 100 !== 0;
-  const formatted = (hasFraction ? moneyFormatterDec : moneyFormatterInt).format(
-    absNum,
-  );
+  const formatted = (
+    hasFraction ? moneyFormatterDec : moneyFormatterInt
+  ).format(absNum);
   return `${num < 0 ? "-৳" : "৳"}${formatted}`;
 };
 
@@ -678,7 +678,9 @@ export function WalletCard({
                 {resolvedHolderName}
               </span>
               <span className="wallet-card-type-tag">
-                <span className="wallet-card-subtitle-text">{cardSubtitle}</span>
+                <span className="wallet-card-subtitle-text">
+                  {cardSubtitle}
+                </span>
                 {card.isPrimary && (
                   <span className="wallet-card-primary-badge">PRIMARY</span>
                 )}

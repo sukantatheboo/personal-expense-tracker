@@ -60,7 +60,9 @@
   border-radius: 50%;
   padding: 0;
   z-index: 2;
-  transition: background-color 150ms ease, color 150ms ease;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
 }
 .mr-card button.mr-x svg {
   width: 18px;
@@ -151,7 +153,9 @@
   letter-spacing: -0.01em;
   text-align: center;
   white-space: nowrap;
-  transition: opacity 150ms ease, transform 150ms ease;
+  transition:
+    opacity 150ms ease,
+    transform 150ms ease;
 }
 .mr-card button.mr-vbtn:hover {
   opacity: 0.92;
@@ -302,7 +306,8 @@
 .mr-sl {
   position: absolute;
   inset: 0;
-  padding: calc(90px + env(safe-area-inset-top, 0px)) 24px calc(14% + env(safe-area-inset-bottom, 0px));
+  padding: calc(90px + env(safe-area-inset-top, 0px)) 24px
+    calc(14% + env(safe-area-inset-bottom, 0px));
   display: flex;
   flex-direction: column;
   justify-content: flex-end;

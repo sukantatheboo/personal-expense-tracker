@@ -542,7 +542,8 @@ export async function syncNativeScheduledNotifications({
     let resolved = candidateId;
     let probe = 1;
     while (usedIds.has(resolved)) {
-      resolved = minRange + ((resolved - minRange + probe) % (maxRange - minRange));
+      resolved =
+        minRange + ((resolved - minRange + probe) % (maxRange - minRange));
       probe += 1;
     }
     usedIds.add(resolved);
@@ -991,7 +992,10 @@ function markActivityNotified(tag) {
     const raw = JSON.parse(localStorage.getItem(ACTIVITY_NOTIFIED_KEY) || "[]");
     const list = Array.isArray(raw) ? raw.filter((item) => item !== tag) : [];
     list.push(tag);
-    localStorage.setItem(ACTIVITY_NOTIFIED_KEY, JSON.stringify(list.slice(-200)));
+    localStorage.setItem(
+      ACTIVITY_NOTIFIED_KEY,
+      JSON.stringify(list.slice(-200)),
+    );
   } catch {
     // ignore storage errors
   }
@@ -1064,7 +1068,9 @@ export function buildTransactionNotification(transaction, cards = []) {
       transaction.dir === "up" ||
       transaction.dir === "increase";
     const sign = isUp ? "+" : "-";
-    const parts = [note, `${acctName} (${sign}${amt})`, dateStr].filter(Boolean);
+    const parts = [note, `${acctName} (${sign}${amt})`, dateStr].filter(
+      Boolean,
+    );
     return {
       title: `Balance Adjusted · ${amt}`,
       body: parts.join(" · "),
@@ -1136,7 +1142,9 @@ export function buildCardAddedNotification(card) {
     };
   }
 
-  const rawType = String(card.type || "").trim().toLowerCase();
+  const rawType = String(card.type || "")
+    .trim()
+    .toLowerCase();
   const typeLabel =
     rawType === "credit"
       ? "Credit"
@@ -1148,7 +1156,8 @@ export function buildCardAddedNotification(card) {
             ? "Virtual"
             : "";
   const lowerName = name.toLowerCase();
-  const hasTypeInName = typeLabel && lowerName.includes(typeLabel.toLowerCase());
+  const hasTypeInName =
+    typeLabel && lowerName.includes(typeLabel.toLowerCase());
   const hasCardInName = /\bcard\b/i.test(name);
   const labelParts = [name];
   if (typeLabel && !hasTypeInName) labelParts.push(typeLabel);

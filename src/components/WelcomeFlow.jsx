@@ -198,7 +198,8 @@ export default function WelcomeFlow({ onDone, theme, exiting = false }) {
     const handlePointerUp = (event) => {
       if (
         pointerStartXRef.current === null ||
-        (pointerIdRef.current !== null && event.pointerId !== pointerIdRef.current)
+        (pointerIdRef.current !== null &&
+          event.pointerId !== pointerIdRef.current)
       ) {
         return;
       }
@@ -208,7 +209,10 @@ export default function WelcomeFlow({ onDone, theme, exiting = false }) {
       if (!splashGoneRef.current || finishedRef.current) return;
       if (Math.abs(deltaX) > SWIPE_THRESHOLD_PX) {
         setSlideIndex((current) =>
-          Math.max(0, Math.min(SLIDE_COUNT - 1, current + (deltaX < 0 ? 1 : -1))),
+          Math.max(
+            0,
+            Math.min(SLIDE_COUNT - 1, current + (deltaX < 0 ? 1 : -1)),
+          ),
         );
         setSlidesReady(true);
       }
@@ -232,14 +236,16 @@ export default function WelcomeFlow({ onDone, theme, exiting = false }) {
   const handleTrackPointerDown = (event) => {
     if (!splashGone) return;
     if (event.pointerType === "touch") return;
-    if (event.target instanceof Element && event.target.closest("button")) return;
+    if (event.target instanceof Element && event.target.closest("button"))
+      return;
     pointerStartXRef.current = event.clientX;
     pointerIdRef.current = event.pointerId;
   };
 
   const handleTrackTouchStart = (event) => {
     if (!splashGone) return;
-    if (event.target instanceof Element && event.target.closest("button")) return;
+    if (event.target instanceof Element && event.target.closest("button"))
+      return;
     if (event.touches?.length === 1) {
       touchStartXRef.current = event.touches[0].clientX;
     }

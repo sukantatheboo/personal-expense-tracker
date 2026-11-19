@@ -247,27 +247,24 @@ if (typeof window !== "undefined") {
 
   const dispatchUpdateAvailable = (info = {}) => {
     const candidateBuildId =
-      info.buildId ||
-      latestDetectedManifest?.buildId ||
-      "sw-pending-update";
+      info.buildId || latestDetectedManifest?.buildId || "sw-pending-update";
     const candidateVersion =
-      info.version ||
-      latestDetectedManifest?.version ||
-      CURRENT_VERSION ||
-      "";
+      info.version || latestDetectedManifest?.version || CURRENT_VERSION || "";
     const detail = {
       buildId: candidateBuildId,
       version: candidateVersion,
-      commit: info.commit || latestDetectedManifest?.commit || CURRENT_COMMIT || "",
+      commit:
+        info.commit || latestDetectedManifest?.commit || CURRENT_COMMIT || "",
       builtAt:
-        info.builtAt || latestDetectedManifest?.builtAt || CURRENT_BUILT_AT || "",
+        info.builtAt ||
+        latestDetectedManifest?.builtAt ||
+        CURRENT_BUILT_AT ||
+        "",
       source: info.source || "sw",
       manual: Boolean(info.manual),
     };
     window.__spendPendingUpdate = detail;
-    window.dispatchEvent(
-      new CustomEvent("spend:update-available", { detail }),
-    );
+    window.dispatchEvent(new CustomEvent("spend:update-available", { detail }));
   };
 
   const checkUnacknowledgedCurrentBuild = async ({ manual = false } = {}) => {
@@ -389,7 +386,10 @@ if (typeof window !== "undefined") {
 
             writeInstalledBuildId(CURRENT_BUILD_ID);
 
-            if (swRegistration?.waiting && navigator.serviceWorker?.controller) {
+            if (
+              swRegistration?.waiting &&
+              navigator.serviceWorker?.controller
+            ) {
               const workerInfo = await getWorkerVersionInfo(
                 swRegistration.waiting,
               );

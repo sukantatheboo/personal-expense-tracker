@@ -67,10 +67,7 @@ const INNER_INK = "var(--icon-inner-ink, #27305E)";
 const ADAPTIVE_ICON_PATHS = {
   food: (
     <>
-      <path
-        d="M23 49 C23 68 35 75 48 75 C59 75 67 67 68 49 Z"
-        fill="#D6E289"
-      />
+      <path d="M23 49 C23 68 35 75 48 75 C59 75 67 67 68 49 Z" fill="#D6E289" />
       <path
         d="M21.0 46.5 C38.0 45.5 58.0 45.8 73.0 47.0 A1.4 1.4 0 0 1 72.8 49.8 C58.0 48.8 38.5 48.8 24.0 49.5 C24.8 65.5 35.5 73.5 48.5 73.5 C60.5 73.5 69.5 66.2 71.2 55.0 A1.3 1.3 0 0 1 73.8 55.4 C71.8 68.8 61.5 77.5 48.0 77.5 C32.5 77.5 19.5 67.5 19.0 48.8 C19.0 47.2 19.8 46.5 21.0 46.5 Z"
         fill={INK}
@@ -1235,7 +1232,9 @@ export function UtilitySymbol({
   imgClassName = "",
   style,
 }) {
-  const key = String(name || "").trim().toLowerCase();
+  const key = String(name || "")
+    .trim()
+    .toLowerCase();
   if (key === "suggestion") {
     return (
       <AdaptiveIconSvg

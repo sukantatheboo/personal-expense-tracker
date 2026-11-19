@@ -131,7 +131,14 @@ class AppErrorBoundary extends Component {
           <h2 style={{ margin: "0 0 8px", fontSize: "18px" }}>
             Unable to open Spend
           </h2>
-          <p style={{ margin: "0 0 16px", fontSize: "13px", opacity: 0.75, maxWidth: "320px" }}>
+          <p
+            style={{
+              margin: "0 0 16px",
+              fontSize: "13px",
+              opacity: 0.75,
+              maxWidth: "320px",
+            }}
+          >
             {this.state.error?.message || "A startup error occurred."}
           </p>
           <button
@@ -466,9 +473,7 @@ function stripCloudRemovedRecordsFromLocal(local, previousCloud, remoteData) {
       .filter(Boolean),
   );
   const prevExpMap = new Map(
-    (previousCloud?.expenses || [])
-      .filter((e) => e?.id)
-      .map((e) => [e.id, e]),
+    (previousCloud?.expenses || []).filter((e) => e?.id).map((e) => [e.id, e]),
   );
   const remoteExpIds = new Set(
     (remoteData?.expenses || []).map((e) => e?.id).filter(Boolean),
@@ -738,7 +743,8 @@ function mergeAccountSettings(
       return bVal;
     }
     if (hasBalKey) return roundMoney(Math.max(0, Number(balancesObj[cardId])));
-    if (hasCardInit) return roundMoney(Math.max(0, Number(cardObj.initialBalance)));
+    if (hasCardInit)
+      return roundMoney(Math.max(0, Number(cardObj.initialBalance)));
     return 0;
   };
 
@@ -818,7 +824,8 @@ function mergeAccountSettings(
     const card = cardMap.get(id);
     return {
       ...card,
-      initialBalance: mergedBalances[id] ?? roundMoney(Number(card?.initialBalance) || 0),
+      initialBalance:
+        mergedBalances[id] ?? roundMoney(Number(card?.initialBalance) || 0),
     };
   });
   const preferredPrimaryId = preferLocalCards
@@ -856,13 +863,13 @@ function mergeAccountSettings(
     ...(resolvedPrimaryCardId ? { primaryCardId: resolvedPrimaryCardId } : {}),
     configured: Boolean(
       localSettings.configured ||
-        cloudSettings.configured ||
-        mergedCards.length > 0,
+      cloudSettings.configured ||
+      mergedCards.length > 0,
     ),
     cardsConfigured: Boolean(
       localSettings.cardsConfigured ||
-        cloudSettings.cardsConfigured ||
-        mergedCards.length > 0,
+      cloudSettings.cardsConfigured ||
+      mergedCards.length > 0,
     ),
     updatedAt: Math.max(localTime, cloudTime),
     ...(Object.keys(remappedAccountIds).length > 0
@@ -1344,7 +1351,8 @@ export default function App() {
   const [ready, setReady] = useState(false);
   const [sessionResolving, setSessionResolving] = useState(() =>
     Boolean(
-      supabaseConfigured && (hasPotentialCloudSession() || loadLocalDataOwner()),
+      supabaseConfigured &&
+      (hasPotentialCloudSession() || loadLocalDataOwner()),
     ),
   );
   const [sessionUser, setSessionUser] = useState(null);
@@ -1494,7 +1502,8 @@ export default function App() {
     isHydrated &&
     (!hasAppPin() || isSessionUnlocked()) &&
     !(
-      (!Boolean(sessionUser || pushUser) && (!welcomeSeen || devForceWelcome)) ||
+      (!Boolean(sessionUser || pushUser) &&
+        (!welcomeSeen || devForceWelcome)) ||
       welcomeExiting
     );
   const canPresentUpdateModalRef = useRef(canPresentUpdateModal);
@@ -1770,10 +1779,7 @@ export default function App() {
     localDataWasUnownedRef.current = !previousUserId && !snapshot;
     adoptLocalDataForUser(userId);
     if (snapshot) {
-      if (
-        isSameOwner &&
-        hasMeaningfulLocalData(cloudSnapshotRef.current)
-      ) {
+      if (isSameOwner && hasMeaningfulLocalData(cloudSnapshotRef.current)) {
         const merged = mergeCloudSnapshots(
           cloudSnapshotRef.current,
           snapshot,
@@ -1850,11 +1856,11 @@ export default function App() {
 
           const savedVersion =
             savedResult && typeof savedResult === "object"
-              ? savedResult.updated_at ?? null
+              ? (savedResult.updated_at ?? null)
               : savedResult;
           const serverMergedData =
             savedResult && typeof savedResult === "object"
-              ? savedResult.data ?? null
+              ? (savedResult.data ?? null)
               : null;
 
           if (savedVersion) {
@@ -2044,7 +2050,9 @@ export default function App() {
         if (source === "live" && previousCloud) {
           const recentCutoff = Date.now() - 5 * 60 * 1000;
           const knownTxIds = new Set([
-            ...(previousCloud.accountData?.transactions || []).map((t) => t?.id),
+            ...(previousCloud.accountData?.transactions || []).map(
+              (t) => t?.id,
+            ),
             ...(rawLocal.accountData?.transactions || []).map((t) => t?.id),
           ]);
           const knownExpIds = new Set([
@@ -2052,7 +2060,9 @@ export default function App() {
             ...(rawLocal.expenses || []).map((e) => e?.id),
           ]);
           const knownCardIds = new Set([
-            ...(previousCloud.accountData?.settings?.cards || []).map((c) => c?.id),
+            ...(previousCloud.accountData?.settings?.cards || []).map(
+              (c) => c?.id,
+            ),
             ...(rawLocal.accountData?.settings?.cards || []).map((c) => c?.id),
           ]);
           const refreshedCards = Array.isArray(
@@ -2708,11 +2718,11 @@ export default function App() {
           }
           savedVersion =
             savedResult && typeof savedResult === "object"
-              ? savedResult.updated_at ?? null
+              ? (savedResult.updated_at ?? null)
               : savedResult;
           const serverMergedData =
             savedResult && typeof savedResult === "object"
-              ? savedResult.data ?? null
+              ? (savedResult.data ?? null)
               : null;
           if (savedVersion) {
             if (serverMergedData) {
@@ -3272,9 +3282,7 @@ export default function App() {
     },
     currentBalances: syncedAccountData.settings.currentBalances,
     reconciliation: liveBalanceState.reconciliation,
-    outboxPending: Boolean(
-      pushUser?.id && hasPendingCloudOutbox(pushUser.id),
-    ),
+    outboxPending: Boolean(pushUser?.id && hasPendingCloudOutbox(pushUser.id)),
     cards: Array.isArray(syncedAccountData.settings.cards)
       ? syncedAccountData.settings.cards
       : [],
@@ -3592,7 +3600,8 @@ export default function App() {
       !description ||
       !isValidDateString(form.date) ||
       (amount !== null && (!Number.isFinite(amount) || amount <= 0)) ||
-      (requiresAmount && (amount === null || !Number.isFinite(amount) || amount <= 0))
+      (requiresAmount &&
+        (amount === null || !Number.isFinite(amount) || amount <= 0))
     ) {
       return false;
     }
@@ -3713,7 +3722,8 @@ export default function App() {
       !form.description.trim() ||
       !isValidDateString(date) ||
       (amount !== null && (!Number.isFinite(amount) || amount <= 0)) ||
-      (isSavings && (amount === null || !Number.isFinite(amount) || amount <= 0))
+      (isSavings &&
+        (amount === null || !Number.isFinite(amount) || amount <= 0))
     )
       return false;
     const cards = Array.isArray(accountData?.settings?.cards)
@@ -3929,7 +3939,9 @@ export default function App() {
       storedNumber =
         String(newCard?.number || "").trim() || (last4 ? `SAV-${last4}` : "");
     } else if (isCash) {
-      const cashCurr = String(newCard?.currency || "BDT").trim().toUpperCase();
+      const cashCurr = String(newCard?.currency || "BDT")
+        .trim()
+        .toUpperCase();
       storedNumber = `CASH-${cashCurr}`;
     } else if (isMfs && rawNumber.length < 15) {
       storedNumber =
@@ -4054,7 +4066,7 @@ export default function App() {
     if (existingCard) {
       const wasPrimaryOnDelete = Boolean(
         existingCard?.isPrimary ||
-          accountData.settings.primaryCardId === cardId,
+        accountData.settings.primaryCardId === cardId,
       );
       return () => {
         const restoreTime = Date.now();
@@ -4067,14 +4079,18 @@ export default function App() {
             return current;
           const baseCards = wasPrimaryOnDelete
             ? currentCards.map((c) =>
-                c.isPrimary ? { ...c, isPrimary: false, updatedAt: restoreTime } : c,
+                c.isPrimary
+                  ? { ...c, isPrimary: false, updatedAt: restoreTime }
+                  : c,
               )
             : currentCards;
           const restoredCards = [
             ...baseCards,
             {
               ...existingCard,
-              isPrimary: wasPrimaryOnDelete ? true : Boolean(existingCard.isPrimary),
+              isPrimary: wasPrimaryOnDelete
+                ? true
+                : Boolean(existingCard.isPrimary),
               updatedAt: restoreTime,
             },
           ];
@@ -4828,7 +4844,9 @@ export default function App() {
     if (!isHydrated) return;
     void refreshBackupCheckpoints(pushUser?.id);
     if (pushUser?.id && cloudSyncReady) {
-      void checkSupabaseSqlHealth().then(setSqlHealth).catch(() => {});
+      void checkSupabaseSqlHealth()
+        .then(setSqlHealth)
+        .catch(() => {});
     }
   }, [isHydrated, pushUser?.id, cloudSyncReady, refreshBackupCheckpoints]);
 
@@ -5673,7 +5691,10 @@ export default function App() {
       return;
     }
 
-    if ("serviceWorker" in navigator && window.Notification?.permission === "granted") {
+    if (
+      "serviceWorker" in navigator &&
+      window.Notification?.permission === "granted"
+    ) {
       try {
         const reg = await navigator.serviceWorker.getRegistration();
         const sw = reg?.active || navigator.serviceWorker.controller;
@@ -5821,9 +5842,7 @@ export default function App() {
     setWelcomeSeen(true);
     setReady(true);
     if (preferredAuthMode !== "skip") {
-      openSignInModal(
-        preferredAuthMode === "sign-up" ? "sign-up" : "sign-in",
-      );
+      openSignInModal(preferredAuthMode === "sign-up" ? "sign-up" : "sign-in");
     }
     if (!reducedMotion) {
       setWelcomeExiting(true);
@@ -5854,110 +5873,112 @@ export default function App() {
         <Suspense fallback={null}>
           <PrototypeMountSignal onMounted={handlePrototypeMounted} />
           <ActivePrototype
-          S={mobilePrototypeData}
-          onUnlock={handleAppUnlock}
-          onResetPin={handleResetForgottenPin}
-          onShift={addMonth}
-          onExpenseSave={saveMobileExpense}
-          onExpenseUpdate={saveMobileExpenseUpdate}
-          onExpenseDelete={removeExpense}
-          onBudgetSave={(amount) => {
-            const nextBudget = roundMoney(amount);
-            const prevBudget = Number(budgets[selectedMonth] || 0);
-            if (nextBudget !== prevBudget) {
-              try {
-                localStorage.removeItem(BUDGET_ALERT_KEY_PREFIX + selectedMonth);
-              } catch {}
+            S={mobilePrototypeData}
+            onUnlock={handleAppUnlock}
+            onResetPin={handleResetForgottenPin}
+            onShift={addMonth}
+            onExpenseSave={saveMobileExpense}
+            onExpenseUpdate={saveMobileExpenseUpdate}
+            onExpenseDelete={removeExpense}
+            onBudgetSave={(amount) => {
+              const nextBudget = roundMoney(amount);
+              const prevBudget = Number(budgets[selectedMonth] || 0);
+              if (nextBudget !== prevBudget) {
+                try {
+                  localStorage.removeItem(
+                    BUDGET_ALERT_KEY_PREFIX + selectedMonth,
+                  );
+                } catch {}
+              }
+              setRecordDeleted("budgets", selectedMonth, false);
+              setBudgetUpdatedAt((current) => ({
+                ...current,
+                [selectedMonth]: Date.now(),
+              }));
+              setBudgets((current) => ({
+                ...current,
+                [selectedMonth]: nextBudget,
+              }));
+              return true;
+            }}
+            onBudgetClear={clearBudget}
+            onTransactionSave={saveMobileTransaction}
+            onTransactionUpdate={saveMobileTransactionUpdate}
+            onTransactionDelete={removeMobileTransaction}
+            onAddCard={handleAddCard}
+            onUpdateCard={handleUpdateCard}
+            onDeleteCard={handleDeleteCard}
+            onSetPrimaryCard={handleSetPrimaryCard}
+            onMoveCardToFront={handleMoveCardToFront}
+            onToggleRec={toggleMobileRecurring}
+            onUpdateRec={saveMobileRecurringUpdate}
+            onRemoveRec={removeMobileRecurring}
+            onTheme={(nextMode) =>
+              setTheme((current) =>
+                typeof nextMode === "string" &&
+                ["auto", "light", "dark"].includes(nextMode)
+                  ? nextMode
+                  : current === "dark"
+                    ? "light"
+                    : "dark",
+              )
             }
-            setRecordDeleted("budgets", selectedMonth, false);
-            setBudgetUpdatedAt((current) => ({
-              ...current,
-              [selectedMonth]: Date.now(),
-            }));
-            setBudgets((current) => ({
-              ...current,
-              [selectedMonth]: nextBudget,
-            }));
-            return true;
-          }}
-          onBudgetClear={clearBudget}
-          onTransactionSave={saveMobileTransaction}
-          onTransactionUpdate={saveMobileTransactionUpdate}
-          onTransactionDelete={removeMobileTransaction}
-          onAddCard={handleAddCard}
-          onUpdateCard={handleUpdateCard}
-          onDeleteCard={handleDeleteCard}
-          onSetPrimaryCard={handleSetPrimaryCard}
-          onMoveCardToFront={handleMoveCardToFront}
-          onToggleRec={toggleMobileRecurring}
-          onUpdateRec={saveMobileRecurringUpdate}
-          onRemoveRec={removeMobileRecurring}
-          onTheme={(nextMode) =>
-            setTheme((current) =>
-              typeof nextMode === "string" &&
-              ["auto", "light", "dark"].includes(nextMode)
-                ? nextMode
-                : current === "dark"
-                  ? "light"
-                  : "dark",
-            )
-          }
-          onReminder={updateReminderTime}
-          profile={{
-            name: pushUser
-              ? localProfileName || userDisplayName(pushUser)
-              : localProfileName || "Local profile",
-            email: pushUser?.email || "",
-            initial: pushUser
-              ? profileInitial(localProfileName || userDisplayName(pushUser))
-              : profileInitial(localProfileName || "Local profile"),
-            avatar: profileAvatar || userAvatarUrl(pushUser) || "",
-            connected: Boolean(pushUser),
-            hasName: Boolean(pushUser || localProfileName),
-          }}
-          onEditProfile={openProfileEditor}
-          onAvatarChange={saveProfileAvatar}
-          profileStatus={profileStatus}
-          cloudSyncEnabled={cloudSyncEnabled}
-          cloudSyncReady={cloudSyncReady}
-          normalizedAccountSync={normalizedAccountSync}
-          cloudRealtimeStatus={cloudRealtimeStatus}
-          cloudSyncActivity={cloudSyncActivity}
-          pushBackendConfigured={pushBackendConfigured}
-          notificationPermission={notificationPermission}
-          notificationStatus={notificationStatus}
-          backgroundPushEnabled={backgroundPushEnabled}
-          onToggleNotifications={toggleNotifications}
-          onTestNotification={handleTestNotification}
-          backupStatus={backupStatus}
-          onBackupDownload={downloadBackup}
-          onEncryptedBackupDownload={downloadEncryptedBackup}
-          onExpensesCsv={exportAllExpensesCsv}
-          onBackupRestore={() => backupFileInputRef.current?.click()}
-          backupCheckpoints={backupCheckpoints}
-          checkpointsLoading={checkpointsLoading}
-          checkpointBusyId={checkpointBusyId}
-          onCreateCheckpoint={handleCreateBackupCheckpoint}
-          onRestoreCheckpoint={handleRestoreBackupCheckpoint}
-          onRefreshCheckpoints={() => refreshBackupCheckpoints(pushUser?.id)}
-          sqlHealth={sqlHealth}
-          sqlHealthChecking={sqlHealthChecking}
-          onVerifySqlAndSync={handleVerifySqlAndSync}
-          onSignOut={signOutOfPush}
-          onResumeSync={handleResumeSync}
-          accountStatus={cloudSyncStatus || authStatus}
-          authBusy={authBusy}
-          onSignIn={openSignInModal}
-          updateAvailable={Boolean(updateInfo)}
-          updateInfo={updateInfo}
-          checkingForUpdate={checkingForUpdate}
-          updateCheckStatus={updateCheckStatus}
-          onCheckForUpdates={handleCheckForUpdates}
-          onOpenUpdateModal={() => {
-            dismissedBuildIdRef.current = "";
-            showUpdateModal();
-          }}
-        />
+            onReminder={updateReminderTime}
+            profile={{
+              name: pushUser
+                ? localProfileName || userDisplayName(pushUser)
+                : localProfileName || "Local profile",
+              email: pushUser?.email || "",
+              initial: pushUser
+                ? profileInitial(localProfileName || userDisplayName(pushUser))
+                : profileInitial(localProfileName || "Local profile"),
+              avatar: profileAvatar || userAvatarUrl(pushUser) || "",
+              connected: Boolean(pushUser),
+              hasName: Boolean(pushUser || localProfileName),
+            }}
+            onEditProfile={openProfileEditor}
+            onAvatarChange={saveProfileAvatar}
+            profileStatus={profileStatus}
+            cloudSyncEnabled={cloudSyncEnabled}
+            cloudSyncReady={cloudSyncReady}
+            normalizedAccountSync={normalizedAccountSync}
+            cloudRealtimeStatus={cloudRealtimeStatus}
+            cloudSyncActivity={cloudSyncActivity}
+            pushBackendConfigured={pushBackendConfigured}
+            notificationPermission={notificationPermission}
+            notificationStatus={notificationStatus}
+            backgroundPushEnabled={backgroundPushEnabled}
+            onToggleNotifications={toggleNotifications}
+            onTestNotification={handleTestNotification}
+            backupStatus={backupStatus}
+            onBackupDownload={downloadBackup}
+            onEncryptedBackupDownload={downloadEncryptedBackup}
+            onExpensesCsv={exportAllExpensesCsv}
+            onBackupRestore={() => backupFileInputRef.current?.click()}
+            backupCheckpoints={backupCheckpoints}
+            checkpointsLoading={checkpointsLoading}
+            checkpointBusyId={checkpointBusyId}
+            onCreateCheckpoint={handleCreateBackupCheckpoint}
+            onRestoreCheckpoint={handleRestoreBackupCheckpoint}
+            onRefreshCheckpoints={() => refreshBackupCheckpoints(pushUser?.id)}
+            sqlHealth={sqlHealth}
+            sqlHealthChecking={sqlHealthChecking}
+            onVerifySqlAndSync={handleVerifySqlAndSync}
+            onSignOut={signOutOfPush}
+            onResumeSync={handleResumeSync}
+            accountStatus={cloudSyncStatus || authStatus}
+            authBusy={authBusy}
+            onSignIn={openSignInModal}
+            updateAvailable={Boolean(updateInfo)}
+            updateInfo={updateInfo}
+            checkingForUpdate={checkingForUpdate}
+            updateCheckStatus={updateCheckStatus}
+            onCheckForUpdates={handleCheckForUpdates}
+            onOpenUpdateModal={() => {
+              dismissedBuildIdRef.current = "";
+              showUpdateModal();
+            }}
+          />
         </Suspense>
       </AppErrorBoundary>
       {authModalOpen &&
@@ -6406,7 +6427,9 @@ export default function App() {
                       if (pushUser && cloudSyncEnabled && cloudSyncReady) {
                         await Promise.race([
                           queueCloudSnapshotSave(pushUser.id).catch(() => {}),
-                          new Promise((resolve) => window.setTimeout(resolve, 1200)),
+                          new Promise((resolve) =>
+                            window.setTimeout(resolve, 1200),
+                          ),
                         ]);
                       }
                     } catch {}

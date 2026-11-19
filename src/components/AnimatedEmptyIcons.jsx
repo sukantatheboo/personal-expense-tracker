@@ -226,11 +226,7 @@ export function AnimatedTransactionsIcon() {
               strokeWidth="2.5"
             />
             <g className="pl f">
-              <path
-                className="sw"
-                strokeWidth="2.6"
-                d="M42 37.5v9M37.5 42h9"
-              />
+              <path className="sw" strokeWidth="2.6" d="M42 37.5v9M37.5 42h9" />
             </g>
           </g>
         </svg>
@@ -400,11 +396,7 @@ export function AnimatedExpensesIcon() {
               stroke="#fff"
               strokeWidth="2.5"
             />
-            <path
-              className="sw"
-              strokeWidth="2.8"
-              d="M42 37.5v9M37.5 42h9"
-            />
+            <path className="sw" strokeWidth="2.8" d="M42 37.5v9M37.5 42h9" />
           </g>
         </svg>
       </div>

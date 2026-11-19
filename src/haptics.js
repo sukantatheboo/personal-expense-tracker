@@ -21,7 +21,8 @@ function isIosWebKit() {
   }
   if (document?.documentElement?.dataset?.platform === "ios") return true;
   const ua = navigator.userAgent || "";
-  const platform = navigator.userAgentData?.platform || navigator.platform || "";
+  const platform =
+    navigator.userAgentData?.platform || navigator.platform || "";
   return (
     /iPhone|iPad|iPod/i.test(ua) ||
     /iPhone|iPad|iPod/i.test(platform) ||

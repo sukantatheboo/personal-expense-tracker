@@ -1,18 +1,18 @@
 /* Manrope Variable is bundled locally via @fontsource-variable/manrope in src/main.jsx */
 
 .sl {
-  --bg: #F4F3EE;
-  --ink: #17201C;
-  --muted: #5B665F;
-  --green: #39785D;
-  --green-ink: #2D6B50;
-  --line: #A3A99F;
-  --ring: #8A928C;
-  --error: #B3261E;
-  --sheet-bg: #FFFFFF;
-  --sheet-shadow: 0 -12px 40px rgba(23, 32, 28, .10);
-  --key-bg: #F4F3EE;
-  --key-active: #E4E3DA;
+  --bg: #f4f3ee;
+  --ink: #17201c;
+  --muted: #5b665f;
+  --green: #39785d;
+  --green-ink: #2d6b50;
+  --line: #a3a99f;
+  --ring: #8a928c;
+  --error: #b3261e;
+  --sheet-bg: #ffffff;
+  --sheet-shadow: 0 -12px 40px rgba(23, 32, 28, 0.1);
+  --key-bg: #f4f3ee;
+  --key-active: #e4e3da;
   --key: 64px;
   --shift: 72px;
   --top: max(88px, calc(env(safe-area-inset-top, 0px) + 36px));
@@ -23,7 +23,9 @@
   background: var(--bg) !important;
   color: var(--ink);
   font-family: "Manrope Variable", "Manrope", system-ui, sans-serif;
-  transition: background-color 0.2s ease, color 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
 }
 
 /* Dark Theme matching app UI background #08080C */
@@ -31,17 +33,17 @@
 html[data-theme="dark"] .sl,
 [data-theme="dark"] .sl,
 .mobile-prototype[data-theme="dark"] .sl {
-  --bg: #08080C;
-  --ink: #F4F5F8;
-  --muted: #8A8F9E;
-  --green: #CFF558;
-  --green-ink: #CFF558;
+  --bg: #08080c;
+  --ink: #f4f5f8;
+  --muted: #8a8f9e;
+  --green: #cff558;
+  --green-ink: #cff558;
   --line: #222430;
   --ring: #475569;
-  --error: #F87171;
-  --sheet-bg: #12131A;
-  --sheet-shadow: 0 -16px 48px rgba(0, 0, 0, .62);
-  --key-bg: #181A24;
+  --error: #f87171;
+  --sheet-bg: #12131a;
+  --sheet-shadow: 0 -16px 48px rgba(0, 0, 0, 0.62);
+  --key-bg: #181a24;
   --key-active: #222533;
 }
 
@@ -49,22 +51,24 @@ html[data-theme="dark"] .sl,
   html:not([data-theme="light"]) .sl,
   :root:not([data-theme="light"]) .sl,
   .mobile-prototype:not([data-theme="light"]) .sl {
-    --bg: #08080C;
-    --ink: #F4F5F8;
-    --muted: #8A8F9E;
-    --green: #CFF558;
-    --green-ink: #CFF558;
+    --bg: #08080c;
+    --ink: #f4f5f8;
+    --muted: #8a8f9e;
+    --green: #cff558;
+    --green-ink: #cff558;
     --line: #222430;
     --ring: #475569;
-    --error: #F87171;
-    --sheet-bg: #151B23;
-    --sheet-shadow: 0 -16px 48px rgba(0, 0, 0, .55);
-    --key-bg: #1D2530;
+    --error: #f87171;
+    --sheet-bg: #151b23;
+    --sheet-shadow: 0 -16px 48px rgba(0, 0, 0, 0.55);
+    --key-bg: #1d2530;
     --key-active: #283342;
   }
 }
 
-.sl *, .sl *::before, .sl *::after {
+.sl *,
+.sl *::before,
+.sl *::after {
   box-sizing: border-box;
 }
 
@@ -93,7 +97,7 @@ html[data-theme="dark"] .sl,
   width: min(100%, 444px);
   padding: 0 24px;
   transform: translate(-50%, var(--shift));
-  transition: transform .34s cubic-bezier(.2, .8, .2, 1);
+  transition: transform 0.34s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .sl--open .sl__stack {
   transform: translate(-50%, 0);
@@ -131,7 +135,7 @@ html[data-theme="dark"] .sl,
   font-size: 32px;
   line-height: 38px;
   font-weight: 800;
-  letter-spacing: -.02em;
+  letter-spacing: -0.02em;
 }
 
 .sl__sub {
@@ -166,7 +170,9 @@ html[data-theme="dark"] .sl,
   box-shadow: none !important;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: border-color .2s, background-color .2s;
+  transition:
+    border-color 0.2s,
+    background-color 0.2s;
 }
 .sl__field:focus,
 .sl__field:focus-visible,
@@ -219,7 +225,9 @@ html[data-theme="dark"] .sl,
   border-radius: 50%;
   border: 2px solid var(--ring);
   background: transparent;
-  transition: background .15s, border-color .15s;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
 }
 .sl__dot--on {
   background: var(--ink);
@@ -246,10 +254,12 @@ html[data-theme="dark"] .sl,
   box-shadow: none !important;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: transform .12s, background-color .15s;
+  transition:
+    transform 0.12s,
+    background-color 0.15s;
 }
 .sl__bio:active {
-  transform: scale(.96);
+  transform: scale(0.96);
 }
 .sl__bio:focus,
 .sl__bio:focus-visible {
@@ -269,44 +279,94 @@ html[data-theme="dark"] .sl,
 
 .sl__meta {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 36px;
-  margin-top: 12px;
+  gap: 8px;
+  margin-top: 14px;
+}
+.sl__status {
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+.sl__error {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--error);
+  text-align: center;
+}
+.sl__lockout-pill {
+  margin: 0;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--error) 12%, transparent);
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--error);
+  text-align: center;
+}
+.sl__timer {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
 }
 .sl .sl__link {
-  padding: 8px 0;
-  font-size: 15px;
-  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
   color: var(--green-ink);
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  text-decoration: none;
+  opacity: 0.92;
   outline: none !important;
   box-shadow: none !important;
+  transition: opacity 0.15s ease;
+}
+.sl .sl__link:active {
+  opacity: 0.65;
 }
 .sl__link:focus,
 .sl__link:focus-visible {
   outline: none !important;
   box-shadow: none !important;
 }
-.sl__error {
-  margin: 0 0 0 auto;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--error);
-  text-align: right;
-}
 
 .sl--error .sl__field {
   border-color: var(--error) !important;
-  animation: sl-shake .36s;
+  animation: sl-shake 0.36s;
+}
+.sl--locked .sl__field {
+  border-color: var(--error) !important;
+  opacity: 0.72;
+  cursor: not-allowed;
+}
+.sl--locked .sl__dots {
+  opacity: 0.45;
+}
+.sl--locked .sl__bio,
+.sl__bio:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  transform: none;
 }
 @keyframes sl-shake {
-  20% { transform: translateX(-8px); }
-  40% { transform: translateX(8px); }
-  60% { transform: translateX(-5px); }
-  80% { transform: translateX(5px); }
+  20% {
+    transform: translateX(-8px);
+  }
+  40% {
+    transform: translateX(8px);
+  }
+  60% {
+    transform: translateX(-5px);
+  }
+  80% {
+    transform: translateX(5px);
+  }
 }
 
 /* Bottom keypad sheet */
@@ -321,7 +381,10 @@ html[data-theme="dark"] .sl,
   box-shadow: var(--sheet-shadow);
   transform: translateY(100%);
   visibility: hidden;
-  transition: transform .34s cubic-bezier(.2, .8, .2, 1), visibility .34s, background-color .2s;
+  transition:
+    transform 0.34s cubic-bezier(0.2, 0.8, 0.2, 1),
+    visibility 0.34s,
+    background-color 0.2s;
 }
 .sl--open .sl__sheet {
   transform: none;
@@ -345,11 +408,18 @@ html[data-theme="dark"] .sl,
   font-weight: 700;
   outline: none !important;
   box-shadow: none !important;
-  transition: transform .12s, background .12s;
+  transition:
+    transform 0.12s,
+    background 0.12s,
+    opacity 0.18s;
 }
-.sl__key:active {
+.sl__key:active:not(:disabled) {
   background: var(--key-active) !important;
-  transform: scale(.96);
+  transform: scale(0.96);
+}
+.sl__key:disabled {
+  opacity: 0.32;
+  cursor: not-allowed;
 }
 .sl__key:focus,
 .sl__key:focus-visible {
@@ -366,6 +436,20 @@ html[data-theme="dark"] .sl,
   display: block;
   fill: none !important;
   stroke: currentColor !important;
+}
+
+/* Mid-height phones: keep stacked meta + Forgot PIN clear of the open keypad */
+@media (max-height: 820px) {
+  .sl {
+    --top: max(56px, calc(env(safe-area-inset-top, 0px) + 18px));
+    --key: 58px;
+  }
+  .sl__title {
+    margin: 22px 0 6px;
+  }
+  .sl__row {
+    margin-top: 28px;
+  }
 }
 
 /* Short desktop window: adjust vertical stack offset without shrinking the logo */
@@ -386,7 +470,10 @@ html[data-theme="dark"] .sl,
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .sl__stack, .sl__sheet, .sl__key, .sl__field {
+  .sl__stack,
+  .sl__sheet,
+  .sl__key,
+  .sl__field {
     transition: none;
   }
   .sl--error .sl__field {

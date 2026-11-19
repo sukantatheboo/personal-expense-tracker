@@ -56,11 +56,8 @@ import {
   enableBiometrics,
   disableBiometrics,
   authenticateWithBiometrics,
-  getLockTimeoutMinutes,
-  setLockTimeoutMinutes,
   markActive,
   markBackgrounded,
-  isSessionUnlocked,
   shouldLockApp,
   lockAppManually,
 } from "./security.js";
@@ -455,12 +452,7 @@ const monthExp = (S) =>
     .map(({ e }) => e);
 function bal(S, id) {
   if (!id) return 0;
-  const computed = computeAccountBalances(
-    S?.cards,
-    S?.start,
-    S?.exp,
-    S?.tx,
-  );
+  const computed = computeAccountBalances(S?.cards, S?.start, S?.exp, S?.tx);
   if (Object.hasOwn(computed.currentBalances, id)) {
     return computed.currentBalances[id];
   }
@@ -604,7 +596,10 @@ function suggestedCategory(description, expenses = [], excludeId = null) {
 // Cross-platform iOS & Android swipe-to-delete click-through guard
 let swipeDeleteClickLockUntil = 0;
 function lockRowClicksAfterDelete(ms = 320) {
-  swipeDeleteClickLockUntil = Math.max(swipeDeleteClickLockUntil, Date.now() + ms);
+  swipeDeleteClickLockUntil = Math.max(
+    swipeDeleteClickLockUntil,
+    Date.now() + ms,
+  );
 }
 function isRowClickLocked() {
   return Date.now() < swipeDeleteClickLockUntil;
@@ -700,7 +695,12 @@ function HeroAmountField({
                 inputRef?.current?.focus({ preventScroll: true });
               }}
             >
-              <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+              <svg
+                viewBox="0 0 24 24"
+                width="14"
+                height="14"
+                aria-hidden="true"
+              >
                 <path d="m18 6-12 12M6 6l12 12" strokeWidth="2.5" />
               </svg>
             </button>
@@ -2453,7 +2453,8 @@ function Home({
     const expectedSpent = (b / daysInMonth) * daysPassed;
     const paceDiff = t - expectedSpent;
     const remainingBudget = round2(b - t);
-    const rawDailyRemaining = remainingBudget > 0 ? remainingBudget / daysRemaining : 0;
+    const rawDailyRemaining =
+      remainingBudget > 0 ? remainingBudget / daysRemaining : 0;
     const dailyRemainingBudget =
       remainingBudget > 0
         ? rawDailyRemaining < 1
@@ -2784,17 +2785,18 @@ function Home({
       </div>
 
       {cs.length > 0 && total > 0 && (
-        <WhereItWentCard
-          key={monthKey}
-          cs={cs}
-          total={total}
-          saved={saved}
-        />
+        <WhereItWentCard key={monthKey} cs={cs} total={total} saved={saved} />
       )}
 
       <div className="sec">
         <h2>Recent</h2>
-        <button type="button" className="see-all-btn" onClick={() => onTab("activity")}>See all</button>
+        <button
+          type="button"
+          className="see-all-btn"
+          onClick={() => onTab("activity")}
+        >
+          See all
+        </button>
       </div>
       <div
         className="card expense-day-card"
@@ -3151,7 +3153,9 @@ function Activity({
     const listEl = activityListRef.current;
     if (!listEl) return;
     const scroller =
-      listEl.closest(".activity-scroll-feed") || listEl.closest(".prototype-tab-panel") || listEl.closest("#app");
+      listEl.closest(".activity-scroll-feed") ||
+      listEl.closest(".prototype-tab-panel") ||
+      listEl.closest("#app");
     if (!scroller) return;
 
     const onScroll = () => {
@@ -3265,7 +3269,9 @@ function Activity({
         <div
           className="activity-header-top"
           onClick={(e) => {
-            if (!e.target.closest("button, a, input, select, [role='button']")) {
+            if (
+              !e.target.closest("button, a, input, select, [role='button']")
+            ) {
               onScrollToTop?.();
             }
           }}
@@ -3521,7 +3527,9 @@ function Activity({
               aria-pressed={quickFilter === "high-value"}
               onClick={() => {
                 triggerHaptic("selection");
-                setQuickFilter(quickFilter === "high-value" ? "" : "high-value");
+                setQuickFilter(
+                  quickFilter === "high-value" ? "" : "high-value",
+                );
                 setCf("");
               }}
             >
@@ -3562,7 +3570,9 @@ function Activity({
             {feedType !== "all" && (
               <b>{feedType.charAt(0).toUpperCase() + feedType.slice(1)}</b>
             )}
-            {feedType !== "all" && (quickFilter || cf || query) && <span>·</span>}
+            {feedType !== "all" && (quickFilter || cf || query) && (
+              <span>·</span>
+            )}
             {quickFilter === "needs-amount" && <b>Needs amt</b>}
             {quickFilter === "recurring" && <b>Repeat</b>}
             {quickFilter === "cash" && <b>Cash</b>}
@@ -4021,7 +4031,8 @@ function Accounts({
     }
 
     if (event.type === "adjust" || event.type === "adjustment") {
-      const before = Math.round((runningBalances[event.account] || 0) * 100) / 100;
+      const before =
+        Math.round((runningBalances[event.account] || 0) * 100) / 100;
       adjustmentBalances.set(event.id, {
         before,
         after: Math.round((before + (changes[event.account] || 0)) * 100) / 100,
@@ -4108,9 +4119,7 @@ function Accounts({
         onAddCardClick?.();
         return;
       }
-      onOpenCardOptions?.(
-        selectedAccount || activeCard?.id || cards[0]?.id,
-      );
+      onOpenCardOptions?.(selectedAccount || activeCard?.id || cards[0]?.id);
     }
   };
 
@@ -4390,13 +4399,7 @@ function sortRecurringSection(items) {
 
 const RECURRING_SWIPE_WIDTH = 84;
 
-function RecurringRow({
-  item,
-  fmt,
-  accountLabel,
-  onSelect,
-  onTogglePause,
-}) {
+function RecurringRow({ item, fmt, accountLabel, onSelect, onTogglePause }) {
   const pointerRef = useRef(null);
   const rowRef = useRef(null);
   const shellRef = useRef(null);
@@ -4466,14 +4469,11 @@ function RecurringRow({
   const paused = isRecurringPaused(item);
   const daysUntil = getDaysUntilDue(item.next);
   const isOverdue = !paused && daysUntil !== null && daysUntil < 0;
-  const showUrgentPill =
-    !paused && daysUntil !== null && daysUntil <= 7;
+  const showUrgentPill = !paused && daysUntil !== null && daysUntil <= 7;
   const title = item.desc || item.cat || "Recurring";
   const freqSuffix = getFreqSuffix(item.iv || "monthly");
   const iconColor =
-    getCategoryColor(item.cat, item.desc) ||
-    CAT[item.cat]?.[1] ||
-    "#64748b";
+    getCategoryColor(item.cat, item.desc) || CAT[item.cat]?.[1] || "#64748b";
 
   const startGesture = (event) => {
     if (event.button != null && event.button !== 0) return;
@@ -4704,7 +4704,10 @@ function RecurringRow({
       clearTimeout(suppressClickTimerRef.current);
       return;
     }
-    if (swipeRef.current.phase === "revealed" || swipeRef.current.offset !== 0) {
+    if (
+      swipeRef.current.phase === "revealed" ||
+      swipeRef.current.offset !== 0
+    ) {
       springRowClosed();
       return;
     }
@@ -4735,10 +4738,7 @@ function RecurringRow({
     .join(" ");
 
   return (
-    <div
-      ref={shellRef}
-      className={shellClasses}
-    >
+    <div ref={shellRef} className={shellClasses}>
       {/* Left Action Button (Swipe Right to Edit) */}
       <button
         className="expense-swipe-delete is-left is-edit"
@@ -4846,7 +4846,8 @@ function RecurringRow({
                       ? "Weekly"
                       : item.iv === "biweekly"
                         ? "Bi-weekly"
-                        : item.iv} ·{" "}
+                        : item.iv}{" "}
+                  ·{" "}
                 </span>
               )}
               Next {formatDueShortDate(item.next)} · {accountLabel}
@@ -4861,9 +4862,7 @@ function RecurringRow({
             <span className="rec-row-unit">{freqSuffix}</span>
           </div>
           {showUrgentPill && (
-            <span
-              className={`rec-due-pill${isOverdue ? " is-overdue" : ""}`}
-            >
+            <span className={`rec-due-pill${isOverdue ? " is-overdue" : ""}`}>
               {formatRelativeDueLabel(daysUntil)}
             </span>
           )}
@@ -5099,6 +5098,7 @@ function Plans({
   isActive = true,
   onShift,
   onBudget,
+  onBudgetInsights,
   onAddRec,
   onOpenRec,
   onToggleRec,
@@ -5175,13 +5175,31 @@ function Plans({
   const shellRef = useRef(null);
   const headerRef = useRef(null);
   const segRowRef = useRef(null);
+  const stageRef = useRef(null);
   const budgetScrollerRef = useRef(null);
   const recScrollerRef = useRef(null);
   const ringCardRef = useRef(null);
   const budgetTabBtnRef = useRef(null);
   const recTabBtnRef = useRef(null);
   const rafIdRef = useRef(0);
+  const swipeRafRef = useRef(0);
+  const collapseTweenRafRef = useRef(0);
   const collapseValRef = useRef(0);
+  const suppressStageClickUntilRef = useRef(0);
+  const swipeDragRef = useRef({
+    active: false,
+    pointerId: null,
+    pointerType: "",
+    startX: 0,
+    startY: 0,
+    lastX: 0,
+    lastTime: 0,
+    velocityX: 0,
+    axis: null,
+    baseProgress: 0,
+    progress: 0,
+    stageWidth: 375,
+  });
 
   // Threshold-only React states (no per-frame setState)
   const [hasScrolled, setHasScrolled] = useState(
@@ -5198,18 +5216,63 @@ function Plans({
     [plan],
   );
 
-  const applyScrollMetrics = useCallback((scrollTop) => {
-    const progress = computePlansCollapse(scrollTop);
-    collapseValRef.current = progress;
-    if (shellRef.current) {
-      shellRef.current.style.setProperty("--collapse", progress.toFixed(4));
-    }
-    const nextScrolled = scrollTop > 2;
-    if (hasScrolledRef.current !== nextScrolled) {
-      hasScrolledRef.current = nextScrolled;
-      setHasScrolled(nextScrolled);
+  const cancelCollapseTween = useCallback(() => {
+    if (collapseTweenRafRef.current) {
+      window.cancelAnimationFrame(collapseTweenRafRef.current);
+      collapseTweenRafRef.current = 0;
     }
   }, []);
+
+  const applyScrollMetrics = useCallback(
+    (scrollTop) => {
+      cancelCollapseTween();
+      const progress = computePlansCollapse(scrollTop);
+      collapseValRef.current = progress;
+      if (shellRef.current) {
+        shellRef.current.style.setProperty("--collapse", progress.toFixed(4));
+      }
+      const nextScrolled = scrollTop > 2;
+      if (hasScrolledRef.current !== nextScrolled) {
+        hasScrolledRef.current = nextScrolled;
+        setHasScrolled(nextScrolled);
+      }
+    },
+    [cancelCollapseTween],
+  );
+
+  const tweenCollapseTo = useCallback(
+    (targetCollapse) => {
+      cancelCollapseTween();
+      const startCollapse = collapseValRef.current;
+      if (
+        Math.abs(targetCollapse - startCollapse) < 0.005 ||
+        window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches
+      ) {
+        collapseValRef.current = targetCollapse;
+        shellRef.current?.style.setProperty(
+          "--collapse",
+          targetCollapse.toFixed(4),
+        );
+        return;
+      }
+      const startTime = performance.now();
+      const duration = 260;
+      const step = (now) => {
+        const t = Math.min(1, (now - startTime) / duration);
+        const eased = 1 - Math.pow(1 - t, 3);
+        const val = startCollapse + (targetCollapse - startCollapse) * eased;
+        collapseValRef.current = val;
+        shellRef.current?.style.setProperty("--collapse", val.toFixed(4));
+        if (t < 1) {
+          collapseTweenRafRef.current = window.requestAnimationFrame(step);
+        } else {
+          collapseTweenRafRef.current = 0;
+        }
+      };
+      collapseTweenRafRef.current = window.requestAnimationFrame(step);
+    },
+    [cancelCollapseTween],
+  );
 
   const syncRingVisibilityManual = useCallback(
     (activePlan = plan) => {
@@ -5279,6 +5342,12 @@ function Plans({
   // Restore active tab's scrollTop before paint & derive header state strictly from ACTIVE tab
   // Re-runs both when switching Budget <-> Recurring and when returning from Home/Activity/Accounts (isActive)
   useLayoutEffect(() => {
+    if (shellRef.current && !swipeDragRef.current.active) {
+      shellRef.current.style.setProperty(
+        "--plans-swipe",
+        plan === "rec" ? "1" : "0",
+      );
+    }
     if (!isActive) return;
     const scroller = getActivePlanScroller(plan);
     if (!scroller) return;
@@ -5287,7 +5356,15 @@ function Plans({
       void scroller.offsetHeight;
       scroller.scrollTop = savedTop;
     }
-    applyScrollMetrics(scroller.scrollTop);
+    if (!collapseTweenRafRef.current) {
+      applyScrollMetrics(scroller.scrollTop);
+    } else {
+      const nextScrolled = scroller.scrollTop > 2;
+      if (hasScrolledRef.current !== nextScrolled) {
+        hasScrolledRef.current = nextScrolled;
+        setHasScrolled(nextScrolled);
+      }
+    }
     syncRingVisibilityManual(plan);
   }, [
     plan,
@@ -5387,7 +5464,12 @@ function Plans({
       applyScrollMetrics(0);
       syncRingVisibilityManual(plan);
     }
-  }, [plan, getActivePlanScroller, applyScrollMetrics, syncRingVisibilityManual]);
+  }, [
+    plan,
+    getActivePlanScroller,
+    applyScrollMetrics,
+    syncRingVisibilityManual,
+  ]);
 
   const selectPlanTab = useCallback(
     (nextPlan, focusTarget = false) => {
@@ -5419,6 +5501,227 @@ function Plans({
       selectPlanTab("rec", true);
     }
   };
+
+  useEffect(() => {
+    const stageEl = stageRef.current;
+    if (!stageEl) return undefined;
+    const onTouchMove = (e) => {
+      if (swipeDragRef.current.active && swipeDragRef.current.axis === "x") {
+        if (e.cancelable) e.preventDefault();
+      }
+    };
+    stageEl.addEventListener("touchmove", onTouchMove, { passive: false });
+    return () => {
+      stageEl.removeEventListener("touchmove", onTouchMove);
+      if (swipeRafRef.current) {
+        window.cancelAnimationFrame(swipeRafRef.current);
+        swipeRafRef.current = 0;
+      }
+      cancelCollapseTween();
+    };
+  }, [cancelCollapseTween]);
+
+  const applyLiveSwipe = useCallback(
+    (progress) => {
+      cancelCollapseTween();
+      const shellEl = shellRef.current;
+      if (!shellEl) return;
+      shellEl.style.setProperty("--plans-swipe", progress.toFixed(4));
+      const clamped = Math.min(1, Math.max(0, progress));
+      shellEl.setAttribute(
+        "data-swipe-target",
+        clamped >= 0.5 ? "rec" : "budget",
+      );
+      const budgetCollapse = computePlansCollapse(plansScrollStore.budget || 0);
+      const recCollapse = computePlansCollapse(plansScrollStore.rec || 0);
+      const blendedCollapse =
+        budgetCollapse + (recCollapse - budgetCollapse) * clamped;
+      collapseValRef.current = blendedCollapse;
+      shellEl.style.setProperty("--collapse", blendedCollapse.toFixed(4));
+    },
+    [cancelCollapseTween],
+  );
+
+  const handleStagePointerDown = useCallback(
+    (e) => {
+      if (!isActive) return;
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      // Preserve OS edge-back gestures on touch devices
+      if (
+        e.pointerType === "touch" &&
+        (e.clientX <= 18 || e.clientX >= window.innerWidth - 18)
+      ) {
+        return;
+      }
+      const target = e.target instanceof Element ? e.target : null;
+      if (
+        target?.closest(
+          ".expense-swipe-shell, input, textarea, select, [data-no-plan-swipe]",
+        )
+      ) {
+        return;
+      }
+      const stageEl = stageRef.current;
+      const width = stageEl?.offsetWidth || window.innerWidth || 375;
+      const base = plan === "rec" ? 1 : 0;
+      swipeDragRef.current = {
+        active: true,
+        pointerId: e.pointerId,
+        pointerType: e.pointerType,
+        startX: e.clientX,
+        startY: e.clientY,
+        lockOriginX: e.clientX,
+        lastX: e.clientX,
+        lastTime: performance.now(),
+        velocityX: 0,
+        axis: null,
+        baseProgress: base,
+        progress: base,
+        stageWidth: width,
+      };
+    },
+    [isActive, plan],
+  );
+
+  const handleStagePointerMove = useCallback(
+    (e) => {
+      const drag = swipeDragRef.current;
+      if (!drag.active || e.pointerId !== drag.pointerId) return;
+      const dx = e.clientX - drag.startX;
+      const dy = e.clientY - drag.startY;
+
+      if (drag.axis === null) {
+        if (Math.hypot(dx, dy) < 8) return;
+        if (Math.abs(dx) > Math.abs(dy) * 1.2) {
+          drag.axis = "x";
+          // Anchor origin at lock point so the track begins moving from 0px with zero initial jump
+          drag.lockOriginX = e.clientX;
+          drag.lastX = e.clientX;
+          drag.lastTime = performance.now();
+          drag.velocityX = 0;
+          window.getSelection?.()?.removeAllRanges?.();
+          shellRef.current?.classList.add("is-swiping");
+          shellRef.current?.setAttribute("data-swipe-target", plan);
+          try {
+            stageRef.current?.setPointerCapture(e.pointerId);
+          } catch {
+            // Ignore if pointer capture is unavailable
+          }
+          return;
+        } else {
+          drag.axis = "y";
+          drag.active = false;
+          return;
+        }
+      }
+
+      if (drag.axis !== "x") return;
+
+      const now = performance.now();
+      const dt = Math.max(1, now - drag.lastTime);
+      const instantVel = (e.clientX - drag.lastX) / dt;
+      drag.velocityX = drag.velocityX * 0.35 + instantVel * 0.65;
+      drag.lastX = e.clientX;
+      drag.lastTime = now;
+
+      // Natural spatial scroll: drag right-to-left (effectiveDx < 0) pulls Recurring in (0 -> 1)
+      const effectiveDx = e.clientX - drag.lockOriginX;
+      const raw = drag.baseProgress - effectiveDx / drag.stageWidth;
+      let progress = raw;
+      if (raw < 0) {
+        progress = Math.max(-0.12, raw * 0.2);
+      } else if (raw > 1) {
+        progress = Math.min(1.12, 1 + (raw - 1) * 0.2);
+      }
+      drag.progress = progress;
+
+      if (!swipeRafRef.current) {
+        swipeRafRef.current = window.requestAnimationFrame(() => {
+          swipeRafRef.current = 0;
+          if (swipeDragRef.current.active && swipeDragRef.current.axis === "x") {
+            applyLiveSwipe(swipeDragRef.current.progress);
+          }
+        });
+      }
+    },
+    [applyLiveSwipe, plan],
+  );
+
+  const handleStagePointerEnd = useCallback(
+    (e) => {
+      const drag = swipeDragRef.current;
+      if (!drag.active || e.pointerId !== drag.pointerId) return;
+      const wasHorizontal = drag.axis === "x";
+      const finalProgress = drag.progress;
+      const isRecentMove = performance.now() - drag.lastTime < 90;
+      const finalVelocityX = isRecentMove ? drag.velocityX : 0;
+      const totalDx = drag.lastX - drag.lockOriginX;
+
+      drag.active = false;
+      drag.axis = null;
+      drag.pointerId = null;
+
+      if (swipeRafRef.current) {
+        window.cancelAnimationFrame(swipeRafRef.current);
+        swipeRafRef.current = 0;
+      }
+
+      if (!wasHorizontal) return;
+
+      try {
+        if (stageRef.current?.hasPointerCapture?.(e.pointerId)) {
+          stageRef.current.releasePointerCapture(e.pointerId);
+        }
+      } catch {
+        // Ignore pointer release errors
+      }
+
+      suppressStageClickUntilRef.current = performance.now() + 120;
+
+      const isFastFlickLeft = finalVelocityX < -0.35 && totalDx < -20;
+      const isFastFlickRight = finalVelocityX > 0.35 && totalDx > 20;
+      let targetPlan = plan;
+      if (plan === "budget") {
+        if (finalProgress >= 0.3 || isFastFlickLeft) {
+          targetPlan = "rec";
+        }
+      } else if (finalProgress <= 0.7 || isFastFlickRight) {
+        targetPlan = "budget";
+      }
+
+      const targetVal = targetPlan === "rec" ? 1 : 0;
+      const remaining = Math.abs(targetVal - finalProgress);
+      const speedBoost = Math.min(1, Math.abs(finalVelocityX) / 1.4);
+      const settleMs = Math.round(
+        Math.max(170, Math.min(290, 175 + remaining * 115 - speedBoost * 55)),
+      );
+
+      const shellEl = shellRef.current;
+      if (shellEl) {
+        // Flush transition re-enable before updating --plans-swipe so Safari/Chrome never skips the settle animation
+        shellEl.style.setProperty("--plans-settle-ms", `${settleMs}ms`);
+        shellEl.classList.remove("is-swiping");
+        shellEl.removeAttribute("data-swipe-target");
+        void shellEl.offsetWidth;
+        shellEl.style.setProperty("--plans-swipe", String(targetVal));
+      }
+
+      const targetScrollTop = plansScrollStore[targetPlan] || 0;
+      tweenCollapseTo(computePlansCollapse(targetScrollTop));
+
+      if (targetPlan !== plan) {
+        selectPlanTab(targetPlan);
+      }
+    },
+    [plan, selectPlanTab, tweenCollapseTo],
+  );
+
+  const handleStageClickCapture = useCallback((e) => {
+    if (performance.now() < suppressStageClickUntilRef.current) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  }, []);
 
   const ringSummaryChipText =
     b > 0
@@ -5465,20 +5768,22 @@ function Plans({
           >
             <button
               type="button"
+              data-plan-action="budget"
               className={`prototype-header-action plans-header-action-item${plan === "budget" ? " is-active" : ""}`}
-              aria-label="Budget insights and limit"
-              title="Budget insights and limit"
+              aria-label="Budget insights"
+              title="Budget insights"
               tabIndex={plan === "budget" ? 0 : -1}
               aria-hidden={plan !== "budget"}
               onClick={() => {
                 triggerHaptic("light");
-                onBudget?.();
+                (onBudgetInsights || onBudget)?.();
               }}
             >
               <Icon n="insights" />
             </button>
             <button
               type="button"
+              data-plan-action="rec"
               className={`rec-new-pill-btn plans-header-new-btn plans-header-action-item${plan === "rec" ? " is-active" : ""}`}
               aria-label="Add new recurring plan"
               tabIndex={plan === "rec" ? 0 : -1}
@@ -5531,7 +5836,16 @@ function Plans({
         </div>
       </header>
 
-      <div className="plans-panels-stage">
+      <div
+        ref={stageRef}
+        className="plans-panels-stage"
+        onPointerDown={handleStagePointerDown}
+        onPointerMove={handleStagePointerMove}
+        onPointerUp={handleStagePointerEnd}
+        onPointerCancel={handleStagePointerEnd}
+        onClickCapture={handleStageClickCapture}
+      >
+        <div className="plans-panels-track">
         <div
           ref={budgetScrollerRef}
           id="plans-panel-budget"
@@ -5774,6 +6088,7 @@ function Plans({
             onToggle={onToggleRec}
           />
         </div>
+        </div>
       </div>
     </div>
   );
@@ -5973,7 +6288,10 @@ function AddSheet({
         }
         onEnter={() => descInputRef.current?.focus()}
       />
-      {(f.iv === "none" || ((amtTouched || submitAttempted) && !amtError && !parseAmount(f.amt))) && (
+      {(f.iv === "none" ||
+        ((amtTouched || submitAttempted) &&
+          !amtError &&
+          !parseAmount(f.amt))) && (
         <p className="hint">
           {f.cat === "Savings" && f.iv === "none"
             ? "Enter an amount to record a savings transfer."
@@ -6076,8 +6394,7 @@ function AddSheet({
                     (spendableCards.length > 0 &&
                       !spendableCards.some((sc) => sc.id === current.acct))
                   ) {
-                    nextAcct =
-                      primaryCard?.id || spendableCards[0]?.id || "";
+                    nextAcct = primaryCard?.id || spendableCards[0]?.id || "";
                   }
                 } else if (current.cat === "Savings" && c !== "Savings") {
                   nextAcct = prevNonSavingsAcctRef.current;
@@ -6484,7 +6801,12 @@ function TxSheet({
           aria-disabled={!canSave || isTransferDisabledForCardCount}
           style={
             isTransferDisabledForCardCount || !canSave
-              ? { opacity: 0.45, pointerEvents: isTransferDisabledForCardCount ? "none" : undefined }
+              ? {
+                  opacity: 0.45,
+                  pointerEvents: isTransferDisabledForCardCount
+                    ? "none"
+                    : undefined,
+                }
               : undefined
           }
           onClick={handleSaveTx}
@@ -6789,10 +7111,9 @@ function AccountTxDetailSheet({
     note: tx.note || "",
     date: tx.date || ld(),
     fromAccount: fallbackFrom,
-    toAccount:
-      tx.to
-        ? tx.to
-        : cards.find((c) => c.id !== fallbackFrom)?.id || "",
+    toAccount: tx.to
+      ? tx.to
+      : cards.find((c) => c.id !== fallbackFrom)?.id || "",
   });
   const [amtError, setAmtError] = useState("");
   const amtInputRef = useRef(null);
@@ -6807,9 +7128,7 @@ function AccountTxDetailSheet({
     : g.fromAccount;
   const allToOptions = allTransferOptions.filter(([id]) => id !== normFrom);
   const singleAccountOptions = ensureAccountOption(g.acct);
-  const normTo = !g.toAccount
-    ? allToOptions[0]?.[0] || ""
-    : g.toAccount;
+  const normTo = !g.toAccount ? allToOptions[0]?.[0] || "" : g.toAccount;
   const amtNum = parseAmount(g.amt);
   const hasValidAmt = Number.isFinite(amtNum) && amtNum > 0;
   const fromCardIsFrozen = Boolean(
@@ -6894,7 +7213,12 @@ function AccountTxDetailSheet({
             aria-disabled={!canSave || isTransferDisabledForCardCount}
             style={
               isTransferDisabledForCardCount || !canSave
-                ? { opacity: 0.45, pointerEvents: isTransferDisabledForCardCount ? "none" : undefined }
+                ? {
+                    opacity: 0.45,
+                    pointerEvents: isTransferDisabledForCardCount
+                      ? "none"
+                      : undefined,
+                  }
                 : undefined
             }
             onClick={handleSaveAccountTx}
@@ -7188,7 +7512,8 @@ function DetailSheet({
   const rawAmtStr = String(f.amt ?? "").trim();
   const amtNum = parseAmount(f.amt);
   const hasExplicitInvalidAmt =
-    rawAmtStr !== "" && (amtNum === null || !Number.isFinite(amtNum) || amtNum <= 0);
+    rawAmtStr !== "" &&
+    (amtNum === null || !Number.isFinite(amtNum) || amtNum <= 0);
   const isSavings = f.cat === "Savings";
   const savingsId = getSavingsAccountId(cards);
   const hasSavingsAccount = Boolean(savingsId);
@@ -7226,7 +7551,10 @@ function DetailSheet({
       amtInputRef.current?.focus({ preventScroll: true });
       return;
     }
-    if (isSavings && (amtNum === null || !Number.isFinite(amtNum) || amtNum <= 0)) {
+    if (
+      isSavings &&
+      (amtNum === null || !Number.isFinite(amtNum) || amtNum <= 0)
+    ) {
       setAmtError("Enter an amount greater than ৳0 for savings transfers.");
       triggerHaptic("warning");
       amtInputRef.current?.focus({ preventScroll: true });
@@ -7447,13 +7775,21 @@ function DetailSheet({
         onPick={(value) => set("acct", value)}
         cards={cards}
         options={
-          isSavings && hasSavingsAccount && nonSavingsCards.length > 0 && f.acct !== ""
+          isSavings &&
+          hasSavingsAccount &&
+          nonSavingsCards.length > 0 &&
+          f.acct !== ""
             ? [
                 ...nonSavingsCards.map((c) => [c.id, c.name]),
                 ...(f.acct &&
                 f.acct !== "cash" &&
                 !nonSavingsCards.some((c) => c.id === f.acct)
-                  ? [[f.acct, getAccountDisplay(f.acct, cards, deletedCards)[0]]]
+                  ? [
+                      [
+                        f.acct,
+                        getAccountDisplay(f.acct, cards, deletedCards)[0],
+                      ],
+                    ]
                   : []),
               ]
             : [
@@ -7462,7 +7798,12 @@ function DetailSheet({
                 ...(f.acct &&
                 f.acct !== "cash" &&
                 !nonSavingsCards.some((c) => c.id === f.acct)
-                  ? [[f.acct, getAccountDisplay(f.acct, cards, deletedCards)[0]]]
+                  ? [
+                      [
+                        f.acct,
+                        getAccountDisplay(f.acct, cards, deletedCards)[0],
+                      ],
+                    ]
                   : []),
               ]
         }
@@ -7521,7 +7862,9 @@ function RecurringDetailSheet({
     amtNum > 0 &&
     !selectedCard?.frozen &&
     !(isSavings && savingsCard?.frozen) &&
-    (!isSavings || !hasSavingsAccount || (Boolean(f.acct) && f.acct !== "cash"));
+    (!isSavings ||
+      !hasSavingsAccount ||
+      (Boolean(f.acct) && f.acct !== "cash"));
 
   const handleSaveRecurring = () => {
     if (!Number.isFinite(amtNum) || amtNum <= 0) {
@@ -7697,13 +8040,21 @@ function RecurringDetailSheet({
         onPick={(value) => set("acct", value)}
         cards={cards}
         options={
-          isSavings && hasSavingsAccount && nonSavingsCards.length > 0 && f.acct !== ""
+          isSavings &&
+          hasSavingsAccount &&
+          nonSavingsCards.length > 0 &&
+          f.acct !== ""
             ? [
                 ...nonSavingsCards.map((c) => [c.id, c.name]),
                 ...(f.acct &&
                 f.acct !== "cash" &&
                 !nonSavingsCards.some((c) => c.id === f.acct)
-                  ? [[f.acct, getAccountDisplay(f.acct, cards, deletedCards)[0]]]
+                  ? [
+                      [
+                        f.acct,
+                        getAccountDisplay(f.acct, cards, deletedCards)[0],
+                      ],
+                    ]
                   : []),
               ]
             : [
@@ -7712,7 +8063,12 @@ function RecurringDetailSheet({
                 ...(f.acct &&
                 f.acct !== "cash" &&
                 !nonSavingsCards.some((c) => c.id === f.acct)
-                  ? [[f.acct, getAccountDisplay(f.acct, cards, deletedCards)[0]]]
+                  ? [
+                      [
+                        f.acct,
+                        getAccountDisplay(f.acct, cards, deletedCards)[0],
+                      ],
+                    ]
                   : []),
               ]
         }
@@ -7774,11 +8130,7 @@ function BudgetSheet({ S, onSave, onClear, onClose }) {
       actionsClassName={currentBudget ? "is-paired" : ""}
       actions={
         <>
-          <button
-            type="button"
-            className="btn"
-            onClick={handleSaveBudget}
-          >
+          <button type="button" className="btn" onClick={handleSaveBudget}>
             Save budget
           </button>
           {currentBudget ? (
@@ -7807,6 +8159,234 @@ function BudgetSheet({ S, onSave, onClear, onClose }) {
         errorMessage={amtError}
         onEnter={handleSaveBudget}
       />
+    </Sheet>
+  );
+}
+
+function BudgetInsightsSheet({ S, onEditBudget, onClose }) {
+  const todayStr = ld();
+  const monthKey = S?.m || todayStr.slice(0, 7);
+  const isCurrentMonth = monthKey === todayStr.slice(0, 7);
+  const round2 = (val) => Math.round((Number(val) || 0) * 100) / 100;
+
+  const monthItems = (S?.exp || []).filter(
+    (e) => typeof e?.date === "string" && e.date.startsWith(monthKey) && e.amt != null,
+  );
+  const nonSavingsItems = monthItems.filter((e) => e.cat !== "Savings");
+  const totalSpent = round2(
+    nonSavingsItems.reduce((sum, e) => sum + (Number(e.amt) || 0), 0),
+  );
+  const savedThisMonth = round2(
+    monthItems
+      .filter((e) => e.cat === "Savings")
+      .reduce((sum, e) => sum + (Number(e.amt) || 0), 0),
+  );
+  const budgetLimit = round2(S?.bud?.[monthKey] || 0);
+
+  const prevMonthKey = shift(monthKey, -1);
+  const prevSpent = round2(
+    (S?.exp || [])
+      .filter(
+        (e) =>
+          typeof e?.date === "string" &&
+          e.date.startsWith(prevMonthKey) &&
+          e.amt != null &&
+          e.cat !== "Savings",
+      )
+      .reduce((sum, e) => sum + (Number(e.amt) || 0), 0),
+  );
+  const prevDiff = round2(totalSpent - prevSpent);
+  const prevDiffPct = prevSpent > 0 ? Math.round((prevDiff / prevSpent) * 100) : null;
+
+  const [yearNum, monthNum] = monthKey.split("-").map(Number);
+  const daysInMonth = new Date(yearNum, monthNum, 0).getDate() || 30;
+  const currentDay = isCurrentMonth
+    ? Math.min(daysInMonth, Number(todayStr.split("-")[2]) || 1)
+    : daysInMonth;
+  const daysPassed = Math.max(1, currentDay);
+  const daysRemaining = Math.max(1, daysInMonth - currentDay + 1);
+
+  const dailyBurn = totalSpent / daysPassed;
+  const projectedTotal = isCurrentMonth
+    ? Math.round(dailyBurn * daysInMonth)
+    : Math.round(totalSpent);
+  const projectedDelta = budgetLimit > 0 ? round2(projectedTotal - budgetLimit) : 0;
+  const safeDailyAllowance =
+    budgetLimit > 0 && isCurrentMonth && budgetLimit > totalSpent
+      ? Math.round((budgetLimit - totalSpent) / daysRemaining)
+      : 0;
+
+  const byCat = {};
+  for (const item of nonSavingsItems) {
+    const cat = CAT[item.cat] ? item.cat : "Other";
+    byCat[cat] = round2((byCat[cat] || 0) + (Number(item.amt) || 0));
+  }
+  const topCategories = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
+
+  const activeBills = (S?.rec || []).filter(
+    (r) => !isRecurringPaused(r) && r.cat !== "Savings",
+  );
+  const recurringBillsMonthly = Math.round(
+    activeBills.reduce((sum, r) => sum + normalizeToMonthly(r.amt, r.iv), 0),
+  );
+
+  return (
+    <Sheet
+      onClose={onClose}
+      actions={
+        <button
+          type="button"
+          className="btn"
+          onClick={() => {
+            triggerHaptic("selection");
+            onEditBudget?.();
+          }}
+        >
+          {budgetLimit > 0 ? "Edit budget" : "Set budget"}
+        </button>
+      }
+    >
+      <h3 id="sheet-title">Budget insights</h3>
+      <p className="hint" style={{ textAlign: "left", marginBottom: 14 }}>
+        {fM(monthKey)}
+      </p>
+
+      <div className="budget-insights-grid">
+        <div className="budget-insights-tile">
+          <span className="budget-insights-label">
+            {isCurrentMonth ? "Projected month-end" : "Total spent"}
+          </span>
+          <strong className="budget-insights-value">
+            {M(projectedTotal)}
+          </strong>
+          <span
+            className={`budget-insights-note${
+              budgetLimit > 0
+                ? projectedDelta > 0
+                  ? " is-bad"
+                  : " is-good"
+                : ""
+            }`}
+          >
+            {budgetLimit > 0
+              ? projectedDelta > 0
+                ? `${M(projectedDelta)} over limit`
+                : projectedDelta < 0
+                  ? `${M(Math.abs(projectedDelta))} under limit`
+                  : "On limit"
+              : "No limit set"}
+          </span>
+        </div>
+
+        <div className="budget-insights-tile">
+          <span className="budget-insights-label">
+            {isCurrentMonth && budgetLimit > 0
+              ? "Safe daily pace"
+              : "Daily average"}
+          </span>
+          <strong className="budget-insights-value">
+            {isCurrentMonth && budgetLimit > 0
+              ? budgetLimit > totalSpent
+                ? `${M(safeDailyAllowance)}/day`
+                : "৳0/day"
+              : `${M(Math.round(dailyBurn))}/day`}
+          </strong>
+          <span className="budget-insights-note">
+            {isCurrentMonth && budgetLimit > 0
+              ? budgetLimit > totalSpent
+                ? `For ${daysRemaining} ${daysRemaining === 1 ? "day" : "days"} left`
+                : "Budget limit reached"
+              : `Across ${daysPassed} ${daysPassed === 1 ? "day" : "days"}`}
+          </span>
+        </div>
+
+        <div className="budget-insights-tile">
+          <span className="budget-insights-label">vs. Last month</span>
+          <strong className="budget-insights-value">
+            {prevSpent > 0
+              ? `${prevDiff > 0 ? "+" : prevDiff < 0 ? "−" : ""}${M(Math.abs(prevDiff))}`
+              : "—"}
+          </strong>
+          <span
+            className={`budget-insights-note${
+              prevSpent > 0
+                ? prevDiff > 0
+                  ? " is-bad"
+                  : prevDiff < 0
+                    ? " is-good"
+                    : ""
+                : ""
+            }`}
+          >
+            {prevSpent > 0
+              ? prevDiffPct === 0
+                ? "Same as last month"
+                : `${prevDiffPct > 0 ? "+" : ""}${prevDiffPct}% vs ${fM(prevMonthKey).split(" ")[0]}`
+              : "No prior month data"}
+          </span>
+        </div>
+
+        <div className="budget-insights-tile">
+          <span className="budget-insights-label">Recurring bills</span>
+          <strong className="budget-insights-value">
+            {M(recurringBillsMonthly)}/mo
+          </strong>
+          <span className="budget-insights-note">
+            {activeBills.length} active {activeBills.length === 1 ? "bill" : "bills"}
+            {savedThisMonth > 0 ? ` · ${M(savedThisMonth)} saved` : ""}
+          </span>
+        </div>
+      </div>
+
+      <div className="budget-insights-categories">
+        <div className="budget-insights-cat-header">
+          <span>Spending by category</span>
+          <small>
+            {topCategories.length}{" "}
+            {topCategories.length === 1 ? "category" : "categories"}
+          </small>
+        </div>
+        {topCategories.length > 0 ? (
+          <div className="budget-insights-cat-list">
+            {topCategories.slice(0, 6).map(([catName, catAmt]) => {
+              const pct = totalSpent > 0 ? Math.round((catAmt / totalSpent) * 100) : 0;
+              const catColor = CAT[catName]?.[1] || "#64748b";
+              return (
+                <div key={catName} className="budget-insights-cat-row">
+                  <div className="budget-insights-cat-top">
+                    <span className="budget-insights-cat-name">
+                      <i
+                        className="budget-insights-cat-icon"
+                        style={{ "--c": catColor }}
+                      >
+                        <CategorySymbol category={catName} />
+                      </i>
+                      <span>{catName}</span>
+                    </span>
+                    <span className="budget-insights-cat-meta">
+                      <small>{pct}%</small>
+                      <b>{M(catAmt)}</b>
+                    </span>
+                  </div>
+                  <div className="budget-insights-cat-track" aria-hidden="true">
+                    <div
+                      className="budget-insights-cat-fill"
+                      style={{
+                        width: `${Math.min(100, Math.max(4, pct))}%`,
+                        background: catColor,
+                      }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="budget-insights-empty">
+            No spending recorded for {fM(monthKey)} yet.
+          </p>
+        )}
+      </div>
     </Sheet>
   );
 }
@@ -8232,7 +8812,10 @@ function AddCardSheet({
     if (prov.category === "cash") {
       const existingCash = cards.find(
         (c) =>
-          (c.id === "cash" || c.provider === "cash" || c.category === "cash" || c.type === "cash") &&
+          (c.id === "cash" ||
+            c.provider === "cash" ||
+            c.category === "cash" ||
+            c.type === "cash") &&
           Boolean(c.createdAt || c.updatedAt || c.isPrimary),
       );
       if (existingCash) {
@@ -8790,7 +9373,9 @@ function AddCardSheet({
                   maxLength={selectedProvider.isPhone ? 11 : 4}
                   placeholder={
                     selectedProvider.isPhone
-                      ? (selectedProvider.numberPlaceholder || "01712345678").replace(/\s+/g, "")
+                      ? (
+                          selectedProvider.numberPlaceholder || "01712345678"
+                        ).replace(/\s+/g, "")
                       : "e.g. 9018"
                   }
                   value={
@@ -9147,8 +9732,7 @@ function CardOptionsSheet({
     const rawNum = String(card?.number || "");
     if (!mfsFlag) return rawNum;
     if (rawNum.includes("•")) {
-      const l4 =
-        card?.last4 || rawNum.replace(/\D/g, "").slice(-4) || "";
+      const l4 = card?.last4 || rawNum.replace(/\D/g, "").slice(-4) || "";
       return l4;
     }
     return rawNum.replace(/\D/g, "").slice(0, 11);
@@ -9346,7 +9930,9 @@ function CardOptionsSheet({
   const handleSave = () => {
     if (!selectedCard) return;
     if (isCard && formData.expiry.trim()) {
-      const expMatch = formData.expiry.trim().match(/^(0[1-9]|1[0-2])\/(\d{2})$/);
+      const expMatch = formData.expiry
+        .trim()
+        .match(/^(0[1-9]|1[0-2])\/(\d{2})$/);
       if (!expMatch) {
         triggerHaptic("warning");
         onToast?.("Enter a valid expiry date (MM/YY).");
@@ -9362,7 +9948,9 @@ function CardOptionsSheet({
     const cleanedName = safeFormData.name.trim() || selectedCard.name || "Card";
     const cleanedHolder =
       safeFormData.holderName.trim() || selectedCard.holderName || "Cardholder";
-    const mfsDigits = isMfs ? String(safeFormData.number || "").replace(/\D/g, "") : "";
+    const mfsDigits = isMfs
+      ? String(safeFormData.number || "").replace(/\D/g, "")
+      : "";
     const resolvedNumber = isMfs
       ? mfsDigits.length >= 10
         ? mfsDigits.slice(0, 11)
@@ -9536,7 +10124,14 @@ function CardOptionsSheet({
                         strokeLinejoin="round"
                         aria-hidden="true"
                       >
-                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                        <rect
+                          x="9"
+                          y="9"
+                          width="13"
+                          height="13"
+                          rx="2"
+                          ry="2"
+                        />
                         <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                       </svg>
                     )}
@@ -10063,9 +10658,7 @@ function CardOptionsSheet({
               <label>Opening Balance (Starting Balance)</label>
               <div className="add-card-balance-input-wrap">
                 <span className="add-card-curr-prefix">
-                  {isCash
-                    ? getCashCurrencyMeta(formData.currency).symbol
-                    : "৳"}
+                  {isCash ? getCashCurrencyMeta(formData.currency).symbol : "৳"}
                 </span>
                 <input
                   type="text"
@@ -10087,7 +10680,10 @@ function CardOptionsSheet({
                     if (firstDot !== -1) {
                       next =
                         next.slice(0, firstDot + 1) +
-                        next.slice(firstDot + 1).replace(/\./g, "").slice(0, 2);
+                        next
+                          .slice(firstDot + 1)
+                          .replace(/\./g, "")
+                          .slice(0, 2);
                     }
                     setFormData((prev) => ({
                       ...prev,
@@ -10690,8 +11286,8 @@ function AppSettingsPage({
       window.__spendCheckForUpdates?.();
     }
   }, []);
-  const [canInstallAndroidApp, setCanInstallAndroidApp] = useState(() =>
-    isAndroidPlatform() && Boolean(window.__spendCanInstallWebApk?.()),
+  const [canInstallAndroidApp, setCanInstallAndroidApp] = useState(
+    () => isAndroidPlatform() && Boolean(window.__spendCanInstallWebApk?.()),
   );
   const [installingAndroidApp, setInstallingAndroidApp] = useState(false);
   useEffect(() => {
@@ -11028,7 +11624,11 @@ function AppSettingsPage({
         </div>
 
         {reconcileExpanded && (
-          <div className="mfs-reconcile-panel" role="region" aria-label="Ledger reconciliation details">
+          <div
+            className="mfs-reconcile-panel"
+            role="region"
+            aria-label="Ledger reconciliation details"
+          >
             <div className="mfs-reconcile-formula">
               <div>
                 <span>Opening</span>
@@ -11037,12 +11637,16 @@ function AppSettingsPage({
               <span className="mfs-reconcile-op">+</span>
               <div>
                 <span>Credits</span>
-                <b className="is-credit">{money(reconciliation.totalCredits || 0)}</b>
+                <b className="is-credit">
+                  {money(reconciliation.totalCredits || 0)}
+                </b>
               </div>
               <span className="mfs-reconcile-op">−</span>
               <div>
                 <span>Debits</span>
-                <b className="is-debit">{money(reconciliation.totalDebits || 0)}</b>
+                <b className="is-debit">
+                  {money(reconciliation.totalDebits || 0)}
+                </b>
               </div>
               <span className="mfs-reconcile-op">=</span>
               <div>
@@ -11057,13 +11661,18 @@ function AppSettingsPage({
                     <div className="mfs-reconcile-acct-meta">
                       <b>{acc.name}</b>
                       <small>
-                        {money(acc.opening)} + {money(acc.credits)} − {money(acc.debits)}
+                        {money(acc.opening)} + {money(acc.credits)} −{" "}
+                        {money(acc.debits)}
                       </small>
                     </div>
                     <div className="mfs-reconcile-acct-bal">
                       <b>{money(acc.currentBalance)}</b>
-                      <span className={`mfs-reconcile-badge${acc.isBalanced ? " is-ok" : " is-warn"}`}>
-                        {acc.isBalanced ? "✓ OK" : `Δ ${money(acc.discrepancy)}`}
+                      <span
+                        className={`mfs-reconcile-badge${acc.isBalanced ? " is-ok" : " is-warn"}`}
+                      >
+                        {acc.isBalanced
+                          ? "✓ OK"
+                          : `Δ ${money(acc.discrepancy)}`}
                       </span>
                     </div>
                   </div>
@@ -11071,7 +11680,14 @@ function AppSettingsPage({
               </div>
             )}
             {profile?.connected && (
-              <div className="mfs-reconcile-accounts" style={{ marginTop: "8px", borderTop: "1px solid var(--line, rgba(128,128,128,0.14))", paddingTop: "10px" }}>
+              <div
+                className="mfs-reconcile-accounts"
+                style={{
+                  marginTop: "8px",
+                  borderTop: "1px solid var(--line, rgba(128,128,128,0.14))",
+                  paddingTop: "10px",
+                }}
+              >
                 <div className="mfs-reconcile-acct-row">
                   <div className="mfs-reconcile-acct-meta">
                     <b>Supabase SQL &amp; Cloud Sync</b>
@@ -11089,7 +11705,11 @@ function AppSettingsPage({
                     <button
                       type="button"
                       className={`mfs-reconcile-badge ${sqlHealth?.allPassed && Math.abs((sqlHealth?.cloudReconciliation?.totalCurrentBalance ?? reconciliation.totalCurrentBalance ?? 0) - (reconciliation.totalCurrentBalance || 0)) < 0.01 ? "is-ok" : "is-warn"}`}
-                      style={{ border: "none", cursor: "pointer", font: "inherit" }}
+                      style={{
+                        border: "none",
+                        cursor: "pointer",
+                        font: "inherit",
+                      }}
                       disabled={sqlHealthChecking}
                       onClick={() => {
                         triggerHaptic("light");
@@ -11100,10 +11720,10 @@ function AppSettingsPage({
                         ? "Checking…"
                         : sqlHealth?.allPassed &&
                             Math.abs(
-                              (sqlHealth?.cloudReconciliation?.totalCurrentBalance ??
+                              (sqlHealth?.cloudReconciliation
+                                ?.totalCurrentBalance ??
                                 reconciliation.totalCurrentBalance ??
-                                0) -
-                                (reconciliation.totalCurrentBalance || 0),
+                                0) - (reconciliation.totalCurrentBalance || 0),
                             ) < 0.01
                           ? "✓ SQL & Cloud OK"
                           : "Sync & Verify"}
@@ -11221,14 +11841,21 @@ function AppSettingsPage({
                     : "No snapshots yet · Tap above to save one"}
               </small>
             </span>
-            <span className={`settings-chevron${checkpointsExpanded ? " is-expanded" : ""}`} aria-hidden="true">
+            <span
+              className={`settings-chevron${checkpointsExpanded ? " is-expanded" : ""}`}
+              aria-hidden="true"
+            >
               <Icon n="r" />
             </span>
           </button>
         </div>
 
         {checkpointsExpanded && (
-          <div className="mfs-checkpoints-list" role="region" aria-label="Saved backup checkpoints">
+          <div
+            className="mfs-checkpoints-list"
+            role="region"
+            aria-label="Saved backup checkpoints"
+          >
             {backupCheckpoints.length === 0 ? (
               <p className="mfs-checkpoints-empty">
                 {checkpointsLoading
@@ -11494,9 +12121,6 @@ function SecuritySheet({ onClose, onBack, onLockNow }) {
   const [biometricsConfigured, setBiometricsConfigured] = useState(() =>
     hasBiometricsConfigured(),
   );
-  const [timeoutMinutes, setTimeoutMinutes] = useState(() =>
-    getLockTimeoutMinutes(),
-  );
   const [step, setStep] = useState("overview"); // "overview" | "setup_pin" | "confirm_pin"
   const [pinDraft, setPinDraft] = useState("");
   const [pinConfirm, setPinConfirm] = useState("");
@@ -11597,13 +12221,6 @@ function SecuritySheet({ onClose, onBack, onLockNow }) {
         setPinError("Could not enable biometric unlock on this device.");
       }
     }
-  };
-
-  const handleTimeoutChange = (mins) => {
-    setLockTimeoutMinutes(mins);
-    setTimeoutMinutes(mins);
-    markActive();
-    triggerHaptic("selection");
   };
 
   return (
@@ -11776,52 +12393,7 @@ function SecuritySheet({ onClose, onBack, onLockNow }) {
                 </button>
               )}
 
-              {pinSet && (
-                <div className="mfs-settings-row is-appearance security-autolock-row">
-                  <div className="mfs-appearance-top">
-                    <i className="ic mfs-row-icon" style={{ "--c": "#0ea5e9" }}>
-                      <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.1"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        aria-hidden="true"
-                      >
-                        <circle cx="12" cy="12" r="10" />
-                        <polyline points="12 6 12 12 16 14" />
-                      </svg>
-                    </i>
-                    <span className="nm">
-                      <b>Auto-Lock</b>
-                      <small>Require passcode after backgrounding</small>
-                    </span>
-                  </div>
-                  <div
-                    className="mfs-theme-seg"
-                    role="radiogroup"
-                    aria-label="Auto-lock timeout"
-                  >
-                    {[
-                      [0, "Immediately"],
-                      [1, "1 min"],
-                      [5, "5 min"],
-                    ].map(([mins, label]) => (
-                      <button
-                        key={mins}
-                        type="button"
-                        role="radio"
-                        aria-checked={timeoutMinutes === mins}
-                        className={`mfs-theme-seg-btn${timeoutMinutes === mins ? " is-active" : ""}`}
-                        onClick={() => handleTimeoutChange(mins)}
-                      >
-                        <span>{label}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
+
             </div>
           </div>
 
@@ -12117,21 +12689,18 @@ function useCollapsingHeader({ activeTab, enableSnap = true }) {
   }, [activeTab]);
 
   // Register each persistent tab panel's scroll container with stable ref callback per tab
-  const registerTabScroller = React.useCallback(
-    (tabKey) => {
-      if (!tabScrollerRefs.current[tabKey]) {
-        tabScrollerRefs.current[tabKey] = (node) => {
-          if (node) {
-            scrollerMapRef.current.set(tabKey, node);
-          } else {
-            scrollerMapRef.current.delete(tabKey);
-          }
-        };
-      }
-      return tabScrollerRefs.current[tabKey];
-    },
-    [],
-  );
+  const registerTabScroller = React.useCallback((tabKey) => {
+    if (!tabScrollerRefs.current[tabKey]) {
+      tabScrollerRefs.current[tabKey] = (node) => {
+        if (node) {
+          scrollerMapRef.current.set(tabKey, node);
+        } else {
+          scrollerMapRef.current.delete(tabKey);
+        }
+      };
+    }
+    return tabScrollerRefs.current[tabKey];
+  }, []);
 
   // Smooth scroll-to-top for header tap & re-tapping active tab
   const scrollToTop = React.useCallback(() => {
@@ -12507,6 +13076,7 @@ export default function MobilePrototype({
       triggerHaptic("warning");
       return {
         ok: false,
+        lockoutSeconds: lockoutSec,
         message: `Too many attempts. Try again in ${lockoutSec}s.`,
       };
     }
@@ -12520,6 +13090,7 @@ export default function MobilePrototype({
     if (remaining > 0) {
       return {
         ok: false,
+        lockoutSeconds: remaining,
         message: `Too many attempts. Try again in ${remaining}s.`,
       };
     }
@@ -12532,6 +13103,7 @@ export default function MobilePrototype({
       triggerHaptic("warning");
       return {
         ok: false,
+        lockoutSeconds: lockoutSec,
         message: `Too many attempts. Try again in ${lockoutSec}s.`,
       };
     }
@@ -12602,12 +13174,11 @@ export default function MobilePrototype({
   }, [onResetPin]);
 
   useEffect(() => {
-    let lastActivityCall = 0;
-    const handleActivity = () => {
-      const now = Date.now();
-      if (now - lastActivityCall > 1000) {
-        lastActivityCall = now;
-        markActive();
+    const lockOnBackground = () => {
+      setIsPrivacyShielded(true);
+      markBackgrounded();
+      if (hasAppPin()) {
+        setIsAppLocked(true);
       }
     };
 
@@ -12618,25 +13189,13 @@ export default function MobilePrototype({
           setIsAppLocked(true);
         }
       } else if (document.visibilityState === "hidden") {
-        setIsPrivacyShielded(true);
-        markBackgrounded();
+        lockOnBackground();
       }
     };
 
     const handlePageHide = () => {
-      setIsPrivacyShielded(true);
-      markBackgrounded();
+      lockOnBackground();
     };
-
-    const idleCheckInterval = setInterval(() => {
-      if (
-        document.visibilityState === "visible" &&
-        isSessionUnlocked() &&
-        shouldLockApp()
-      ) {
-        setIsAppLocked(true);
-      }
-    }, 5000);
 
     // Native Capacitor app lifecycle support (Android & iOS)
     let capacitorListenerHandle = null;
@@ -12652,8 +13211,7 @@ export default function MobilePrototype({
                 setIsAppLocked(true);
               }
             } else {
-              setIsPrivacyShielded(true);
-              markBackgrounded();
+              lockOnBackground();
             }
           },
         );
@@ -12662,25 +13220,11 @@ export default function MobilePrototype({
       }
     }
 
-    window.addEventListener("pointerdown", handleActivity, { passive: true });
-    window.addEventListener("touchstart", handleActivity, { passive: true });
-    window.addEventListener("keydown", handleActivity, { passive: true });
-    window.addEventListener("wheel", handleActivity, { passive: true });
-    window.addEventListener("scroll", handleActivity, {
-      passive: true,
-      capture: true,
-    });
     document.addEventListener("visibilitychange", handleVisibility);
     window.addEventListener("pagehide", handlePageHide);
 
     return () => {
-      clearInterval(idleCheckInterval);
       capacitorListenerHandle?.then?.((h) => h?.remove?.())?.catch?.(() => {});
-      window.removeEventListener("pointerdown", handleActivity);
-      window.removeEventListener("touchstart", handleActivity);
-      window.removeEventListener("keydown", handleActivity);
-      window.removeEventListener("wheel", handleActivity);
-      window.removeEventListener("scroll", handleActivity, { capture: true });
       document.removeEventListener("visibilitychange", handleVisibility);
       window.removeEventListener("pagehide", handlePageHide);
     };
@@ -12717,12 +13261,16 @@ export default function MobilePrototype({
     if (typeof window === "undefined") return;
     window.requestAnimationFrame(() => {
       const root = mobileRootRef.current;
-      if (root && !document.querySelector('[role="dialog"][aria-modal="true"]')) {
+      if (
+        root &&
+        !document.querySelector('[role="dialog"][aria-modal="true"]')
+      ) {
         root.removeAttribute("data-sheet-open");
         root.removeAttribute("data-sheet-closing");
         root.style.removeProperty("--sheet-drag-progress");
       }
-      const dock = dockRef.current || document.querySelector(".mobile-prototype .dock");
+      const dock =
+        dockRef.current || document.querySelector(".mobile-prototype .dock");
       if (!dock) return;
       dock.style.transform = "";
       dock.style.visibility = "";
@@ -12825,7 +13373,9 @@ export default function MobilePrototype({
     syncPlatform();
 
     window.addEventListener("resize", syncPlatform, { passive: true });
-    window.addEventListener("orientationchange", syncPlatform, { passive: true });
+    window.addEventListener("orientationchange", syncPlatform, {
+      passive: true,
+    });
     return () => {
       window.removeEventListener("resize", syncPlatform);
       window.removeEventListener("orientationchange", syncPlatform);
@@ -13474,7 +14024,11 @@ export default function MobilePrototype({
       );
     }
     const savingsId = getSavingsAccountId(cards);
-    if (isSavings && (!form.acct || form.acct === "cash") && Boolean(savingsId)) {
+    if (
+      isSavings &&
+      (!form.acct || form.acct === "cash") &&
+      Boolean(savingsId)
+    ) {
       return toast("Select an account to transfer from.");
     }
     if (form.acct && form.acct !== "cash") {
@@ -13783,6 +14337,7 @@ export default function MobilePrototype({
         <Suspense fallback={null}>
           <SpendLogin
             verifyPin={handleVerifyPin}
+            getLockoutSeconds={getPinLockoutRemainingSeconds}
             biometric={
               hasBiometricsConfigured()
                 ? {
@@ -14154,6 +14709,7 @@ export default function MobilePrototype({
                 isActive={tab === "plans" && !settingsRoute}
                 onShift={onShift}
                 onBudget={openBudget}
+                onBudgetInsights={() => openSheet({ type: "budInsights" })}
                 onAddRec={() => openSheet({ type: "add", iv: "monthly" })}
                 onOpenRec={openRecurring}
                 onToggleRec={onToggleRec}
@@ -14294,7 +14850,8 @@ export default function MobilePrototype({
             openSheet({ type: "tx", t: "adjust", acct: cardId })
           }
           onSyncCashBalance={(cardId, diff) => {
-            if (!cardId || !Number.isFinite(diff) || Math.abs(diff) < 0.01) return;
+            if (!cardId || !Number.isFinite(diff) || Math.abs(diff) < 0.01)
+              return;
             const res = onTransactionSave?.({
               type: "adjust",
               acct: cardId,
@@ -14347,7 +14904,9 @@ export default function MobilePrototype({
         <AddCardSheet
           onClose={close}
           cards={cards}
-          onOpenExistingCard={(cardId) => openSheet({ type: "cardOptions", cardId })}
+          onOpenExistingCard={(cardId) =>
+            openSheet({ type: "cardOptions", cardId })
+          }
           onToast={toast}
           onAddCard={(newCard) => {
             const added = onAddCard?.(newCard);
@@ -14364,7 +14923,11 @@ export default function MobilePrototype({
               newCard?.category === "savings" ||
               newCard?.type === "savings" ||
               newCard?.provider === "savings";
-            if (!isSavings && (newCard?.isPrimary || isFirstNonSavings) && cardId) {
+            if (
+              !isSavings &&
+              (newCard?.isPrimary || isFirstNonSavings) &&
+              cardId
+            ) {
               handlePreferredAccountChange(cardId);
             }
           }}
@@ -14443,6 +15006,13 @@ export default function MobilePrototype({
           S={S}
           onSave={saveBudget}
           onClear={clearBudget}
+          onClose={close}
+        />
+      )}
+      {sheet?.type === "budInsights" && (
+        <BudgetInsightsSheet
+          S={S}
+          onEditBudget={openBudget}
           onClose={close}
         />
       )}

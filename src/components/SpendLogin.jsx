@@ -4,6 +4,16 @@ import "./SpendLogin.css";
 const DIGITS = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
 const busy = (s) => s === "checking" || s === "done";
 
+function formatCountdown(seconds) {
+  const sec = Math.max(0, Math.ceil(Number(seconds) || 0));
+  if (sec >= 60) {
+    const mins = Math.floor(sec / 60);
+    const rem = sec % 60;
+    return `${mins}:${String(rem).padStart(2, "0")}`;
+  }
+  return `${sec}s`;
+}
+
 const icon = {
   width: 30,
   height: 30,
@@ -36,16 +46,18 @@ const FingerprintIcon = () => (
 
 /**
  * Props
- *  verifyPin(pin)  -> boolean | {ok, message?} (or a Promise of either)   required: your PIN check; message shows on failure
- *  biometric       {type:"face"|"fingerprint", label} | null   from useBiometric(); null hides the button
- *  onBiometric()   -> Promise<boolean>             optional: resolve true on success
- *  autoPrompt                                      open the biometric prompt on mount (default false)
- *  onUnlock()                                      called ~450ms after success
- *  onForgot()                                      "Forgot PIN?" tapped
- *  pinLength                                       default 4
+ *  verifyPin(pin)      -> boolean | {ok, message?, lockoutSeconds?} (or a Promise of either)
+ *  getLockoutSeconds() -> number (remaining lockout seconds, optional)
+ *  biometric           {type:"face"|"fingerprint", label} | null   from useBiometric(); null hides the button
+ *  onBiometric()       -> Promise<boolean | {ok, message?, lockoutSeconds?}>
+ *  autoPrompt          open the biometric prompt on mount (default false)
+ *  onUnlock()          called ~450ms after success
+ *  onForgot()          "Forgot PIN?" tapped
+ *  pinLength           default 4
  */
 export default function SpendLogin({
   verifyPin,
+  getLockoutSeconds,
   biometric = { type: "face", label: "Face ID" },
   onBiometric,
   onUnlock,
@@ -53,12 +65,61 @@ export default function SpendLogin({
   autoPrompt = false,
   pinLength = 4,
 }) {
+  const readLockout = useCallback(
+    () => Math.max(0, Math.ceil(Number(getLockoutSeconds?.()) || 0)),
+    [getLockoutSeconds],
+  );
+
   const [open, setOpen] = useState(false);
   const [pin, setPin] = useState("");
+  const [lockoutSec, setLockoutSec] = useState(() => readLockout());
   const [status, setStatus] = useState("idle"); // idle | checking | error | done
   const [msg, setMsg] = useState("");
   const timer = useRef();
+  const lockoutUntilRef = useRef(
+    lockoutSec > 0 ? Date.now() + lockoutSec * 1000 : 0,
+  );
   useEffect(() => () => clearTimeout(timer.current), []);
+
+  const lockedOut = lockoutSec > 0;
+
+  const startLockout = useCallback((seconds) => {
+    const sec = Math.max(0, Math.ceil(Number(seconds) || 0));
+    if (sec <= 0) return;
+    lockoutUntilRef.current = Date.now() + sec * 1000;
+    setLockoutSec(sec);
+    setPin("");
+    setStatus("error");
+  }, []);
+
+  // Live countdown ticker synced to wall-clock / security store
+  useEffect(() => {
+    if (lockoutSec <= 0) return undefined;
+
+    const syncRemaining = () => {
+      const next =
+        typeof getLockoutSeconds === "function"
+          ? readLockout()
+          : Math.max(0, Math.ceil((lockoutUntilRef.current - Date.now()) / 1000));
+      setLockoutSec(next);
+      if (next <= 0) {
+        lockoutUntilRef.current = 0;
+        setMsg("");
+        setStatus((prev) => (prev === "error" ? "idle" : prev));
+      }
+    };
+
+    const intervalId = setInterval(syncRemaining, 250);
+    const onVisibility = () => {
+      if (!document.hidden) syncRemaining();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [lockoutSec > 0, getLockoutSeconds, readLockout]);
 
   const finish = useCallback(() => {
     setStatus("done");
@@ -76,42 +137,63 @@ export default function SpendLogin({
         res = { ok: false, message: "Something went wrong. Try again." };
       }
       const ok = typeof res === "object" && res !== null ? res.ok : !!res;
-      if (ok) finish();
-      else {
+      if (ok) {
+        finish();
+        return;
+      }
+      const remaining =
+        (typeof res === "object" && res !== null
+          ? Number(res.lockoutSeconds) || 0
+          : 0) || readLockout();
+      if (remaining > 0) {
+        setMsg("");
+        startLockout(remaining);
+      } else {
         setMsg(res?.message || "Wrong PIN. Try again.");
         setStatus("error");
         setPin("");
       }
     },
-    [verifyPin, finish],
+    [verifyPin, finish, readLockout, startLockout],
   );
 
   const press = useCallback(
     (d) => {
-      if (busy(status) || pin.length >= pinLength) return;
+      if (busy(status) || lockedOut || pin.length >= pinLength) return;
       const next = pin + d;
       setOpen(true);
       setStatus("idle");
+      setMsg("");
       setPin(next);
       if (next.length === pinLength) submit(next);
     },
-    [pin, pinLength, status, submit],
+    [pin, pinLength, status, lockedOut, submit],
   );
 
   const back = useCallback(() => {
-    if (busy(status)) return;
+    if (busy(status) || lockedOut) return;
     setStatus("idle");
     setPin((p) => p.slice(0, -1));
-  }, [status]);
+  }, [status, lockedOut]);
 
   const bio = async () => {
-    if (busy(status)) return;
+    if (busy(status) || lockedOut) return;
     setOpen(false);
     try {
       const res = await onBiometric?.();
       const ok = typeof res === "object" && res !== null ? res.ok : !!res;
-      if (ok) finish();
-      else if (res?.message) {
+      if (ok) {
+        finish();
+        return;
+      }
+      const remaining =
+        (typeof res === "object" && res !== null
+          ? Number(res.lockoutSeconds) || 0
+          : 0) || readLockout();
+      if (remaining > 0) {
+        setMsg("");
+        startLockout(remaining);
+      } else if (res?.message) {
         setMsg(res.message);
         setStatus("error");
       }
@@ -122,12 +204,12 @@ export default function SpendLogin({
 
   const prompted = useRef(false);
   useEffect(() => {
-    if (autoPrompt && biometric && !prompted.current) {
+    if (autoPrompt && biometric && !prompted.current && !lockedOut) {
       prompted.current = true;
       bio();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoPrompt, biometric]);
+  }, [autoPrompt, biometric, lockedOut]);
 
   // Physical keyboard: digits, Backspace, Escape
   useEffect(() => {
@@ -160,11 +242,13 @@ export default function SpendLogin({
     "sl",
     open && "sl--open",
     status === "error" && "sl--error",
+    lockedOut && "sl--locked",
     status === "done" && "sl--done",
   ]
     .filter(Boolean)
     .join(" ");
   const done = status === "done";
+  const padDisabled = lockedOut || busy(status);
 
   return (
     <main className={cls} aria-busy={status === "checking"}>
@@ -200,8 +284,13 @@ export default function SpendLogin({
           <button
             type="button"
             className="sl__field"
-            onClick={() => !done && setOpen(true)}
-            aria-label="Enter your PIN"
+            disabled={done || lockedOut}
+            onClick={() => !done && !lockedOut && setOpen(true)}
+            aria-label={
+              lockedOut
+                ? `PIN entry locked for ${formatCountdown(lockoutSec)}`
+                : "Enter your PIN"
+            }
           >
             <span className="sl__field-icon" aria-hidden="true">
               <svg
@@ -232,6 +321,7 @@ export default function SpendLogin({
             <button
               type="button"
               className="sl__bio"
+              disabled={done || lockedOut}
               onClick={bio}
               aria-label={`Unlock with ${biometric.label}`}
             >
@@ -241,14 +331,21 @@ export default function SpendLogin({
         </div>
 
         <div className="sl__meta">
+          <div className="sl__status" role="alert" aria-live="polite">
+            {lockedOut ? (
+              <p className="sl__lockout-pill">
+                Too many attempts. Try again in{" "}
+                <span className="sl__timer">{formatCountdown(lockoutSec)}</span>
+              </p>
+            ) : status === "error" && msg ? (
+              <p className="sl__error">{msg}</p>
+            ) : null}
+          </div>
           {!done && (
             <button type="button" className="sl__link" onClick={onForgot}>
               Forgot PIN?
             </button>
           )}
-          <p className="sl__error" role="alert">
-            {status === "error" ? msg : ""}
-          </p>
         </div>
       </div>
 
@@ -259,15 +356,16 @@ export default function SpendLogin({
               key={d}
               type="button"
               className="sl__key"
+              disabled={padDisabled}
               onClick={() => press(d)}
-              tabIndex={open ? 0 : -1}
+              tabIndex={open && !padDisabled ? 0 : -1}
             >
               {d}
             </button>
           ))}
           <button
             type="button"
-            className="sl__key sl__key--ghost"
+            className="sl__key sl__key--ghost sl__key--dismiss"
             onClick={(e) => {
               e.currentTarget.blur();
               setOpen(false);
@@ -292,17 +390,19 @@ export default function SpendLogin({
           <button
             type="button"
             className="sl__key"
+            disabled={padDisabled}
             onClick={() => press("0")}
-            tabIndex={open ? 0 : -1}
+            tabIndex={open && !padDisabled ? 0 : -1}
           >
             0
           </button>
           <button
             type="button"
             className="sl__key sl__key--ghost"
+            disabled={padDisabled}
             onClick={back}
             aria-label="Delete last digit"
-            tabIndex={open ? 0 : -1}
+            tabIndex={open && !padDisabled ? 0 : -1}
           >
             <svg
               width="28"

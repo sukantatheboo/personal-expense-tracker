@@ -36,7 +36,8 @@ export function BkashLogo({ className = "", height = 22 }) {
           fontSize: Math.round(height * 0.62),
           letterSpacing: "-0.03em",
           lineHeight: 1,
-          fontFamily: '"Manrope Variable", "Manrope", system-ui, -apple-system, sans-serif',
+          fontFamily:
+            '"Manrope Variable", "Manrope", system-ui, -apple-system, sans-serif',
           textShadow: "0 1px 2px rgba(0,0,0,0.22)",
         }}
       >
@@ -372,7 +373,8 @@ export function CityBankLogo({ className = "", height = 22 }) {
           fontSize,
           letterSpacing: "0.04em",
           lineHeight: 1,
-          fontFamily: '"Manrope Variable", "Manrope", system-ui, -apple-system, sans-serif',
+          fontFamily:
+            '"Manrope Variable", "Manrope", system-ui, -apple-system, sans-serif',
           textShadow: "0 1px 2px rgba(0,0,0,0.25)",
         }}
       >
@@ -430,7 +432,8 @@ export function EblLogo({ className = "", height = 22 }) {
           fontSize,
           letterSpacing: "0.04em",
           lineHeight: 1,
-          fontFamily: '"Manrope Variable", "Manrope", system-ui, -apple-system, sans-serif',
+          fontFamily:
+            '"Manrope Variable", "Manrope", system-ui, -apple-system, sans-serif',
           textShadow: "0 1px 2px rgba(0,0,0,0.25)",
         }}
       >
@@ -488,7 +491,8 @@ export function DbblLogo({ className = "", height = 22 }) {
           fontSize,
           letterSpacing: "0.04em",
           lineHeight: 1,
-          fontFamily: '"Manrope Variable", "Manrope", system-ui, -apple-system, sans-serif',
+          fontFamily:
+            '"Manrope Variable", "Manrope", system-ui, -apple-system, sans-serif',
           textShadow: "0 1px 2px rgba(0,0,0,0.25)",
         }}
       >
@@ -536,7 +540,8 @@ export function StandardCharteredLogo({ className = "", height = 22 }) {
           fontSize,
           letterSpacing: "0.04em",
           lineHeight: 1,
-          fontFamily: '"Manrope Variable", "Manrope", system-ui, -apple-system, sans-serif',
+          fontFamily:
+            '"Manrope Variable", "Manrope", system-ui, -apple-system, sans-serif',
           textShadow: "0 1px 2px rgba(0,0,0,0.24)",
         }}
       >
@@ -1567,16 +1572,15 @@ export function MiniCardPreview({ provider, card, className = "" }) {
   }
 
   // Top-right mark (.mk)
-  const markText =
-    isVirtual
-      ? "Virtual"
-      : isMfs
-        ? "Wallet"
-        : isSavings
-          ? "Vault"
-          : isCash
-            ? "Cash"
-            : spec.mk || (p?.shortCode ? p.shortCode : "Sign");
+  const markText = isVirtual
+    ? "Virtual"
+    : isMfs
+      ? "Wallet"
+      : isSavings
+        ? "Vault"
+        : isCash
+          ? "Cash"
+          : spec.mk || (p?.shortCode ? p.shortCode : "Sign");
 
   // Top-left round glyph for Wallets / Cash
   const glyphChar = isCash

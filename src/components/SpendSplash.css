@@ -5,7 +5,7 @@
   --sp-tile: #d5f45b;
   --sp-ink: #161d2b;
   --sp-word: #f2f0ea;
-  --sp-glow: rgb(213 244 91 / .14);
+  --sp-glow: rgb(213 244 91 / 0.14);
   color-scheme: dark;
 
   position: fixed;
@@ -15,7 +15,15 @@
   height: calc(100dvh + 4px);
   box-shadow: 0 0 0 4px var(--sp-bg);
   background: var(--sp-bg);
-  font-family: var(--sp-font, "Manrope Variable", "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif);
+  font-family: var(
+    --sp-font,
+    "Manrope Variable",
+    "Manrope",
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif
+  );
   -webkit-font-smoothing: antialiased;
   user-select: none;
   -webkit-user-select: none;
@@ -40,7 +48,11 @@
   content: "";
   position: absolute;
   inset: 0;
-  background: radial-gradient(circle at 50% 50%, var(--sp-glow), transparent 55%);
+  background: radial-gradient(
+    circle at 50% 50%,
+    var(--sp-glow),
+    transparent 55%
+  );
   opacity: 0;
   pointer-events: none;
 }
@@ -84,7 +96,7 @@
   display: grid;
   grid-template-columns: 0fr;
   margin-left: 0;
-  font-size: calc(var(--sp-t) * .6);
+  font-size: calc(var(--sp-t) * 0.6);
   line-height: 1.2;
 }
 
@@ -93,26 +105,30 @@
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
-  padding: .1em 0;
+  padding: 0.1em 0;
 }
 
 .sp-word b {
   display: block;
-  padding-right: .04em;
+  padding-right: 0.04em;
   font-weight: 800;
-  letter-spacing: -.03em;
+  letter-spacing: -0.03em;
   color: var(--sp-word);
   opacity: 0;
 }
 
 @keyframes sp-dot {
-  from { transform: scale(0); }
-  to { transform: scale(.16); }
+  from {
+    transform: scale(0);
+  }
+  to {
+    transform: scale(0.16);
+  }
 }
 
 @keyframes sp-grow {
   from {
-    transform: scale(.16);
+    transform: scale(0.16);
     border-radius: 50%;
   }
   to {
@@ -122,7 +138,9 @@
 }
 
 @keyframes sp-pulse {
-  50% { transform: scale(1.07); }
+  50% {
+    transform: scale(1.07);
+  }
 }
 
 @keyframes sp-draw {
@@ -139,7 +157,7 @@
 @keyframes sp-open {
   to {
     grid-template-columns: 1fr;
-    margin-left: calc(var(--sp-t) * .26);
+    margin-left: calc(var(--sp-t) * 0.26);
   }
 }
 
@@ -155,34 +173,36 @@
 }
 
 @keyframes sp-glow {
-  to { opacity: 1; }
+  to {
+    opacity: 1;
+  }
 }
 
 .sp-stage.play .sp-tile {
   animation:
-    sp-dot .3s cubic-bezier(.3, 1.5, .5, 1) both,
-    sp-grow .55s cubic-bezier(.2, .9, .25, 1.15) .38s forwards,
-    sp-pulse .4s ease-in-out 1.65s;
+    sp-dot 0.3s cubic-bezier(0.3, 1.5, 0.5, 1) both,
+    sp-grow 0.55s cubic-bezier(0.2, 0.9, 0.25, 1.15) 0.38s forwards,
+    sp-pulse 0.4s ease-in-out 1.65s;
 }
 
 .sp-stage.play .sp-shaft {
-  animation: sp-draw .42s cubic-bezier(.6, 0, .3, 1) .95s forwards;
+  animation: sp-draw 0.42s cubic-bezier(0.6, 0, 0.3, 1) 0.95s forwards;
 }
 
 .sp-stage.play .sp-head {
-  animation: sp-draw .3s cubic-bezier(.6, 0, .3, 1) 1.3s forwards;
+  animation: sp-draw 0.3s cubic-bezier(0.6, 0, 0.3, 1) 1.3s forwards;
 }
 
 .sp-stage.play .sp-word {
-  animation: sp-open .65s cubic-bezier(.65, 0, .25, 1) 1.75s forwards;
+  animation: sp-open 0.65s cubic-bezier(0.65, 0, 0.25, 1) 1.75s forwards;
 }
 
 .sp-stage.play .sp-word b {
-  animation: sp-slide .6s cubic-bezier(.2, .8, .2, 1) 1.85s both;
+  animation: sp-slide 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) 1.85s both;
 }
 
 .sp-stage.play::before {
-  animation: sp-glow 1s ease-out .4s forwards;
+  animation: sp-glow 1s ease-out 0.4s forwards;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -203,7 +223,7 @@
   }
   .sp-word {
     grid-template-columns: 1fr !important;
-    margin-left: calc(var(--sp-t) * .26) !important;
+    margin-left: calc(var(--sp-t) * 0.26) !important;
   }
   .sp-word b {
     opacity: 1 !important;

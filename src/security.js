@@ -356,7 +356,10 @@ function syncLockoutStateFromStorage() {
     const storedUntil = Number(rawUntil) || 0;
 
     // Detect if localStorage keys were manually deleted or modified while in-memory lockout is active
-    if (inMemoryPinFailCount > storedFails || inMemoryPinLockoutUntil > storedUntil) {
+    if (
+      inMemoryPinFailCount > storedFails ||
+      inMemoryPinLockoutUntil > storedUntil
+    ) {
       const sig = computeLockoutSignature(
         inMemoryPinFailCount,
         inMemoryPinLockoutUntil,
@@ -838,7 +841,7 @@ export function hasAppPin() {
   try {
     return Boolean(
       localStorage.getItem(PIN_STORAGE_KEY) &&
-        localStorage.getItem(PIN_SALT_KEY),
+      localStorage.getItem(PIN_SALT_KEY),
     );
   } catch {
     return false;
@@ -1172,18 +1175,12 @@ function clearBackgroundedAt() {
 }
 
 export function getLockTimeoutMinutes() {
-  try {
-    const val = localStorage.getItem(LOCK_TIMEOUT_KEY);
-    if (val === "0" || val === "1" || val === "5") return Number(val);
-  } catch {
-    // ignore
-  }
-  return 1; // Default: 1 minute
+  return 0; // Always lock immediately on backgrounding
 }
 
-export function setLockTimeoutMinutes(minutes) {
+export function setLockTimeoutMinutes() {
   try {
-    localStorage.setItem(LOCK_TIMEOUT_KEY, String(minutes));
+    localStorage.setItem(LOCK_TIMEOUT_KEY, "0");
   } catch {
     // ignore
   }
@@ -1201,45 +1198,18 @@ export function markActive() {
 
 export function markBackgrounded() {
   if (!hasAppPin() || !isSessionUnlocked()) return;
-  const timeoutMinutes = getLockTimeoutMinutes();
   setBackgroundedAt(Date.now());
-  if (timeoutMinutes === 0) {
-    lockRuntimeSession();
-  }
+  lockRuntimeSession();
 }
 
 export function shouldLockApp() {
   if (!hasAppPin()) return false;
   if (!isSessionUnlocked()) return true;
 
-  const timeoutMinutes = getLockTimeoutMinutes();
   const backgroundedAt = getBackgroundedAt();
-
   if (backgroundedAt != null) {
-    const elapsedMinutes = (Date.now() - backgroundedAt) / 60000;
-    if (timeoutMinutes === 0 || elapsedMinutes >= timeoutMinutes) {
-      lockRuntimeSession();
-      clearBackgroundedAt();
-      return true;
-    }
-    clearBackgroundedAt();
-    markActive();
-    return false;
-  }
-
-  if (timeoutMinutes === 0) {
-    return false;
-  }
-
-  let lastActive = 0;
-  try {
-    lastActive = Number(localStorage.getItem(LAST_ACTIVE_KEY)) || 0;
-  } catch {
-    lastActive = 0;
-  }
-  const elapsedMinutes = (Date.now() - lastActive) / 60000;
-  if (elapsedMinutes >= timeoutMinutes) {
     lockRuntimeSession();
+    clearBackgroundedAt();
     return true;
   }
 

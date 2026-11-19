@@ -87,8 +87,7 @@ export function readSupabaseAccessTokenFromStorage(nowMs = Date.now()) {
       const parsed = JSON.parse(raw);
       const sessionObj =
         parsed?.currentSession || parsed?.session || parsed || {};
-      const token =
-        sessionObj?.access_token || parsed?.access_token || "";
+      const token = sessionObj?.access_token || parsed?.access_token || "";
       const expiresAt =
         Number(sessionObj?.expires_at ?? parsed?.expires_at) || 0;
       if (
@@ -477,8 +476,7 @@ export async function listBackupCheckpoints(
     .filter(
       (item) =>
         item &&
-        ((item.userId || "local") === effectiveUser ||
-          item.userId === "local"),
+        ((item.userId || "local") === effectiveUser || item.userId === "local"),
     )
     .map(({ data: _data, ...meta }) => ({
       ...meta,
@@ -940,14 +938,16 @@ export function mergeAccountDataWithRawSnapshot(
   for (const c of primaryCards) {
     if (!c?.id || isPhantomAutoReconstructedCard(c)) continue;
     const tombstone = deletedCardTombstones[c.id];
-    const cTime = parseTimestampMs(c.updatedAt) || parseTimestampMs(c.createdAt);
+    const cTime =
+      parseTimestampMs(c.updatedAt) || parseTimestampMs(c.createdAt);
     if (tombstone?.deleted && tombstone.updatedAt >= cTime) continue;
     cardMap.set(c.id, c);
   }
   for (const c of secondaryCards) {
     if (!c?.id || isPhantomAutoReconstructedCard(c)) continue;
     const tombstone = deletedCardTombstones[c.id];
-    const cTime = parseTimestampMs(c.updatedAt) || parseTimestampMs(c.createdAt);
+    const cTime =
+      parseTimestampMs(c.updatedAt) || parseTimestampMs(c.createdAt);
     if (tombstone?.deleted && tombstone.updatedAt >= cTime) continue;
     const existing = cardMap.get(c.id);
     const exTime =
@@ -1075,8 +1075,12 @@ export function mergeAccountDataWithRawSnapshot(
     mergedBalances[id] = cleanBal;
 
     const currentBalCandidate = useRawForCard
-      ? rawCurrentBalances[id] ?? card?.currentBalance ?? normCurrentBalances[id]
-      : normCurrentBalances[id] ?? card?.currentBalance ?? rawCurrentBalances[id];
+      ? (rawCurrentBalances[id] ??
+        card?.currentBalance ??
+        normCurrentBalances[id])
+      : (normCurrentBalances[id] ??
+        card?.currentBalance ??
+        rawCurrentBalances[id]);
     if (
       currentBalCandidate !== undefined &&
       currentBalCandidate !== null &&
@@ -1299,7 +1303,9 @@ async function loadLegacyCloudData(client, userId) {
   if (transactionsResult.error) throw transactionsResult.error;
 
   const tableCards = Array.isArray(settingsResult.data?.cards)
-    ? settingsResult.data.cards.filter((c) => !isPhantomAutoReconstructedCard(c))
+    ? settingsResult.data.cards.filter(
+        (c) => !isPhantomAutoReconstructedCard(c),
+      )
     : [];
   const rawCards =
     tableCards.length > 0
@@ -1476,7 +1482,8 @@ export function sanitizeCloudPayload(data) {
   const sanitizedExpenses = Array.isArray(data.expenses)
     ? data.expenses.flatMap((exp) => {
         if (!exp || typeof exp !== "object") return [];
-        const id = typeof exp.id === "string" ? exp.id.trim().slice(0, 120) : "";
+        const id =
+          typeof exp.id === "string" ? exp.id.trim().slice(0, 120) : "";
         const date =
           typeof exp.date === "string" && isValidDateString(exp.date)
             ? exp.date
@@ -1488,7 +1495,11 @@ export function sanitizeCloudPayload(data) {
         if (!id || !date || !rawDesc) return [];
 
         let cleanAmount = null;
-        if (exp.amount !== null && exp.amount !== undefined && exp.amount !== "") {
+        if (
+          exp.amount !== null &&
+          exp.amount !== undefined &&
+          exp.amount !== ""
+        ) {
           const num = Number(exp.amount);
           if (!Number.isFinite(num) || num <= 0) return [];
           cleanAmount = roundMoney(num);
@@ -1542,7 +1553,8 @@ export function sanitizeCloudPayload(data) {
   const sanitizedRecurring = Array.isArray(data.recurringSchedules)
     ? data.recurringSchedules.flatMap((rec) => {
         if (!rec || typeof rec !== "object") return [];
-        const id = typeof rec.id === "string" ? rec.id.trim().slice(0, 120) : "";
+        const id =
+          typeof rec.id === "string" ? rec.id.trim().slice(0, 120) : "";
         const description =
           typeof rec.description === "string"
             ? rec.description.trim().slice(0, 160)
@@ -1552,7 +1564,13 @@ export function sanitizeCloudPayload(data) {
           typeof rec.nextDate === "string" && isValidDateString(rec.nextDate)
             ? rec.nextDate
             : "";
-        if (!id || !description || !Number.isFinite(numAmt) || numAmt <= 0 || !nextDate) {
+        if (
+          !id ||
+          !description ||
+          !Number.isFinite(numAmt) ||
+          numAmt <= 0 ||
+          !nextDate
+        ) {
           return [];
         }
         const category = CATEGORIES.includes(rec.category)
@@ -1594,7 +1612,9 @@ export function sanitizeCloudPayload(data) {
   if (!data.accountData || typeof data.accountData !== "object") {
     return {
       ...data,
-      ...(sanitizedExpenses !== undefined ? { expenses: sanitizedExpenses } : {}),
+      ...(sanitizedExpenses !== undefined
+        ? { expenses: sanitizedExpenses }
+        : {}),
       ...(sanitizedBudgets !== undefined ? { budgets: sanitizedBudgets } : {}),
       ...(sanitizedRecurring !== undefined
         ? { recurringSchedules: sanitizedRecurring }
@@ -1678,7 +1698,12 @@ export function sanitizeCloudPayload(data) {
   if (rawSettings && typeof rawSettings === "object") {
     const rawCards = Array.isArray(rawSettings.cards) ? rawSettings.cards : [];
     const sanitizedCards = rawCards.flatMap((c) => {
-      if (!c || typeof c !== "object" || typeof c.id !== "string" || !c.id.trim()) {
+      if (
+        !c ||
+        typeof c !== "object" ||
+        typeof c.id !== "string" ||
+        !c.id.trim()
+      ) {
         return [];
       }
       const { cvv: _cvv, ...restCard } = c;

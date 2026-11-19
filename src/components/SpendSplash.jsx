@@ -254,11 +254,7 @@ export default function SpendSplash({
   if (skip) return null;
 
   return (
-    <div
-      ref={rootRef}
-      className="sp-root"
-      style={{ "--sp-font": fontFamily }}
-    >
+    <div ref={rootRef} className="sp-root" style={{ "--sp-font": fontFamily }}>
       <main className="sp-stage" aria-label="Spend">
         <div className="sp-lockup">
           <div className="sp-tile">

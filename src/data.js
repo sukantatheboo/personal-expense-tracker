@@ -108,16 +108,15 @@ export function emptyDeletedRecords() {
 }
 
 export function normalizeDeletedRecords(value, now = Date.now()) {
-  const safeNow = Number.isFinite(Number(now)) && Number(now) > 0 ? Number(now) : Date.now();
+  const safeNow =
+    Number.isFinite(Number(now)) && Number(now) > 0 ? Number(now) : Date.now();
   const cutoff = safeNow - TOMBSTONE_MAX_AGE_MS;
 
   const cleanChanges = (changes) => {
     let entries = [];
     if (Array.isArray(changes)) {
       const uniqueIds = [
-        ...new Set(
-          changes.filter((id) => typeof id === "string" && id.trim()),
-        ),
+        ...new Set(changes.filter((id) => typeof id === "string" && id.trim())),
       ];
       entries = uniqueIds.map((id) => [
         id.trim().slice(0, 120),
@@ -136,7 +135,10 @@ export function normalizeDeletedRecords(value, now = Date.now()) {
         }
         const rawUpdatedAt = parseTimestampMs(change.updatedAt);
         // Legacy entries with updatedAt: 0 are stamped so they can age out cleanly instead of persisting forever
-        const updatedAt = rawUpdatedAt > 0 ? rawUpdatedAt : safeNow - TOMBSTONE_MAX_AGE_MS + 24 * 60 * 60 * 1000;
+        const updatedAt =
+          rawUpdatedAt > 0
+            ? rawUpdatedAt
+            : safeNow - TOMBSTONE_MAX_AGE_MS + 24 * 60 * 60 * 1000;
         if (updatedAt < cutoff) continue;
         entries.push([
           id,
@@ -383,12 +385,12 @@ export function isSavingsCard(card) {
   if (!card || typeof card !== "object") return false;
   return Boolean(
     card.category === "savings" ||
-      card.type === "savings" ||
-      card.provider === "savings" ||
-      card.id === "savings" ||
-      String(card.number || "").startsWith("SAV-") ||
-      String(card.number || "").startsWith("VAULT-") ||
-      String(card.number || "").startsWith("DPS-"),
+    card.type === "savings" ||
+    card.provider === "savings" ||
+    card.id === "savings" ||
+    String(card.number || "").startsWith("SAV-") ||
+    String(card.number || "").startsWith("VAULT-") ||
+    String(card.number || "").startsWith("DPS-"),
   );
 }
 
@@ -396,9 +398,9 @@ export function isCashCard(card) {
   if (!card || typeof card !== "object") return false;
   return Boolean(
     card.id === "cash" ||
-      card.provider === "cash" ||
-      card.category === "cash" ||
-      card.type === "cash",
+    card.provider === "cash" ||
+    card.category === "cash" ||
+    card.type === "cash",
   );
 }
 
@@ -406,12 +408,12 @@ export function isMfsCard(card) {
   if (!card || typeof card !== "object") return false;
   return Boolean(
     card.isPhone ||
-      card.category === "mfs" ||
-      card.type === "mfs" ||
-      card.network === "mfs" ||
-      ["bkash", "nagad", "rocket", "upay"].includes(
-        String(card.provider || "").toLowerCase(),
-      ),
+    card.category === "mfs" ||
+    card.type === "mfs" ||
+    card.network === "mfs" ||
+    ["bkash", "nagad", "rocket", "upay"].includes(
+      String(card.provider || "").toLowerCase(),
+    ),
   );
 }
 
@@ -439,9 +441,7 @@ export function isPhantomAutoReconstructedCard(card) {
     card.name === "Account" ||
     card.name === card.id ||
     ["bkash", "bank", "savings"].includes(card.id);
-  return (
-    hasNoCustomDetails && isDefaultPlaceholderAppearance && isAutoNamed
-  );
+  return hasNoCustomDetails && isDefaultPlaceholderAppearance && isAutoNamed;
 }
 
 export function loadExpenses(
@@ -473,8 +473,9 @@ export function loadExpenses(
           }
           if (
             item.recurringId &&
-            deletedExpenseTombstones[`recurring:${item.recurringId}:${item.date}`]
-              ?.deleted === true
+            deletedExpenseTombstones[
+              `recurring:${item.recurringId}:${item.date}`
+            ]?.deleted === true
           ) {
             return false;
           }
@@ -527,10 +528,7 @@ export function isAccountId(value, accountData = null, deletedRecords = null) {
   const trimmed = value.trim();
   if (!trimmed) return false;
   if (trimmed === "cash") return true;
-  if (
-    deletedRecords?.cards &&
-    Object.hasOwn(deletedRecords.cards, trimmed)
-  ) {
+  if (deletedRecords?.cards && Object.hasOwn(deletedRecords.cards, trimmed)) {
     return true;
   }
   if (
@@ -1209,21 +1207,24 @@ export function loadAccountData(
       let storedNumber = "";
       if (isSavings) {
         storedNumber =
-          String(card?.number || "").trim().slice(0, 32) ||
-          (rawLast4 ? `SAV-${rawLast4}` : "");
+          String(card?.number || "")
+            .trim()
+            .slice(0, 32) || (rawLast4 ? `SAV-${rawLast4}` : "");
       } else if (isCashCard(card)) {
         const cashCurr = String(card?.currency || "BDT")
           .trim()
           .toUpperCase()
           .slice(0, 8);
-        storedNumber =
-          String(card?.number || "").trim().startsWith("CASH-")
-            ? String(card.number).trim().slice(0, 32)
-            : `CASH-${cashCurr}`;
+        storedNumber = String(card?.number || "")
+          .trim()
+          .startsWith("CASH-")
+          ? String(card.number).trim().slice(0, 32)
+          : `CASH-${cashCurr}`;
       } else if (isMfs && rawNumber.length < 15) {
         storedNumber =
-          String(card?.number || "").trim().slice(0, 32) ||
-          (rawLast4 ? `01••• •••${rawLast4}` : "");
+          String(card?.number || "")
+            .trim()
+            .slice(0, 32) || (rawLast4 ? `01••• •••${rawLast4}` : "");
       } else {
         storedNumber = rawLast4 ? `•••• •••• •••• ${rawLast4}` : "";
       }
@@ -1269,7 +1270,9 @@ export function loadAccountData(
               ).slice(0, 120)
             : "",
         currency: isCashCard(card)
-          ? String(card.currency || "BDT").toUpperCase().slice(0, 8)
+          ? String(card.currency || "BDT")
+              .toUpperCase()
+              .slice(0, 8)
           : !card.currency || String(card.currency).toUpperCase() === "USD"
             ? "BDT"
             : String(card.currency).slice(0, 8),
@@ -1278,7 +1281,8 @@ export function loadAccountData(
           : isCashCard(card)
             ? "cash"
             : card.type || "credit",
-        network: isSavings || isCashCard(card) ? "none" : card.network || "visa",
+        network:
+          isSavings || isCashCard(card) ? "none" : card.network || "visa",
         ...(isSavings ? { category: "savings" } : {}),
         ...(isCashCard(card) ? { category: "cash" } : {}),
         last4: rawLast4,
@@ -1392,13 +1396,15 @@ export function loadAccountData(
             ...item,
             id: String(item.id).trim().slice(0, 120),
             ...(item.account || item.accountId
-              ? { account: String(item.account || item.accountId).trim().slice(0, 120) }
+              ? {
+                  account: String(item.account || item.accountId)
+                    .trim()
+                    .slice(0, 120),
+                }
               : {}),
             ...(item.fromAccount || item.from_account
               ? {
-                  fromAccount: String(
-                    item.fromAccount || item.from_account,
-                  )
+                  fromAccount: String(item.fromAccount || item.from_account)
                     .trim()
                     .slice(0, 120),
                 }
@@ -1477,7 +1483,9 @@ export function loadAccountData(
       openingBalances: initialBalances,
       currentBalances: computedLedger.currentBalances,
       cards: syncedCards,
-      ...(resolvedPrimaryCardId ? { primaryCardId: resolvedPrimaryCardId } : {}),
+      ...(resolvedPrimaryCardId
+        ? { primaryCardId: resolvedPrimaryCardId }
+        : {}),
       configured: settings.configured === true || syncedCards.length > 0,
       cardsConfigured:
         settings.cardsConfigured === true || syncedCards.length > 0,

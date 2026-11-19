@@ -79,8 +79,7 @@ export const CARD_PROVIDERS = [
     defaultNetwork: "mastercard",
     currency: "BDT",
     color: "#d4b062",
-    gradient:
-      "linear-gradient(135deg, #ddbd75 0%, #d3af62 52%, #c9a252 100%)",
+    gradient: "linear-gradient(135deg, #ddbd75 0%, #d3af62 52%, #c9a252 100%)",
     numberPrefix: "5134",
     numberPlaceholder: "5134 4455 6677 1234",
     isPhone: false,
@@ -108,8 +107,7 @@ export const CARD_PROVIDERS = [
     defaultNetwork: "mastercard",
     currency: "BDT",
     color: "#1b183a",
-    gradient:
-      "linear-gradient(135deg, #1d1a3e 0%, #161332 52%, #0f0d24 100%)",
+    gradient: "linear-gradient(135deg, #1d1a3e 0%, #161332 52%, #0f0d24 100%)",
     numberPrefix: "5500",
     numberPlaceholder: "5500 0011 2233 4455",
     isPhone: false,
@@ -123,8 +121,7 @@ export const CARD_PROVIDERS = [
     defaultNetwork: "visa",
     currency: "BDT",
     color: "#e6f3ef",
-    gradient:
-      "linear-gradient(135deg, #f2f9f6 0%, #eaf5f1 52%, #e2f0eb 100%)",
+    gradient: "linear-gradient(135deg, #f2f9f6 0%, #eaf5f1 52%, #e2f0eb 100%)",
     numberPrefix: "4111",
     numberPlaceholder: "4111 2233 4455 6677",
     isPhone: false,
@@ -295,8 +292,7 @@ export const CARD_PROVIDERS = [
     defaultNetwork: "visa",
     currency: "BDT",
     color: "#111114",
-    gradient:
-      "linear-gradient(135deg, #161619 0%, #111114 54%, #0b0b0d 100%)",
+    gradient: "linear-gradient(135deg, #161619 0%, #111114 54%, #0b0b0d 100%)",
     numberPrefix: "4000",
     numberPlaceholder: "4000 1234 5678 9010",
     isPhone: false,
@@ -406,7 +402,9 @@ export const CASH_CURRENCIES = [
 ];
 
 export function getCashCurrencyMeta(code) {
-  const upper = String(code || "BDT").trim().toUpperCase();
+  const upper = String(code || "BDT")
+    .trim()
+    .toUpperCase();
   return CASH_CURRENCIES.find((c) => c.code === upper) || CASH_CURRENCIES[0];
 }
 
@@ -415,7 +413,9 @@ export function resolveCardGradient(card, provider) {
     card?.provider ||
     (card?.type === "savings" || card?.category === "savings"
       ? "savings"
-      : card?.type === "cash" || card?.category === "cash" || card?.id === "cash"
+      : card?.type === "cash" ||
+          card?.category === "cash" ||
+          card?.id === "cash"
         ? "cash"
         : card?.id);
   if (provId === "cash") {

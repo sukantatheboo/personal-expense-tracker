@@ -44,16 +44,59 @@ const SAMPLE = {
   entries: 48,
   daysInMonth: 31,
   categories: [
-    { name: "Food", amount: 5200, icon: getCategoryIcon("Food"), tint: CATEGORY_TINTS.Food },
-    { name: "Transport", amount: 2300, icon: getCategoryIcon("Transport"), tint: CATEGORY_TINTS.Transport },
-    { name: "Bills", amount: 2100, icon: getCategoryIcon("Bills"), tint: CATEGORY_TINTS.Bills },
-    { name: "Shopping", amount: 1780, icon: getCategoryIcon("Shopping"), tint: CATEGORY_TINTS.Shopping },
-    { name: "Home", amount: 1400, icon: getCategoryIcon("Home"), tint: CATEGORY_TINTS.Home },
+    {
+      name: "Food",
+      amount: 5200,
+      icon: getCategoryIcon("Food"),
+      tint: CATEGORY_TINTS.Food,
+    },
+    {
+      name: "Transport",
+      amount: 2300,
+      icon: getCategoryIcon("Transport"),
+      tint: CATEGORY_TINTS.Transport,
+    },
+    {
+      name: "Bills",
+      amount: 2100,
+      icon: getCategoryIcon("Bills"),
+      tint: CATEGORY_TINTS.Bills,
+    },
+    {
+      name: "Shopping",
+      amount: 1780,
+      icon: getCategoryIcon("Shopping"),
+      tint: CATEGORY_TINTS.Shopping,
+    },
+    {
+      name: "Home",
+      amount: 1400,
+      icon: getCategoryIcon("Home"),
+      tint: CATEGORY_TINTS.Home,
+    },
   ],
   days: {
-    2: 320, 3: 540, 5: 410, 6: 260, 8: 780, 9: 350, 11: 620, 12: 290, 14: 480,
-    15: 1250, 17: 2100, 18: 380, 20: 540, 21: 660, 23: 310, 24: 890, 26: 450,
-    27: 520, 29: 760, 30: 430, 31: 140,
+    2: 320,
+    3: 540,
+    5: 410,
+    6: 260,
+    8: 780,
+    9: 350,
+    11: 620,
+    12: 290,
+    14: 480,
+    15: 1250,
+    17: 2100,
+    18: 380,
+    20: 540,
+    21: 660,
+    23: 310,
+    24: 890,
+    26: 450,
+    27: 520,
+    29: 760,
+    30: 430,
+    31: 140,
   },
 };
 
@@ -227,9 +270,7 @@ export default function MonthRecap({
   const activeData = resolvedData;
   const baseMonthId =
     activeData?.monthKey || activeData?.month || month || "October";
-  const dismissId = isPreview
-    ? `preview-${month || baseMonthId}`
-    : baseMonthId;
+  const dismissId = isPreview ? `preview-${month || baseMonthId}` : baseMonthId;
 
   const isDismissed = (id) => {
     if (!id) return false;
@@ -283,16 +324,24 @@ export default function MonthRecap({
   const pill =
     delta !== null ? (
       <>
-        <span>{delta <= 0 ? "▾" : "▴"} {Math.abs(delta)}% {delta <= 0 ? "less" : "more"} than </span>
+        <span>
+          {delta <= 0 ? "▾" : "▴"} {Math.abs(delta)}%{" "}
+          {delta <= 0 ? "less" : "more"} than{" "}
+        </span>
         <span className="mr-pill-m-full">{activeData?.prevMonth}</span>
-        <span className="mr-pill-m-short">{activeData?.prevMonthShort || activeData?.prevMonth?.slice(0, 3)}</span>
+        <span className="mr-pill-m-short">
+          {activeData?.prevMonthShort || activeData?.prevMonth?.slice(0, 3)}
+        </span>
       </>
     ) : activeData ? (
       `${activeData.entries} ${activeData.entries === 1 ? "entry" : "entries"} · ${cats.length} ${cats.length === 1 ? "category" : "categories"}`
     ) : null;
 
   const cardNum = useCountUp(activeData?.total || 0, true, 100, 900);
-  const heroNum = useCountUp(activeData?.total || 0, ready && slides[i] === "total");
+  const heroNum = useCountUp(
+    activeData?.total || 0,
+    ready && slides[i] === "total",
+  );
 
   const measure = () => {
     if (!cardRef.current) return { top: 0, left: 0, width: 0, height: 0 };
