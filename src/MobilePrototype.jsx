@@ -193,6 +193,23 @@ const TABS = [
   ["accounts", "Accounts"],
   ["plans", "Plans"],
 ];
+// Dock geometry (k = 1.25 -> 67.5px bar, 50px FAB, 20px overhang, 125px notch)
+const DOCK_K = 1.25;
+const DOCK_G = {
+  start: 50 * DOCK_K,
+  c1: 36 * DOCK_K,
+  c2x: 32.7 * DOCK_K,
+  c2y: 11.1 * DOCK_K,
+  jx: 21.4 * DOCK_K,
+  jy: 22.4 * DOCK_K,
+  r: 30.25 * DOCK_K,
+};
+const DOCK_BAR_H = 54 * DOCK_K;
+const DOCK_NOTCH_W = DOCK_G.start * 2;
+const DOCK_NOTCH_D =
+  `M0 0 C${DOCK_G.start - DOCK_G.c1} 0 ${DOCK_G.start - DOCK_G.c2x} ${DOCK_G.c2y} ${DOCK_G.start - DOCK_G.jx} ${DOCK_G.jy} ` +
+  `A${DOCK_G.r} ${DOCK_G.r} 0 0 0 ${DOCK_G.start + DOCK_G.jx} ${DOCK_G.jy} ` +
+  `C${DOCK_G.start + DOCK_G.c2x} ${DOCK_G.c2y} ${DOCK_G.start + DOCK_G.c1} 0 ${DOCK_NOTCH_W} 0 V${DOCK_BAR_H} H0 Z`;
 const SHEET_EXIT_MS = 280;
 const SHEET_REDUCED_EXIT_MS = 160;
 
@@ -1541,11 +1558,28 @@ function ExpenseRow({
   );
 }
 
-function Sheet({ onClose, children, actions, actionsClassName = "" }) {
+function Sheet({
+  onClose,
+  children,
+  actions,
+  actionsClassName = "",
+  contentRef,
+}) {
   const dragRef = useRef(null);
   const sheetRef = useRef(null);
   const overlayRef = useRef(null);
   const scrollRef = useRef(null);
+  const setScrollNode = useCallback(
+    (node) => {
+      scrollRef.current = node;
+      if (typeof contentRef === "function") {
+        contentRef(node);
+      } else if (contentRef && typeof contentRef === "object") {
+        contentRef.current = node;
+      }
+    },
+    [contentRef],
+  );
   const rAFRef = useRef(null);
   const pendingDyRef = useRef(0);
   const [detent, setDetent] = useState("default"); // "default" | "expanded"
@@ -2029,7 +2063,7 @@ function Sheet({ onClose, children, actions, actionsClassName = "" }) {
           </button>
         </div>
         <div
-          ref={scrollRef}
+          ref={setScrollNode}
           className="sheet-content"
           onPointerDown={(e) => {
             if (
@@ -8944,6 +8978,18 @@ function AddCardSheet({
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("all");
   const [selectedProvider, setSelectedProvider] = useState(CARD_PROVIDERS[0]);
+  const sheetScrollRef = useRef(null);
+  const catalogScrollTopRef = useRef(0);
+
+  useLayoutEffect(() => {
+    const scrollNode = sheetScrollRef.current;
+    if (!scrollNode) return;
+    if (step === "catalog") {
+      scrollNode.scrollTop = catalogScrollTopRef.current;
+    } else {
+      scrollNode.scrollTop = 0;
+    }
+  }, [step]);
 
   // Form State with Live Synchronization - Clean & Unfilled Initially (Use placeholders instead of pre-typed text)
   const [formData, setFormData] = useState({
@@ -9033,6 +9079,7 @@ function AddCardSheet({
       color: prov.color || "#1e293b",
       gradient: prov.gradient || "",
     });
+    catalogScrollTopRef.current = sheetScrollRef.current?.scrollTop ?? 0;
     setStep("customize");
   };
 
@@ -9212,7 +9259,7 @@ function AddCardSheet({
   };
 
   return (
-    <Sheet onClose={onClose}>
+    <Sheet onClose={onClose} contentRef={sheetScrollRef}>
       {/* ──── Step 1: Catalog ("Add New Card") ──── */}
       {step === "catalog" && (
         <div className="add-new-card-catalog">
@@ -14922,50 +14969,79 @@ export default function MobilePrototype({
       >
         {/* Surface with notch */}
         <div className="dock__surface" aria-hidden="true">
-          <div className="dock__side dock__side--left" />
-          <div className="dock__notch">
-            <svg viewBox="0 0 122 35">
-              {/* fillet r30, then a circular scoop r40 centred on the + button */}
-              <path
-                vectorEffect="non-scaling-stroke"
-                d="M-1 0H0.97A30 30 0 0 1 26.7 14.57A40 40 0 0 0 95.3 14.57A30 30 0 0 1 121.03 0H123V38H-1Z"
-              />
+          <div className="dock__surface-row">
+            <div className="dock__side dock__side--left" />
+            <svg
+              className="dock__notch-svg"
+              width={DOCK_NOTCH_W}
+              height={DOCK_BAR_H}
+              viewBox={`0 0 ${DOCK_NOTCH_W} ${DOCK_BAR_H}`}
+              aria-hidden="true"
+            >
+              <path d={DOCK_NOTCH_D} />
             </svg>
-            <div className="dock__notch-fill" />
+            <div className="dock__side dock__side--right" />
           </div>
-          <div className="dock__side dock__side--right" />
+          <div className="dock__safe-fill" />
         </div>
 
         {/* Tabs */}
         <div className="dock__tabs">
-          {TABS.map(([t, l]) => {
-            if (t === "add") {
-              return <div key={t} aria-hidden="true" />;
-            }
-            const isActive =
-              !appSettingsOpen && !profileSettingsOpen && tab === t;
-            const dockIcon = DOCK_ICONS[t];
-            return (
-              <button
-                key={t}
-                className={`tab${isActive ? " is-active" : ""}`}
-                type="button"
-                aria-current={isActive ? "page" : undefined}
-                onClick={() => nav(t)}
-              >
-                <span className="tab__icon">
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    {dockIcon
-                      ? isActive
-                        ? dockIcon.active
-                        : dockIcon.inactive
-                      : ICONS[t]}
-                  </svg>
-                </span>
-                <span className="tab__label">{l}</span>
-              </button>
-            );
-          })}
+          <div className="dock__tab-group">
+            {TABS.slice(0, 2).map(([t, l]) => {
+              const isActive =
+                !appSettingsOpen && !profileSettingsOpen && tab === t;
+              const dockIcon = DOCK_ICONS[t];
+              return (
+                <button
+                  key={t}
+                  className={`tab${isActive ? " is-active" : ""}`}
+                  type="button"
+                  aria-current={isActive ? "page" : undefined}
+                  onClick={() => nav(t)}
+                >
+                  <span className="tab__icon">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      {dockIcon
+                        ? isActive
+                          ? dockIcon.active
+                          : dockIcon.inactive
+                        : ICONS[t]}
+                    </svg>
+                  </span>
+                  <span className="tab__label">{l}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div aria-hidden="true" />
+          <div className="dock__tab-group">
+            {TABS.slice(3).map(([t, l]) => {
+              const isActive =
+                !appSettingsOpen && !profileSettingsOpen && tab === t;
+              const dockIcon = DOCK_ICONS[t];
+              return (
+                <button
+                  key={t}
+                  className={`tab${isActive ? " is-active" : ""}`}
+                  type="button"
+                  aria-current={isActive ? "page" : undefined}
+                  onClick={() => nav(t)}
+                >
+                  <span className="tab__icon">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      {dockIcon
+                        ? isActive
+                          ? dockIcon.active
+                          : dockIcon.inactive
+                        : ICONS[t]}
+                    </svg>
+                  </span>
+                  <span className="tab__label">{l}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* Center action */}

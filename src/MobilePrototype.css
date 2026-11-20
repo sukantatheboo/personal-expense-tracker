@@ -877,8 +877,8 @@ a:active,
   --collapse: 0;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --tab-bar-h: 68px;
-  --fab-overhang: 32px;
+  --tab-bar-h: 67.5px;
+  --fab-overhang: 20px;
   --bar-h: 52px;
   --header-bar-h: var(--bar-h);
   --header-base-top-pad: 12px;
@@ -4152,11 +4152,11 @@ a:active,
 }
 /* ---------- Notched Dock ---------- */
 .mobile-prototype .dock {
-  --dock-h: var(--tab-bar-h, 68px);
-  --notch-w: 122px;
-  --notch-d: 35px;
-  --fab: 56px;
-  --fab-top: calc(-1 * var(--fab-overhang, 32px));
+  --dock-h: var(--tab-bar-h, 67.5px);
+  --notch-w: 125px;
+  --dock-gap: 95px;
+  --fab: 50px;
+  --fab-top: calc(-1 * var(--fab-overhang, 20px));
   --radius: 0px;
   position: fixed;
   left: 0;
@@ -4202,63 +4202,70 @@ a:active,
     visibility 0s linear 220ms;
 }
 
-/* Surface = left block + notch + right block (stays crisp at any width) */
+/* Surface = left block + full-height notch SVG + right block + safe-area fill */
 .mobile-prototype .dock__surface {
   position: absolute;
   inset: 0 0 -2px 0;
   display: flex;
+  flex-direction: column;
   pointer-events: none;
   filter: var(--dock-surface-filter);
+}
+.mobile-prototype .dock__surface-row {
+  display: flex;
+  height: var(--dock-h);
+  flex: none;
 }
 .mobile-prototype .dock__side {
   flex: 1;
   background: var(--dock-surface);
 }
 .mobile-prototype .dock__side--left {
-  margin-right: -1px;
+  margin-right: -0.5px;
   border-top-left-radius: var(--radius);
 }
 .mobile-prototype .dock__side--right {
-  margin-left: -1px;
+  margin-left: -0.5px;
   border-top-right-radius: var(--radius);
 }
-
-.mobile-prototype .dock__notch {
-  flex: none;
-  width: var(--notch-w);
-  display: flex;
-  flex-direction: column;
-}
-/* the path overhangs 1px on each side, so no seams show next to the side blocks */
-.mobile-prototype .dock__notch svg {
+.mobile-prototype .dock__notch-svg {
   display: block;
-  width: 100%;
-  height: var(--notch-d);
+  width: var(--notch-w);
+  height: var(--dock-h);
   flex: none;
-  overflow: visible;
   fill: none;
   stroke: none;
-  stroke-width: 0;
 }
-.mobile-prototype .dock__notch path {
+.mobile-prototype .dock__notch-svg path {
   fill: var(--dock-surface);
   stroke: none;
-  vector-effect: non-scaling-stroke;
 }
-.mobile-prototype .dock__notch-fill {
+.mobile-prototype .dock__safe-fill {
   flex: 1;
-  margin: -2px -1px 0;
+  margin-top: -0.5px;
   background: var(--dock-surface);
 }
 
 /* ---------- Tabs ---------- */
 .mobile-prototype .dock__tabs {
   position: absolute;
-  inset: 0 0 6px 0;
-  padding: 2px 18px env(safe-area-inset-bottom, 0px);
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--dock-h);
+  box-sizing: border-box;
+  padding: 2px 6px 0;
   display: grid;
-  grid-template-columns: 1fr 1fr 78px 1fr 1fr;
+  grid-template-columns: 1fr var(--dock-gap) 1fr;
   align-items: center;
+  pointer-events: none;
+}
+.mobile-prototype .dock__tab-group {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  height: 100%;
+  pointer-events: auto;
 }
 
 .mobile-prototype .dock .tab {
@@ -13592,7 +13599,7 @@ html[data-platform="ios"]
   -webkit-backface-visibility: hidden;
 }
 .mobile-prototype .dock__tabs {
-  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 4px);
+  padding-bottom: 0;
 }
 .mobile-prototype:not([data-sheet-open="true"]):not([data-sheet-closing="true"])
   .dock:not([data-hidden="true"]):not([data-keyboard-open="true"]) {
