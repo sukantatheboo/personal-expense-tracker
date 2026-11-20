@@ -1700,27 +1700,43 @@ a:active,
 .mobile-prototype .hero.spend-card .row.spend-card-top-row {
   opacity: 1;
   margin-bottom: 2px;
+  flex-wrap: wrap;
+  gap: 6px 8px;
 }
 
 .mobile-prototype .spend-card-label {
-  font-size: 15px;
+  font-size: clamp(13px, 3.6vw, 15px);
   font-weight: 650;
   letter-spacing: -0.01em;
   color: var(--spend-card-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .mobile-prototype .chip.spend-card-vs-pill {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   background: var(--spend-card-pill-bg);
   color: var(--spend-card-pill-ink);
   border-radius: 999px;
-  padding: 6px 12px;
-  font-size: 12px;
+  padding: clamp(5px, 1.4vw, 6px) clamp(9px, 2.8vw, 12px);
+  font-size: clamp(11px, 3vw, 12px);
   font-weight: 750;
   letter-spacing: -0.01em;
   line-height: 1.15;
+  white-space: nowrap;
+  flex-shrink: 0;
+  max-width: 100%;
+}
+
+.mobile-prototype .spend-card-vs-amt {
+  display: inline-flex;
+  align-items: center;
+}
+
+.mobile-prototype .spend-card-vs-text {
+  white-space: nowrap;
 }
 
 .mobile-prototype .mx-hero {
@@ -1903,10 +1919,10 @@ a:active,
 }
 
 .mobile-prototype .mx-tri {
-  font-size: 12px;
+  font-size: 1em;
   font-weight: 800;
   color: var(--spend-card-pill-accent);
-  margin-right: 2px;
+  line-height: 1;
 }
 
 /* Screen-reader only */

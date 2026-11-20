@@ -2691,14 +2691,16 @@ function Home({
           <span className="spend-card-label">Spent this month</span>
           {p ? (
             <span className="chip spend-card-vs-pill">
-              <span className="mx-tri">{d > 0 ? "↑" : d < 0 ? "↓" : "•"}</span>{" "}
-              ৳
-              <Amount
-                value={amountFormatter.format(Math.abs(d))}
-                mask={3}
-                shown={shown}
-              />{" "}
-              vs last month
+              <span className="mx-tri">{d > 0 ? "↑" : d < 0 ? "↓" : "•"}</span>
+              <span className="spend-card-vs-amt">
+                ৳
+                <Amount
+                  value={amountFormatter.format(Math.abs(d))}
+                  mask={3}
+                  shown={shown}
+                />
+              </span>
+              <span className="spend-card-vs-text">vs last month</span>
             </span>
           ) : null}
         </div>
