@@ -95,18 +95,6 @@ export default function SegmentedControl({
     const dx = e.clientX - d.x0;
     const dy = e.clientY - d.y0;
 
-    // Abort cleanly if the user starts scrolling vertically
-    if (!d.moved && Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx) * 1.15) {
-      d.cancelled = true;
-      try {
-        if (rootRef.current?.hasPointerCapture?.(d.pointerId)) {
-          rootRef.current.releasePointerCapture(d.pointerId);
-        }
-      } catch {}
-      reset();
-      return;
-    }
-
     if (!d.canDrag) {
       if (Math.hypot(dx, dy) > 12) d.cancelled = true;
       return;

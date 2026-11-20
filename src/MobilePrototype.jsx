@@ -1955,6 +1955,7 @@ function Sheet({
 
     const onTouchStart = (e) => {
       if (e.touches.length !== 1 || dragRef.current?.active) return;
+      if (e.target instanceof Element && e.target.closest(".seg-ctrl")) return;
       touchStartY = e.touches[0].clientY;
       touchStartX = e.touches[0].clientX;
       initialScrollTop = scrollNode.scrollTop;

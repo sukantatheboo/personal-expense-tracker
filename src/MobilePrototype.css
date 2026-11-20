@@ -5158,6 +5158,9 @@ a:active,
   background: color-mix(in srgb, var(--ink) 2.2%, var(--card));
   overflow: hidden;
 }
+.mobile-prototype .mfs-settings-group:has(.seg--pressed) {
+  overflow: visible;
+}
 :root[data-theme="dark"] .mobile-prototype .mfs-settings-group,
 .mobile-prototype[data-theme="dark"] .mfs-settings-group {
   background: rgba(255, 255, 255, 0.03);
