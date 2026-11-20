@@ -87,6 +87,7 @@ import {
 } from "./components/AnimatedEmptyIcons.jsx";
 
 import SpendLogin from "./components/SpendLogin.jsx";
+import SegmentedControl from "./components/SegmentedControl.jsx";
 
 const MonthEndBanner = lazy(() => import("./components/MonthEndBanner.jsx"));
 
@@ -481,23 +482,16 @@ function bal(S, id) {
 }
 
 /* ───────────── small shared pieces ───────────── */
-const Seg = ({ value, options, onPick }) => (
-  <div className="seg">
-    {options.map(([x, l]) => (
-      <button
-        key={x}
-        type="button"
-        aria-pressed={value === x}
-        className={value === x ? "on" : ""}
-        onClick={() => {
-          triggerHaptic("selection");
-          onPick(x);
-        }}
-      >
-        {l}
-      </button>
-    ))}
-  </div>
+const Seg = ({ value, options, onPick, ariaLabel, glass = true, className = "", compact = false }) => (
+  <SegmentedControl
+    value={value}
+    options={options}
+    onChange={onPick}
+    ariaLabel={ariaLabel}
+    glass={glass}
+    className={className}
+    compact={compact}
+  />
 );
 
 const MonthSwitch = ({ m, onShift }) => (
@@ -6026,40 +6020,31 @@ function Plans({
         </div>
 
         <div ref={segRowRef} className="plans-header-seg-row">
-          <div
-            className="seg plans-seg"
+          <SegmentedControl
+            className="plans-seg"
             role="tablist"
-            aria-label="Plans views"
-            data-active={plan}
-            onKeyDown={handleSegKeyDown}
-          >
-            <button
-              ref={budgetTabBtnRef}
-              id="plans-tab-budget"
-              type="button"
-              role="tab"
-              aria-selected={plan === "budget"}
-              aria-controls="plans-panel-budget"
-              tabIndex={plan === "budget" ? 0 : -1}
-              className={plan === "budget" ? "on" : ""}
-              onClick={() => selectPlanTab("budget")}
-            >
-              Budget
-            </button>
-            <button
-              ref={recTabBtnRef}
-              id="plans-tab-rec"
-              type="button"
-              role="tab"
-              aria-selected={plan === "rec"}
-              aria-controls="plans-panel-rec"
-              tabIndex={plan === "rec" ? 0 : -1}
-              className={plan === "rec" ? "on" : ""}
-              onClick={() => selectPlanTab("rec")}
-            >
-              Recurring
-            </button>
-          </div>
+            ariaLabel="Plans views"
+            value={plan}
+            dataActive={plan}
+            glass={true}
+            onChange={(next) => selectPlanTab(next)}
+            options={[
+              {
+                value: "budget",
+                label: "Budget",
+                id: "plans-tab-budget",
+                ariaControls: "plans-panel-budget",
+                ref: budgetTabBtnRef,
+              },
+              {
+                value: "rec",
+                label: "Recurring",
+                id: "plans-tab-rec",
+                ariaControls: "plans-panel-rec",
+                ref: recTabBtnRef,
+              },
+            ]}
+          />
         </div>
       </header>
 
@@ -6458,6 +6443,7 @@ function AddSheet({
       </h3>
       {!iv && onSwitchToTx && (
         <Seg
+          className="sheet-mode-seg"
           value="expense"
           onPick={(mode) => {
             if (mode === "income" || mode === "transfer") {
@@ -7044,6 +7030,7 @@ function TxSheet({
     >
       <h3 id="sheet-title">Account activity</h3>
       <Seg
+        className="sheet-mode-seg"
         value={g.type}
         onPick={(v) => {
           setAmtError("");
@@ -7464,6 +7451,7 @@ function AccountTxDetailSheet({
     >
       <h3 id="sheet-title">Edit account activity</h3>
       <Seg
+        className="sheet-mode-seg"
         value={g.type}
         onPick={(v) => {
           setAmtError("");
@@ -8726,79 +8714,81 @@ function SettingsSheet({
                   </small>
                 </span>
               </div>
-              <div
-                className="mfs-theme-seg"
+              <SegmentedControl
+                className="mfs-theme-seg-frosted"
                 role="radiogroup"
-                aria-label="Appearance theme"
-              >
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={themeMode === "auto"}
-                  className={`mfs-theme-seg-btn${themeMode === "auto" ? " is-active" : ""}`}
-                  onClick={() => handlePickTheme("auto")}
-                >
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.1"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <circle cx="12" cy="12" r="9" />
-                    <path d="M12 3v18" />
-                    <path
-                      d="M12 7a5 5 0 0 1 0 10"
-                      fill="currentColor"
-                      stroke="none"
-                    />
-                  </svg>
-                  <span>Auto</span>
-                </button>
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={themeMode === "light"}
-                  className={`mfs-theme-seg-btn${themeMode === "light" ? " is-active" : ""}`}
-                  onClick={() => handlePickTheme("light")}
-                >
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.1"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <circle cx="12" cy="12" r="4.5" />
-                    <path d="M12 2.5v2.2M12 19.3v2.2M5.28 5.28l1.56 1.56M17.16 17.16l1.56 1.56M2.5 12h2.2M19.3 12h2.2M5.28 18.72l1.56-1.56M17.16 6.84l1.56-1.56" />
-                  </svg>
-                  <span>Light</span>
-                </button>
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={themeMode === "dark"}
-                  className={`mfs-theme-seg-btn${themeMode === "dark" ? " is-active" : ""}`}
-                  onClick={() => handlePickTheme("dark")}
-                >
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.1"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-                  </svg>
-                  <span>Dark</span>
-                </button>
-              </div>
+                ariaLabel="Appearance theme"
+                value={themeMode}
+                glass={true}
+                compact={true}
+                onChange={(mode) => handlePickTheme(mode)}
+                options={[
+                  [
+                    "auto",
+                    <span className="seg-item-with-icon" key="auto">
+                      <svg
+                        width="15"
+                        height="15"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.1"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        <circle cx="12" cy="12" r="9" />
+                        <path d="M12 3v18" />
+                        <path
+                          d="M12 7a5 5 0 0 1 0 10"
+                          fill="currentColor"
+                          stroke="none"
+                        />
+                      </svg>
+                      <span>Auto</span>
+                    </span>,
+                  ],
+                  [
+                    "light",
+                    <span className="seg-item-with-icon" key="light">
+                      <svg
+                        width="15"
+                        height="15"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.1"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        <circle cx="12" cy="12" r="4.5" />
+                        <path d="M12 2.5v2.2M12 19.3v2.2M5.28 5.28l1.56 1.56M17.16 17.16l1.56 1.56M2.5 12h2.2M19.3 12h2.2M5.28 18.72l1.56-1.56M17.16 6.84l1.56-1.56" />
+                      </svg>
+                      <span>Light</span>
+                    </span>,
+                  ],
+                  [
+                    "dark",
+                    <span className="seg-item-with-icon" key="dark">
+                      <svg
+                        width="15"
+                        height="15"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.1"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                      </svg>
+                      <span>Dark</span>
+                    </span>,
+                  ],
+                ]}
+              />
             </div>
 
             <button

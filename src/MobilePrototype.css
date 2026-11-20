@@ -3511,92 +3511,93 @@ a:active,
   color: var(--on);
   border-color: var(--g);
 }
-.mobile-prototype .seg {
+.mobile-prototype .seg:not(.seg-ctrl) {
   display: flex;
-  background: color-mix(in srgb, var(--ink) 5%, var(--bg));
-  border: 1px solid var(--line);
-  border-radius: 14px;
+  background: #e7e5e0;
+  border: 0;
+  box-shadow: none;
+  border-radius: 999px;
   padding: 4px;
   gap: 4px;
 }
-.mobile-prototype .sh .seg {
-  background: var(--bg);
+.mobile-prototype .sh .seg:not(.seg-ctrl) {
+  background: #e7e5e0;
 }
-.mobile-prototype .seg > * {
+.mobile-prototype .seg:not(.seg-ctrl) > * {
   flex: 1;
   text-align: center;
-  padding: 10px 4px;
-  border-radius: 11px;
+  padding: 10px 6px;
+  border-radius: 999px;
   font-size: 14px;
   font-weight: 700;
-  color: var(--mut);
-  border: 1px solid transparent;
+  color: #6b7266;
+  border: 0;
   background: none;
 }
-.mobile-prototype .seg button {
+.mobile-prototype .seg:not(.seg-ctrl) button {
   transition:
     transform 160ms cubic-bezier(0.25, 1, 0.5, 1),
     background-color 150ms ease,
     box-shadow 150ms ease,
-    border-color 150ms ease,
     color 150ms ease;
   touch-action: manipulation;
 }
-.mobile-prototype .seg button:active {
+.mobile-prototype .seg:not(.seg-ctrl) button:active {
   transform: scale(0.98);
 }
-.mobile-prototype .seg .on {
-  background: var(--card);
-  border-color: rgba(0, 0, 0, 0.05);
+.mobile-prototype .seg:not(.seg-ctrl) .on {
+  background: #ffffff;
   box-shadow:
-    0 1.5px 5px rgba(0, 0, 0, 0.08),
-    0 0.5px 1.5px rgba(0, 0, 0, 0.03);
-  color: var(--ink);
+    0 1px 2px rgba(0, 0, 0, 0.08),
+    0 3px 10px rgba(0, 0, 0, 0.08);
+  color: #1d1d1b;
   font-weight: 800;
 }
-:root[data-theme="dark"] .mobile-prototype .seg,
-.mobile-prototype[data-theme="dark"] .seg {
-  background: color-mix(in srgb, var(--card) 55%, var(--bg));
-  border-color: var(--line);
+:root[data-theme="dark"] .mobile-prototype .seg:not(.seg-ctrl),
+.mobile-prototype[data-theme="dark"] .seg:not(.seg-ctrl) {
+  background: rgba(20, 20, 18, 0.38);
+  backdrop-filter: blur(5px) saturate(1.4);
+  -webkit-backdrop-filter: blur(5px) saturate(1.4);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.32);
 }
-:root[data-theme="dark"] .mobile-prototype .sh .seg,
-.mobile-prototype[data-theme="dark"] .sh .seg {
-  background: var(--bg);
+:root[data-theme="dark"] .mobile-prototype .sh .seg:not(.seg-ctrl),
+.mobile-prototype[data-theme="dark"] .sh .seg:not(.seg-ctrl) {
+  background: rgba(20, 20, 18, 0.38);
 }
-:root[data-theme="dark"] .mobile-prototype .seg > *,
-.mobile-prototype[data-theme="dark"] .seg > * {
-  color: var(--mut);
+:root[data-theme="dark"] .mobile-prototype .seg:not(.seg-ctrl) > *,
+.mobile-prototype[data-theme="dark"] .seg:not(.seg-ctrl) > * {
+  color: #c9ccc2;
 }
-:root[data-theme="dark"] .mobile-prototype .seg .on,
-.mobile-prototype[data-theme="dark"] .seg .on {
-  background: var(--card);
-  border-color: rgba(255, 255, 255, 0.08);
+:root[data-theme="dark"] .mobile-prototype .seg:not(.seg-ctrl) .on,
+.mobile-prototype[data-theme="dark"] .seg:not(.seg-ctrl) .on {
+  background: rgba(255, 255, 255, 0.24);
   box-shadow:
-    0 2px 6px rgba(0, 0, 0, 0.4),
-    0 0.5px 1.5px rgba(255, 255, 255, 0.05);
-  color: #ffffff;
+    0 1px 2px rgba(0, 0, 0, 0.4),
+    0 3px 10px rgba(0, 0, 0, 0.3);
+  color: #f5f4f0;
 }
 @media (prefers-color-scheme: dark) {
-  .mobile-prototype:not([data-theme="light"]) .seg {
-    background: color-mix(in srgb, var(--card) 55%, var(--bg));
-    border-color: var(--line);
+  .mobile-prototype:not([data-theme="light"]) .seg:not(.seg-ctrl) {
+    background: rgba(20, 20, 18, 0.38);
+    backdrop-filter: blur(5px) saturate(1.4);
+    -webkit-backdrop-filter: blur(5px) saturate(1.4);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.32);
   }
-  .mobile-prototype:not([data-theme="light"]) .sh .seg {
-    background: var(--bg);
+  .mobile-prototype:not([data-theme="light"]) .sh .seg:not(.seg-ctrl) {
+    background: rgba(20, 20, 18, 0.38);
   }
-  .mobile-prototype:not([data-theme="light"]) .seg > * {
-    color: var(--mut);
+  .mobile-prototype:not([data-theme="light"]) .seg:not(.seg-ctrl) > * {
+    color: #c9ccc2;
   }
-  .mobile-prototype:not([data-theme="light"]) .seg .on {
-    background: var(--card);
-    border-color: rgba(255, 255, 255, 0.08);
+  .mobile-prototype:not([data-theme="light"]) .seg:not(.seg-ctrl) .on {
+    background: rgba(255, 255, 255, 0.24);
     box-shadow:
-      0 2px 6px rgba(0, 0, 0, 0.4),
-      0 0.5px 1.5px rgba(255, 255, 255, 0.05);
-    color: #ffffff;
+      0 1px 2px rgba(0, 0, 0, 0.4),
+      0 3px 10px rgba(0, 0, 0, 0.3);
+    color: #f5f4f0;
   }
 }
-.mobile-prototype .seg input {
+.mobile-prototype .seg:not(.seg-ctrl) input {
   padding: 8px 4px;
   font-size: 16px;
   color: var(--ink);
@@ -13788,28 +13789,36 @@ html[data-platform="ios"]
 }
 
 .mobile-prototype .plans-shared-header {
-  position: relative;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
   flex-shrink: 0;
   z-index: 30;
   padding: calc(var(--plans-safe-top) + 8px) 18px 12px;
-  background: var(--bg);
-  border-bottom: 1px solid transparent;
-  transition:
-    border-color 180ms ease,
-    box-shadow 180ms ease;
+  background: linear-gradient(
+    180deg,
+    var(--bg) 0%,
+    color-mix(in srgb, var(--bg) 88%, transparent) 44%,
+    transparent 100%
+  );
+  border-bottom: 0;
+  pointer-events: none;
   user-select: none;
   -webkit-user-select: none;
 }
 
-.mobile-prototype .plans-shared-header.is-scrolled {
-  border-bottom-color: color-mix(in srgb, var(--line) 88%, transparent);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+.mobile-prototype .plans-shared-header > * {
+  pointer-events: auto;
 }
 
-:root[data-theme="dark"] .mobile-prototype .plans-shared-header.is-scrolled,
-.mobile-prototype[data-theme="dark"] .plans-shared-header.is-scrolled {
-  border-bottom-color: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.28);
+.mobile-prototype .plans-shared-header.is-scrolled {
+  background: linear-gradient(
+    180deg,
+    var(--bg) 0%,
+    color-mix(in srgb, var(--bg) 78%, transparent) 42%,
+    transparent 100%
+  );
 }
 
 .mobile-prototype .plans-header-top-row {
@@ -13962,88 +13971,13 @@ html[data-platform="ios"]
   width: 100%;
 }
 
+/* Plans Segmented Control uses Frosted Glass SegmentedControl (.fseg.plans-seg) */
 .mobile-prototype .plans-seg {
-  position: relative;
   margin: 0;
-  background: color-mix(in srgb, var(--ink) 5.5%, var(--bg));
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 4px;
-  gap: 4px;
-  isolation: isolate;
 }
 
-:root[data-theme="dark"] .mobile-prototype .plans-seg,
-.mobile-prototype[data-theme="dark"] .plans-seg {
-  background: color-mix(in srgb, var(--card) 55%, var(--bg));
-  border-color: var(--line);
-}
-
-.mobile-prototype .plans-seg::before {
-  content: "";
-  position: absolute;
-  top: 4px;
-  bottom: 4px;
-  left: 4px;
-  width: calc((100% - 12px) / 2);
-  border-radius: 11px;
-  background-color: var(--card);
-  border: 1px solid rgba(0, 0, 0, 0.05);
-  box-shadow:
-    0 1.5px 5px rgba(0, 0, 0, 0.08),
-    0 0.5px 1.5px rgba(0, 0, 0, 0.03);
-  transform: translate3d(
-    calc((100% + 4px) * clamp(0, var(--plans-swipe, 0), 1)),
-    0,
-    0
-  );
-  transition: transform var(--plans-settle-ms, 280ms)
-    cubic-bezier(0.22, 1, 0.36, 1);
-  will-change: transform;
-  z-index: 0;
-  pointer-events: none;
-}
-
-.mobile-prototype .plans-screen-shell.is-swiping .plans-seg::before {
-  transition: none;
-}
-
-/* Live segmented label emphasis as the pill crosses the midpoint */
-.mobile-prototype
-  .plans-screen-shell.is-swiping[data-swipe-target="budget"]
-  #plans-tab-budget,
-.mobile-prototype
-  .plans-screen-shell.is-swiping[data-swipe-target="rec"]
-  #plans-tab-rec {
-  color: var(--ink);
-  font-weight: 800;
-}
-
-.mobile-prototype
-  .plans-screen-shell.is-swiping[data-swipe-target="budget"]
-  #plans-tab-rec,
-.mobile-prototype
-  .plans-screen-shell.is-swiping[data-swipe-target="rec"]
-  #plans-tab-budget {
-  color: var(--mut);
-  font-weight: 700;
-}
-
-:root[data-theme="dark"]
-  .mobile-prototype
-  .plans-screen-shell.is-swiping[data-swipe-target="budget"]
-  #plans-tab-budget,
-:root[data-theme="dark"]
-  .mobile-prototype
-  .plans-screen-shell.is-swiping[data-swipe-target="rec"]
-  #plans-tab-rec,
-.mobile-prototype[data-theme="dark"]
-  .plans-screen-shell.is-swiping[data-swipe-target="budget"]
-  #plans-tab-budget,
-.mobile-prototype[data-theme="dark"]
-  .plans-screen-shell.is-swiping[data-swipe-target="rec"]
-  #plans-tab-rec {
-  color: #ffffff;
+.mobile-prototype .plans-seg .fseg-opt {
+  min-height: 44px;
 }
 
 /* Two-phase staggered cross-fade so the circle icon & '+ New' pill never overlap muddily */
@@ -14084,28 +14018,6 @@ html[data-platform="ios"]
   .plans-header-chip-slot.is-visible {
   opacity: clamp(0, calc(1 - clamp(0, var(--plans-swipe, 0), 1) * 2.35), 1);
   transition: none;
-}
-
-:root[data-theme="dark"] .mobile-prototype .plans-seg::before,
-.mobile-prototype[data-theme="dark"] .plans-seg::before {
-  background-color: var(--card);
-  border-color: rgba(255, 255, 255, 0.08);
-  box-shadow:
-    0 2px 6px rgba(0, 0, 0, 0.4),
-    0 0.5px 1.5px rgba(255, 255, 255, 0.05);
-}
-
-.mobile-prototype .plans-seg button,
-.mobile-prototype .plans-seg button.on {
-  position: relative;
-  z-index: 1;
-  min-height: 44px;
-  background: transparent !important;
-  border-color: transparent !important;
-  box-shadow: none !important;
-  transition:
-    color 160ms ease,
-    transform 160ms cubic-bezier(0.25, 1, 0.5, 1);
 }
 
 /* Per-Tab Scroll Containers + Interactive Horizontal Swipe Pager */
@@ -14149,7 +14061,7 @@ html[data-platform="ios"]
   overflow-x: hidden;
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
-  padding: 0 18px;
+  padding: var(--header-expanded-h, 118px) 18px 0;
   box-sizing: border-box;
   contain: layout style;
   scrollbar-width: none;

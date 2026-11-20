@@ -1,0 +1,310 @@
+/* ==========================================================================
+   Segmented control:
+   - Light mode: clean solid #e7e5e0 pill track + crisp #ffffff thumb
+   - Dark mode: frosted glass track (blur + bright 1px glass edge) + translucent thumb
+   - Press & hold (both themes): thumb scales to 1.07 and becomes a frosted glass lens
+   Scoped with .seg.seg-ctrl so it never collides with WelcomeFlow or date .seg
+   ========================================================================== */
+
+/* ---------- tokens: light (default) ---------- */
+.mobile-prototype .seg.seg-ctrl,
+.seg.seg-ctrl {
+  --seg-pad: 4px;
+  --seg-n: 2; /* set inline by the component */
+  --seg-spring: cubic-bezier(.34, 1.32, .5, 1);
+
+  /* light mode — matches Image 1 */
+  --seg-track: #e7e5e0;
+  --seg-thumb: #ffffff;
+  --seg-ink: #1d1d1b;
+  --seg-muted: #6b7266;
+  --seg-ring: #3b6ef6;
+  --seg-thumb-shadow: 0 1px 2px rgba(0, 0, 0, .08), 0 3px 10px rgba(0, 0, 0, .08);
+  --seg-pressed-shadow: 0 1px 2px rgba(0, 0, 0, .1), 0 12px 28px rgba(0, 0, 0, .16);
+
+  /* frosted glass lens (press & hold) */
+  --seg-lens: blur(18px) saturate(1.9) brightness(1.08);
+  --seg-lens-off: blur(0px) saturate(1) brightness(1);
+  --seg-glass: rgba(255, 255, 255, .26);        /* pressed thumb fill */
+  --seg-glass-hi: rgba(255, 255, 255, .55);     /* top sheen */
+  --seg-glass-edge: rgba(255, 255, 255, .9);    /* dark-mode track hairline */
+  --seg-glass-track: rgba(255, 255, 255, .34);  /* track tint */
+  --seg-glass-muted: #6b7266;                   /* idle label in light mode */
+  --seg-thumb-glass: #ffffff;                   /* resting thumb in light mode */
+  --seg-rim-a: rgba(255, 255, 255, .95);        /* rim light, bright corners */
+  --seg-rim-b: rgba(255, 255, 255, .12);        /* rim light, faded middle */
+  --seg-glow: rgba(255, 255, 255, .45);         /* inner glow */
+
+  --seg-idle: var(--seg-muted);
+}
+
+/* ---------- tokens: dark — matches Image 2 ---------- */
+@media (prefers-color-scheme: dark) {
+  .mobile-prototype:not([data-theme="light"]) .seg.seg-ctrl,
+  :root:not([data-theme="light"]) .seg.seg-ctrl {
+    --seg-track: #2b2b28;
+    --seg-thumb: #4b4b47;
+    --seg-ink: #f5f4f0;
+    --seg-muted: #9ba097;
+    --seg-thumb-shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 3px 10px rgba(0, 0, 0, .3);
+
+    --seg-glass: rgba(255, 255, 255, .16);
+    --seg-glass-hi: rgba(255, 255, 255, .3);
+    --seg-glass-edge: rgba(255, 255, 255, .32);
+    --seg-glass-track: rgba(20, 20, 18, .38);
+    --seg-glass-muted: #c9ccc2;
+    --seg-thumb-glass: rgba(255, 255, 255, .24);
+    --seg-rim-a: rgba(255, 255, 255, .55);
+    --seg-rim-b: rgba(255, 255, 255, .05);
+    --seg-glow: rgba(255, 255, 255, .14);
+  }
+}
+:root[data-theme="dark"] .mobile-prototype .seg.seg-ctrl,
+.mobile-prototype[data-theme="dark"] .seg.seg-ctrl,
+:root[data-theme="dark"] .seg.seg-ctrl {
+  --seg-track: #2b2b28;
+  --seg-thumb: #4b4b47;
+  --seg-ink: #f5f4f0;
+  --seg-muted: #9ba097;
+  --seg-thumb-shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 3px 10px rgba(0, 0, 0, .3);
+
+  --seg-glass: rgba(255, 255, 255, .16);
+  --seg-glass-hi: rgba(255, 255, 255, .3);
+  --seg-glass-edge: rgba(255, 255, 255, .32);
+  --seg-glass-track: rgba(20, 20, 18, .38);
+  --seg-glass-muted: #c9ccc2;
+  --seg-thumb-glass: rgba(255, 255, 255, .24);
+  --seg-rim-a: rgba(255, 255, 255, .55);
+  --seg-rim-b: rgba(255, 255, 255, .05);
+  --seg-glow: rgba(255, 255, 255, .14);
+}
+
+/* ---------- track ---------- */
+.mobile-prototype .seg.seg-ctrl,
+.mobile-prototype .sh .seg.seg-ctrl,
+.seg.seg-ctrl {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(var(--seg-n), 1fr);
+  gap: 0;
+  padding: var(--seg-pad);
+  background: var(--seg-track);
+  border: 0;
+  box-shadow: none;
+  border-radius: 999px;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  overflow: visible;
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ---------- thumb ---------- */
+.mobile-prototype .seg.seg-ctrl .seg__thumb,
+.seg.seg-ctrl .seg__thumb {
+  position: absolute;
+  top: var(--seg-pad);
+  bottom: var(--seg-pad);
+  left: var(--seg-pad);
+  width: calc((100% - var(--seg-pad) * 2) / var(--seg-n));
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--seg-thumb);
+  box-shadow: var(--seg-thumb-shadow);
+  backdrop-filter: var(--seg-lens-off);
+  -webkit-backdrop-filter: var(--seg-lens-off);
+  --seg-soft: scale .3s var(--seg-spring), background-color .3s ease, box-shadow .3s ease,
+    backdrop-filter .3s ease, -webkit-backdrop-filter .3s ease;
+  transition: transform .42s var(--seg-spring), var(--seg-soft);
+  will-change: transform;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* glass layers, visible only while pressed:
+   ::before = diagonal rim light, ::after = inner glow + top sheen */
+.seg.seg-ctrl .seg__thumb::before,
+.seg.seg-ctrl .seg__thumb::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  opacity: 0;
+  transition: opacity .3s ease;
+  pointer-events: none;
+}
+.seg.seg-ctrl .seg__thumb::before {
+  padding: 1.5px;
+  background: linear-gradient(135deg, var(--seg-rim-a), var(--seg-rim-b) 38%, var(--seg-rim-b) 62%, var(--seg-rim-a));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+.seg.seg-ctrl .seg__thumb::after {
+  background: linear-gradient(180deg, var(--seg-glass-hi), transparent 50%);
+  box-shadow: inset 0 0 16px var(--seg-glow), inset 0 1px 1px var(--seg-rim-a);
+}
+
+/* ---------- options ---------- */
+.mobile-prototype .seg.seg-ctrl .seg__opt,
+.seg.seg-ctrl .seg__opt {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 13px 8px;
+  border: 0 !important;
+  border-radius: 999px;
+  background: none !important;
+  box-shadow: none !important;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 650;
+  color: var(--seg-idle);
+  transition: color .25s ease;
+  touch-action: pan-y;
+  -webkit-tap-highlight-color: transparent;
+}
+.mobile-prototype .seg.seg-ctrl.seg--compact .seg__opt,
+.seg.seg-ctrl.seg--compact .seg__opt {
+  min-height: 38px;
+  padding: 8px 8px;
+  font-size: 13px;
+}
+.mobile-prototype .seg.seg-ctrl .seg__opt:not(:disabled):active,
+.seg.seg-ctrl .seg__opt:not(:disabled):active {
+  transform: none !important;
+  filter: none !important;
+}
+.seg.seg-ctrl .seg__opt svg { flex: none; }
+.mobile-prototype .seg.seg-ctrl .seg__opt[aria-checked="true"],
+.mobile-prototype .seg.seg-ctrl .seg__opt[aria-selected="true"],
+.seg.seg-ctrl .seg__opt[aria-checked="true"],
+.seg.seg-ctrl .seg__opt[aria-selected="true"] {
+  color: var(--seg-ink);
+  font-weight: 750;
+}
+.seg.seg-ctrl .seg__opt:focus-visible { outline: 2px solid var(--seg-ring); outline-offset: -2px; }
+
+/* ---------- variant: glass track ----------
+   Light mode: clean solid #e7e5e0 track + #ffffff thumb (Image 1)
+   Dark mode: frosted glass track + translucent thumb (Image 2) */
+.mobile-prototype .seg.seg-ctrl.seg--glass,
+.mobile-prototype .sh .seg.seg-ctrl.seg--glass,
+.seg.seg-ctrl.seg--glass {
+  background: var(--seg-track);
+  --seg-idle: var(--seg-muted);
+}
+.mobile-prototype .seg.seg-ctrl.seg--glass .seg__thumb,
+.seg.seg-ctrl.seg--glass .seg__thumb {
+  background: var(--seg-thumb-glass);
+}
+
+@media (prefers-color-scheme: dark) {
+  .mobile-prototype:not([data-theme="light"]) .seg.seg-ctrl.seg--glass,
+  .mobile-prototype:not([data-theme="light"]) .sh .seg.seg-ctrl.seg--glass,
+  :root:not([data-theme="light"]) .seg.seg-ctrl.seg--glass {
+    background: none;
+    --seg-idle: var(--seg-glass-muted);
+  }
+  .mobile-prototype:not([data-theme="light"]) .seg.seg-ctrl.seg--glass::before,
+  :root:not([data-theme="light"]) .seg.seg-ctrl.seg--glass::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: var(--seg-glass-track);
+    backdrop-filter: blur(5px) saturate(1.4);
+    -webkit-backdrop-filter: blur(5px) saturate(1.4);
+    box-shadow: inset 0 0 0 1px var(--seg-glass-edge);
+    pointer-events: none;
+  }
+}
+
+:root[data-theme="dark"] .mobile-prototype .seg.seg-ctrl.seg--glass,
+:root[data-theme="dark"] .mobile-prototype .sh .seg.seg-ctrl.seg--glass,
+.mobile-prototype[data-theme="dark"] .seg.seg-ctrl.seg--glass,
+.mobile-prototype[data-theme="dark"] .sh .seg.seg-ctrl.seg--glass,
+:root[data-theme="dark"] .seg.seg-ctrl.seg--glass {
+  background: none;
+  --seg-idle: var(--seg-glass-muted);
+}
+:root[data-theme="dark"] .mobile-prototype .seg.seg-ctrl.seg--glass::before,
+.mobile-prototype[data-theme="dark"] .seg.seg-ctrl.seg--glass::before,
+:root[data-theme="dark"] .seg.seg-ctrl.seg--glass::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--seg-glass-track);
+  backdrop-filter: blur(5px) saturate(1.4);
+  -webkit-backdrop-filter: blur(5px) saturate(1.4);
+  box-shadow: inset 0 0 0 1px var(--seg-glass-edge);
+  pointer-events: none;
+}
+
+/* ---------- press and hold: thumb grows into a frosted lens ---------- */
+.mobile-prototype .seg.seg-ctrl.seg--pressed .seg__thumb,
+.seg.seg-ctrl.seg--pressed .seg__thumb {
+  scale: 1.07;
+  background: var(--seg-glass);
+  backdrop-filter: var(--seg-lens);
+  -webkit-backdrop-filter: var(--seg-lens);
+  box-shadow: var(--seg-pressed-shadow);
+}
+.seg.seg-ctrl.seg--pressed .seg__thumb::before,
+.seg.seg-ctrl.seg--pressed .seg__thumb::after { opacity: 1; }
+
+/* ---------- dragging: thumb follows the finger, labels hand off ---------- */
+.seg.seg-ctrl.seg--dragging .seg__thumb { transition: var(--seg-soft); }
+.mobile-prototype .seg.seg-ctrl.seg--dragging .seg__opt[aria-checked="true"],
+.mobile-prototype .seg.seg-ctrl.seg--dragging .seg__opt[aria-selected="true"],
+.seg.seg-ctrl.seg--dragging .seg__opt[aria-checked="true"],
+.seg.seg-ctrl.seg--dragging .seg__opt[aria-selected="true"] {
+  color: var(--seg-idle);
+}
+.mobile-prototype .seg.seg-ctrl.seg--dragging .seg__opt.seg__opt--near,
+.seg.seg-ctrl.seg--dragging .seg__opt.seg__opt--near {
+  color: var(--seg-ink);
+}
+
+/* Keep sheet mode bar cleanly in normal flow below the sheet title */
+.mobile-prototype .sheet-mode-seg {
+  position: relative;
+  margin: 6px 0 12px;
+}
+
+/* Plans horizontal stage swipe sync with .plans-seg .seg__thumb */
+.mobile-prototype .plans-screen-shell.is-swiping .plans-seg .seg__thumb {
+  transform: translateX(calc(clamp(0, var(--plans-swipe, 0), 1) * 100%)) !important;
+  transition: none !important;
+}
+.mobile-prototype
+  .plans-screen-shell.is-swiping[data-swipe-target="budget"]
+  #plans-tab-budget,
+.mobile-prototype
+  .plans-screen-shell.is-swiping[data-swipe-target="rec"]
+  #plans-tab-rec {
+  color: var(--seg-ink);
+  font-weight: 750;
+}
+.mobile-prototype
+  .plans-screen-shell.is-swiping[data-swipe-target="budget"]
+  #plans-tab-rec,
+.mobile-prototype
+  .plans-screen-shell.is-swiping[data-swipe-target="rec"]
+  #plans-tab-budget {
+  color: var(--seg-idle);
+  font-weight: 650;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .seg.seg-ctrl .seg__thumb,
+  .seg.seg-ctrl.seg--dragging .seg__thumb { transition-duration: .01s; }
+  .seg.seg-ctrl .seg__opt { transition: none; }
+}
