@@ -11202,6 +11202,7 @@ html[data-theme="dark"]
 /* Plans budget overview */
 .mobile-prototype .plans-budget-scroll,
 .mobile-prototype .plans-recurring-scroll {
+  padding-top: 4px;
   padding-bottom: 0;
 }
 
@@ -12006,9 +12007,7 @@ html[data-theme="dark"]
 
 .mobile-prototype .rec-section-header {
   position: sticky;
-  top: calc(
-    var(--header-collapsed-h, calc(env(safe-area-inset-top, 0px) + 106px)) - 1px
-  );
+  top: 0;
   z-index: 15;
   display: flex;
   align-items: center;
@@ -13789,16 +13788,11 @@ html[data-platform="ios"]
 }
 
 .mobile-prototype .plans-shared-header {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
+  position: relative;
+  flex-shrink: 0;
   z-index: 30;
   padding: calc(var(--plans-safe-top) + 8px) 18px 12px;
   background: var(--bg);
-  background: color-mix(in srgb, var(--bg) 94%, transparent);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
   border-bottom: 1px solid transparent;
   transition:
     border-color 180ms ease,
@@ -13823,10 +13817,7 @@ html[data-platform="ios"]
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  min-height: calc(
-    var(--plans-title-expanded-h) -
-      (var(--collapse, 0) * var(--plans-collapse-delta))
-  );
+  min-height: var(--plans-title-collapsed-h);
   margin-bottom: 8px;
   cursor: pointer;
 }
@@ -14158,7 +14149,7 @@ html[data-platform="ios"]
   overflow-x: hidden;
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
-  padding: var(--header-expanded-h) 18px 0;
+  padding: 0 18px;
   box-sizing: border-box;
   contain: layout style;
   scrollbar-width: none;

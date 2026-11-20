@@ -5517,14 +5517,14 @@ function Plans({
       const scrollerRect = scroller.getBoundingClientRect();
       const ringRect = ringEl.getBoundingClientRect();
       if (scrollerRect.height === 0 && ringRect.height === 0) return;
-      const headerBottom = scrollerRect.top + collapsedHeaderPx;
+      const headerBottom = scrollerRect.top;
       const isVisible = ringRect.bottom > headerBottom;
       if (ringVisibleRef.current !== isVisible) {
         ringVisibleRef.current = isVisible;
         setRingVisible(isVisible);
       }
     },
-    [plan, b, collapsedHeaderPx],
+    [plan, b],
   );
 
   // Keep --header-expanded-h and --header-collapsed-h synced with actual header geometry
@@ -5658,8 +5658,7 @@ function Plans({
         const entry = entries[0];
         if (!entry) return;
         const rootTop =
-          entry.rootBounds?.top ??
-          scroller.getBoundingClientRect().top + collapsedHeaderPx;
+          entry.rootBounds?.top ?? scroller.getBoundingClientRect().top;
         const nextVisible =
           entry.isIntersecting || entry.boundingClientRect.top >= rootTop;
         if (ringVisibleRef.current !== nextVisible) {
@@ -5669,14 +5668,14 @@ function Plans({
       },
       {
         root: scroller,
-        rootMargin: `-${collapsedHeaderPx}px 0px 0px 0px`,
+        rootMargin: "0px 0px 0px 0px",
         threshold: 0,
       },
     );
 
     observer.observe(ringEl);
     return () => observer.disconnect();
-  }, [isActive, plan, b, S.m, collapsedHeaderPx]);
+  }, [isActive, plan, b, S.m]);
 
   const scrollActiveTabToTop = useCallback(() => {
     const scroller = getActivePlanScroller(plan);
