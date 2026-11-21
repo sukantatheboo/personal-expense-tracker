@@ -13789,7 +13789,18 @@ export default function MobilePrototype({
   }, [onResetPin]);
 
   useEffect(() => {
+    const isAndroid = isAndroidPlatform();
+    const setAndroidPrivacyBlur = (active) => {
+      if (!isAndroid || typeof document === "undefined") return;
+      if (active && hasAppPin()) {
+        document.documentElement.dataset.androidPrivacyBlur = "1";
+      } else {
+        delete document.documentElement.dataset.androidPrivacyBlur;
+      }
+    };
+
     const lockOnBackground = () => {
+      setAndroidPrivacyBlur(true);
       setIsPrivacyShielded(true);
       markBackgrounded();
       if (hasAppPin()) {
@@ -13799,6 +13810,7 @@ export default function MobilePrototype({
 
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
+        setAndroidPrivacyBlur(false);
         setIsPrivacyShielded(false);
         if (shouldLockApp()) {
           setIsAppLocked(true);
@@ -13812,6 +13824,17 @@ export default function MobilePrototype({
       lockOnBackground();
     };
 
+    const handleAndroidBlur = () => {
+      // Android Chrome captures Recents snapshots on blur before visibilitychange settles
+      setAndroidPrivacyBlur(true);
+    };
+
+    const handleAndroidFocus = () => {
+      if (document.visibilityState === "visible") {
+        setAndroidPrivacyBlur(false);
+      }
+    };
+
     // Native Capacitor app lifecycle support (Android & iOS)
     let capacitorListenerHandle = null;
     const appPlugin = CapacitorApp || window.Capacitor?.Plugins?.App;
@@ -13821,6 +13844,7 @@ export default function MobilePrototype({
           "appStateChange",
           ({ isActive }) => {
             if (isActive) {
+              setAndroidPrivacyBlur(false);
               setIsPrivacyShielded(false);
               if (shouldLockApp()) {
                 setIsAppLocked(true);
@@ -13837,11 +13861,22 @@ export default function MobilePrototype({
 
     document.addEventListener("visibilitychange", handleVisibility);
     window.addEventListener("pagehide", handlePageHide);
+    if (isAndroid) {
+      window.addEventListener("blur", handleAndroidBlur);
+      window.addEventListener("focus", handleAndroidFocus);
+      window.addEventListener("pageshow", handleAndroidFocus);
+    }
 
     return () => {
+      setAndroidPrivacyBlur(false);
       capacitorListenerHandle?.then?.((h) => h?.remove?.())?.catch?.(() => {});
       document.removeEventListener("visibilitychange", handleVisibility);
       window.removeEventListener("pagehide", handlePageHide);
+      if (isAndroid) {
+        window.removeEventListener("blur", handleAndroidBlur);
+        window.removeEventListener("focus", handleAndroidFocus);
+        window.removeEventListener("pageshow", handleAndroidFocus);
+      }
     };
   }, []);
   const {
@@ -13998,8 +14033,15 @@ export default function MobilePrototype({
   }, []);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
+    const applyLaunchUrl = (rawUrl) => {
+      if (typeof window === "undefined" || !rawUrl) return;
+      let parsed;
+      try {
+        parsed = new URL(rawUrl, window.location.href);
+      } catch {
+        return;
+      }
+      const params = parsed.searchParams;
       const targetTab = params.get("tab");
       const action = params.get("action");
       let urlChanged = false;
@@ -14030,6 +14072,21 @@ export default function MobilePrototype({
       if (urlChanged) {
         const cleanUrl = window.location.pathname + window.location.hash;
         window.history.replaceState({}, "", cleanUrl);
+      }
+    };
+
+    if (typeof window !== "undefined") {
+      applyLaunchUrl(window.location.href);
+      if (
+        isAndroidPlatform() &&
+        "launchQueue" in window &&
+        typeof window.launchQueue?.setConsumer === "function"
+      ) {
+        window.launchQueue.setConsumer((launchParams) => {
+          if (launchParams?.targetURL) {
+            applyLaunchUrl(launchParams.targetURL);
+          }
+        });
       }
     }
 
@@ -14722,6 +14779,7 @@ export default function MobilePrototype({
   const backNavStateRef = useRef(null);
   const historyGuardArmedRef = useRef(false);
   backNavStateRef.current = {
+    isAppLocked,
     sheet,
     sheetClosing,
     confirmDeleteExpense,
@@ -14734,12 +14792,13 @@ export default function MobilePrototype({
   };
 
   const isNonRootLayer =
-    Boolean(sheet) ||
-    Boolean(confirmDeleteExpense) ||
-    Boolean(resetPinConfirmOpen) ||
-    Boolean(profileSettingsOpen) ||
-    Boolean(appSettingsOpen) ||
-    tab !== "home";
+    !isAppLocked &&
+    (Boolean(sheet) ||
+      Boolean(confirmDeleteExpense) ||
+      Boolean(resetPinConfirmOpen) ||
+      Boolean(profileSettingsOpen) ||
+      Boolean(appSettingsOpen) ||
+      tab !== "home");
 
   useEffect(() => {
     if (
@@ -14759,25 +14818,25 @@ export default function MobilePrototype({
         historyGuardArmedRef.current = true;
       } catch {}
     }
-  }, [isNonRootLayer, sheet?.type, profileSettingsOpen, appSettingsOpen, tab]);
+  }, [isNonRootLayer, isAppLocked, sheet?.type, profileSettingsOpen, appSettingsOpen, tab]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !isAndroidPlatform()) return undefined;
 
     const handleBackStep = () => {
       const st = backNavStateRef.current;
-      if (!st) return false;
+      if (!st || st.isAppLocked) return false;
       if (st.resetPinConfirmOpen) {
         setResetPinConfirmOpen(false);
-        return true;
+        return "resetPinConfirm";
       }
       if (document.querySelector(".sl.sl--open")) {
         window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
-        return true;
+        return "dropdown";
       }
       if (st.confirmDeleteExpense) {
         setConfirmDeleteExpense(null);
-        return true;
+        return "confirmDelete";
       }
       const innerSheetBackBtn = document.querySelector(
         ".security-sheet-back-btn, .add-card-back-btn",
@@ -14787,50 +14846,49 @@ export default function MobilePrototype({
         !innerSheetBackBtn.hasAttribute("disabled")
       ) {
         innerSheetBackBtn.click();
-        return true;
+        return "innerSheet";
       }
       if (st.sheet && !st.sheetClosing) {
         st.close();
-        return true;
+        return "sheet";
       }
       if (st.profileSettingsOpen || st.appSettingsOpen) {
         setSlideDirection("backward");
         setProfileSettingsOpen(false);
         setAppSettingsOpen(false);
         setAnimateScreen(true);
-        return true;
+        return "settings";
       }
       if (st.tab !== "home") {
         st.nav("home");
-        return true;
+        return "tab";
       }
       return false;
     };
 
     const onPopState = () => {
       historyGuardArmedRef.current = false;
+      const st = backNavStateRef.current;
       const handled = handleBackStep();
-      if (handled) {
-        window.setTimeout(() => {
-          const next = backNavStateRef.current;
-          const stillDeep =
-            Boolean(next?.sheet) ||
-            Boolean(next?.confirmDeleteExpense) ||
-            Boolean(next?.resetPinConfirmOpen) ||
-            Boolean(next?.profileSettingsOpen) ||
-            Boolean(next?.appSettingsOpen) ||
-            (next?.tab && next.tab !== "home");
-          if (stillDeep && !historyGuardArmedRef.current) {
-            try {
-              window.history.pushState(
-                { __spendBackGuard: true },
-                "",
-                window.location.href,
-              );
-              historyGuardArmedRef.current = true;
-            } catch {}
-          }
-        }, 40);
+      if (handled && st && !st.isAppLocked) {
+        // Re-arm synchronously if another non-root layer remains so rapid double-back swipes cannot race past the guard
+        const remainsDeep =
+          (handled !== "resetPinConfirm" && Boolean(st.resetPinConfirmOpen)) ||
+          (handled !== "confirmDelete" && Boolean(st.confirmDeleteExpense)) ||
+          (handled !== "sheet" && Boolean(st.sheet)) ||
+          (handled !== "settings" &&
+            (Boolean(st.profileSettingsOpen) || Boolean(st.appSettingsOpen))) ||
+          (handled !== "tab" && st.tab !== "home");
+        if (remainsDeep && !historyGuardArmedRef.current) {
+          try {
+            window.history.pushState(
+              { __spendBackGuard: true },
+              "",
+              window.location.href,
+            );
+            historyGuardArmedRef.current = true;
+          } catch {}
+        }
       }
     };
 

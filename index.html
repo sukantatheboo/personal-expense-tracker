@@ -64,6 +64,15 @@
                   : "web";
           root.dataset.platform = detectedPlatform;
           root.setAttribute("data-platform", detectedPlatform);
+          if (detectedPlatform === "android") {
+            var vp = document.querySelector('meta[name="viewport"]');
+            if (vp) {
+              vp.setAttribute(
+                "content",
+                "width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
+              );
+            }
+          }
         } catch (e) {}
       })();
     </script>

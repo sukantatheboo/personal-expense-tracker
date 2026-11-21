@@ -15,6 +15,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import "@fontsource-variable/manrope";
 import App from "./App.jsx";
+import { flushStorageWriteQueues } from "./data.js";
 
 const CURRENT_BUILD_ID =
   typeof __APP_BUILD_ID__ !== "undefined" ? __APP_BUILD_ID__ : "dev";
@@ -45,8 +46,21 @@ function isAndroidRuntime() {
 }
 
 if (typeof window !== "undefined") {
-  // Capture beforeinstallprompt on Android Chrome for WebAPK installation
+  // Capture beforeinstallprompt & request persistent storage on Android Chrome WebAPK
   if (isAndroidRuntime()) {
+    const requestAndroidPersistentStorage = async () => {
+      try {
+        if (!navigator.storage?.persist) return false;
+        const alreadyPersisted = await navigator.storage.persisted?.();
+        if (alreadyPersisted) return true;
+        return Boolean(await navigator.storage.persist());
+      } catch {
+        return false;
+      }
+    };
+    window.__spendRequestPersistentStorage = requestAndroidPersistentStorage;
+    void requestAndroidPersistentStorage();
+
     window.__spendDeferredInstallPrompt =
       window.__spendDeferredInstallPrompt || null;
 
@@ -62,6 +76,7 @@ if (typeof window !== "undefined") {
 
     window.addEventListener("appinstalled", () => {
       window.__spendDeferredInstallPrompt = null;
+      void requestAndroidPersistentStorage();
       window.dispatchEvent(
         new CustomEvent("spend:install-available", {
           detail: { available: false },
@@ -575,6 +590,9 @@ if (typeof window !== "undefined") {
     const reloadCleanly = async () => {
       if (refreshing) return;
       refreshing = true;
+      if (isAndroidRuntime()) {
+        await flushStorageWriteQueues().catch(() => {});
+      }
       await cleanupLegacyShellCaches(targetBuildId);
       await refreshCachedIndex(targetBuildId);
       window.location.reload();
@@ -625,7 +643,10 @@ if (typeof window !== "undefined") {
           latestDetectedManifest?.buildId ||
           window.__spendPendingUpdate?.buildId ||
           CURRENT_BUILD_ID;
-        cleanupLegacyShellCaches(targetBuildId)
+        Promise.resolve(
+          isAndroidRuntime() ? flushStorageWriteQueues().catch(() => {}) : null,
+        )
+          .then(() => cleanupLegacyShellCaches(targetBuildId))
           .then(() => refreshCachedIndex(targetBuildId))
           .finally(() => {
             window.location.reload();

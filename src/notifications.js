@@ -468,10 +468,11 @@ export async function sendNativeBuiltinNotification({
       ? window.location.origin
       : window.location.href;
     const iconHref = new URL(`${base}icons/icon-192.png`, originBase).href;
+    const badgeHref = new URL(`${base}icons/badge-96.png`, originBase).href;
     const options = {
       body,
       icon: iconHref,
-      badge: iconHref,
+      badge: badgeHref,
       tag: tag || `spend-${notifId}`,
       renotify: true,
       vibrate: tone === "welcome" ? [120, 60, 120, 60, 240] : [200, 100, 200],
@@ -740,15 +741,25 @@ export async function syncNativeScheduledNotifications({
     "Notification" in window &&
     window.Notification.permission === "granted"
   ) {
+    // Android Chrome kills idle Service Workers after ~30–60s, so 24h in-memory
+    // setTimeout timers never survive screen lock (closed-app WebAPK delivery is
+    // handled by Supabase Web Push in src/push.js). Cap SW timers to imminent
+    // foreground reminders on Android browsers while leaving iOS/desktop intact.
+    const isAndroidWeb =
+      !isNativePlatform() &&
+      (document.documentElement?.dataset?.platform === "android" ||
+        /Android/i.test(navigator.userAgent || ""));
+    const maxSwTimerWindowMs = isAndroidWeb ? 60 * 1000 : 24 * 60 * 60 * 1000;
+
     navigator.serviceWorker
       .getRegistration()
       .then((reg) => {
         const sw = reg?.active || navigator.serviceWorker.controller;
         if (!sw) return;
-        const upcoming24h = notifications
+        const upcoming = notifications
           .filter((n) => {
             const atMs = n.schedule?.at?.getTime?.() || 0;
-            return atMs > nowMs && atMs - nowMs <= 24 * 60 * 60 * 1000;
+            return atMs > nowMs && atMs - nowMs <= maxSwTimerWindowMs;
           })
           .map((n) => ({
             title: n.title,
@@ -760,7 +771,7 @@ export async function syncNativeScheduledNotifications({
           }));
         sw.postMessage({
           type: "SYNC_SCHEDULED_NOTIFICATIONS",
-          items: upcoming24h,
+          items: upcoming,
         });
       })
       .catch(() => {});

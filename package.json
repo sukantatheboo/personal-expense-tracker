@@ -11,9 +11,9 @@
     "build:ios": "vite build --base=./",
     "sync:ios": "npm run build:ios && cap sync ios",
     "open:ios": "npm run sync:ios && cap open ios",
-    "sync:android": "npm run build:ios && cap sync android",
+    "sync:android": "npm run build:ios && cap sync android && rm -rf android/app/src/main/assets/public/splash android/app/src/main/assets/public/.DS_Store",
     "open:android": "npm run sync:android && cap open android",
-    "sync:all": "npm run build:ios && cap sync"
+    "sync:all": "npm run build:ios && cap sync && rm -rf android/app/src/main/assets/public/splash android/app/src/main/assets/public/.DS_Store"
   },
   "dependencies": {
     "@capacitor/android": "^8.6.0",

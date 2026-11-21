@@ -10938,6 +10938,23 @@ html[data-theme="dark"]
   color: var(--g);
 }
 
+/* Android-only synchronous privacy blur for Chrome Recents when PIN lock is enabled */
+html[data-platform="android"][data-android-privacy-blur="1"] .mobile-prototype:not(.is-locked-screen) > * {
+  filter: blur(22px) saturate(0.9);
+  transition: none !important;
+}
+
+html[data-platform="android"][data-android-privacy-blur="1"] .mobile-prototype:not(.is-locked-screen)::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  background: color-mix(in srgb, var(--bg, #161d2b) 78%, transparent);
+  backdrop-filter: blur(24px) saturate(1.1);
+  -webkit-backdrop-filter: blur(24px) saturate(1.1);
+  pointer-events: none;
+}
+
 /* ───────────── Native Dark Mode Elevation, Surface & Icon Visibility System ───────────── */
 :root[data-theme="dark"] .mobile-prototype,
 .mobile-prototype[data-theme="dark"] {
@@ -14293,5 +14310,37 @@ html[data-platform="ios"]
   font-size: 13px;
   color: var(--mut);
   text-align: center;
+}
+
+/* Android 15/16 (targetSdk 36) edge-to-edge safe-area bridge:
+   Capacitor 8 SystemBars injects --safe-area-inset-* CSS variables alongside
+   env(safe-area-inset-*). Scoped strictly to Android so iOS is untouched. */
+html[data-platform="android"] .mobile-prototype {
+  --safe-top: max(
+    env(safe-area-inset-top, 0px),
+    var(--safe-area-inset-top, 0px)
+  );
+  --safe-bottom: max(
+    env(safe-area-inset-bottom, 0px),
+    var(--safe-area-inset-bottom, 0px)
+  );
+}
+
+html[data-platform="android"] .mobile-prototype .plans-screen-shell {
+  --plans-safe-top: max(
+    env(safe-area-inset-top, 0px),
+    var(--safe-area-inset-top, 0px)
+  );
+}
+
+html[data-platform="android"] .mobile-prototype .dock {
+  height: calc(var(--dock-h) + var(--safe-bottom) + 6px);
+}
+
+html[data-platform="android"] .mobile-prototype .plans-scroll-spacer {
+  height: calc(
+    var(--tab-bar-h, 68px) + var(--fab-overhang, 32px) + 24px +
+      var(--safe-bottom)
+  );
 }
 

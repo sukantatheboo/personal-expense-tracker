@@ -12,6 +12,7 @@ const STATIC_PATHS = [
   "fonts/fonts.css",
   "favicon.svg",
   "icon.svg",
+  "icons/badge-96.png",
   "icons/icon-180.png",
   "icons/icon-192.png",
   "icons/icon-512.png",
@@ -146,7 +147,7 @@ self.addEventListener("message", (event) => {
       self.registration.scope,
     ).toString();
     const badgeUrl = new URL(
-      "icons/icon-192.png",
+      "icons/badge-96.png",
       self.registration.scope,
     ).toString();
 
@@ -186,7 +187,7 @@ self.addEventListener("message", (event) => {
       self.registration.scope,
     ).toString();
     const badgeUrl = new URL(
-      "icons/icon-192.png",
+      "icons/badge-96.png",
       self.registration.scope,
     ).toString();
     const targetUrl = new URL(
@@ -388,7 +389,7 @@ self.addEventListener("push", (event) => {
     self.registration.scope,
   ).toString();
   const badgeUrl = new URL(
-    "icons/icon-192.png",
+    "icons/badge-96.png",
     self.registration.scope,
   ).toString();
 
