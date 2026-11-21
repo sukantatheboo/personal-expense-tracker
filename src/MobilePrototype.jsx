@@ -719,6 +719,7 @@ function HeroAmountField({
             ৳
           </span>
           <input
+            name="amount"
             ref={inputRef}
             className="amt-hero-input"
             type="text"
@@ -1952,10 +1953,18 @@ function Sheet({
     let touchStartX = 0;
     let initialScrollTop = 0;
     let isPulling = false;
+    let ignoreTouch = false;
 
     const onTouchStart = (e) => {
-      if (e.touches.length !== 1 || dragRef.current?.active) return;
-      if (e.target instanceof Element && e.target.closest(".seg-ctrl")) return;
+      if (e.touches.length !== 1 || dragRef.current?.active) {
+        ignoreTouch = true;
+        return;
+      }
+      if (e.target instanceof Element && e.target.closest(".seg-ctrl")) {
+        ignoreTouch = true;
+        return;
+      }
+      ignoreTouch = false;
       touchStartY = e.touches[0].clientY;
       touchStartX = e.touches[0].clientX;
       initialScrollTop = scrollNode.scrollTop;
@@ -1963,7 +1972,7 @@ function Sheet({
     };
 
     const onTouchMove = (e) => {
-      if (e.touches.length !== 1) return;
+      if (ignoreTouch || e.touches.length !== 1) return;
       if (!isPulling && dragRef.current?.active) return;
       const clientY = e.touches[0].clientY;
       const clientX = e.touches[0].clientX;
@@ -1990,6 +1999,7 @@ function Sheet({
     };
 
     const onTouchEnd = () => {
+      ignoreTouch = false;
       if (isPulling) {
         isPulling = false;
         endDrag();
@@ -3445,6 +3455,7 @@ function Activity({
           <label className="srch">
             <Icon n="s" />
             <input
+              name="activitySearch"
               ref={searchRef}
               className="activity-search-input"
               type="search"
@@ -6318,8 +6329,9 @@ function AddSheet({
   initialCategory = "",
   onAccountChange,
   onSave,
+  onSaveTx,
   onClose,
-  onSwitchToTx,
+  onLockedCardNotice,
 }) {
   const nonSavingsCards = cards.filter(
     (c) =>
@@ -6335,6 +6347,22 @@ function AddSheet({
   const primaryCard =
     spendableCards.find((c) => c.isPrimary) || spendableCards[0];
   const hasSavingsAccount = Boolean(getSavingsAccountId(cards));
+
+  const hasCashInCards = cards.some(
+    (c) =>
+      c.id === "cash" ||
+      c.provider === "cash" ||
+      c.category === "cash" ||
+      c.type === "cash",
+  );
+  const txAccountOptions = [
+    ...cards.map((c) => [c.id, c.name]),
+    ...(!hasCashInCards ? [["cash", "Cash"]] : []),
+  ];
+  const unfrozenTxFromOptions = [
+    ...cards.filter((c) => !c.frozen).map((c) => [c.id, c.name]),
+    ...(!hasCashInCards ? [["cash", "Cash"]] : []),
+  ];
 
   const resolvedInitialAcct = useMemo(() => {
     // 1. Explicit defaultAccount passed to sheet (including empty string or "cash" for Cash)
@@ -6359,6 +6387,22 @@ function AddSheet({
     return primaryCard?.id || "";
   }, [defaultAccount, preferredAccount, spendableCards, primaryCard]);
 
+  const resolvedTxFrom = (() => {
+    const candidate = resolvedInitialAcct || "cash";
+    if (txAccountOptions.some(([id]) => id === candidate)) return candidate;
+    return unfrozenTxFromOptions[0]?.[0] || txAccountOptions[0]?.[0] || "";
+  })();
+  const resolvedTxTransferFrom = unfrozenTxFromOptions.some(
+    ([id]) => id === resolvedTxFrom,
+  )
+    ? resolvedTxFrom
+    : unfrozenTxFromOptions[0]?.[0] || resolvedTxFrom;
+  const resolvedTxTo =
+    txAccountOptions.find(([id]) => id !== resolvedTxTransferFrom)?.[0] ||
+    txAccountOptions[1]?.[0] ||
+    "";
+
+  const [mode, setMode] = useState("expense"); // "expense" | "income" | "transfer"
   const [f, setF] = useState({
     amt: "",
     desc: "",
@@ -6370,15 +6414,46 @@ function AddSheet({
         : resolvedInitialAcct,
     iv: iv || "none",
   });
+  const [tx, setTx] = useState({
+    acct: resolvedTxFrom,
+    fromAccount: resolvedTxTransferFrom,
+    toAccount: resolvedTxTo,
+    note: "",
+  });
   const [amtError, setAmtError] = useState("");
   const [amtTouched, setAmtTouched] = useState(false);
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const prevNonSavingsAcctRef = useRef(resolvedInitialAcct);
   const amtInputRef = useRef(null);
   const descInputRef = useRef(null);
+  const noteInputRef = useRef(null);
   const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
+  const setTxField = (k, v) => setTx((x) => ({ ...x, [k]: v }));
   const custom = f.date !== ld() && f.date !== ago(1);
   const categorySuggestion = suggestedCategory(f.desc, expenses);
+
+  const isTxMode = mode === "income" || mode === "transfer";
+  const isTransfer = mode === "transfer";
+  const hasUnfrozenTxCard = unfrozenTxFromOptions.length > 0;
+  const fromCardIsFrozen = cards.find((c) => c.id === tx.fromAccount)?.frozen;
+  const toCardIsFrozen = cards.find((c) => c.id === tx.toAccount)?.frozen;
+  const canSwapTx =
+    txAccountOptions.length >= 2 &&
+    Boolean(tx.fromAccount) &&
+    Boolean(tx.toAccount) &&
+    tx.fromAccount !== tx.toAccount &&
+    (!hasUnfrozenTxCard || !toCardIsFrozen);
+  const txAmtNum = parseAmount(f.amt);
+  const hasValidTxAmt = Number.isFinite(txAmtNum) && txAmtNum > 0;
+  const canSaveTx =
+    hasValidTxAmt &&
+    txAccountOptions.length > 0 &&
+    (!isTransfer ||
+      (txAccountOptions.length >= 2 &&
+        tx.fromAccount !== tx.toAccount &&
+        !fromCardIsFrozen));
+  const isTransferDisabledForCardCount =
+    isTransfer && txAccountOptions.length < 2;
 
   const handleSave = () => {
     setSubmitAttempted(true);
@@ -6414,43 +6489,157 @@ function AddSheet({
     onSave({ ...f, cat: resolvedCat });
   };
 
+  const handleSaveTx = () => {
+    if (!hasValidTxAmt) {
+      setAmtError("Enter an amount greater than ৳0.");
+      triggerHaptic("warning");
+      amtInputRef.current?.focus({ preventScroll: true });
+      return;
+    }
+    if (txAccountOptions.length === 0) {
+      setAmtError("Add a card or wallet in Accounts first.");
+      triggerHaptic("warning");
+      return;
+    }
+    if (isTransfer && txAccountOptions.length < 2) {
+      setAmtError("Add at least two cards or wallets to transfer.");
+      triggerHaptic("warning");
+      return;
+    }
+    if (isTransfer && fromCardIsFrozen) {
+      setAmtError("Source card is locked. Choose an unlocked account.");
+      triggerHaptic("warning");
+      return;
+    }
+    if (isTransfer && tx.fromAccount === tx.toAccount) {
+      setAmtError("Select two different accounts for a transfer.");
+      triggerHaptic("warning");
+      return;
+    }
+    if (!canSaveTx) {
+      setAmtError("Enter a valid amount greater than ৳0.");
+      triggerHaptic("warning");
+      return;
+    }
+    setAmtError("");
+    triggerHaptic("selection");
+    onSaveTx?.({
+      type: mode,
+      amt: f.amt,
+      acct: tx.acct,
+      dir: "up",
+      note: tx.note,
+      date: f.date,
+      fromAccount: tx.fromAccount,
+      toAccount: tx.toAccount,
+    });
+  };
+
+  const handleSwapTransferAccounts = () => {
+    if (!canSwapTx) {
+      triggerHaptic("warning");
+      return;
+    }
+    triggerHaptic("selection");
+    setTx((current) => ({
+      ...current,
+      fromAccount: current.toAccount,
+      toAccount: current.fromAccount,
+    }));
+  };
+
+  const handleModePick = (nextMode) => {
+    setAmtError("");
+    if (nextMode === "transfer" && !hasUnfrozenTxCard) {
+      const lockedCard =
+        cards.find((c) => c.id === (f.acct || defaultAccount)) || cards[0];
+      triggerHaptic("warning");
+      onLockedCardNotice?.(lockedCard?.name);
+      return;
+    }
+    if (nextMode === "transfer") {
+      setTx((current) => {
+        const candidateFrom = current.fromAccount || current.acct;
+        const isCandidateFrozen = Boolean(
+          cards.find((c) => c.id === candidateFrom)?.frozen,
+        );
+        const nextFrom =
+          !isCandidateFrozen && candidateFrom
+            ? candidateFrom
+            : unfrozenTxFromOptions[0]?.[0] || candidateFrom;
+        const nextTo =
+          current.toAccount && current.toAccount !== nextFrom
+            ? current.toAccount
+            : txAccountOptions.find(([id]) => id !== nextFrom)?.[0] || "";
+        return {
+          ...current,
+          fromAccount: nextFrom,
+          toAccount: nextTo,
+        };
+      });
+    }
+    setMode(nextMode);
+  };
+
   return (
     <Sheet
       onClose={onClose}
       actions={
-        <button
-          type="button"
-          aria-pressed={false}
-          className="btn"
-          onClick={() => {
-            triggerHaptic("selection");
-            handleSave();
-          }}
-        >
-          {f.cat === "Savings" && hasSavingsAccount
-            ? f.iv === "none"
-              ? "Save to Savings"
-              : "Schedule savings transfer"
-            : f.iv === "none"
-              ? "Add expense"
-              : "Schedule expense"}
-        </button>
+        isTxMode ? (
+          <button
+            type="button"
+            className="btn"
+            disabled={isTransferDisabledForCardCount}
+            aria-disabled={!canSaveTx || isTransferDisabledForCardCount}
+            style={
+              isTransferDisabledForCardCount || !canSaveTx
+                ? {
+                    opacity: 0.45,
+                    pointerEvents: isTransferDisabledForCardCount
+                      ? "none"
+                      : undefined,
+                  }
+                : undefined
+            }
+            onClick={handleSaveTx}
+          >
+            {isTransfer ? "Save transfer" : "Add income"}
+          </button>
+        ) : (
+          <button
+            type="button"
+            aria-pressed={false}
+            className="btn"
+            onClick={() => {
+              triggerHaptic("selection");
+              handleSave();
+            }}
+          >
+            {f.cat === "Savings" && hasSavingsAccount
+              ? f.iv === "none"
+                ? "Save to Savings"
+                : "Schedule savings transfer"
+              : f.iv === "none"
+                ? "Add expense"
+                : "Schedule expense"}
+          </button>
+        )
       }
     >
       <h3 id="sheet-title">
-        {f.cat === "Savings" && hasSavingsAccount
-          ? "Savings transfer"
-          : "New expense"}
+        {mode === "income"
+          ? "New income"
+          : mode === "transfer"
+            ? "New transfer"
+            : f.cat === "Savings" && hasSavingsAccount
+              ? "Savings transfer"
+              : "New expense"}
       </h3>
-      {!iv && onSwitchToTx && (
+      {(!iv || iv === "none") && onSaveTx && (
         <Seg
           className="sheet-mode-seg"
-          value="expense"
-          onPick={(mode) => {
-            if (mode === "income" || mode === "transfer") {
-              onSwitchToTx(mode, f.acct || primaryCard?.id || cards[0]?.id);
-            }
-          }}
+          value={mode}
+          onPick={handleModePick}
           options={[
             ["expense", "Expense"],
             [
@@ -6482,17 +6671,25 @@ function AddSheet({
         placeholder="0"
         enterKeyHint="done"
         ariaLabel={
-          f.cat === "Savings" ? "Savings transfer amount" : "Expense amount"
+          mode === "income"
+            ? "Income amount in taka"
+            : mode === "transfer"
+              ? "Transfer amount in taka"
+              : f.cat === "Savings"
+                ? "Savings transfer amount"
+                : "Expense amount"
         }
         hasError={
           Boolean(amtError) ||
-          ((amtTouched || submitAttempted) &&
+          (!isTxMode &&
+            (amtTouched || submitAttempted) &&
             f.iv !== "none" &&
             !parseAmount(f.amt))
         }
         errorMessage={
           amtError ||
-          ((amtTouched || submitAttempted) &&
+          (!isTxMode &&
+          (amtTouched || submitAttempted) &&
           f.iv !== "none" &&
           !parseAmount(f.amt)
             ? f.cat === "Savings"
@@ -6500,8 +6697,155 @@ function AddSheet({
               : "Recurring expenses need an amount."
             : "")
         }
-        onEnter={() => descInputRef.current?.focus()}
+        onEnter={() =>
+          isTxMode
+            ? noteInputRef.current?.focus()
+            : descInputRef.current?.focus()
+        }
       />
+      {isTxMode ? (
+        <>
+          {isTransfer && txAccountOptions.length < 2 && (
+            <p className="hint">
+              Add at least two cards or wallets to transfer between accounts.
+            </p>
+          )}
+
+          {isTransfer && txAccountOptions.length >= 2 && (
+            <>
+              <span className="lbl">From</span>
+              <TxAccountCardGrid
+                value={tx.fromAccount}
+                options={txAccountOptions}
+                cards={cards}
+                lockFrozen={hasUnfrozenTxCard}
+                ariaLabel="Transfer from account"
+                onPick={(value) => {
+                  setTx((current) => ({
+                    ...current,
+                    fromAccount: value,
+                    toAccount:
+                      current.toAccount === value
+                        ? current.fromAccount && current.fromAccount !== value
+                          ? current.fromAccount
+                          : txAccountOptions.find(([id]) => id !== value)?.[0] ||
+                            ""
+                        : current.toAccount,
+                  }));
+                }}
+              />
+
+              <div className="tx-transfer-to-header">
+                <span className="lbl">To</span>
+                <button
+                  type="button"
+                  className="tx-transfer-swap-btn"
+                  disabled={!canSwapTx}
+                  onClick={handleSwapTransferAccounts}
+                  aria-label="Swap From and To accounts"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.1"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M7 4v16m0 0-4-4m4 4 4-4" />
+                    <path d="M17 20V4m0 0-4 4m4-4 4 4" />
+                  </svg>
+                  <span>Swap</span>
+                </button>
+              </div>
+
+              <TxAccountCardGrid
+                value={tx.toAccount}
+                options={txAccountOptions}
+                cards={cards}
+                disabledAccountId={tx.fromAccount}
+                disabledReason="Sending from here"
+                ariaLabel="Transfer to account"
+                onPick={(value) => setTxField("toAccount", value)}
+              />
+            </>
+          )}
+
+          {!isTransfer && (
+            <>
+              <span className="lbl">Account</span>
+              <TxAccountCardGrid
+                value={tx.acct}
+                options={txAccountOptions}
+                cards={cards}
+                ariaLabel="Select account"
+                onPick={(v) => setTxField("acct", v)}
+              />
+            </>
+          )}
+
+          <span className="lbl">Date</span>
+          <div className="seg">
+            <button
+              type="button"
+              aria-pressed={f.date === ld()}
+              className={f.date === ld() ? "on" : ""}
+              onClick={() => {
+                triggerHaptic("selection");
+                set("date", ld());
+              }}
+            >
+              Today
+            </button>
+            <button
+              type="button"
+              aria-pressed={f.date === ago(1)}
+              className={f.date === ago(1) ? "on" : ""}
+              onClick={() => {
+                triggerHaptic("selection");
+                set("date", ago(1));
+              }}
+            >
+              Yesterday
+            </button>
+            <input
+              name="transactionDate"
+              type="date"
+              className={custom ? "on" : ""}
+              aria-label="Transaction date"
+              value={f.date}
+              onChange={(e) => {
+                if (e.target.value) set("date", e.target.value);
+              }}
+            />
+          </div>
+
+          <span className="lbl">Note (optional)</span>
+          <input
+            name="transactionNote"
+            ref={noteInputRef}
+            className="in"
+            maxLength={80}
+            aria-label="Transaction note"
+            autoCapitalize="sentences"
+            enterKeyHint="done"
+            placeholder={
+              mode === "income" ? "e.g. Salary, cash in" : "Optional note"
+            }
+            value={tx.note}
+            onChange={(e) => setTxField("note", e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                e.currentTarget.blur();
+                if (canSaveTx) handleSaveTx();
+              }
+            }}
+          />
+        </>
+      ) : (
+        <>
       {(f.iv === "none" ||
         ((amtTouched || submitAttempted) &&
           !amtError &&
@@ -6519,6 +6863,7 @@ function AddSheet({
 
       <span className="lbl">What was it for?</span>
       <input
+        name="expenseDescription"
         ref={descInputRef}
         className="in"
         maxLength={80}
@@ -6661,6 +7006,7 @@ function AddSheet({
           Yesterday
         </button>
         <input
+          name="expenseDate"
           type="date"
           className={custom ? "on" : ""}
           aria-label="Expense date"
@@ -6709,6 +7055,8 @@ function AddSheet({
           ["monthly", "Monthly"],
         ]}
       />
+        </>
+      )}
     </Sheet>
   );
 }
@@ -7233,6 +7581,7 @@ function TxSheet({
           Yesterday
         </button>
         <input
+          name="txDate"
           type="date"
           className={customDate ? "on" : ""}
           aria-label="Transaction date"
@@ -7247,6 +7596,7 @@ function TxSheet({
         <>
           <span className="lbl">Reason (optional)</span>
           <select
+            name="adjustmentReason"
             ref={reasonSelectRef}
             className="in"
             aria-label="Adjustment reason (optional)"
@@ -7263,6 +7613,7 @@ function TxSheet({
         <>
           <span className="lbl">Note (optional)</span>
           <input
+            name="txNote"
             ref={noteInputRef}
             className="in"
             maxLength={80}
@@ -7641,6 +7992,7 @@ function AccountTxDetailSheet({
           Yesterday
         </button>
         <input
+          name="editTxDate"
           type="date"
           className={customDate ? "on" : ""}
           aria-label="Transaction date"
@@ -7655,6 +8007,7 @@ function AccountTxDetailSheet({
         <>
           <span className="lbl">Reason (optional)</span>
           <select
+            name="editAdjustmentReason"
             ref={reasonSelectRef}
             className="in"
             aria-label="Adjustment reason (optional)"
@@ -7675,6 +8028,7 @@ function AccountTxDetailSheet({
         <>
           <span className="lbl">Note (optional)</span>
           <input
+            name="editTxNote"
             ref={noteInputRef}
             className="in"
             maxLength={80}
@@ -7843,6 +8197,7 @@ function DetailSheet({
       />
       <span className="lbl">What was it for?</span>
       <input
+        name="editExpenseDescription"
         ref={descInputRef}
         className={`in${descError ? " is-error" : ""}`}
         maxLength={80}
@@ -7934,6 +8289,7 @@ function DetailSheet({
             This recurring expense stays on its scheduled date.
           </p>
           <input
+            name="editExpenseDateDisabled"
             className="in"
             type="date"
             aria-label="Expense date"
@@ -7967,6 +8323,7 @@ function DetailSheet({
             Yesterday
           </button>
           <input
+            name="editExpenseDate"
             type="date"
             className={customDate ? "on" : ""}
             aria-label="Expense date"
@@ -8148,6 +8505,7 @@ function RecurringDetailSheet({
       />
       <span className="lbl">What was it for?</span>
       <input
+        name="recurringDescription"
         ref={descInputRef}
         className={`in${descError ? " is-error" : ""}`}
         maxLength={80}
@@ -8234,6 +8592,7 @@ function RecurringDetailSheet({
       </div>
       <span className="lbl">Next scheduled date</span>
       <input
+        name="recurringNextDate"
         className="in"
         type="date"
         aria-label="Next scheduled date"
@@ -9282,6 +9641,7 @@ function AddCardSheet({
               />
             </svg>
             <input
+              name="cardProviderSearch"
               type="text"
               className="add-card-search-input"
               aria-label="Search by bank, card, or wallet"
@@ -9518,6 +9878,7 @@ function AddCardSheet({
               <div className="add-card-field">
                 <label className="add-card-input-lbl">Bank / Card Name</label>
                 <input
+                  name="cardName"
                   className="add-card-native-input"
                   type="text"
                   maxLength={30}
@@ -9573,6 +9934,7 @@ function AddCardSheet({
                   : "Card Holder Name"}
               </label>
               <input
+                name="cardHolderName"
                 className="add-card-native-input"
                 type="text"
                 maxLength={30}
@@ -9598,6 +9960,7 @@ function AddCardSheet({
                   {selectedProvider.isPhone ? "Mobile Number" : "Last 4 Digits"}
                 </label>
                 <input
+                  name="cardNumber"
                   className="add-card-native-input"
                   type="text"
                   inputMode="numeric"
@@ -9631,6 +9994,7 @@ function AddCardSheet({
                 <div className="add-card-field">
                   <label className="add-card-input-lbl">Expiry (MM/YY)</label>
                   <input
+                    name="cardExpiry"
                     className="add-card-native-input"
                     type="text"
                     inputMode="numeric"
@@ -9657,6 +10021,7 @@ function AddCardSheet({
                     : "৳"}
                 </span>
                 <input
+                  name="cardStartingBalance"
                   type="text"
                   className="add-card-native-input add-card-balance-input"
                   inputMode="decimal"
@@ -10477,6 +10842,7 @@ function CardOptionsSheet({
                 <div className="card-options-field">
                   <label>Wallet Name</label>
                   <input
+                    name="cashHolderName"
                     type="text"
                     value={formData.holderName}
                     placeholder="Cash wallet"
@@ -10610,6 +10976,7 @@ function CardOptionsSheet({
                 <div className="card-options-field">
                   <label>Card Display Name</label>
                   <input
+                    name="editCardName"
                     type="text"
                     value={formData.name}
                     placeholder="e.g. Amazon Platinum"
@@ -10628,6 +10995,7 @@ function CardOptionsSheet({
                 <div className="card-options-field">
                   <label>Cardholder Name</label>
                   <input
+                    name="editCardHolderName"
                     type="text"
                     value={formData.holderName}
                     placeholder="e.g. John Smith"
@@ -10651,6 +11019,7 @@ function CardOptionsSheet({
                     {isMfs ? "Phone / Account Number" : "Last 4 Digits"}
                   </label>
                   <input
+                    name="editCardNumber"
                     type="text"
                     inputMode={isMfs ? "tel" : "numeric"}
                     placeholder={isMfs ? "01712 •••678" : "9018"}
@@ -10669,6 +11038,7 @@ function CardOptionsSheet({
                 <div className="card-options-field">
                   <label>Expiry (MM/YY)</label>
                   <input
+                    name="editCardExpiry"
                     type="text"
                     inputMode="numeric"
                     placeholder="12/28"
@@ -10687,6 +11057,7 @@ function CardOptionsSheet({
                 <div className="card-options-field">
                   <label>Card Tag / Subtitle</label>
                   <input
+                    name="editCardSubtitle"
                     type="text"
                     value={formData.subtitle}
                     placeholder="e.g. Platinum Credit, Premium Visa"
@@ -10713,6 +11084,7 @@ function CardOptionsSheet({
                 <div className="card-options-field">
                   <label>Account / Wallet Name</label>
                   <input
+                    name="editMfsName"
                     type="text"
                     value={formData.name}
                     placeholder="e.g. bKash, Nagad"
@@ -10731,6 +11103,7 @@ function CardOptionsSheet({
                 <div className="card-options-field">
                   <label>Account Holder Name</label>
                   <input
+                    name="editMfsHolderName"
                     type="text"
                     value={formData.holderName}
                     placeholder="e.g. John Smith"
@@ -10752,6 +11125,7 @@ function CardOptionsSheet({
                 <div className="card-options-field">
                   <label>Mobile Number</label>
                   <input
+                    name="editMfsNumber"
                     type="text"
                     inputMode="numeric"
                     maxLength={11}
@@ -10770,6 +11144,7 @@ function CardOptionsSheet({
                 <div className="card-options-field">
                   <label>Account Tag / Subtitle</label>
                   <input
+                    name="editMfsSubtitle"
                     type="text"
                     value={formData.subtitle}
                     placeholder="e.g. Personal Wallet"
@@ -10796,6 +11171,7 @@ function CardOptionsSheet({
                 <div className="card-options-field">
                   <label>Vault Display Name</label>
                   <input
+                    name="editSavingsName"
                     type="text"
                     value={formData.name}
                     placeholder="e.g. Savings Vault"
@@ -10808,6 +11184,7 @@ function CardOptionsSheet({
                 <div className="card-options-field">
                   <label>Account Holder Name</label>
                   <input
+                    name="editSavingsHolderName"
                     type="text"
                     value={formData.holderName}
                     placeholder="e.g. Personal Savings"
@@ -10823,6 +11200,7 @@ function CardOptionsSheet({
                 <div className="card-options-field">
                   <label>Vault Account Number / ID</label>
                   <input
+                    name="editSavingsNumber"
                     type="text"
                     value={formData.number}
                     placeholder="SAV-4710"
@@ -10841,6 +11219,7 @@ function CardOptionsSheet({
                 <div className="card-options-field">
                   <label>Tag / Subtitle</label>
                   <input
+                    name="editSavingsSubtitle"
                     type="text"
                     value={formData.subtitle}
                     placeholder="e.g. Personal Savings"
@@ -10892,6 +11271,7 @@ function CardOptionsSheet({
                   {isCash ? getCashCurrencyMeta(formData.currency).symbol : "৳"}
                 </span>
                 <input
+                  name="editOpeningBalance"
                   type="text"
                   className="add-card-native-input add-card-balance-input"
                   inputMode="decimal"
@@ -10947,6 +11327,7 @@ function CardOptionsSheet({
             </div>
             <div className="cash-sync-input-row">
               <input
+                name="exactCashBalance"
                 type="text"
                 inputMode="decimal"
                 aria-label="Exact cash on hand"
@@ -11181,6 +11562,7 @@ function ProfileSettingsPage({
   return (
     <div className="mfs-profile-page">
       <input
+        name="profilePhotoFile"
         ref={fileInputRef}
         type="file"
         accept="image/*"
@@ -11609,6 +11991,7 @@ function AppSettingsPage({
             </span>
             <div className="mfs-time-pill-wrap">
               <input
+                name="dailyReminderTime"
                 className="in settings-time-input mfs-time-pill"
                 type="time"
                 aria-label="Daily reminder time"
@@ -12312,6 +12695,7 @@ function PasscodeInputField({
       onClick={() => inputRef.current?.focus({ preventScroll: true })}
     >
       <input
+        name="appPin"
         ref={inputRef}
         type="password"
         inputMode="numeric"
@@ -15205,9 +15589,12 @@ export default function MobilePrototype({
           initialCategory={sheet.cat || ""}
           onAccountChange={handlePreferredAccountChange}
           onSave={saveExpense}
+          onSaveTx={saveTransaction}
           onClose={close}
-          onSwitchToTx={(txType, acct) =>
-            openSheet({ type: "tx", t: txType, acct: acct || undefined })
+          onLockedCardNotice={(cardName) =>
+            toast(
+              `${cardName || "This card"} is locked. Unlock it in Card Options first.`,
+            )
           }
         />
       )}

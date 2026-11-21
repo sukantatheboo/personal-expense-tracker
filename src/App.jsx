@@ -6449,6 +6449,7 @@ export default function App() {
         )}
       <input
         ref={backupFileInputRef}
+        name="backupFile"
         type="file"
         accept=".json,application/json"
         aria-label="Restore backup file"

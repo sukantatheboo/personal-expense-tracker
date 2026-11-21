@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { triggerHaptic } from "../haptics.js";
 import "./segmented-control.css";
 
@@ -60,6 +60,20 @@ export default function SegmentedControl({
     setNear(null);
   };
 
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return undefined;
+    const blockVerticalScroll = (e) => {
+      if (dragRef.current?.canDrag && e.cancelable) {
+        e.preventDefault();
+      }
+    };
+    root.addEventListener("touchmove", blockVerticalScroll, { passive: false });
+    return () => {
+      root.removeEventListener("touchmove", blockVerticalScroll);
+    };
+  }, []);
+
   const onPointerDown = (e) => {
     if (e.button) return;
     const root = rootRef.current;
@@ -91,7 +105,7 @@ export default function SegmentedControl({
 
   const onPointerMove = (e) => {
     const d = dragRef.current;
-    if (!d || d.cancelled) return;
+    if (!d || d.cancelled || e.pointerId !== d.pointerId) return;
     const dx = e.clientX - d.x0;
     const dy = e.clientY - d.y0;
 
@@ -109,7 +123,7 @@ export default function SegmentedControl({
 
   const onPointerUp = (e) => {
     const d = dragRef.current;
-    if (!d) return;
+    if (!d || e.pointerId !== d.pointerId) return;
     try {
       if (rootRef.current?.hasPointerCapture?.(d.pointerId)) {
         rootRef.current.releasePointerCapture(d.pointerId);
@@ -166,6 +180,7 @@ export default function SegmentedControl({
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={reset}
+      onLostPointerCapture={reset}
       onPointerLeave={() => {
         if (dragRef.current && !dragRef.current.canDrag) reset();
       }}

@@ -102,7 +102,7 @@
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
   overflow: visible;
-  touch-action: pan-y;
+  touch-action: none;
   user-select: none;
   -webkit-user-select: none;
 }
@@ -175,7 +175,7 @@
   font-weight: 650;
   color: var(--seg-idle);
   transition: color .25s ease;
-  touch-action: pan-y;
+  touch-action: none;
   -webkit-tap-highlight-color: transparent;
 }
 .mobile-prototype .seg.seg-ctrl.seg--compact .seg__opt,
