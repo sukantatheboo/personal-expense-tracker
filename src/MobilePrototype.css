@@ -10824,18 +10824,19 @@ html[data-theme="dark"]
 
 /* ───────────── Native UX Upgrade 4: Elastic Pull-to-Refresh Indicator ───────────── */
 .mobile-prototype .ptr-container {
+  position: absolute;
+  top: var(--safe-top, 0px);
+  left: 0;
+  right: 0;
+  height: 56px;
+  z-index: 40;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   width: 100%;
-  overflow: hidden;
+  overflow: visible;
   pointer-events: none;
-  transition: height 220ms cubic-bezier(0.2, 0.9, 0.28, 1);
-}
-
-.mobile-prototype .ptr-container.is-pulling,
-.mobile-prototype .ptr-container.is-ready {
-  transition: none;
+  contain: layout style;
 }
 
 .mobile-prototype .ptr-pill {
@@ -10850,6 +10851,17 @@ html[data-theme="dark"]
   color: var(--ink);
   font-size: 12px;
   font-weight: 750;
+  transform: translate3d(0, -44px, 0) scale(0.72);
+  opacity: 0;
+  will-change: transform, opacity;
+  contain: layout style;
+}
+
+.mobile-prototype[data-platform="android"] .ptr-pill,
+.mobile-prototype[data-platform="web"] .ptr-pill {
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.14),
+    0 2px 6px rgba(0, 0, 0, 0.08);
 }
 
 .mobile-prototype .ptr-spinner {
@@ -10858,6 +10870,7 @@ html[data-theme="dark"]
   stroke: var(--g);
   stroke-width: 2.3;
   fill: none;
+  will-change: transform;
 }
 
 .mobile-prototype .ptr-container.is-refreshing .ptr-spinner {

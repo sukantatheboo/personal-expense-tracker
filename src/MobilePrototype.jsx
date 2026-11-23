@@ -13541,11 +13541,23 @@ export default function MobilePrototype({
   const [isAppLocked, setIsAppLocked] = useState(() => shouldLockApp());
   const [resetPinConfirmOpen, setResetPinConfirmOpen] = useState(false);
   const [isPrivacyShielded, setIsPrivacyShielded] = useState(false);
-  const [ptrState, setPtrState] = useState({ pullY: 0, phase: "idle" });
+  const ptrPhaseRef = useRef("idle");
+  const ptrPullYRef = useRef(0);
+  const ptrVelocityRef = useRef(0);
+  const ptrRafRef = useRef(0);
+  const ptrSpringRafRef = useRef(0);
+  const ptrFinishTimerRef = useRef(0);
+  const ptrContainerRef = useRef(null);
+  const ptrPillRef = useRef(null);
+  const ptrSpinnerRef = useRef(null);
+  const ptrLabelRef = useRef(null);
   const ptrGestureRef = useRef({
     active: false,
+    pulling: false,
     startY: 0,
     startX: 0,
+    lastY: 0,
+    lastTime: 0,
     passedThreshold: false,
   });
 
@@ -14657,6 +14669,343 @@ export default function MobilePrototype({
 
   const settingsRoute = appSettingsOpen || profileSettingsOpen;
 
+  // Native 60/120fps Pull-to-Refresh: zero React re-renders, zero root CSS-var recalc, damped rAF spring
+  // iOS: elastic header + page pull | Android & Web: Material floating pill over stationary page
+  const ptrContextRef = useRef(null);
+  ptrContextRef.current = {
+    settingsRoute,
+    sheet,
+    platform,
+    profileConnected: Boolean(profile?.connected),
+    onResumeSync,
+    getActiveScroller,
+  };
+
+  useEffect(() => {
+    if (isAppLocked) return undefined;
+    const root = mobileRootRef.current;
+    if (!root) return undefined;
+
+    const isIOSMode = () => ptrContextRef.current?.platform === "ios";
+
+    const getPageLayers = () => {
+      const headerEl = root.querySelector(":scope > .prototype-header");
+      const stageEl = root.querySelector(":scope > .prototype-tabs-stage");
+      return { headerEl, stageEl };
+    };
+
+    const clearPageLayers = () => {
+      const { headerEl, stageEl } = getPageLayers();
+      if (headerEl) {
+        headerEl.style.transform = "";
+        headerEl.style.transition = "";
+        headerEl.style.willChange = "";
+      }
+      if (stageEl) {
+        stageEl.style.transform = "";
+        stageEl.style.transition = "";
+        stageEl.style.willChange = "";
+      }
+    };
+
+    const updatePhaseDOM = (phase) => {
+      ptrPhaseRef.current = phase;
+      const container = ptrContainerRef.current;
+      if (container) {
+        container.classList.toggle("is-refreshing", phase === "refreshing");
+        container.classList.toggle("is-ready", phase === "ready");
+        if (phase === "idle") {
+          container.setAttribute("aria-hidden", "true");
+        } else {
+          container.removeAttribute("aria-hidden");
+        }
+      }
+      const label = ptrLabelRef.current;
+      if (label) {
+        const connected = Boolean(ptrContextRef.current?.profileConnected);
+        label.textContent =
+          phase === "refreshing"
+            ? connected
+              ? "Syncing…"
+              : "Refreshing…"
+            : phase === "ready"
+              ? "Release to refresh"
+              : "Pull to refresh";
+      }
+      const spinner = ptrSpinnerRef.current;
+      if (spinner && phase === "refreshing") {
+        spinner.style.transform = "";
+      }
+    };
+
+    const renderPtrFrame = (pullY, phase) => {
+      const clampedY = Math.max(0, pullY);
+      const ios = isIOSMode();
+      const pill = ptrPillRef.current;
+      const spinner = ptrSpinnerRef.current;
+
+      if (clampedY <= 0.1 && phase === "idle") {
+        if (pill) {
+          pill.style.transform = "translate3d(0, -44px, 0) scale(0.72)";
+          pill.style.opacity = "0";
+        }
+        if (spinner) spinner.style.transform = "";
+        clearPageLayers();
+        return;
+      }
+
+      const progress = Math.min(1, clampedY / 56);
+      const scale = 0.72 + progress * 0.28;
+      const opacity = Math.min(1, clampedY / 26);
+
+      if (ios) {
+        const pillY = Math.max(-28, clampedY * 0.5 - 16);
+        if (pill) {
+          pill.style.transform = `translate3d(0, ${pillY.toFixed(2)}px, 0) scale(${scale.toFixed(3)})`;
+          pill.style.opacity = opacity.toFixed(3);
+        }
+        const { headerEl, stageEl } = getPageLayers();
+        const pageTx = `translate3d(0, ${clampedY.toFixed(2)}px, 0)`;
+        if (headerEl) {
+          headerEl.style.transition = "none";
+          headerEl.style.willChange = "transform";
+          headerEl.style.transform = pageTx;
+        }
+        if (stageEl) {
+          stageEl.style.transition = "none";
+          stageEl.style.willChange = "transform";
+          stageEl.style.transform = pageTx;
+        }
+      } else {
+        // Android / Web Material 3 floating pill: page stays stationary at 120fps
+        const pillY = -36 + clampedY * 1.05;
+        if (pill) {
+          pill.style.transform = `translate3d(0, ${pillY.toFixed(2)}px, 0) scale(${scale.toFixed(3)})`;
+          pill.style.opacity = opacity.toFixed(3);
+        }
+      }
+
+      if (spinner && phase !== "refreshing") {
+        spinner.style.transform = `rotate(${(clampedY * 4.2).toFixed(1)}deg)`;
+      }
+    };
+
+    const cancelFrames = () => {
+      if (ptrRafRef.current) {
+        window.cancelAnimationFrame(ptrRafRef.current);
+        ptrRafRef.current = 0;
+      }
+      if (ptrSpringRafRef.current) {
+        window.cancelAnimationFrame(ptrSpringRafRef.current);
+        ptrSpringRafRef.current = 0;
+      }
+    };
+
+    const animateSpringTo = (targetY, targetPhase, onDone) => {
+      cancelFrames();
+      const reducedMotion =
+        window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
+      if (reducedMotion) {
+        ptrPullYRef.current = targetY;
+        ptrVelocityRef.current = 0;
+        updatePhaseDOM(targetPhase);
+        renderPtrFrame(targetY, targetPhase);
+        onDone?.();
+        return;
+      }
+
+      let y = ptrPullYRef.current;
+      let v = Math.max(-1400, Math.min(1400, ptrVelocityRef.current));
+      const stiffness = 310;
+      const damping = 28;
+      let lastTs = performance.now();
+
+      const step = (now) => {
+        const dt = Math.min(0.032, Math.max(0.001, (now - lastTs) / 1000));
+        lastTs = now;
+        const force = -stiffness * (y - targetY);
+        const damper = -damping * v;
+        v += (force + damper) * dt;
+        y += v * dt;
+
+        if (targetY === 0 && y < 0) {
+          y = 0;
+          v = 0;
+        }
+
+        ptrPullYRef.current = y;
+        ptrVelocityRef.current = v;
+        renderPtrFrame(y, targetPhase);
+
+        if (Math.abs(y - targetY) < 0.25 && Math.abs(v) < 6) {
+          ptrSpringRafRef.current = 0;
+          ptrPullYRef.current = targetY;
+          ptrVelocityRef.current = 0;
+          if (targetY === 0) updatePhaseDOM("idle");
+          renderPtrFrame(targetY, targetY === 0 ? "idle" : targetPhase);
+          onDone?.();
+          return;
+        }
+        ptrSpringRafRef.current = window.requestAnimationFrame(step);
+      };
+
+      ptrSpringRafRef.current = window.requestAnimationFrame(step);
+    };
+
+    const onTouchStart = (e) => {
+      const ctx = ptrContextRef.current;
+      if (
+        !ctx ||
+        ctx.settingsRoute ||
+        ctx.sheet ||
+        ptrPhaseRef.current === "refreshing" ||
+        e.touches.length !== 1
+      )
+        return;
+      const scroller = ctx.getActiveScroller();
+      if (!scroller || scroller.scrollTop > 1) return;
+      const target = e.target instanceof Element ? e.target : null;
+      if (
+        target?.closest?.(
+          ".dock, .ov, .sh, .cards-deck-stage, .stack, .chips, .account-picker-container",
+        )
+      )
+        return;
+      cancelFrames();
+      const y = e.touches[0].clientY;
+      ptrVelocityRef.current = 0;
+      ptrGestureRef.current = {
+        active: true,
+        pulling: false,
+        startY: y,
+        startX: e.touches[0].clientX,
+        lastY: y,
+        lastTime: performance.now(),
+        passedThreshold: false,
+      };
+    };
+
+    const onTouchMove = (e) => {
+      const g = ptrGestureRef.current;
+      const ctx = ptrContextRef.current;
+      if (!g.active || !ctx || ctx.sheet || e.touches.length !== 1) return;
+      const scroller = ctx.getActiveScroller();
+      if (!scroller || scroller.scrollTop > 1) {
+        g.active = false;
+        if (ptrPullYRef.current > 0) {
+          animateSpringTo(0, "idle");
+        }
+        return;
+      }
+      const clientY = e.touches[0].clientY;
+      const clientX = e.touches[0].clientX;
+      const dy = clientY - g.startY;
+      const dx = clientX - g.startX;
+      if (!g.pulling) {
+        if (dy > 8 && dy > Math.abs(dx) * 1.25) {
+          g.pulling = true;
+          g.lastY = clientY;
+          g.lastTime = performance.now();
+        } else if (Math.abs(dx) > 10 || dy < -4) {
+          g.active = false;
+          return;
+        } else {
+          return;
+        }
+      }
+      if (e.cancelable) e.preventDefault();
+
+      const now = performance.now();
+      const dtSec = Math.max(0.004, (now - g.lastTime) / 1000);
+      const effDy = Math.max(0, dy - 8);
+      const maxPull = isIOSMode() ? 104 : 96;
+      const damped = maxPull * (1 - Math.exp(-effDy / 155));
+      const instVel = (damped - ptrPullYRef.current) / dtSec;
+      ptrVelocityRef.current = ptrVelocityRef.current * 0.65 + instVel * 0.35;
+      g.lastY = clientY;
+      g.lastTime = now;
+
+      const ready = damped >= 56;
+      if (ready && !g.passedThreshold) {
+        g.passedThreshold = true;
+        triggerHaptic("selection");
+      } else if (!ready && g.passedThreshold) {
+        g.passedThreshold = false;
+      }
+      ptrPullYRef.current = damped;
+      const nextPhase = ready ? "ready" : "pulling";
+      if (ptrPhaseRef.current !== nextPhase) {
+        updatePhaseDOM(nextPhase);
+      }
+      if (!ptrRafRef.current) {
+        ptrRafRef.current = window.requestAnimationFrame(() => {
+          ptrRafRef.current = 0;
+          if (ptrGestureRef.current.active && ptrGestureRef.current.pulling) {
+            renderPtrFrame(ptrPullYRef.current, ptrPhaseRef.current);
+          }
+        });
+      }
+    };
+
+    const onTouchEnd = () => {
+      const g = ptrGestureRef.current;
+      if (!g.active) return;
+      g.active = false;
+      g.pulling = false;
+      if (ptrRafRef.current) {
+        window.cancelAnimationFrame(ptrRafRef.current);
+        ptrRafRef.current = 0;
+      }
+      if (ptrPhaseRef.current === "ready") {
+        const ctx = ptrContextRef.current;
+        triggerHaptic("medium");
+        updatePhaseDOM("refreshing");
+        const settleY = isIOSMode() ? 52 : 56;
+        animateSpringTo(settleY, "refreshing");
+        if (typeof window !== "undefined") {
+          window.__spendCheckForUpdates?.({ force: true, manual: true });
+        }
+        if (ctx?.profileConnected && ctx?.onResumeSync) {
+          try {
+            ctx.onResumeSync();
+          } catch {}
+        }
+        window.clearTimeout(ptrFinishTimerRef.current);
+        ptrFinishTimerRef.current = window.setTimeout(() => {
+          triggerHaptic("success");
+          ptrVelocityRef.current = 0;
+          animateSpringTo(0, "idle");
+        }, 680);
+      } else if (ptrPullYRef.current > 0 || ptrPhaseRef.current !== "idle") {
+        animateSpringTo(0, "idle");
+      }
+    };
+
+    const onTouchCancel = () => {
+      ptrGestureRef.current.active = false;
+      ptrGestureRef.current.pulling = false;
+      if (ptrPullYRef.current > 0 || ptrPhaseRef.current !== "idle") {
+        ptrVelocityRef.current = 0;
+        animateSpringTo(0, "idle");
+      }
+    };
+
+    root.addEventListener("touchstart", onTouchStart, { passive: true });
+    root.addEventListener("touchmove", onTouchMove, { passive: false });
+    root.addEventListener("touchend", onTouchEnd, { passive: true });
+    root.addEventListener("touchcancel", onTouchCancel, { passive: true });
+
+    return () => {
+      cancelFrames();
+      window.clearTimeout(ptrFinishTimerRef.current);
+      clearPageLayers();
+      root.removeEventListener("touchstart", onTouchStart);
+      root.removeEventListener("touchmove", onTouchMove);
+      root.removeEventListener("touchend", onTouchEnd);
+      root.removeEventListener("touchcancel", onTouchCancel);
+    };
+  }, [isAppLocked]);
+
   // P0 #1: Android Hardware Back & Chrome/PWA Edge-Swipe Back Navigation
   // Priority: Confirm modals -> Active sheets -> Settings sub-routes -> Non-Home tabs -> Exit at root
   const backNavStateRef = useRef(null);
@@ -14940,6 +15289,26 @@ export default function MobilePrototype({
         "--sheet-exit-from-opacity": sheetExitFromOpacity,
       }}
     >
+      <div
+        ref={ptrContainerRef}
+        className="ptr-container"
+        aria-live="polite"
+        aria-hidden="true"
+      >
+        <div ref={ptrPillRef} className="ptr-pill">
+          <svg
+            ref={ptrSpinnerRef}
+            className="ptr-spinner"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+            <polyline points="21 3 21 9 15 9" />
+          </svg>
+          <span ref={ptrLabelRef}>Pull to refresh</span>
+        </div>
+      </div>
+
       <CollapsibleTopBar
         activeTab={tab}
         monthLabel={activeMonthLabel}
@@ -14954,132 +15323,7 @@ export default function MobilePrototype({
         id="app"
         className="prototype-tabs-stage"
         key={settingsRoute ? screenKey : "main-tabs"}
-        onTouchStart={(e) => {
-          if (
-            settingsRoute ||
-            sheet ||
-            ptrState.phase === "refreshing" ||
-            e.touches.length !== 1
-          )
-            return;
-          const scroller = getActiveScroller();
-          if (!scroller || scroller.scrollTop > 2) return;
-          if (
-            e.target.closest?.(
-              ".cards-deck-stage, .stack, .chips, .account-picker-container",
-            )
-          )
-            return;
-          ptrGestureRef.current = {
-            active: true,
-            pulling: false,
-            startY: e.touches[0].clientY,
-            startX: e.touches[0].clientX,
-            passedThreshold: false,
-          };
-        }}
-        onTouchMove={(e) => {
-          const g = ptrGestureRef.current;
-          if (!g.active || sheet || e.touches.length !== 1) return;
-          const scroller = getActiveScroller();
-          if (!scroller || scroller.scrollTop > 2) {
-            g.active = false;
-            if (ptrState.pullY > 0) setPtrState({ pullY: 0, phase: "idle" });
-            return;
-          }
-          const dy = e.touches[0].clientY - g.startY;
-          const dx = e.touches[0].clientX - g.startX;
-          if (!g.pulling) {
-            if (dy > 10 && dy > Math.abs(dx) * 1.25) {
-              g.pulling = true;
-            } else if (Math.abs(dx) > 10 || dy < -4) {
-              g.active = false;
-              return;
-            } else {
-              return;
-            }
-          }
-          const damped = Math.min(
-            96,
-            Math.round(Math.pow(Math.max(0, dy - 10), 0.78) * 2.1),
-          );
-          const ready = damped >= 56;
-          if (ready && !g.passedThreshold) {
-            g.passedThreshold = true;
-            triggerHaptic("selection");
-          } else if (!ready && g.passedThreshold) {
-            g.passedThreshold = false;
-          }
-          setPtrState({ pullY: damped, phase: ready ? "ready" : "pulling" });
-        }}
-        onTouchEnd={() => {
-          const g = ptrGestureRef.current;
-          if (!g.active) return;
-          g.active = false;
-          if (ptrState.phase === "ready") {
-            triggerHaptic("medium");
-            setPtrState({ pullY: 48, phase: "refreshing" });
-            if (typeof window !== "undefined") {
-              window.__spendCheckForUpdates?.({ force: true, manual: true });
-            }
-            if (profile?.connected && onResumeSync) {
-              try {
-                onResumeSync();
-              } catch {}
-            }
-            window.setTimeout(() => {
-              triggerHaptic("success");
-              setPtrState({ pullY: 0, phase: "idle" });
-            }, 680);
-          } else if (ptrState.pullY > 0) {
-            setPtrState({ pullY: 0, phase: "idle" });
-          }
-        }}
-        onTouchCancel={() => {
-          ptrGestureRef.current.active = false;
-          if (ptrState.pullY > 0) setPtrState({ pullY: 0, phase: "idle" });
-        }}
       >
-        {(ptrState.pullY > 0 || ptrState.phase === "refreshing") && (
-          <div
-            className={`ptr-container is-${ptrState.phase}`}
-            style={{ height: `${ptrState.pullY}px` }}
-            aria-live="polite"
-          >
-            <div
-              className="ptr-pill"
-              style={{
-                transform: `scale(${Math.min(1, 0.65 + ptrState.pullY / 110).toFixed(2)})`,
-                opacity: Math.min(1, ptrState.pullY / 36).toFixed(2),
-              }}
-            >
-              <svg
-                className="ptr-spinner"
-                viewBox="0 0 24 24"
-                style={
-                  ptrState.phase !== "refreshing"
-                    ? {
-                        transform: `rotate(${Math.round(ptrState.pullY * 3.8)}deg)`,
-                      }
-                    : undefined
-                }
-                aria-hidden="true"
-              >
-                <path d="M21 12a9 9 0 1 1-2.64-6.36" />
-                <polyline points="21 3 21 9 15 9" />
-              </svg>
-              <span>
-                {ptrState.phase === "refreshing"
-                  ? profile?.connected
-                    ? "Syncing…"
-                    : "Refreshing…"
-                  : ptrState.phase === "ready"
-                    ? "Release to refresh"
-                    : "Pull to refresh"}
-              </span>
-            </div>
-          </div>
-        )}
 
         {profileSettingsOpen ? (
           <div
