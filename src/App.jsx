@@ -1,6 +1,5 @@
 import {
   Component,
-  lazy,
   Suspense,
   useCallback,
   useEffect,

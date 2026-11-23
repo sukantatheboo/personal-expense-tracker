@@ -14,10 +14,6 @@ import incomeSvg from "./assets/spend-trans-icns/income.svg";
 import transferSvg from "./assets/spend-trans-icns/transfer.svg";
 import cardOptionsSvg from "./assets/spend-trans-icns/card-options.svg";
 
-import alertSvg from "./assets/spend-trans-icns/alert.svg";
-import cashSvg from "./assets/spend-trans-icns/cash.svg";
-import starSvg from "./assets/spend-trans-icns/star.svg";
-import refreshSvg from "./assets/spend-trans-icns/refresh.svg";
 import suggestionSvg from "./assets/spend-trans-icns/suggestion.svg";
 
 // Dynamic Entertainment & Subscription Icons
@@ -45,10 +41,6 @@ export {
   incomeSvg,
   transferSvg,
   cardOptionsSvg,
-  alertSvg,
-  cashSvg,
-  starSvg,
-  refreshSvg,
   suggestionSvg,
   spotifySvg,
   netflixSvg,

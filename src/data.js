@@ -1101,22 +1101,6 @@ export function computeAccountBalances(
   };
 }
 
-export function reconcileAccountLedger(
-  cards = [],
-  openingBalances = {},
-  expenses = [],
-  transactions = [],
-  reportedBalances = null,
-) {
-  return computeAccountBalances(
-    cards,
-    openingBalances,
-    expenses,
-    transactions,
-    reportedBalances,
-  ).reconciliation;
-}
-
 function isValidAccountTransaction(item, accountData = null) {
   if (
     !item ||

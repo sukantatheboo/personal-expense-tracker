@@ -1,5 +1,4 @@
 import React, {
-  Fragment,
   lazy,
   memo,
   Suspense,
@@ -38,11 +37,6 @@ import {
   educationSvg,
   savingsSvg,
   otherSvg,
-  alertSvg,
-  cashSvg,
-  starSvg,
-  refreshSvg,
-  suggestionSvg,
 } from "./categoryAssets.jsx";
 import {
   setAppPin,
@@ -212,7 +206,6 @@ const DOCK_NOTCH_CURVE_D =
   `M0 0 C${DOCK_G.start - DOCK_G.c1} 0 ${DOCK_G.start - DOCK_G.c2x} ${DOCK_G.c2y} ${DOCK_G.start - DOCK_G.jx} ${DOCK_G.jy} ` +
   `A${DOCK_G.r} ${DOCK_G.r} 0 0 0 ${DOCK_G.start + DOCK_G.jx} ${DOCK_G.jy} ` +
   `C${DOCK_G.start + DOCK_G.c2x} ${DOCK_G.c2y} ${DOCK_G.start + DOCK_G.c1} 0 ${DOCK_NOTCH_W} 0`;
-const DOCK_NOTCH_D = `${DOCK_NOTCH_CURVE_D} V${DOCK_BAR_H} H0 Z`;
 const SHEET_EXIT_MS = 280;
 const SHEET_REDUCED_EXIT_MS = 160;
 
@@ -622,8 +615,6 @@ const ROW_SWIPE_REVEAL_OFFSET = 84;
 const ROW_SWIPE_REVEAL_THRESHOLD = 42;
 const ROW_SWIPE_LOCK_DISTANCE = 10;
 const ROW_SWIPE_LOCK_RATIO = 1.35;
-const ROW_SWIPE_SPRING_TRANSITION =
-  "transform 300ms cubic-bezier(0.22, 1, 0.36, 1)";
 
 function getRowSwipeFullThresholds(width) {
   const rowWidth = Math.max(240, Number(width) || 320);
@@ -2631,7 +2622,6 @@ function Home({
   highlightedExpenseId,
 }) {
   const [currentTime, setCurrentTime] = useState(() => new Date());
-  const [highlightedCategory, setHighlightedCategory] = useState("");
   const { shown, toggle } = useReveal();
   const todayStr = ld();
   const currentMonthKey = todayStr.slice(0, 7);
@@ -2713,12 +2703,6 @@ function Home({
     String(x?.next || "").localeCompare(String(y?.next || "")),
   )[0];
   const h = currentTime.getHours();
-  useEffect(() => setHighlightedCategory(""), [S.m]);
-  useEffect(() => {
-    if (highlightedCategory && by[highlightedCategory] == null) {
-      setHighlightedCategory("");
-    }
-  }, [by, highlightedCategory]);
   useEffect(() => {
     const timer = window.setInterval(() => setCurrentTime(new Date()), 60_000);
     return () => window.clearInterval(timer);
@@ -4621,8 +4605,6 @@ function sortRecurringSection(items) {
   });
 }
 
-const RECURRING_SWIPE_WIDTH = 84;
-
 const RecurringRow = memo(function RecurringRow({ item, fmt, accountLabel, onSelect, onTogglePause }) {
   const pointerRef = useRef(null);
   const rowRef = useRef(null);
@@ -5497,7 +5479,6 @@ function Plans({
   const hasScrolledRef = useRef(hasScrolled);
   const [ringVisible, setRingVisible] = useState(true);
   const ringVisibleRef = useRef(true);
-  const [collapsedHeaderPx, setCollapsedHeaderPx] = useState(106);
 
   const getActivePlanScroller = useCallback(
     (targetPlan = plan) =>
@@ -5610,9 +5591,6 @@ function Plans({
       const collapsedH = Math.max(72, expandedH - deltaPx);
       shellEl.style.setProperty("--header-expanded-h", `${expandedH}px`);
       shellEl.style.setProperty("--header-collapsed-h", `${collapsedH}px`);
-      setCollapsedHeaderPx((prev) =>
-        Math.abs(prev - collapsedH) > 1 ? collapsedH : prev,
-      );
     };
 
     updateHeaderHeights();
@@ -5775,20 +5753,6 @@ function Plans({
     },
     [plan, setPlan],
   );
-
-  const handleSegKeyDown = (e) => {
-    if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
-      e.preventDefault();
-      const next = plan === "budget" ? "rec" : "budget";
-      selectPlanTab(next, true);
-    } else if (e.key === "Home") {
-      e.preventDefault();
-      selectPlanTab("budget", true);
-    } else if (e.key === "End") {
-      e.preventDefault();
-      selectPlanTab("rec", true);
-    }
-  };
 
   useEffect(() => {
     const stageEl = stageRef.current;

@@ -784,20 +784,6 @@ export async function restoreBackupCheckpoint(
   };
 }
 
-export async function verifyCloudLedgerReconciliation() {
-  const client = await getSupabase();
-  if (!client) return null;
-  try {
-    const rpcRes = await client.rpc("verify_spend_ledger_reconciliation");
-    if (!rpcRes.error && rpcRes.data) {
-      return rpcRes.data;
-    }
-  } catch {
-    return null;
-  }
-  return null;
-}
-
 export async function checkSupabaseSqlHealth() {
   const client = await getSupabase();
   if (!client) {

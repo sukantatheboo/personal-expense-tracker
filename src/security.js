@@ -16,7 +16,6 @@ const PIN_LOCKOUT_UNTIL_KEY = "spend-security-pin-lockout-v1";
 const PIN_LOCKOUT_SIG_KEY = "spend-security-pin-lockout-sig-v1";
 const BIOMETRIC_KEY_ID = "spend-biometric-credential-v1";
 const BIOMETRIC_KEY_STORAGE = "spend-biometric-key-v1";
-const LOCK_TIMEOUT_KEY = "spend-lock-timeout-v1";
 const LAST_ACTIVE_KEY = "spend-last-active-v1";
 const BACKGROUNDED_AT_KEY = "spend-backgrounded-at-v1";
 const SESSION_UNLOCKED_KEY = "spend-session-unlocked-v1";
@@ -1172,19 +1171,6 @@ function clearBackgroundedAt() {
   } catch {
     // ignore
   }
-}
-
-export function getLockTimeoutMinutes() {
-  return 0; // Always lock immediately on backgrounding
-}
-
-export function setLockTimeoutMinutes() {
-  try {
-    localStorage.setItem(LOCK_TIMEOUT_KEY, "0");
-  } catch {
-    // ignore
-  }
-  markActive();
 }
 
 export function markActive() {
