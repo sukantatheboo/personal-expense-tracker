@@ -1760,11 +1760,14 @@ function Sheet({
     }
 
     const sheetHeight = sheetNode.offsetHeight || 440;
+    const overlayHeight =
+      overlayNode?.clientHeight || window.innerHeight || sheetHeight;
     dragRef.current = {
       startY: clientY,
       currentOffset: 0,
       recentPoints: [{ y: clientY, t: performance.now() }],
       sheetHeight,
+      overlayHeight,
       active: true,
     };
 
@@ -1788,7 +1791,7 @@ function Sheet({
       let offset = clientY - drag.startY;
       if (offset < 0) {
         offset =
-          detentRef.current === "expanded" ? offset * 0.16 : offset * 0.35;
+          detentRef.current === "expanded" ? offset * 0.12 : offset * 0.45;
       }
       drag.currentOffset = offset;
       pendingDyRef.current = offset;
@@ -1798,8 +1801,27 @@ function Sheet({
           rAFRef.current = null;
           if (!dragRef.current?.active) return;
           const currentOffset = pendingDyRef.current;
-          if (sheetRef.current) {
-            sheetRef.current.style.transform = `translate3d(0, ${currentOffset}px, 0)`;
+          const sheetNode = sheetRef.current;
+          if (sheetNode) {
+            if (currentOffset < 0) {
+              // Keep the bottom of the sheet anchored flush to bottom: 0 while
+              // growing upward toward the expanded detent instead of lifting off the screen.
+              const maxCap = Math.max(
+                drag.sheetHeight,
+                drag.overlayHeight - 8,
+              );
+              const nextHeight = Math.min(
+                maxCap,
+                drag.sheetHeight + Math.abs(currentOffset),
+              );
+              sheetNode.style.transform = "translate3d(0, 0, 0)";
+              sheetNode.style.maxHeight = `${nextHeight}px`;
+              sheetNode.style.height = `${nextHeight}px`;
+            } else {
+              if (sheetNode.style.height) sheetNode.style.height = "";
+              if (sheetNode.style.maxHeight) sheetNode.style.maxHeight = "";
+              sheetNode.style.transform = `translate3d(0, ${currentOffset}px, 0)`;
+            }
           }
           const dragDismissRatio = Math.max(
             0,
@@ -1848,7 +1870,9 @@ function Sheet({
       if (sheetNode) {
         sheetNode.removeAttribute("data-dragging");
         sheetNode.style.transition =
-          "transform 280ms cubic-bezier(0.32, 0.72, 0, 1)";
+          "transform 280ms cubic-bezier(0.32, 0.72, 0, 1), height 280ms cubic-bezier(0.32, 0.72, 0, 1), max-height 280ms cubic-bezier(0.32, 0.72, 0, 1)";
+        sheetNode.style.height = "";
+        sheetNode.style.maxHeight = "";
         sheetNode.style.transform = "translate3d(0, 0, 0)";
         window.setTimeout(() => {
           setRootDragProgress(null, false);
@@ -1875,6 +1899,8 @@ function Sheet({
       const overlayNode = overlayRef.current;
       if (sheetNode) {
         sheetNode.removeAttribute("data-dragging");
+        sheetNode.style.height = "";
+        sheetNode.style.maxHeight = "";
         sheetNode.style.transition =
           "transform 280ms cubic-bezier(0.32, 0.72, 0, 1)";
         sheetNode.style.transform = "translate3d(0, 0, 0)";
@@ -1912,6 +1938,8 @@ function Sheet({
 
       if (sheetNode) {
         sheetNode.removeAttribute("data-dragging");
+        sheetNode.style.height = "";
+        sheetNode.style.maxHeight = "";
         sheetNode.style.transition =
           "transform 260ms cubic-bezier(0.32, 0.72, 0, 1)";
         sheetNode.style.transform = "translate3d(0, 100%, 0)";
@@ -1931,7 +1959,9 @@ function Sheet({
       if (sheetNode) {
         sheetNode.removeAttribute("data-dragging");
         sheetNode.style.transition =
-          "transform 280ms cubic-bezier(0.32, 0.72, 0, 1)";
+          "transform 280ms cubic-bezier(0.32, 0.72, 0, 1), height 280ms cubic-bezier(0.32, 0.72, 0, 1), max-height 280ms cubic-bezier(0.32, 0.72, 0, 1)";
+        sheetNode.style.height = "";
+        sheetNode.style.maxHeight = "";
         sheetNode.style.transform = "translate3d(0, 0, 0)";
       }
       if (overlayNode) {
@@ -2091,18 +2121,6 @@ function Sheet({
           }}
         >
           <div className="grab" aria-hidden="true" />
-          <button
-            type="button"
-            className="sheet-close-btn"
-            aria-label="Close"
-            onClick={(e) => {
-              e.stopPropagation();
-              triggerHaptic("light");
-              onClose();
-            }}
-          >
-            <Icon n="x" />
-          </button>
         </div>
         <div
           ref={setScrollNode}

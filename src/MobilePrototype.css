@@ -860,9 +860,8 @@ a:active,
 .mobile-prototype {
   position: fixed;
   inset: 0;
-  left: 50%;
-  right: auto;
-  transform: translateX(-50%);
+  left: 0;
+  right: 0;
   width: min(100%, 480px);
   top: var(--mobile-visible-top, 0px);
   bottom: 0;
@@ -870,7 +869,7 @@ a:active,
   max-height: none;
   max-width: 480px;
   min-height: 0;
-  margin: 0;
+  margin: 0 auto;
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -3551,10 +3550,15 @@ a:active,
   }
 }
 .mobile-prototype .seg:not(.seg-ctrl) input {
-  padding: 8px 4px;
-  font-size: 16px;
+  flex: 1.35;
+  padding: 8px 10px;
+  font-size: 13.5px;
   color: var(--ink);
   min-width: 0;
+}
+.mobile-prototype .seg:not(.seg-ctrl) input[type="date"]::-webkit-calendar-picker-indicator {
+  margin-left: 2px;
+  padding: 0;
 }
 .mobile-prototype .activity-type-seg {
   margin: 0;
@@ -4118,6 +4122,8 @@ a:active,
   left: 0;
   right: 0;
   bottom: -2px;
+  max-width: 480px;
+  margin: 0 auto;
   z-index: 40;
   height: calc(var(--dock-h) + var(--safe-bottom) + 2px);
   padding-bottom: calc(var(--safe-bottom) + 2px);
@@ -4393,7 +4399,13 @@ a:active,
 }
 .mobile-prototype .ov {
   position: fixed;
-  inset: 0;
+  top: var(--mobile-visible-top, 0px);
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: var(--mobile-visible-height, auto);
+  max-width: 480px;
+  margin: 0 auto;
   z-index: 600;
   display: flex;
   align-items: flex-end;
@@ -4412,10 +4424,13 @@ a:active,
   opacity: 1;
 }
 .mobile-prototype .sh {
-  position: relative;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin: 0 auto;
   z-index: 610;
   isolation: isolate;
-  contain: layout style paint;
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -4460,35 +4475,6 @@ a:active,
   user-select: none;
   -webkit-user-select: none;
 }
-.mobile-prototype .sheet-close-btn {
-  position: absolute;
-  top: 8px;
-  right: 14px;
-  z-index: 12;
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  border: 1px solid color-mix(in srgb, var(--line) 85%, transparent);
-  background: color-mix(in srgb, var(--ink) 6%, var(--sheet-surface, #ffffff));
-  color: var(--mut);
-  cursor: pointer;
-  touch-action: manipulation;
-  transition:
-    transform 120ms ease,
-    background-color 140ms ease,
-    color 140ms ease;
-}
-.mobile-prototype .sheet-close-btn svg {
-  width: 15px;
-  height: 15px;
-  stroke-width: 2.4;
-}
-.mobile-prototype .sheet-close-btn:active {
-  transform: scale(0.92);
-  color: var(--ink);
-}
 .mobile-prototype .sheet-content {
   flex: 1 1 auto;
   min-height: 0;
@@ -4500,7 +4486,7 @@ a:active,
   touch-action: pan-y;
   scrollbar-width: none;
   scroll-padding-block: 0 28px;
-  padding: 0 18px calc(28px + env(safe-area-inset-bottom, 0px));
+  padding: 0 18px calc(28px + var(--safe-bottom, env(safe-area-inset-bottom, 0px)));
   background-color: var(--sheet-surface, #ffffff) !important;
 }
 .mobile-prototype .sheet-content::-webkit-scrollbar {
@@ -4511,7 +4497,7 @@ a:active,
   top: -1px;
   z-index: 4;
   margin: 0 -4px 4px;
-  padding: 6px 36px 10px 4px;
+  padding: 6px 4px 10px 4px;
   background-color: var(--sheet-surface, #ffffff) !important;
   user-select: none;
   -webkit-user-select: none;
@@ -4555,7 +4541,7 @@ a:active,
   grid-template-columns: minmax(0, 1fr);
   gap: 10px;
   margin: 0;
-  padding: 12px 20px calc(16px + env(safe-area-inset-bottom, 0px));
+  padding: 12px 20px calc(16px + var(--safe-bottom, env(safe-area-inset-bottom, 0px)));
   border-top: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
   background-color: var(--sheet-surface, #ffffff) !important;
   box-shadow: 0 -10px 20px rgb(20 35 26 / 6%);
@@ -5869,7 +5855,7 @@ a:active,
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
-  bottom: calc(118px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(118px + var(--safe-bottom, env(safe-area-inset-bottom, 0px)));
   background: var(--ink);
   color: var(--bg);
   border-radius: 16px;
@@ -9097,7 +9083,7 @@ a:active,
   align-items: center;
   justify-content: center;
   text-align: center;
-  margin: 18px 0 calc(14px + env(safe-area-inset-bottom, 0px));
+  margin: 18px 0 calc(14px + var(--safe-bottom, env(safe-area-inset-bottom, 0px)));
   border-radius: 16px;
   border: 0;
   background: var(--ink);
@@ -9132,7 +9118,7 @@ a:active,
 
 /* Success Modal matching video */
 .mobile-prototype .add-card-success-sheet {
-  padding: 28px 20px calc(24px + env(safe-area-inset-bottom, 0px));
+  padding: 28px 20px calc(24px + var(--safe-bottom, env(safe-area-inset-bottom, 0px)));
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -9554,7 +9540,7 @@ a:active,
   display: flex;
   flex-direction: column;
   gap: 10px;
-  margin: 14px 0 calc(20px + env(safe-area-inset-bottom, 0px));
+  margin: 14px 0 calc(20px + var(--safe-bottom, env(safe-area-inset-bottom, 0px)));
 }
 .mobile-prototype .card-options-save-cta {
   width: 100%;
@@ -13671,19 +13657,11 @@ html[data-platform="ios"]
 .mobile-prototype .sheet-drag-zone {
   z-index: 30;
 }
-.mobile-prototype .sheet-close-btn {
-  width: 30px !important;
-  height: 30px !important;
-  min-width: 30px !important;
-  min-height: 30px !important;
-  z-index: 32;
-}
 .mobile-prototype .icon-btn,
 .mobile-prototype .prototype-header-avatar,
 .mobile-prototype .prototype-header-action,
 .mobile-prototype .prototype-header-back,
 .mobile-prototype .mx-eye,
-.mobile-prototype .sheet-close-btn,
 .mobile-prototype .mn button,
 .mobile-prototype .mon button,
 .mobile-prototype .plans-calendar-btn,
@@ -13698,7 +13676,6 @@ html[data-platform="ios"]
 .mobile-prototype .prototype-header-action::after,
 .mobile-prototype .prototype-header-back::after,
 .mobile-prototype .mx-eye::after,
-.mobile-prototype .sheet-close-btn::after,
 .mobile-prototype .mn button::after,
 .mobile-prototype .mon button::after,
 .mobile-prototype .plans-calendar-btn::after,
@@ -13751,7 +13728,7 @@ html[data-platform="ios"]
   position: sticky;
   top: -1px;
   z-index: 4;
-  padding: 6px 36px 10px 4px;
+  padding: 6px 4px 10px 4px;
 }
 .mobile-prototype .sheet-content .amt.amt-hero-redesigned {
   position: relative;
