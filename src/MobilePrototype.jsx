@@ -13733,6 +13733,7 @@ export default function MobilePrototype({
       : appSettingsOpen
         ? "app-settings"
         : tab,
+    activePlan: plan,
     hideDockOnScroll: hideDockOnScrollForActiveTab,
     dockRef,
     plansScrollStore,

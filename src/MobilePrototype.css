@@ -1118,11 +1118,7 @@ a:active,
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
   box-sizing: border-box;
-  pointer-events: none;
-}
-
-.mobile-prototype .prototype-header.is-settings-route {
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .mobile-prototype .prototype-header > * {
@@ -1151,7 +1147,7 @@ a:active,
   align-items: center;
   min-width: 0;
   flex: 1;
-  pointer-events: none;
+  pointer-events: auto;
 }
 .mobile-prototype .prototype-header-compact-wrap > * {
   pointer-events: auto;
@@ -1430,8 +1426,6 @@ a:active,
   justify-content: space-between;
   gap: 8px;
   margin-bottom: 16px;
-  opacity: clamp(0, calc(1 - var(--p, 0) * 2), 1);
-  will-change: opacity;
 }
 .mobile-prototype .hd > div:first-child {
   min-width: 0;

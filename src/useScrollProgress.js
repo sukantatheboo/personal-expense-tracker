@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   computeHeaderScrollRange,
   computeScrollProgress,
@@ -13,6 +19,7 @@ import {
  */
 export function useScrollProgress({
   activeTab,
+  activePlan = null,
   hideDockOnScroll = false,
   dockRef = null,
   plansScrollStore = null,
@@ -20,6 +27,9 @@ export function useScrollProgress({
   const screenRootRef = useRef(null);
   const scrollerMapRef = useRef(new Map());
   const tabScrollerRefs = useRef({});
+  const activeTabRef = useRef(activeTab);
+  activeTabRef.current = activeTab;
+  const [scrollerRevision, setScrollerRevision] = useState(0);
   const tabScrollTopRef = useRef({
     home: 0,
     activity: 0,
@@ -118,10 +128,15 @@ export function useScrollProgress({
   const registerTabScroller = useCallback((tabKey) => {
     if (!tabScrollerRefs.current[tabKey]) {
       tabScrollerRefs.current[tabKey] = (node) => {
-        if (node) {
-          scrollerMapRef.current.set(tabKey, node);
+        const prev = scrollerMapRef.current.get(tabKey) || null;
+        const next = node || null;
+        if (next) {
+          scrollerMapRef.current.set(tabKey, next);
         } else {
           scrollerMapRef.current.delete(tabKey);
+        }
+        if (prev !== next && activeTabRef.current === tabKey) {
+          setScrollerRevision((v) => v + 1);
         }
       };
     }
@@ -156,7 +171,10 @@ export function useScrollProgress({
     measureHeaderRange();
     const savedTop = tabScrollTopRef.current[activeTab] ?? 0;
     if (scroller) {
-      if (Math.abs(scroller.scrollTop - savedTop) > 1) {
+      // Plans manages per-subtab (budget/rec) scroll restoration via plansScrollStore
+      const ownsOwnScrollStore =
+        activeTab === "plans" && Boolean(plansScrollStore);
+      if (!ownsOwnScrollStore && Math.abs(scroller.scrollTop - savedTop) > 1) {
         void scroller.offsetHeight;
         scroller.scrollTop = savedTop;
       }
@@ -169,6 +187,9 @@ export function useScrollProgress({
     applyDockScrollHidden(false);
   }, [
     activeTab,
+    activePlan,
+    scrollerRevision,
+    plansScrollStore,
     getActiveScroller,
     measureHeaderRange,
     applyProgressFromScrollTop,
@@ -231,6 +252,8 @@ export function useScrollProgress({
     };
   }, [
     activeTab,
+    activePlan,
+    scrollerRevision,
     hideDockOnScroll,
     getActiveScroller,
     measureHeaderRange,
