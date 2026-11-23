@@ -13,8 +13,9 @@
   --bill-muted: #e9e8df;
   position: fixed;
   inset: 0;
-  width: 100%;
-  height: 100dvh;
+  width: auto;
+  height: auto;
+  min-height: 100%;
   z-index: 9998;
   box-sizing: border-box;
   padding-top: env(safe-area-inset-top, 0px);

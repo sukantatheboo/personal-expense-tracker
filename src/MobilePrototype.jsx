@@ -13887,13 +13887,20 @@ export default function MobilePrototype({
     const rootEl = document.documentElement;
     rootEl.dataset.theme = resolvedTheme;
     rootEl.setAttribute("data-theme", resolvedTheme);
-    rootEl.style.colorScheme = resolvedTheme;
-    const themeColor = resolvedTheme === "dark" ? "#08080c" : "#f4f3ee";
-    rootEl.style.backgroundColor = themeColor;
-    document.body.style.backgroundColor = themeColor;
-    document
-      .querySelectorAll('meta[name="theme-color"]')
-      .forEach((meta) => meta.setAttribute("content", themeColor));
+    if (rootEl.dataset.splashActive !== "1") {
+      rootEl.style.colorScheme = resolvedTheme;
+      const themeColor = resolvedTheme === "dark" ? "#08080c" : "#f4f3ee";
+      rootEl.style.backgroundColor = themeColor;
+      document.body.style.backgroundColor = themeColor;
+      let themeMeta = document.querySelector('meta[name="theme-color"]');
+      if (!themeMeta) {
+        themeMeta = document.createElement("meta");
+        themeMeta.name = "theme-color";
+        document.head.appendChild(themeMeta);
+      }
+      themeMeta.removeAttribute("media");
+      themeMeta.setAttribute("content", themeColor);
+    }
     try {
       const modeToSave = S?.themeMode || S?.theme || resolvedTheme;
       localStorage.setItem("spend-theme-v1", modeToSave);
@@ -14080,14 +14087,13 @@ export default function MobilePrototype({
       const isKeyboardOpen = textEntryFocused && keyboardHeight > 120;
 
       if (root) {
-        root.style.setProperty(
-          "--mobile-visible-height",
-          isKeyboardOpen ? `${visibleHeight}px` : "100dvh",
-        );
-        root.style.setProperty(
-          "--mobile-visible-top",
-          isKeyboardOpen ? `${visibleTop}px` : "0px",
-        );
+        if (isKeyboardOpen) {
+          root.style.setProperty("--mobile-visible-height", `${visibleHeight}px`);
+          root.style.setProperty("--mobile-visible-top", `${visibleTop}px`);
+        } else {
+          root.style.removeProperty("--mobile-visible-height");
+          root.style.setProperty("--mobile-visible-top", "0px");
+        }
       }
       setKeyboardOpen(isKeyboardOpen);
       if (!textEntryFocused || keyboardHeight <= 120) {

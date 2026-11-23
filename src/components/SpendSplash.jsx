@@ -33,10 +33,33 @@ function alreadySeen(once, key) {
   }
 }
 
+const SPLASH_BG = "#161d2b";
+
+function applySplashChrome() {
+  if (typeof document === "undefined") return;
+  const root = document.documentElement;
+  root.dataset.splashActive = "1";
+  root.style.colorScheme = "dark";
+  root.style.backgroundColor = SPLASH_BG;
+  if (document.body) {
+    document.body.style.backgroundColor = SPLASH_BG;
+  }
+  document
+    .querySelectorAll('meta[name="theme-color"]')
+    .forEach((meta) => meta.setAttribute("content", SPLASH_BG));
+}
+
 function syncThemeColorMeta() {
   if (typeof document === "undefined") return;
-  const isDark = document.documentElement.dataset.theme === "dark";
+  const root = document.documentElement;
+  delete root.dataset.splashActive;
+  const isDark = root.dataset.theme === "dark";
   const color = isDark ? "#08080c" : "#f4f3ee";
+  root.style.colorScheme = isDark ? "dark" : "light";
+  root.style.backgroundColor = color;
+  if (document.body) {
+    document.body.style.backgroundColor = color;
+  }
   document
     .querySelectorAll('meta[name="theme-color"]')
     .forEach((meta) => meta.setAttribute("content", color));
@@ -77,8 +100,6 @@ export default function SpendSplash({
     if (!skip || firedSkip.current) return;
     firedSkip.current = true;
     handoffStaticSplash();
-    document.documentElement.style.backgroundColor = "";
-    document.body.style.backgroundColor = "";
     syncThemeColorMeta();
     document.dispatchEvent(new CustomEvent("spend:splash-done"));
     live.current.onDone?.();
@@ -97,7 +118,7 @@ export default function SpendSplash({
 
     handoffStaticSplash();
     ensureAppFontsLoaded();
-    syncThemeColorMeta();
+    applySplashChrome();
 
     const stage = root.querySelector(".sp-stage");
     const reduce = window.matchMedia(
@@ -121,8 +142,6 @@ export default function SpendSplash({
     const exitAnims = [];
 
     const restoreBg = () => {
-      document.documentElement.style.backgroundColor = "";
-      document.body.style.backgroundColor = "";
       syncThemeColorMeta();
     };
 

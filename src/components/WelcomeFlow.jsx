@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { App as CapacitorApp } from "@capacitor/app";
 import "./WelcomeFlow.css";
 
@@ -127,17 +127,44 @@ export default function WelcomeFlow({ onDone, theme, exiting = false }) {
     }
   }, [isExiting]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    const restoreAppChrome = () => {
+      if (typeof document === "undefined") return;
+      const root = document.documentElement;
+      delete root.dataset.splashActive;
+      const isDark = root.dataset.theme === "dark";
+      const color = isDark ? "#08080c" : "#f4f3ee";
+      root.style.colorScheme = isDark ? "dark" : "light";
+      root.style.backgroundColor = color;
+      if (document.body) {
+        document.body.style.backgroundColor = color;
+      }
+      document
+        .querySelectorAll('meta[name="theme-color"]')
+        .forEach((meta) => meta.setAttribute("content", color));
+    };
+
     if (typeof document !== "undefined") {
       document.getElementById("initial-splash")?.remove();
     }
     if (exiting || finishedRef.current) {
-      if (typeof document !== "undefined") {
-        document.documentElement.style.backgroundColor = "";
-        document.body.style.backgroundColor = "";
-      }
+      restoreAppChrome();
       return undefined;
     }
+
+    if (typeof document !== "undefined") {
+      const root = document.documentElement;
+      root.dataset.splashActive = "1";
+      root.style.colorScheme = "dark";
+      root.style.backgroundColor = "#161d2b";
+      if (document.body) {
+        document.body.style.backgroundColor = "#161d2b";
+      }
+      document
+        .querySelectorAll('meta[name="theme-color"]')
+        .forEach((meta) => meta.setAttribute("content", "#161d2b"));
+    }
+
     const reducedMotion =
       typeof window !== "undefined" &&
       Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches);
@@ -152,15 +179,7 @@ export default function WelcomeFlow({ onDone, theme, exiting = false }) {
     const splashTimer = window.setTimeout(() => {
       splashGoneRef.current = true;
       setSplashGone(true);
-      if (typeof document !== "undefined") {
-        document.documentElement.style.backgroundColor = "";
-        document.body.style.backgroundColor = "";
-        const isDark = document.documentElement.dataset.theme === "dark";
-        const color = isDark ? "#08080c" : "#f4f3ee";
-        document
-          .querySelectorAll('meta[name="theme-color"]')
-          .forEach((meta) => meta.setAttribute("content", color));
-      }
+      restoreAppChrome();
       if (reducedMotion) {
         setSlidesReady(true);
       } else {
@@ -173,10 +192,7 @@ export default function WelcomeFlow({ onDone, theme, exiting = false }) {
     return () => {
       window.clearTimeout(splashTimer);
       if (slideTimer) window.clearTimeout(slideTimer);
-      if (typeof document !== "undefined") {
-        document.documentElement.style.backgroundColor = "";
-        document.body.style.backgroundColor = "";
-      }
+      restoreAppChrome();
     };
   }, [exiting]);
 

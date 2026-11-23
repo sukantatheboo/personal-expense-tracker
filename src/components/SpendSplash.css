@@ -9,10 +9,11 @@
   color-scheme: dark;
 
   position: fixed;
-  inset: -2px;
+  inset: -4px;
   z-index: 2147483000;
-  width: calc(100vw + 4px);
-  height: calc(100dvh + 4px);
+  width: auto;
+  height: auto;
+  min-height: 100%;
   box-shadow: 0 0 0 4px var(--sp-bg);
   background: var(--sp-bg);
   font-family: var(

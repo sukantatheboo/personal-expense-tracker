@@ -2143,12 +2143,26 @@ export default function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = resolvedTheme;
     document.documentElement.dataset.themeMode = theme;
-    if (ready && !sessionResolving) {
+    if (
+      ready &&
+      !sessionResolving &&
+      document.documentElement.dataset.splashActive !== "1"
+    ) {
       const browserChromeColor =
         resolvedTheme === "dark" ? "#08080c" : "#f4f3ee";
-      document
-        .querySelectorAll('meta[name="theme-color"]')
-        .forEach((meta) => meta.setAttribute("content", browserChromeColor));
+      document.documentElement.style.colorScheme = resolvedTheme;
+      document.documentElement.style.backgroundColor = browserChromeColor;
+      if (document.body) {
+        document.body.style.backgroundColor = browserChromeColor;
+      }
+      let themeMeta = document.querySelector('meta[name="theme-color"]');
+      if (!themeMeta) {
+        themeMeta = document.createElement("meta");
+        themeMeta.name = "theme-color";
+        document.head.appendChild(themeMeta);
+      }
+      themeMeta.removeAttribute("media");
+      themeMeta.setAttribute("content", browserChromeColor);
     }
     try {
       localStorage.setItem(STORAGE_KEYS.theme, theme);

@@ -48,14 +48,16 @@ body::-webkit-scrollbar {
   display: none;
 }
 html {
-  min-height: 100dvh;
+  height: 100%;
+  min-height: 100%;
   background: var(--page-bg);
   -webkit-tap-highlight-color: transparent;
   -webkit-touch-callout: none;
   overscroll-behavior: none;
 }
 body {
-  min-height: 100dvh;
+  height: 100%;
+  min-height: 100%;
   background: var(--page-bg);
   color: var(--ink);
   font-family:
@@ -74,7 +76,8 @@ body {
   -webkit-touch-callout: none;
 }
 #root {
-  min-height: 100dvh;
+  height: 100%;
+  min-height: 100%;
   background: var(--page-bg);
   touch-action: pan-x pan-y;
 }
@@ -862,10 +865,9 @@ a:active,
   transform: translateX(-50%);
   width: min(100%, 480px);
   top: var(--mobile-visible-top, 0px);
-  bottom: auto;
-  height: 100dvh;
-  max-height: 100dvh;
-  height: var(--mobile-visible-height, 100dvh);
+  bottom: 0;
+  height: var(--mobile-visible-height, auto);
+  max-height: none;
   max-width: 480px;
   min-height: 0;
   margin: 0;
@@ -880,8 +882,14 @@ a:active,
 }
 .mobile-prototype {
   --p: 0;
-  --safe-top: env(safe-area-inset-top, 0px);
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-top: max(
+    env(safe-area-inset-top, 0px),
+    var(--safe-area-inset-top, 0px)
+  );
+  --safe-bottom: max(
+    env(safe-area-inset-bottom, 0px),
+    var(--safe-area-inset-bottom, 0px)
+  );
   --tab-bar-h: 67.5px;
   --dock-h: var(--tab-bar-h, 67.5px);
   --fab-overhang: 20px;
@@ -1090,7 +1098,7 @@ a:active,
   overflow-x: hidden;
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
-  padding: 0 18px calc(var(--dock-h) + env(safe-area-inset-bottom, 0px) + 16px);
+  padding: 0 18px calc(var(--dock-h) + var(--safe-bottom) + 16px);
   scrollbar-width: none;
 }
 .mobile-prototype .prototype-tab-panel::-webkit-scrollbar {
@@ -4109,10 +4117,10 @@ a:active,
   position: fixed;
   left: 0;
   right: 0;
-  bottom: 0;
+  bottom: -2px;
   z-index: 40;
-  height: calc(var(--dock-h) + env(safe-area-inset-bottom, 0px));
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  height: calc(var(--dock-h) + var(--safe-bottom) + 2px);
+  padding-bottom: calc(var(--safe-bottom) + 2px);
   box-sizing: border-box;
   background: transparent;
   visibility: visible;
@@ -4126,7 +4134,7 @@ a:active,
   pointer-events: none;
   transform: translate3d(
     0,
-    calc(100% + env(safe-area-inset-bottom, 0px) + var(--fab-overhang, 20px)),
+    calc(100% + var(--safe-bottom) + var(--fab-overhang, 20px)),
     0
   );
   transition: transform 350ms cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -4148,9 +4156,14 @@ a:active,
 /* Single-element frosted glass surface masked to the exact notched dock silhouette */
 .mobile-prototype .dock__surface {
   position: absolute;
-  inset: 0;
+  inset: 0 0 -16px 0;
   pointer-events: none;
-  background: color-mix(in srgb, var(--dock-surface) 60%, transparent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--dock-surface) 74%, transparent) 0%,
+    color-mix(in srgb, var(--dock-surface) 88%, transparent) 65%,
+    color-mix(in srgb, var(--dock-surface) 95%, transparent) 100%
+  );
   -webkit-backdrop-filter: blur(22px) saturate(180%);
   backdrop-filter: blur(22px) saturate(180%);
   -webkit-mask-image:
@@ -4162,12 +4175,12 @@ a:active,
     left top,
     right top,
     center top,
-    left var(--dock-h);
+    left bottom;
   -webkit-mask-size:
-    calc(50% - var(--notch-w) / 2 + 0.5px) calc(var(--dock-h) + 0.5px),
-    calc(50% - var(--notch-w) / 2 + 0.5px) calc(var(--dock-h) + 0.5px),
-    var(--notch-w) calc(var(--dock-h) + 0.5px),
-    100% calc(100% - var(--dock-h) + 1px);
+    calc(50% - var(--notch-w) / 2 + 1px) var(--dock-h),
+    calc(50% - var(--notch-w) / 2 + 1px) var(--dock-h),
+    var(--notch-w) var(--dock-h),
+    100% calc(100% - var(--dock-h) + 2px);
   -webkit-mask-repeat: no-repeat;
   mask-image:
     linear-gradient(#000, #000),
@@ -4178,12 +4191,12 @@ a:active,
     left top,
     right top,
     center top,
-    left var(--dock-h);
+    left bottom;
   mask-size:
-    calc(50% - var(--notch-w) / 2 + 0.5px) calc(var(--dock-h) + 0.5px),
-    calc(50% - var(--notch-w) / 2 + 0.5px) calc(var(--dock-h) + 0.5px),
-    var(--notch-w) calc(var(--dock-h) + 0.5px),
-    100% calc(100% - var(--dock-h) + 1px);
+    calc(50% - var(--notch-w) / 2 + 1px) var(--dock-h),
+    calc(50% - var(--notch-w) / 2 + 1px) var(--dock-h),
+    var(--notch-w) var(--dock-h),
+    100% calc(100% - var(--dock-h) + 2px);
   mask-repeat: no-repeat;
 }
 @supports not (
@@ -4233,7 +4246,7 @@ a:active,
   right: 0;
   height: var(--dock-h);
   box-sizing: border-box;
-  padding: 2px 6px 0;
+  padding: 4px 6px 4px;
   display: grid;
   grid-template-columns: 1fr var(--dock-gap) 1fr;
   align-items: center;
@@ -12828,7 +12841,7 @@ html[data-platform="android"][data-android-privacy-blur="1"] .mobile-prototype:n
   -webkit-overflow-scrolling: touch; /* iOS momentum scrolling */
   overscroll-behavior-y: contain; /* Stops scroll chaining to body/window */
   padding: 0 0
-    calc(var(--dock-h) + env(safe-area-inset-bottom, 0px) + 16px);
+    calc(var(--dock-h) + var(--safe-bottom) + 16px);
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
@@ -13078,7 +13091,7 @@ html[data-platform="android"][data-android-privacy-blur="1"] .mobile-prototype:n
 
 /* 9. Settings Route Panels, Flat Minimal App Settings & Checkpoints */
 .mobile-prototype .prototype-tab-panel.is-settings-panel {
-  padding: 0 18px calc(var(--dock-h) + env(safe-area-inset-bottom, 0px) + 16px) !important;
+  padding: 0 18px calc(var(--dock-h) + var(--safe-bottom) + 16px) !important;
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
 }
@@ -14120,7 +14133,7 @@ html[data-platform="ios"]
 .mobile-prototype .plans-scroll-spacer {
   width: 100%;
   height: calc(
-    var(--dock-h) + env(safe-area-inset-bottom, 0px) + 16px
+    var(--dock-h) + var(--safe-bottom) + 16px
   );
   flex-shrink: 0;
   pointer-events: none;
@@ -14333,8 +14346,8 @@ html[data-platform="android"] .mobile-prototype .plans-screen-shell {
 }
 
 html[data-platform="android"] .mobile-prototype .dock {
-  height: calc(var(--dock-h) + var(--safe-bottom));
-  padding-bottom: var(--safe-bottom);
+  height: calc(var(--dock-h) + var(--safe-bottom) + 2px);
+  padding-bottom: calc(var(--safe-bottom) + 2px);
 }
 
 html[data-platform="android"] .mobile-prototype .plans-scroll-spacer {
