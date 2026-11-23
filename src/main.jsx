@@ -46,6 +46,40 @@ function isAndroidRuntime() {
 }
 
 if (typeof window !== "undefined") {
+  // Lock down pinch-to-zoom and multi-touch zoom so Spend behaves like a native app
+  // across iOS Safari/PWA, Android Chrome/WebAPK, and Capacitor WebViews.
+  const preventZoomGesture = (event) => {
+    if (event.cancelable) {
+      event.preventDefault();
+    }
+  };
+  const preventMultiTouchZoom = (event) => {
+    if (event.touches && event.touches.length > 1 && event.cancelable) {
+      event.preventDefault();
+    }
+  };
+  const preventCtrlWheelZoom = (event) => {
+    if (event.ctrlKey && event.cancelable) {
+      event.preventDefault();
+    }
+  };
+  document.addEventListener("gesturestart", preventZoomGesture, {
+    passive: false,
+  });
+  document.addEventListener("gesturechange", preventZoomGesture, {
+    passive: false,
+  });
+  document.addEventListener("gestureend", preventZoomGesture, {
+    passive: false,
+  });
+  document.addEventListener("touchstart", preventMultiTouchZoom, {
+    passive: false,
+  });
+  document.addEventListener("touchmove", preventMultiTouchZoom, {
+    passive: false,
+  });
+  window.addEventListener("wheel", preventCtrlWheelZoom, { passive: false });
+
   // Capture beforeinstallprompt & request persistent storage on Android Chrome WebAPK
   if (isAndroidRuntime()) {
     const requestAndroidPersistentStorage = async () => {

@@ -295,7 +295,7 @@ html[data-theme="light"] .welcome-flow,
 html[data-platform="android"] .welcome-flow,
 html[data-platform="android"] .welcome-flow .track,
 html[data-platform="android"] .welcome-flow .slide {
-  touch-action: pan-y pinch-zoom;
+  touch-action: pan-y;
   overscroll-behavior-x: none;
   -webkit-user-select: none;
   user-select: none;

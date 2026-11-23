@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="theme-color" content="#161d2b" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#161d2b" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#161d2b" />
@@ -64,15 +64,6 @@
                   : "web";
           root.dataset.platform = detectedPlatform;
           root.setAttribute("data-platform", detectedPlatform);
-          if (detectedPlatform === "android") {
-            var vp = document.querySelector('meta[name="viewport"]');
-            if (vp) {
-              vp.setAttribute(
-                "content",
-                "width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
-              );
-            }
-          }
         } catch (e) {}
       })();
     </script>

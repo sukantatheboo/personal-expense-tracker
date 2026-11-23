@@ -40,6 +40,7 @@ body {
   overscroll-behavior: none;
   overflow-x: hidden;
   scrollbar-width: none;
+  touch-action: pan-x pan-y;
 }
 html::-webkit-scrollbar,
 body::-webkit-scrollbar {
@@ -73,6 +74,7 @@ body {
 #root {
   min-height: 100dvh;
   background: var(--page-bg);
+  touch-action: pan-x pan-y;
 }
 button,
 input,
@@ -870,6 +872,7 @@ a:active,
   flex-direction: column;
   overflow: hidden;
   overscroll-behavior: none;
+  touch-action: pan-x pan-y;
   background: var(--bg);
   color: var(--ink);
 }
