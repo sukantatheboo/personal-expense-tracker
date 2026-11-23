@@ -2148,27 +2148,21 @@ export default function App() {
       !sessionResolving &&
       document.documentElement.dataset.splashActive !== "1"
     ) {
-      const pageBg = resolvedTheme === "dark" ? "#08080c" : "#f4f3ee";
-      const isLockScreenVisible = Boolean(
-        document.querySelector(".mobile-prototype.is-locked-screen"),
-      );
-      const browserChromeColor = isLockScreenVisible
-        ? pageBg
-        : resolvedTheme === "dark"
-          ? "#171923"
-          : "#f9f9f7";
+      const browserChromeColor =
+        resolvedTheme === "dark" ? "#08080c" : "#f4f3ee";
       document.documentElement.style.colorScheme = resolvedTheme;
-      document.documentElement.style.backgroundColor = pageBg;
+      document.documentElement.style.backgroundColor = browserChromeColor;
       if (document.body) {
-        document.body.style.backgroundColor = pageBg;
+        document.body.style.backgroundColor = browserChromeColor;
       }
-      document
-        .querySelectorAll('meta[name="theme-color"]')
-        .forEach((meta) => meta.remove());
-      const themeMeta = document.createElement("meta");
-      themeMeta.name = "theme-color";
-      themeMeta.content = browserChromeColor;
-      document.head.appendChild(themeMeta);
+      let themeMeta = document.querySelector('meta[name="theme-color"]');
+      if (!themeMeta) {
+        themeMeta = document.createElement("meta");
+        themeMeta.name = "theme-color";
+        document.head.appendChild(themeMeta);
+      }
+      themeMeta.removeAttribute("media");
+      themeMeta.setAttribute("content", browserChromeColor);
     }
     try {
       localStorage.setItem(STORAGE_KEYS.theme, theme);

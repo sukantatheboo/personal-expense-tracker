@@ -13884,39 +13884,28 @@ export default function MobilePrototype({
   const [platform, setPlatform] = useState(() => detectMobilePlatform());
 
   useLayoutEffect(() => {
-    const syncChrome = () => {
-      const rootEl = document.documentElement;
-      rootEl.dataset.theme = resolvedTheme;
-      rootEl.setAttribute("data-theme", resolvedTheme);
-      if (rootEl.dataset.splashActive !== "1") {
-        rootEl.style.colorScheme = resolvedTheme;
-        const pageBg = resolvedTheme === "dark" ? "#08080c" : "#f4f3ee";
-        const chromeColor = isAppLocked
-          ? pageBg
-          : resolvedTheme === "dark"
-            ? "#171923"
-            : "#f9f9f7";
-        rootEl.style.backgroundColor = pageBg;
-        document.body.style.backgroundColor = pageBg;
-        document
-          .querySelectorAll('meta[name="theme-color"]')
-          .forEach((meta) => meta.remove());
-        const themeMeta = document.createElement("meta");
+    const rootEl = document.documentElement;
+    rootEl.dataset.theme = resolvedTheme;
+    rootEl.setAttribute("data-theme", resolvedTheme);
+    if (rootEl.dataset.splashActive !== "1") {
+      rootEl.style.colorScheme = resolvedTheme;
+      const themeColor = resolvedTheme === "dark" ? "#08080c" : "#f4f3ee";
+      rootEl.style.backgroundColor = themeColor;
+      document.body.style.backgroundColor = themeColor;
+      let themeMeta = document.querySelector('meta[name="theme-color"]');
+      if (!themeMeta) {
+        themeMeta = document.createElement("meta");
         themeMeta.name = "theme-color";
-        themeMeta.content = chromeColor;
         document.head.appendChild(themeMeta);
       }
-    };
-    syncChrome();
-    document.addEventListener("spend:splash-done", syncChrome);
+      themeMeta.removeAttribute("media");
+      themeMeta.setAttribute("content", themeColor);
+    }
     try {
       const modeToSave = S?.themeMode || S?.theme || resolvedTheme;
       localStorage.setItem("spend-theme-v1", modeToSave);
     } catch {}
-    return () => {
-      document.removeEventListener("spend:splash-done", syncChrome);
-    };
-  }, [resolvedTheme, isAppLocked, S?.theme, S?.themeMode]);
+  }, [resolvedTheme, S?.theme, S?.themeMode]);
 
   // Dynamically sync iOS / Android platform attribute & ensure viewport meta allows accessibility zoom
   useLayoutEffect(() => {
