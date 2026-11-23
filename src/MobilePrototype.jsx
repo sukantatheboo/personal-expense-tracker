@@ -1587,9 +1587,14 @@ function Sheet({
     setDetent(nextDetent);
   }, []);
 
-  const setRootDragProgress = useCallback((progressValue) => {
+  const setRootDragProgress = useCallback((progressValue, isDragging = null) => {
     const root = sheetRef.current?.closest(".mobile-prototype");
     if (!root) return;
+    if (isDragging === true) {
+      root.setAttribute("data-sheet-dragging", "true");
+    } else if (isDragging === false || progressValue == null) {
+      root.removeAttribute("data-sheet-dragging");
+    }
     if (progressValue == null) {
       root.style.removeProperty("--sheet-drag-progress");
     } else {
@@ -1606,20 +1611,48 @@ function Sheet({
         cancelAnimationFrame(rAFRef.current);
       }
       const root = document.querySelector(".mobile-prototype");
+      root?.removeAttribute("data-sheet-dragging");
       root?.style.removeProperty("--sheet-drag-progress");
     };
   }, []);
 
-  useLayoutEffect(() => {
+  // Two-frame composited entrance: let the browser paint & upload the sheet layer off-screen
+  // at translate3d(0, 100%, 0) first, then flip data-entered="true" so Frame 1 is never skipped.
+  useEffect(() => {
     const sheetNode = sheetRef.current;
-    if (!sheetNode) return;
+    const overlayNode = overlayRef.current;
+    if (!sheetNode) return undefined;
 
-    // Check if there is an explicit autofocus target or a primary amount input field
-    const autoFocusTarget = sheetNode.querySelector(
-      "[data-sheet-autofocus], .amt input, input[autofocus]",
-    );
+    let raf1 = 0;
+    let raf2 = 0;
+    let focusTimer = 0;
 
-    sheetNode.focus({ preventScroll: true });
+    const startEnter = () => {
+      overlayNode?.setAttribute("data-entered", "true");
+      sheetNode.setAttribute("data-entered", "true");
+      sheetNode.focus({ preventScroll: true });
+    };
+
+    const reducedMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+
+    if (reducedMotion) {
+      startEnter();
+    } else {
+      raf1 = window.requestAnimationFrame(() => {
+        raf2 = window.requestAnimationFrame(startEnter);
+      });
+    }
+
+    // Defer auto-focus until after the 360ms entrance transition settles (skip on iOS
+    // where WebKit ignores programmatic setTimeout focus without a direct tap gesture).
+    const isIOS = detectMobilePlatform() === "ios";
+    const autoFocusTarget = !isIOS
+      ? sheetNode.querySelector(
+          "[data-sheet-autofocus], .amt input, input[autofocus]",
+        )
+      : null;
 
     if (autoFocusTarget && typeof autoFocusTarget.focus === "function") {
       const focusTarget = () => {
@@ -1645,12 +1678,14 @@ function Sheet({
         }
       };
 
-      // Dynamically delay auto-focus (300ms on Android IME, 280ms on iOS/Web) until the sheet
-      // entrance transition finishes so keyboard resize never janks or clips the sticky Save footer
-      const focusDelayMs = isAndroidPlatform() ? 300 : 280;
-      const timer = setTimeout(focusTarget, focusDelayMs);
-      return () => clearTimeout(timer);
+      focusTimer = window.setTimeout(focusTarget, reducedMotion ? 0 : 380);
     }
+
+    return () => {
+      if (raf1) window.cancelAnimationFrame(raf1);
+      if (raf2) window.cancelAnimationFrame(raf2);
+      if (focusTimer) window.clearTimeout(focusTimer);
+    };
   }, []);
 
   useEffect(() => {
@@ -1770,7 +1805,7 @@ function Sheet({
             0,
             Math.min(1, currentOffset / (drag.sheetHeight * 0.85)),
           );
-          setRootDragProgress(dragDismissRatio);
+          setRootDragProgress(dragDismissRatio, true);
           if (overlayRef.current) {
             const progress = 1 - dragDismissRatio;
             overlayRef.current.style.opacity = progress.toFixed(3);
@@ -1808,15 +1843,15 @@ function Sheet({
     ) {
       triggerHaptic("selection");
       updateDetent("expanded");
-      setRootDragProgress(0);
+      setRootDragProgress(0, false);
       const sheetNode = sheetRef.current;
       if (sheetNode) {
         sheetNode.removeAttribute("data-dragging");
         sheetNode.style.transition =
-          "transform 280ms cubic-bezier(0.2, 0.9, 0.28, 1)";
+          "transform 280ms cubic-bezier(0.32, 0.72, 0, 1)";
         sheetNode.style.transform = "translate3d(0, 0, 0)";
         window.setTimeout(() => {
-          setRootDragProgress(null);
+          setRootDragProgress(null, false);
           if (sheetNode && !dragRef.current?.active) {
             sheetNode.style.transition = "";
             sheetNode.style.transform = "";
@@ -1835,22 +1870,22 @@ function Sheet({
     ) {
       triggerHaptic("selection");
       updateDetent("default");
-      setRootDragProgress(0);
+      setRootDragProgress(0, false);
       const sheetNode = sheetRef.current;
       const overlayNode = overlayRef.current;
       if (sheetNode) {
         sheetNode.removeAttribute("data-dragging");
         sheetNode.style.transition =
-          "transform 280ms cubic-bezier(0.2, 0.9, 0.28, 1)";
+          "transform 280ms cubic-bezier(0.32, 0.72, 0, 1)";
         sheetNode.style.transform = "translate3d(0, 0, 0)";
       }
       if (overlayNode) {
         overlayNode.style.transition =
-          "opacity 240ms cubic-bezier(0.2, 0.9, 0.28, 1)";
+          "opacity 240ms cubic-bezier(0.32, 0.72, 0, 1)";
         overlayNode.style.opacity = "1";
       }
       window.setTimeout(() => {
-        setRootDragProgress(null);
+        setRootDragProgress(null, false);
         if (sheetNode && !dragRef.current?.active) {
           sheetNode.style.transition = "";
           sheetNode.style.transform = "";
@@ -1873,40 +1908,40 @@ function Sheet({
 
     if (shouldClose) {
       triggerHaptic("selection");
-      setRootDragProgress(1);
+      setRootDragProgress(1, false);
 
       if (sheetNode) {
         sheetNode.removeAttribute("data-dragging");
         sheetNode.style.transition =
-          "transform 260ms cubic-bezier(0.2, 0.9, 0.28, 1)";
+          "transform 260ms cubic-bezier(0.32, 0.72, 0, 1)";
         sheetNode.style.transform = "translate3d(0, 100%, 0)";
       }
       if (overlayNode) {
         overlayNode.style.transition =
-          "opacity 240ms cubic-bezier(0.2, 0.9, 0.28, 1)";
+          "opacity 240ms cubic-bezier(0.32, 0.72, 0, 1)";
         overlayNode.style.opacity = "0";
       }
 
       window.setTimeout(() => {
-        setRootDragProgress(null);
+        setRootDragProgress(null, false);
         onClose({ kind: "drag", distance, velocity });
-      }, 240);
+      }, 270);
     } else {
-      setRootDragProgress(0);
+      setRootDragProgress(0, false);
       if (sheetNode) {
         sheetNode.removeAttribute("data-dragging");
         sheetNode.style.transition =
-          "transform 260ms cubic-bezier(0.2, 0.9, 0.28, 1)";
+          "transform 280ms cubic-bezier(0.32, 0.72, 0, 1)";
         sheetNode.style.transform = "translate3d(0, 0, 0)";
       }
       if (overlayNode) {
         overlayNode.style.transition =
-          "opacity 240ms cubic-bezier(0.2, 0.9, 0.28, 1)";
+          "opacity 240ms cubic-bezier(0.32, 0.72, 0, 1)";
         overlayNode.style.opacity = "1";
       }
 
       window.setTimeout(() => {
-        setRootDragProgress(null);
+        setRootDragProgress(null, false);
         if (sheetNode && !dragRef.current?.active) {
           sheetNode.style.transition = "";
           sheetNode.style.transform = "";
@@ -1915,7 +1950,7 @@ function Sheet({
           overlayNode.style.transition = "";
           overlayNode.style.opacity = "";
         }
-      }, 270);
+      }, 290);
     }
   }, [onClose, setRootDragProgress, updateDetent]);
 
