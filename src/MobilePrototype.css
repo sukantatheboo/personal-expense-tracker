@@ -159,14 +159,14 @@ a:active,
   overflow-y: auto;
   padding: 16px;
   background: rgb(0 0 0 / 58%);
-  backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   animation: prototype-fade-in 180ms ease-out both;
 }
 .update-modal-backdrop {
   z-index: 10001;
-  backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
 }
 .auth-modal-backdrop.is-closing,
 .profile-editor-backdrop.is-closing,
@@ -1136,8 +1136,8 @@ a:active,
   inset: 0;
   z-index: -1;
   background: color-mix(in srgb, var(--bg) 94%, transparent);
-  backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
   border-bottom: 0.5px solid color-mix(in srgb, var(--line) 85%, transparent);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
   opacity: var(--p, 0);
@@ -3159,8 +3159,8 @@ a:active,
   margin: 0;
   padding: 8px 4px;
   background: color-mix(in srgb, var(--bg) 88%, transparent);
-  backdrop-filter: blur(14px) saturate(160%);
   -webkit-backdrop-filter: blur(14px) saturate(160%);
+  backdrop-filter: blur(14px) saturate(160%);
 }
 .mobile-prototype .activity-filter-summary {
   display: flex;
@@ -3507,8 +3507,8 @@ a:active,
 :root[data-theme="dark"] .mobile-prototype .seg:not(.seg-ctrl),
 .mobile-prototype[data-theme="dark"] .seg:not(.seg-ctrl) {
   background: rgba(20, 20, 18, 0.38);
-  backdrop-filter: blur(5px) saturate(1.4);
   -webkit-backdrop-filter: blur(5px) saturate(1.4);
+  backdrop-filter: blur(5px) saturate(1.4);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.32);
 }
 :root[data-theme="dark"] .mobile-prototype .sh .seg:not(.seg-ctrl),
@@ -3530,8 +3530,8 @@ a:active,
 @media (prefers-color-scheme: dark) {
   .mobile-prototype:not([data-theme="light"]) .seg:not(.seg-ctrl) {
     background: rgba(20, 20, 18, 0.38);
-    backdrop-filter: blur(5px) saturate(1.4);
     -webkit-backdrop-filter: blur(5px) saturate(1.4);
+    backdrop-filter: blur(5px) saturate(1.4);
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.32);
   }
   .mobile-prototype:not([data-theme="light"]) .sh .seg:not(.seg-ctrl) {
@@ -4157,8 +4157,8 @@ a:active,
   inset: 0;
   pointer-events: none;
   background: color-mix(in srgb, var(--dock-surface) 60%, transparent);
-  backdrop-filter: blur(22px) saturate(180%);
   -webkit-backdrop-filter: blur(22px) saturate(180%);
+  backdrop-filter: blur(22px) saturate(180%);
   -webkit-mask-image:
     linear-gradient(#000, #000),
     linear-gradient(#000, #000),
@@ -4392,8 +4392,8 @@ a:active,
   align-items: flex-end;
   justify-content: center;
   background: rgba(0, 0, 0, 0.64);
-  backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   animation: prototype-fade-in 280ms cubic-bezier(0.2, 0.9, 0.28, 1) both;
   will-change: opacity;
 }
@@ -9587,8 +9587,8 @@ a:active,
   justify-content: center;
   padding: 20px;
   background: rgba(0, 0, 0, 0.65);
-  backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
   animation: prototype-fade-in 160ms ease-out both;
   touch-action: none;
 }
@@ -10165,8 +10165,8 @@ html[data-theme="dark"]
   border-radius: 999px;
   background: var(--spend-velocity-bg, rgba(255, 255, 255, 0.08));
   border: 1px solid var(--spend-velocity-border, rgba(255, 255, 255, 0.1));
-  backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
 }
 .mobile-prototype .hero-velocity-badge {
   display: inline-flex;
@@ -10250,8 +10250,8 @@ html[data-theme="dark"]
   inset: 0;
   z-index: 9999;
   background: rgba(15, 23, 20, 0.52);
-  backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -10595,8 +10595,8 @@ html[data-theme="dark"]
 }
 
 .mobile-prototype .ov {
-  backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
 }
 
 /* ───────────── GPU-Mounted Persistent Tab Panels ───────────── */
@@ -10907,8 +10907,8 @@ html[data-theme="dark"]
   justify-content: center;
   gap: 10px;
   background: color-mix(in srgb, var(--bg) 76%, transparent);
-  backdrop-filter: blur(22px) saturate(1.2);
   -webkit-backdrop-filter: blur(22px) saturate(1.2);
+  backdrop-filter: blur(22px) saturate(1.2);
   color: var(--ink);
   pointer-events: none;
 }
@@ -10937,8 +10937,8 @@ html[data-platform="android"][data-android-privacy-blur="1"] .mobile-prototype:n
   inset: 0;
   z-index: 2147483000;
   background: color-mix(in srgb, var(--bg, #161d2b) 78%, transparent);
-  backdrop-filter: blur(24px) saturate(1.1);
   -webkit-backdrop-filter: blur(24px) saturate(1.1);
+  backdrop-filter: blur(24px) saturate(1.1);
   pointer-events: none;
 }
 
@@ -12679,8 +12679,8 @@ html[data-platform="android"][data-android-privacy-blur="1"] .mobile-prototype:n
   z-index: 20;
   padding: calc(var(--safe-top, env(safe-area-inset-top, 0px)) + 12px) 18px 0;
   background: color-mix(in srgb, var(--bg) 92%, transparent);
-  backdrop-filter: blur(18px) saturate(180%);
   -webkit-backdrop-filter: blur(18px) saturate(180%);
+  backdrop-filter: blur(18px) saturate(180%);
   border-bottom: 1px solid color-mix(in srgb, var(--line) 75%, transparent);
   user-select: none;
   -webkit-user-select: none;
@@ -12843,8 +12843,8 @@ html[data-platform="android"][data-android-privacy-blur="1"] .mobile-prototype:n
   font-weight: 700;
   color: var(--mut);
   background: color-mix(in srgb, var(--bg) 94%, transparent);
-  backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
   user-select: none;
   -webkit-user-select: none;
 }
@@ -13712,16 +13712,16 @@ html[data-platform="ios"]
 .mobile-prototype .sh {
   --sheet-surface: rgba(251, 250, 246, 0.94);
   background: var(--sheet-surface) !important;
-  backdrop-filter: blur(24px) saturate(180%);
   -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
 }
 :root[data-theme="dark"] .mobile-prototype .sh,
 .mobile-prototype[data-theme="dark"] .sh,
 .mobile-prototype.dark .sh {
   --sheet-surface: rgba(20, 20, 24, 0.94);
   background: var(--sheet-surface) !important;
-  backdrop-filter: blur(24px) saturate(180%);
   -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
 }
 .mobile-prototype .sheet-content > h3:first-child {
   position: sticky;

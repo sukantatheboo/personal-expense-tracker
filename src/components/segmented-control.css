@@ -99,8 +99,8 @@
   border: 0;
   box-shadow: none;
   border-radius: 999px;
-  backdrop-filter: none;
   -webkit-backdrop-filter: none;
+  backdrop-filter: none;
   overflow: visible;
   touch-action: none;
   user-select: none;
@@ -120,8 +120,8 @@
   border-radius: 999px;
   background: var(--seg-thumb);
   box-shadow: var(--seg-thumb-shadow);
-  backdrop-filter: var(--seg-lens-off);
   -webkit-backdrop-filter: var(--seg-lens-off);
+  backdrop-filter: var(--seg-lens-off);
   --seg-soft: scale .3s var(--seg-spring), background-color .3s ease, box-shadow .3s ease,
     backdrop-filter .3s ease, -webkit-backdrop-filter .3s ease;
   transition: transform .42s var(--seg-spring), var(--seg-soft);
@@ -226,8 +226,8 @@
     inset: 0;
     border-radius: inherit;
     background: var(--seg-glass-track);
-    backdrop-filter: blur(5px) saturate(1.4);
     -webkit-backdrop-filter: blur(5px) saturate(1.4);
+    backdrop-filter: blur(5px) saturate(1.4);
     box-shadow: inset 0 0 0 1px var(--seg-glass-edge);
     pointer-events: none;
   }
@@ -249,8 +249,8 @@
   inset: 0;
   border-radius: inherit;
   background: var(--seg-glass-track);
-  backdrop-filter: blur(5px) saturate(1.4);
   -webkit-backdrop-filter: blur(5px) saturate(1.4);
+  backdrop-filter: blur(5px) saturate(1.4);
   box-shadow: inset 0 0 0 1px var(--seg-glass-edge);
   pointer-events: none;
 }
@@ -268,8 +268,8 @@
 .seg.seg-ctrl.seg--pressed .seg__thumb {
   scale: 1.07;
   background: var(--seg-glass);
-  backdrop-filter: var(--seg-lens);
   -webkit-backdrop-filter: var(--seg-lens);
+  backdrop-filter: var(--seg-lens);
   box-shadow: var(--seg-pressed-shadow);
 }
 .seg.seg-ctrl.seg--pressed .seg__thumb::before,
