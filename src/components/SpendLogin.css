@@ -15,10 +15,10 @@
   --key-active: #e4e3da;
   --key: 64px;
   --shift: 72px;
-  --top: max(88px, calc(env(safe-area-inset-top, 0px) + 36px));
+  --top: max(88px, calc(var(--safe-top, env(safe-area-inset-top, 0px)) + 36px));
   position: relative;
   width: 100%;
-  height: 100dvh;
+  height: 100%;
   overflow: hidden;
   background: var(--bg) !important;
   color: var(--ink);
@@ -59,10 +59,10 @@ html[data-theme="dark"] .sl,
     --line: #222430;
     --ring: #475569;
     --error: #f87171;
-    --sheet-bg: #151b23;
-    --sheet-shadow: 0 -16px 48px rgba(0, 0, 0, 0.55);
-    --key-bg: #1d2530;
-    --key-active: #283342;
+    --sheet-bg: #12131a;
+    --sheet-shadow: 0 -16px 48px rgba(0, 0, 0, 0.62);
+    --key-bg: #181a24;
+    --key-active: #222533;
   }
 }
 
@@ -375,7 +375,7 @@ html[data-theme="dark"] .sl,
   left: 0;
   right: 0;
   bottom: 0;
-  padding: 20px 20px max(34px, env(safe-area-inset-bottom));
+  padding: 20px 20px max(34px, calc(var(--safe-bottom, env(safe-area-inset-bottom, 0px)) + 16px));
   background: var(--sheet-bg);
   border-radius: 28px 28px 0 0;
   box-shadow: var(--sheet-shadow);
@@ -441,7 +441,7 @@ html[data-theme="dark"] .sl,
 /* Mid-height phones: keep stacked meta + Forgot PIN clear of the open keypad */
 @media (max-height: 820px) {
   .sl {
-    --top: max(56px, calc(env(safe-area-inset-top, 0px) + 18px));
+    --top: max(56px, calc(var(--safe-top, env(safe-area-inset-top, 0px)) + 18px));
     --key: 58px;
   }
   .sl__title {
@@ -457,7 +457,7 @@ html[data-theme="dark"] .sl,
   .sl {
     --key: 52px;
     --shift: 20px;
-    --top: max(24px, env(safe-area-inset-top, 0px));
+    --top: max(24px, var(--safe-top, env(safe-area-inset-top, 0px)));
   }
   .sl__title {
     margin: 18px 0 6px;
@@ -466,7 +466,7 @@ html[data-theme="dark"] .sl,
     margin-top: 24px;
   }
   .sl__sheet {
-    padding: 16px 20px 24px;
+    padding: 16px 20px max(24px, calc(var(--safe-bottom, env(safe-area-inset-bottom, 0px)) + 12px));
   }
 }
 @media (prefers-reduced-motion: reduce) {

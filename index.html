@@ -39,12 +39,17 @@
               window.matchMedia("(prefers-color-scheme: dark)").matches);
           var resolved = dark ? "dark" : "light";
           var splashBg = "#161d2b";
+          var resolvedChrome = dark ? "#08080c" : "#f4f3ee";
           var root = document.documentElement;
           root.dataset.theme = resolved;
           root.setAttribute("data-theme", resolved);
           root.dataset.splashActive = "1";
-          root.style.colorScheme = "dark";
+          root.style.colorScheme = dark ? "dark" : "light";
           root.style.backgroundColor = splashBg;
+          var bootThemeMeta = document.querySelector('meta[name="theme-color"]');
+          if (bootThemeMeta) {
+            bootThemeMeta.setAttribute("content", resolvedChrome);
+          }
 
           var ua = (navigator && navigator.userAgent) || "";
           var plat =
