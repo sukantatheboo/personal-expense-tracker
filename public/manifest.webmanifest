@@ -10,8 +10,8 @@
     "client_mode": "focus-existing"
   },
   "orientation": "portrait",
-  "background_color": "#161d2b",
-  "theme_color": "#161d2b",
+  "background_color": "#f4f3ee",
+  "theme_color": "#f4f3ee",
   "categories": ["finance", "productivity"],
   "icons": [
     { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },

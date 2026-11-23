@@ -5,6 +5,8 @@ import {
   cleanEnv,
   computeAccountBalances,
   emptyAccountData,
+  isCashCard,
+  isMfsCard,
   isPhantomAutoReconstructedCard,
   isSavingsCard,
   isValidDateString,
@@ -1706,7 +1708,26 @@ export function sanitizeCloudPayload(data) {
       ) {
         return [];
       }
-      const { cvv: _cvv, ...restCard } = c;
+      const {
+        cvv: _cvv,
+        cvc: _cvc,
+        securityCode: _securityCode,
+        security_code: _securityCodeSnake,
+        pin: _pin,
+        ...restCard
+      } = c;
+      const rawNumberStr = typeof c.number === "string" ? c.number.trim() : "";
+      const rawDigits = rawNumberStr.replace(/\D/g, "");
+      const rawLast4 = String(
+        c.last4 || (rawDigits ? rawDigits.slice(-4) : ""),
+      ).slice(0, 8);
+      const isSavings = isSavingsCard(c);
+      const isCash = isCashCard(c);
+      const isMfs = isMfsCard(c);
+      let safeNumber = rawNumberStr;
+      if (rawDigits.length >= 13 || (!isSavings && !isCash && !isMfs && rawNumberStr)) {
+        safeNumber = rawLast4 ? `•••• •••• •••• ${rawLast4}` : "";
+      }
       const initBal = Number(c.initialBalance);
       const currBal = Number(c.currentBalance);
       return [
@@ -1714,6 +1735,8 @@ export function sanitizeCloudPayload(data) {
           ...restCard,
           id: c.id.trim().slice(0, 120),
           name: String(c.name || c.id).slice(0, 80),
+          ...(rawLast4 ? { last4: rawLast4 } : {}),
+          ...(c.number !== undefined ? { number: safeNumber.slice(0, 32) } : {}),
           initialBalance:
             Number.isFinite(initBal) && initBal >= 0 ? roundMoney(initBal) : 0,
           ...(Number.isFinite(currBal)

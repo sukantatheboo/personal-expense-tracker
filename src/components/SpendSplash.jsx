@@ -95,13 +95,9 @@ export default function SpendSplash({
     const root = rootRef.current;
     if (!root || skip) return undefined;
 
-    document.documentElement.style.backgroundColor = "#161d2b";
-    document.body.style.backgroundColor = "#161d2b";
-    document
-      .querySelectorAll('meta[name="theme-color"]')
-      .forEach((meta) => meta.setAttribute("content", "#161d2b"));
     handoffStaticSplash();
     ensureAppFontsLoaded();
+    syncThemeColorMeta();
 
     const stage = root.querySelector(".sp-stage");
     const reduce = window.matchMedia(

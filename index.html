@@ -2,10 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
-    <meta name="theme-color" content="#161d2b" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#161d2b" media="(prefers-color-scheme: dark)" />
-    <meta name="theme-color" content="#161d2b" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#f4f3ee" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#08080c" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f4f3ee" />
     <style id="spend-critical-splash-css">
       #initial-splash {
         position: fixed;
@@ -36,11 +36,12 @@
               window.matchMedia &&
               window.matchMedia("(prefers-color-scheme: dark)").matches);
           var resolved = dark ? "dark" : "light";
+          var appBg = dark ? "#08080c" : "#f4f3ee";
           var root = document.documentElement;
           root.dataset.theme = resolved;
           root.setAttribute("data-theme", resolved);
           root.style.colorScheme = resolved;
-          root.style.backgroundColor = "#161d2b";
+          root.style.backgroundColor = appBg;
 
           var ua = (navigator && navigator.userAgent) || "";
           var plat =
@@ -83,7 +84,7 @@
     />
     <title>Spend — Personal Expense Tracker</title>
   </head>
-  <body style="background-color: #161d2b; margin: 0">
+  <body style="margin: 0">
     <div id="initial-splash" aria-hidden="true"></div>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>

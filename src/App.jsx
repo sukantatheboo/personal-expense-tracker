@@ -3993,6 +3993,10 @@ export default function App() {
             ...current.settings.balances,
             [cardId]: initialBalance,
           },
+          openingBalances: {
+            ...(current.settings.openingBalances || current.settings.balances),
+            [cardId]: initialBalance,
+          },
         },
       };
     });
@@ -4020,7 +4024,9 @@ export default function App() {
         ? accountData.settings.cards
         : []
     ).find((c) => c.id === cardId);
-    const existingBalance = accountData.settings.balances?.[cardId];
+    const existingBalance =
+      accountData.settings.openingBalances?.[cardId] ??
+      accountData.settings.balances?.[cardId];
     const now = Date.now();
 
     setAccountData((current) => {
@@ -4041,6 +4047,10 @@ export default function App() {
       );
       const nextBalances = { ...current.settings.balances };
       delete nextBalances[cardId];
+      const nextOpeningBalances = {
+        ...(current.settings.openingBalances || current.settings.balances),
+      };
+      delete nextOpeningBalances[cardId];
       return {
         ...current,
         settings: {
@@ -4053,6 +4063,7 @@ export default function App() {
             "",
           cards: nextCards,
           balances: nextBalances,
+          openingBalances: nextOpeningBalances,
         },
       };
     });
@@ -4106,6 +4117,13 @@ export default function App() {
               cards: restoredCards,
               balances: {
                 ...current.settings.balances,
+                ...(existingBalance !== undefined
+                  ? { [existingCard.id]: existingBalance }
+                  : {}),
+              },
+              openingBalances: {
+                ...(current.settings.openingBalances ||
+                  current.settings.balances),
                 ...(existingBalance !== undefined
                   ? { [existingCard.id]: existingBalance }
                   : {}),
@@ -4208,7 +4226,8 @@ export default function App() {
               ? roundMoney(rawInitialBal)
               : roundMoney(
                   Number(
-                    current.settings.balances?.[updatedCard.id] ??
+                    current.settings.openingBalances?.[updatedCard.id] ??
+                      current.settings.balances?.[updatedCard.id] ??
                       c.initialBalance,
                   ) || 0,
                 );
@@ -4246,6 +4265,11 @@ export default function App() {
             ? {
                 balances: {
                   ...current.settings.balances,
+                  [updatedCard.id]: roundMoney(rawInitialBal),
+                },
+                openingBalances: {
+                  ...(current.settings.openingBalances ||
+                    current.settings.balances),
                   [updatedCard.id]: roundMoney(rawInitialBal),
                 },
               }

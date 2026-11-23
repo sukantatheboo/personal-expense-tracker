@@ -62,6 +62,7 @@ import {
   lockAppManually,
 } from "./security.js";
 import "./MobilePrototype.css";
+import { useScrollProgress } from "./useScrollProgress.js";
 import {
   QuickActionsRow,
   QuickAction,
@@ -207,10 +208,11 @@ const DOCK_G = {
 };
 const DOCK_BAR_H = 54 * DOCK_K;
 const DOCK_NOTCH_W = DOCK_G.start * 2;
-const DOCK_NOTCH_D =
+const DOCK_NOTCH_CURVE_D =
   `M0 0 C${DOCK_G.start - DOCK_G.c1} 0 ${DOCK_G.start - DOCK_G.c2x} ${DOCK_G.c2y} ${DOCK_G.start - DOCK_G.jx} ${DOCK_G.jy} ` +
   `A${DOCK_G.r} ${DOCK_G.r} 0 0 0 ${DOCK_G.start + DOCK_G.jx} ${DOCK_G.jy} ` +
-  `C${DOCK_G.start + DOCK_G.c2x} ${DOCK_G.c2y} ${DOCK_G.start + DOCK_G.c1} 0 ${DOCK_NOTCH_W} 0 V${DOCK_BAR_H} H0 Z`;
+  `C${DOCK_G.start + DOCK_G.c2x} ${DOCK_G.c2y} ${DOCK_G.start + DOCK_G.c1} 0 ${DOCK_NOTCH_W} 0`;
+const DOCK_NOTCH_D = `${DOCK_NOTCH_CURVE_D} V${DOCK_BAR_H} H0 Z`;
 const SHEET_EXIT_MS = 280;
 const SHEET_REDUCED_EXIT_MS = 160;
 
@@ -792,7 +794,7 @@ function HeroAmountField({
   );
 }
 
-function ExpenseRow({
+const ExpenseRow = memo(function ExpenseRow({
   e,
   cards = [],
   deletedCards = null,
@@ -1551,7 +1553,7 @@ function ExpenseRow({
       {row}
     </div>
   );
-}
+});
 
 function Sheet({
   onClose,
@@ -4568,7 +4570,7 @@ function sortRecurringSection(items) {
 
 const RECURRING_SWIPE_WIDTH = 84;
 
-function RecurringRow({ item, fmt, accountLabel, onSelect, onTogglePause }) {
+const RecurringRow = memo(function RecurringRow({ item, fmt, accountLabel, onSelect, onTogglePause }) {
   const pointerRef = useRef(null);
   const rowRef = useRef(null);
   const shellRef = useRef(null);
@@ -5104,7 +5106,7 @@ function RecurringRow({ item, fmt, accountLabel, onSelect, onTogglePause }) {
       </div>
     </div>
   );
-}
+});
 
 const plansScrollStore = {
   budget: 0,
@@ -13259,170 +13261,7 @@ function SecuritySheet({ onClose, onBack, onLockNow }) {
   );
 }
 
-const COLLAPSE_START_PX = 8;
-const COLLAPSE_RANGE_PX = 52; // 8px -> 60px (0 -> 1)
 
-function computeCollapse(scrollTop) {
-  return Math.min(
-    1,
-    Math.max(0, (scrollTop - COLLAPSE_START_PX) / COLLAPSE_RANGE_PX),
-  );
-}
-
-function useCollapsingHeader({ activeTab, enableSnap = true }) {
-  const screenRootRef = React.useRef(null);
-  const scrollerMapRef = React.useRef(new Map());
-  const tabScrollerRefs = React.useRef({});
-  const tabScrollTopRef = React.useRef({
-    home: 0,
-    activity: 0,
-    accounts: 0,
-    plans: 0,
-    "app-settings": 0,
-    "profile-settings": 0,
-  });
-  const rafIdRef = React.useRef(0);
-  const isSnappingRef = React.useRef(false);
-
-  const applyCollapseFromScrollTop = React.useCallback((scrollTop) => {
-    const rootEl = screenRootRef.current;
-    if (!rootEl) return;
-    const progress = computeCollapse(scrollTop);
-    rootEl.style.setProperty("--collapse", progress.toFixed(4));
-  }, []);
-
-  const getActiveScroller = React.useCallback(() => {
-    const panel = scrollerMapRef.current.get(activeTab) || null;
-    if (!panel) return null;
-    if (activeTab === "plans") {
-      return panel.querySelector(".plans-tab-scroller.is-active") || panel;
-    }
-    if (activeTab === "activity") {
-      return panel.querySelector(".activity-scroll-feed") || panel;
-    }
-    return panel;
-  }, [activeTab]);
-
-  // Register each persistent tab panel's scroll container with stable ref callback per tab
-  const registerTabScroller = React.useCallback((tabKey) => {
-    if (!tabScrollerRefs.current[tabKey]) {
-      tabScrollerRefs.current[tabKey] = (node) => {
-        if (node) {
-          scrollerMapRef.current.set(tabKey, node);
-        } else {
-          scrollerMapRef.current.delete(tabKey);
-        }
-      };
-    }
-    return tabScrollerRefs.current[tabKey];
-  }, []);
-
-  // Smooth scroll-to-top for header tap & re-tapping active tab
-  const scrollToTop = React.useCallback(() => {
-    const panel = scrollerMapRef.current.get(activeTab) || null;
-    if (!panel) return;
-    const target =
-      panel.querySelector(
-        ".activity-scroll-feed, .plans-tab-scroller.is-active",
-      ) || panel;
-    tabScrollTopRef.current[activeTab] = 0;
-    if (activeTab === "plans") {
-      const activePlanShell = panel.querySelector(".plans-screen-shell");
-      const activePlanKey =
-        activePlanShell?.getAttribute("data-active-plan") || "budget";
-      plansScrollStore[activePlanKey] = 0;
-    }
-    const prefersReducedMotion =
-      window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
-    target.scrollTo({
-      top: 0,
-      behavior: prefersReducedMotion ? "auto" : "smooth",
-    });
-  }, [activeTab]);
-
-  // Restore saved scrollTop & sync --collapse before paint when switching tabs
-  React.useLayoutEffect(() => {
-    const scroller = getActiveScroller();
-    if (!scroller) return;
-    const savedTop = tabScrollTopRef.current[activeTab] ?? 0;
-    if (Math.abs(scroller.scrollTop - savedTop) > 1) {
-      void scroller.offsetHeight;
-      scroller.scrollTop = savedTop;
-    }
-    applyCollapseFromScrollTop(scroller.scrollTop);
-  }, [activeTab, getActiveScroller, applyCollapseFromScrollTop]);
-
-  // Bind passive rAF-throttled scroll listener + optional scrollend snap to active tab
-  React.useEffect(() => {
-    const scroller = getActiveScroller();
-    if (!scroller) return undefined;
-
-    let ticking = false;
-
-    const update = () => {
-      ticking = false;
-      // If the scroller is detached or hidden, ignore artificial scroll-to-0 events
-      if (!scroller.offsetParent && scroller.scrollTop === 0) return;
-      const top = scroller.scrollTop;
-      tabScrollTopRef.current[activeTab] = top;
-      applyCollapseFromScrollTop(top);
-    };
-
-    const onScroll = () => {
-      if (!ticking) {
-        ticking = true;
-        rafIdRef.current = window.requestAnimationFrame(update);
-      }
-    };
-
-    // Optional native iOS mid-collapse snap on scrollend (feature-detected)
-    const supportsScrollEnd = "onscrollend" in window;
-    const onScrollEnd = () => {
-      if (!enableSnap || isSnappingRef.current) {
-        isSnappingRef.current = false;
-        return;
-      }
-      const top = scroller.scrollTop;
-      if (
-        top > COLLAPSE_START_PX &&
-        top < COLLAPSE_START_PX + COLLAPSE_RANGE_PX
-      ) {
-        const progress = computeCollapse(top);
-        const targetTop =
-          progress < 0.5 ? 0 : COLLAPSE_START_PX + COLLAPSE_RANGE_PX;
-        isSnappingRef.current = true;
-        scroller.scrollTo({ top: targetTop, behavior: "smooth" });
-      }
-    };
-
-    // Sync initial state on bind
-    applyCollapseFromScrollTop(scroller.scrollTop);
-
-    scroller.addEventListener("scroll", onScroll, { passive: true });
-    if (supportsScrollEnd) {
-      scroller.addEventListener("scrollend", onScrollEnd, { passive: true });
-    }
-
-    return () => {
-      if (rafIdRef.current) {
-        window.cancelAnimationFrame(rafIdRef.current);
-        rafIdRef.current = 0;
-      }
-      scroller.removeEventListener("scroll", onScroll);
-      if (supportsScrollEnd) {
-        scroller.removeEventListener("scrollend", onScrollEnd);
-      }
-    };
-  }, [activeTab, enableSnap, getActiveScroller, applyCollapseFromScrollTop]);
-
-  return {
-    screenRootRef,
-    registerTabScroller,
-    scrollToTop,
-    tabScrollTopRef,
-    getActiveScroller,
-  };
-}
 
 const CollapsibleTopBar = React.memo(function CollapsibleTopBar({
   activeTab,
@@ -13879,19 +13718,24 @@ export default function MobilePrototype({
       }
     };
   }, []);
+  const dockRef = useRef(null);
+  const hideDockOnScrollForActiveTab =
+    tab === "activity" && !appSettingsOpen && !profileSettingsOpen;
   const {
     screenRootRef,
     registerTabScroller,
     scrollToTop,
     tabScrollTopRef,
     getActiveScroller,
-  } = useCollapsingHeader({
+  } = useScrollProgress({
     activeTab: profileSettingsOpen
       ? "profile-settings"
       : appSettingsOpen
         ? "app-settings"
         : tab,
-    enableSnap: true,
+    hideDockOnScroll: hideDockOnScrollForActiveTab,
+    dockRef,
+    plansScrollStore,
   });
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [slideDirection, setSlideDirection] = useState("forward");
@@ -13900,7 +13744,6 @@ export default function MobilePrototype({
   const sheetCloseTimer = useRef();
   const highlightTimer = useRef();
   const mobileRootRef = useRef(null);
-  const dockRef = useRef(null);
   const sheetTriggerCandidateRef = useRef(null);
   const sheetReturnFocusRef = useRef(null);
   const activitySearchRef = useRef(null);
@@ -13999,6 +13842,7 @@ export default function MobilePrototype({
     rootEl.style.colorScheme = resolvedTheme;
     const themeColor = resolvedTheme === "dark" ? "#08080c" : "#f4f3ee";
     rootEl.style.backgroundColor = themeColor;
+    document.body.style.backgroundColor = themeColor;
     document
       .querySelectorAll('meta[name="theme-color"]')
       .forEach((meta) => meta.setAttribute("content", themeColor));
@@ -14188,7 +14032,10 @@ export default function MobilePrototype({
       const isKeyboardOpen = textEntryFocused && keyboardHeight > 120;
 
       if (root) {
-        root.style.setProperty("--mobile-visible-height", `${visibleHeight}px`);
+        root.style.setProperty(
+          "--mobile-visible-height",
+          isKeyboardOpen ? `${visibleHeight}px` : "100dvh",
+        );
         root.style.setProperty(
           "--mobile-visible-top",
           isKeyboardOpen ? `${visibleTop}px` : "0px",
@@ -15398,23 +15245,24 @@ export default function MobilePrototype({
         aria-label="Main"
         data-keyboard-open={keyboardOpen ? "true" : undefined}
         data-hidden={keyboardOpen || settingsRoute ? "true" : undefined}
+        aria-hidden={keyboardOpen || settingsRoute ? "true" : undefined}
+        inert={keyboardOpen || settingsRoute ? true : undefined}
       >
-        {/* Surface with notch */}
-        <div className="dock__surface" aria-hidden="true">
-          <div className="dock__surface-row">
-            <div className="dock__side dock__side--left" />
-            <svg
-              className="dock__notch-svg"
-              width={DOCK_NOTCH_W}
-              height={DOCK_BAR_H}
-              viewBox={`0 0 ${DOCK_NOTCH_W} ${DOCK_BAR_H}`}
-              aria-hidden="true"
-            >
-              <path d={DOCK_NOTCH_D} />
-            </svg>
-            <div className="dock__side dock__side--right" />
-          </div>
-          <div className="dock__safe-fill" />
+        {/* Single masked frosted-glass surface with center + notch */}
+        <div className="dock__surface" aria-hidden="true" />
+        {/* 0.5px top hairline following the bar and notch contour */}
+        <div className="dock__border" aria-hidden="true">
+          <div className="dock__border-side" />
+          <svg
+            className="dock__border-notch"
+            width={DOCK_NOTCH_W}
+            height={DOCK_BAR_H}
+            viewBox={`0 0 ${DOCK_NOTCH_W} ${DOCK_BAR_H}`}
+            aria-hidden="true"
+          >
+            <path d={DOCK_NOTCH_CURVE_D} vectorEffect="non-scaling-stroke" />
+          </svg>
+          <div className="dock__border-side" />
         </div>
 
         {/* Tabs */}
