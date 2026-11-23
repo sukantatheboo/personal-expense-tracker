@@ -35,6 +35,17 @@ function alreadySeen(once, key) {
 
 const SPLASH_BG = "#161d2b";
 
+function setThemeColorMeta(color) {
+  if (typeof document === "undefined") return;
+  document
+    .querySelectorAll('meta[name="theme-color"]')
+    .forEach((meta) => meta.remove());
+  const meta = document.createElement("meta");
+  meta.name = "theme-color";
+  meta.content = color;
+  document.head.appendChild(meta);
+}
+
 function applySplashChrome() {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
@@ -44,9 +55,7 @@ function applySplashChrome() {
   if (document.body) {
     document.body.style.backgroundColor = SPLASH_BG;
   }
-  document
-    .querySelectorAll('meta[name="theme-color"]')
-    .forEach((meta) => meta.setAttribute("content", SPLASH_BG));
+  setThemeColorMeta(SPLASH_BG);
 }
 
 function syncThemeColorMeta() {
@@ -54,15 +63,14 @@ function syncThemeColorMeta() {
   const root = document.documentElement;
   delete root.dataset.splashActive;
   const isDark = root.dataset.theme === "dark";
-  const color = isDark ? "#08080c" : "#f4f3ee";
+  const pageBg = isDark ? "#08080c" : "#f4f3ee";
+  const chromeColor = isDark ? "#171923" : "#f9f9f7";
   root.style.colorScheme = isDark ? "dark" : "light";
-  root.style.backgroundColor = color;
+  root.style.backgroundColor = pageBg;
   if (document.body) {
-    document.body.style.backgroundColor = color;
+    document.body.style.backgroundColor = pageBg;
   }
-  document
-    .querySelectorAll('meta[name="theme-color"]')
-    .forEach((meta) => meta.setAttribute("content", color));
+  setThemeColorMeta(chromeColor);
 }
 
 function handoffStaticSplash() {
@@ -161,7 +169,6 @@ export default function SpendSplash({
     };
 
     const exit = () => {
-      restoreBg();
       if (clock === null) clock = performance.now();
       if (releaseAt === null) releaseAt = sinceStart();
       const since = Math.max(0, sinceStart() - releaseAt);

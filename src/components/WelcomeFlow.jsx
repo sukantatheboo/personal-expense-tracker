@@ -128,20 +128,30 @@ export default function WelcomeFlow({ onDone, theme, exiting = false }) {
   }, [isExiting]);
 
   useLayoutEffect(() => {
+    const setThemeColorMeta = (color) => {
+      if (typeof document === "undefined") return;
+      document
+        .querySelectorAll('meta[name="theme-color"]')
+        .forEach((meta) => meta.remove());
+      const meta = document.createElement("meta");
+      meta.name = "theme-color";
+      meta.content = color;
+      document.head.appendChild(meta);
+    };
+
     const restoreAppChrome = () => {
       if (typeof document === "undefined") return;
       const root = document.documentElement;
       delete root.dataset.splashActive;
       const isDark = root.dataset.theme === "dark";
-      const color = isDark ? "#08080c" : "#f4f3ee";
+      const pageBg = isDark ? "#08080c" : "#f4f3ee";
+      const chromeColor = isDark ? "#171923" : "#f9f9f7";
       root.style.colorScheme = isDark ? "dark" : "light";
-      root.style.backgroundColor = color;
+      root.style.backgroundColor = pageBg;
       if (document.body) {
-        document.body.style.backgroundColor = color;
+        document.body.style.backgroundColor = pageBg;
       }
-      document
-        .querySelectorAll('meta[name="theme-color"]')
-        .forEach((meta) => meta.setAttribute("content", color));
+      setThemeColorMeta(chromeColor);
     };
 
     if (typeof document !== "undefined") {
@@ -160,9 +170,7 @@ export default function WelcomeFlow({ onDone, theme, exiting = false }) {
       if (document.body) {
         document.body.style.backgroundColor = "#161d2b";
       }
-      document
-        .querySelectorAll('meta[name="theme-color"]')
-        .forEach((meta) => meta.setAttribute("content", "#161d2b"));
+      setThemeColorMeta("#161d2b");
     }
 
     const reducedMotion =
