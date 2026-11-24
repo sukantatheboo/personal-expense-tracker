@@ -4,6 +4,7 @@ import entertainmentSvg from "./assets/spend-trans-icns/entertainment.svg";
 import foodSvg from "./assets/spend-trans-icns/food.svg";
 import healthSvg from "./assets/spend-trans-icns/health.svg";
 import homeSvg from "./assets/spend-trans-icns/home.svg";
+import loanSvg from "./assets/spend-trans-icns/loan.svg";
 import otherSvg from "./assets/spend-trans-icns/other.svg";
 import savingsSvg from "./assets/spend-trans-icns/savings.svg";
 import shoppingSvg from "./assets/spend-trans-icns/shopping.svg";
@@ -33,6 +34,7 @@ export {
   foodSvg,
   healthSvg,
   homeSvg,
+  loanSvg,
   otherSvg,
   savingsSvg,
   shoppingSvg,
@@ -274,6 +276,52 @@ const ADAPTIVE_ICON_PATHS = {
       />
       <path
         d="M79.0 44.5 L80.5 66.0 A2.2 2.2 0 1 1 76.2 66.0 L76.2 44.5 A1.4 1.4 0 0 1 79.0 44.5 Z"
+        fill={INK}
+      />
+    </>
+  ),
+  loan: (
+    <>
+      <path
+        d="M39.5 34.0 L57.0 34.0 C63.0 38.5 67.8 48.5 67.8 63.5 C67.8 75.5 59.5 84.5 47.0 84.5 C33.5 84.5 23.0 77.5 23.0 65.5 C23.0 52.5 29.5 40.5 39.5 34.0 Z"
+        fill="#D6E289"
+      />
+      <path
+        d="M39.2 33.0 C37.0 28.5 34.4 24.0 34.6 20.2 C34.8 17.0 40.8 15.8 45.2 17.0 C47.5 17.8 48.8 18.4 50.0 18.4 C51.2 18.4 52.5 17.8 54.5 17.0 C57.5 16.2 59.8 17.5 59.5 20.5 C59.2 24.2 57.2 28.5 55.8 33.0 Z"
+        fill="#D6E289"
+      />
+      <path
+        d="M72.6 54.8 C70.5 46.8 65.5 39.5 59.0 35.5 C53.5 36.2 46.5 36.2 41.0 35.5 C31.5 41.0 25.5 53.0 25.5 65.5 C25.5 76.5 36.0 82.0 50.0 82.0 C63.5 82.0 72.8 76.2 73.8 66.2 A1.5 1.5 0 0 1 76.8 66.8 C75.5 79.5 64.5 87.0 49.5 87.0 C33.0 87.0 20.5 79.5 20.5 66.0 C20.5 51.5 28.0 39.0 37.5 34.0 L61.8 34.0 C68.2 38.2 73.2 45.8 75.4 54.2 A1.4 1.4 0 0 1 72.6 54.8 Z"
+        fill={INK}
+      />
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M37.2 33.5 C34.5 29.0 31.8 24.5 32.2 19.8 C32.6 15.8 40.2 13.8 45.2 15.4 C47.6 16.2 48.8 17.0 50.0 17.0 C51.2 17.0 52.6 16.2 55.0 15.4 C60.0 13.8 66.8 15.8 66.4 19.8 C66.0 24.2 63.8 29.0 61.6 33.5 Z M41.2 31.8 C39.2 28.0 36.4 23.8 36.6 20.5 C36.8 18.2 41.5 17.4 45.2 18.5 C47.4 19.2 48.8 19.8 50.0 19.8 C51.2 19.8 52.6 19.2 54.8 18.5 C58.6 17.4 63.4 18.2 63.6 20.5 C63.8 23.8 61.2 28.0 58.8 31.8 Z"
+        fill={INK}
+      />
+      <path
+        d="M36.5 31.5 C44.0 30.8 56.0 30.8 63.2 31.6 A1.9 1.9 0 0 1 63.0 35.4 C55.8 36.4 44.2 36.5 36.5 35.9 A2.2 2.2 0 0 1 36.5 31.5 Z"
+        fill={INK}
+      />
+      <path
+        d="M48.1 45.8 A1.4 1.4 0 0 1 50.9 45.8 L51.0 72.8 A1.6 1.6 0 0 1 47.8 72.8 Z"
+        fill={INNER_INK}
+      />
+      <path
+        d="M53.3 53.3 C52.5 52.2 51.2 51.6 49.5 51.6 C47.4 51.6 46.0 52.6 46.0 54.1 C46.0 55.8 47.8 56.7 50.7 58.0 C54.2 59.5 57.0 61.3 57.0 64.4 C57.0 68.3 53.8 70.8 49.3 70.8 C45.9 70.8 43.8 69.3 42.6 67.3 A1.75 1.75 0 0 1 45.1 64.8 C46.2 66.4 47.4 67.2 49.3 67.2 C51.8 67.2 53.5 66.1 53.5 64.4 C53.5 62.7 51.3 61.7 48.3 60.5 C44.9 59.0 42.2 57.2 42.2 54.0 C42.2 50.4 45.4 48.4 49.5 48.4 C52.6 48.4 54.7 49.5 55.8 51.3 A1.6 1.6 0 0 1 53.3 53.3 Z"
+        fill={INNER_INK}
+      />
+      <path
+        d="M24.8 31.2 C23.0 29.5 20.8 27.0 19.0 25.8 A1.9 1.9 0 0 0 17.0 29.0 C18.8 30.1 22.0 31.3 24.4 32.0 A0.45 0.45 0 0 0 24.8 31.2 Z"
+        fill={INK}
+      />
+      <path
+        d="M73.3 26.7 C75.0 24.8 76.8 22.0 78.3 20.7 A1.9 1.9 0 0 1 80.7 23.7 C79.1 24.9 76.1 26.4 73.9 27.3 A0.43 0.43 0 0 1 73.3 26.7 Z"
+        fill={INK}
+      />
+      <path
+        d="M77.9 35.0 C79.8 34.1 82.0 32.8 83.8 32.4 A1.65 1.65 0 0 1 84.6 35.6 C82.8 36.0 80.1 35.8 78.1 35.8 A0.42 0.42 0 0 1 77.9 35.0 Z"
         fill={INK}
       />
     </>
@@ -979,6 +1027,7 @@ export const CATEGORY_ICONS = {
   Health: healthSvg,
   Entertainment: entertainmentSvg,
   Education: educationSvg,
+  Loan: loanSvg,
   Savings: savingsSvg,
   Other: otherSvg,
   // Aliases for common alternative labels
@@ -986,6 +1035,8 @@ export const CATEGORY_ICONS = {
   Medicine: healthSvg,
   Utilities: billsSvg,
   Travel: transportSvg,
+  EMI: loanSvg,
+  Debt: loanSvg,
   // Dynamic entertainment service aliases
   Spotify: spotifySvg,
   Netflix: netflixSvg,
@@ -1009,12 +1060,15 @@ export const CATEGORY_COLORS = {
   Health: "#dc2626",
   Entertainment: "#06b6d4",
   Education: "#4f46e5",
+  Loan: "#0d9488",
   Savings: "#be185d",
   Other: "#64748b",
   Grocery: "#8b5cf6",
   Medicine: "#dc2626",
   Utilities: "#eab308",
   Travel: "#2563eb",
+  EMI: "#0d9488",
+  Debt: "#0d9488",
   // Dynamic entertainment service colors
   Spotify: "#25D865",
   Netflix: "#E50914",
@@ -1098,6 +1152,9 @@ export function getCategoryIconKey(category, description) {
     Medicine: "health",
     Entertainment: "entertainment",
     Education: "education",
+    Loan: "loan",
+    Emi: "loan",
+    Debt: "loan",
     Savings: "savings",
     Other: "other",
   };

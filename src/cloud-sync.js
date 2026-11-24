@@ -1077,16 +1077,22 @@ export function mergeAccountDataWithRawSnapshot(
       mergedCurrentBalances[id] = roundMoney(Number(currentBalCandidate));
     }
 
+    const isCash = isCashCard(card);
     return {
       ...card,
       subtitle:
         typeof card?.subtitle === "string"
-          ? card.subtitle.replace(/\bUSD\b/gi, "BDT")
+          ? isCash
+            ? card.subtitle
+            : card.subtitle.replace(/\bUSD\b/gi, "BDT")
           : card?.subtitle || "",
-      currency:
-        !card?.currency || String(card.currency).toUpperCase() === "USD"
+      currency: isCash
+        ? String(card?.currency || "BDT")
+            .toUpperCase()
+            .slice(0, 8)
+        : !card?.currency || String(card.currency).toUpperCase() === "USD"
           ? "BDT"
-          : card.currency,
+          : String(card.currency).slice(0, 8),
       initialBalance: cleanBal,
       ...(mergedCurrentBalances[id] !== undefined
         ? { currentBalance: mergedCurrentBalances[id] }
@@ -1270,6 +1276,17 @@ async function loadLegacyCloudData(client, userId) {
       data: null,
       updated_at: null,
       normalizedAccountSync: !normalizedSchemaUnavailable,
+    };
+  }
+
+  if (
+    snapshotData &&
+    (snapshotData._encrypted || snapshotData.format === "spend-encrypted-v1")
+  ) {
+    return {
+      ...snapshot,
+      normalizedAccountSync: false,
+      data: snapshotData,
     };
   }
 
@@ -1860,6 +1877,14 @@ export async function saveCloudData(
   const isRpcMissing =
     rpcRes.error.code === "42883" || rpcRes.error.code === "PGRST202";
   if (!isRpcMissing) {
+    if (
+      rpcRes.error.code === "23514" &&
+      String(rpcRes.error.message || "").includes("max_size")
+    ) {
+      throw new Error(
+        "Your cloud data exceeds the 512 KB snapshot limit. Try removing or resizing your profile photo before syncing.",
+      );
+    }
     throw rpcRes.error;
   }
 

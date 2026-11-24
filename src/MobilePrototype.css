@@ -7604,6 +7604,10 @@ a:active,
   background: #eef2ff;
   color: #4f46e5;
 }
+.mobile-prototype .accounts-tx-icon-circle.is-loan {
+  background: #f0fdfa;
+  color: #0d9488;
+}
 .mobile-prototype .accounts-tx-icon-circle.is-savings {
   background: #fdf2f8;
   color: #be185d;
@@ -7697,6 +7701,10 @@ a:active,
 [data-theme="dark"] .mobile-prototype .accounts-tx-icon-circle.is-education {
   background: rgba(79, 70, 229, 0.18);
   color: #818cf8;
+}
+[data-theme="dark"] .mobile-prototype .accounts-tx-icon-circle.is-loan {
+  background: rgba(13, 148, 136, 0.18);
+  color: #2dd4bf;
 }
 [data-theme="dark"] .mobile-prototype .accounts-tx-icon-circle.is-savings {
   background: rgba(190, 24, 93, 0.18);

@@ -69,6 +69,7 @@ begin
 end;
 $$;
 
+drop trigger if exists preserve_push_reminder_progress on public.push_reminders;
 drop trigger if exists preserve_push_reminder_progress_trigger on public.push_reminders;
 create trigger preserve_push_reminder_progress_trigger
   before insert or update on public.push_reminders

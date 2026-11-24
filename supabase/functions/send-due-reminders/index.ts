@@ -3,7 +3,7 @@ import webpush from "npm:web-push@3.6.7";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL");
 const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-const vapidSubject = Deno.env.get("VAPID_SUBJECT") || "mailto:admin@example.com";
+const vapidSubject = Deno.env.get("VAPID_SUBJECT");
 const vapidPublicKey = Deno.env.get("VAPID_PUBLIC_KEY");
 const vapidPrivateKey = Deno.env.get("VAPID_PRIVATE_KEY");
 
@@ -12,11 +12,43 @@ const supabase = createClient(
   supabaseServiceRoleKey || "",
 );
 
-if (vapidSubject && vapidPublicKey && vapidPrivateKey) {
-  webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
+if (vapidPublicKey && vapidPrivateKey) {
+  if (!vapidSubject) {
+    console.warn("VAPID_SUBJECT is not configured; falling back to placeholder mailto.");
+  }
+  webpush.setVapidDetails(
+    vapidSubject || "mailto:admin@example.com",
+    vapidPublicKey,
+    vapidPrivateKey,
+  );
 }
 
 const STALE_MS = 12 * 60 * 60 * 1000; // don't send reminders that are over 12h late
+const BATCH_LIMIT = 200;
+const MAX_DRAIN_BATCHES = 5;
+const DEVICE_LOOKUP_CHUNK_SIZE = 50;
+const CONCURRENCY = 10;
+
+type DueReminder = {
+  user_id: string;
+  device_id: string;
+  schedule_id: string;
+  description: string;
+  interval: string;
+  day_of_month: number | null;
+  next_date: string;
+  next_notify_at: string;
+  timezone: string;
+  reminder_time: string;
+  claim_until: string;
+  subscription?: Record<string, unknown> | null;
+};
+
+type DeviceRow = {
+  user_id: string;
+  device_id: string;
+  subscription: Record<string, unknown>;
+};
 
 function timingSafeEqualStr(a: string, b: string): boolean {
   const enc = new TextEncoder();
@@ -149,12 +181,93 @@ function zonedTimeToUtc(date: string, time: string, timeZone: string) {
   return new Date(guess.getTime() - zoneOffsetMs(firstPass, timeZone));
 }
 
+async function claimDueBatch(): Promise<{
+  due: DueReminder[];
+  usedJoinedRpc: boolean;
+  error: { message: string } | null;
+}> {
+  const joined = await supabase.rpc("claim_due_push_reminders_with_devices", {
+    p_limit: BATCH_LIMIT,
+    p_lease_seconds: 5 * 60,
+  });
+
+  if (!joined.error) {
+    return {
+      due: (joined.data ?? []) as DueReminder[],
+      usedJoinedRpc: true,
+      error: null,
+    };
+  }
+
+  const rpcMissing =
+    joined.error.code === "42883" || joined.error.code === "PGRST202";
+  if (!rpcMissing) {
+    return { due: [], usedJoinedRpc: true, error: joined.error };
+  }
+
+  const legacy = await supabase.rpc("claim_due_push_reminders", {
+    p_limit: BATCH_LIMIT,
+    p_lease_seconds: 5 * 60,
+  });
+  return {
+    due: (legacy.data ?? []) as DueReminder[],
+    usedJoinedRpc: false,
+    error: legacy.error,
+  };
+}
+
+async function lookupDevicesChunked(due: DueReminder[]): Promise<Map<string, DeviceRow>> {
+  const uniquePairs = new Map<string, { user_id: string; device_id: string }>();
+  for (const r of due) {
+    const key = `${r.user_id}:${r.device_id}`;
+    if (!uniquePairs.has(key)) {
+      uniquePairs.set(key, { user_id: r.user_id, device_id: r.device_id });
+    }
+  }
+  const pairs = [...uniquePairs.values()];
+  const byDevice = new Map<string, DeviceRow>();
+
+  for (let i = 0; i < pairs.length; i += DEVICE_LOOKUP_CHUNK_SIZE) {
+    const slice = pairs.slice(i, i + DEVICE_LOOKUP_CHUNK_SIZE);
+    const userIds = [...new Set(slice.map((p) => p.user_id))];
+    const deviceIds = [...new Set(slice.map((p) => p.device_id))];
+    const { data, error } = await supabase
+      .from("push_devices")
+      .select("user_id, device_id, subscription")
+      .in("user_id", userIds)
+      .in("device_id", deviceIds);
+    if (error) {
+      throw new Error(error.message);
+    }
+    for (const d of (data ?? []) as DeviceRow[]) {
+      byDevice.set(`${d.user_id}:${d.device_id}`, d);
+    }
+  }
+  return byDevice;
+}
+
+async function releaseClaimLease(r: DueReminder) {
+  let query = supabase
+    .from("push_reminders")
+    .update({
+      claim_until: null,
+      pending_notification: false,
+    })
+    .eq("user_id", r.user_id)
+    .eq("device_id", r.device_id)
+    .eq("schedule_id", r.schedule_id);
+  if (r.claim_until) {
+    query = query.eq("claim_until", r.claim_until);
+  }
+  await query;
+}
+
 Deno.serve(async (req) => {
   if (req.method !== "POST") {
     return new Response("Method Not Allowed", { status: 405 });
   }
-  const cronSecret = Deno.env.get("CRON_SECRET");
-  const providedSecret = req.headers.get("x-cron-secret") || "";
+  const cronSecret = (Deno.env.get("CRON_SECRET") || "").trim();
+  const providedSecret = (req.headers.get("x-cron-secret") || "").trim();
   if (!cronSecret || !providedSecret || !timingSafeEqualStr(providedSecret, cronSecret)) {
     return new Response("forbidden", { status: 403 });
   }
@@ -166,143 +279,159 @@ Deno.serve(async (req) => {
     );
   }
 
-  const now = new Date();
-  // Atomic claim (needs migration 20261113020000): one SQL statement picks the due
-  // rows, locks them with SKIP LOCKED and writes a 5-minute lease, so two
-  // overlapping cron runs can never send the same reminder twice.
-  const { data: due, error } = await supabase.rpc("claim_due_push_reminders", {
-    p_limit: 200,
-    p_lease_seconds: 5 * 60,
-  });
-
-  if (error) return new Response(error.message, { status: 500 });
-  if (!due?.length) return Response.json({ due: 0, sent: 0 });
-
-  const dueUserIds = [...new Set(due.map((r) => r.user_id))];
-  const dueDeviceIds = [...new Set(due.map((r) => r.device_id))];
-  const { data: devices, error: devicesError } = await supabase
-    .from("push_devices")
-    .select("user_id, device_id, subscription")
-    .in("user_id", dueUserIds)
-    .in("device_id", dueDeviceIds);
-  if (devicesError) {
-    // Do NOT treat a failed lookup as "device missing" - that would delete every
-    // due reminder. The leases expire on their own and the next run retries.
-    console.error("device lookup failed", devicesError.message);
-    return new Response(devicesError.message, { status: 500 });
-  }
-  const byDevice = new Map((devices ?? []).map((d) => [`${d.user_id}:${d.device_id}`, d]));
+  const startedAt = Date.now();
+  let totalDue = 0;
+  let totalSent = 0;
+  let batchesRun = 0;
   const deadDevices = new Set<string>();
 
-  let sent = 0;
-  const CONCURRENCY = 10;
-
-  async function processReminder(r: (typeof due)[number]) {
-    const deviceKey = `${r.user_id}:${r.device_id}`;
-    if (deadDevices.has(deviceKey)) {
-      return;
-    }
-    const device = byDevice.get(deviceKey);
-    if (!device) {
-      deadDevices.add(deviceKey);
-      // Clean up orphaned push_reminders whose device subscription no longer exists
-      await supabase
-        .from("push_reminders")
-        .delete()
-        .eq("user_id", r.user_id)
-        .eq("device_id", r.device_id);
-      return;
+  for (let batchIdx = 0; batchIdx < MAX_DRAIN_BATCHES; batchIdx += 1) {
+    // Stop draining if we've exceeded 45s so we finish well within Edge Function limits
+    if (batchIdx > 0 && Date.now() - startedAt > 45_000) {
+      break;
     }
 
-    // (lease already acquired atomically by claim_due_push_reminders)
+    const { due, usedJoinedRpc, error } = await claimDueBatch();
+    if (error) {
+      return new Response(error.message, { status: 500 });
+    }
+    if (!due.length) {
+      break;
+    }
+    batchesRun += 1;
+    totalDue += due.length;
 
-    // Calculate next FUTURE occurrence date
-    let date: string = r.next_date;
-    let notifyAt = new Date(r.next_notify_at);
-    for (let i = 0; notifyAt.getTime() <= now.getTime() && i < 500; i += 1) {
-      date = nextDate(date, r.interval, r.day_of_month, r.schedule_id);
-      notifyAt = zonedTimeToUtc(date, r.reminder_time, r.timezone);
+    const byDevice = new Map<string, DeviceRow>();
+    if (usedJoinedRpc) {
+      for (const r of due) {
+        if (r.subscription && typeof r.subscription === "object") {
+          byDevice.set(`${r.user_id}:${r.device_id}`, {
+            user_id: r.user_id,
+            device_id: r.device_id,
+            subscription: r.subscription,
+          });
+        }
+      }
+    } else {
+      try {
+        const fetched = await lookupDevicesChunked(due);
+        for (const [k, v] of fetched.entries()) {
+          byDevice.set(k, v);
+        }
+      } catch (lookupErr) {
+        console.error("device lookup failed", (lookupErr as Error).message);
+        await Promise.allSettled(due.map((r) => releaseClaimLease(r)));
+        return new Response((lookupErr as Error).message, { status: 500 });
+      }
     }
 
-    // Skip sending if reminder is stale (>12h old), but advance schedule forward
-    if (now.getTime() - new Date(r.next_notify_at).getTime() > STALE_MS) {
-      await supabase
-        .from("push_reminders")
-        .update({
-          next_date: date,
-          next_notify_at: notifyAt.toISOString(),
-          claim_until: null,
-          pending_notification: false,
-        })
-        .eq("user_id", r.user_id)
-        .eq("device_id", r.device_id)
-        .eq("schedule_id", r.schedule_id);
-      return;
-    }
+    const now = new Date();
 
-    const payload = buildPushPayload(r);
-    let pushSucceeded = false;
-    try {
-      await webpush.sendNotification(
-        device.subscription,
-        JSON.stringify(payload),
-        { TTL: 6 * 60 * 60 },
-      );
-      sent += 1;
-      pushSucceeded = true;
-    } catch (err) {
-      const status = (err as { statusCode?: number }).statusCode;
-      if (status === 404 || status === 410) {
+    async function processReminder(r: DueReminder) {
+      const deviceKey = `${r.user_id}:${r.device_id}`;
+      if (deadDevices.has(deviceKey)) {
+        return;
+      }
+      const device = byDevice.get(deviceKey);
+      if (!device) {
         deadDevices.add(deviceKey);
-        byDevice.delete(deviceKey);
-        // Subscription expired: remove both device and its reminders so orphaned rows do not accumulate
         await supabase
           .from("push_reminders")
           .delete()
           .eq("user_id", r.user_id)
           .eq("device_id", r.device_id);
-        await supabase
-          .from("push_devices")
-          .delete()
-          .eq("user_id", r.user_id)
-          .eq("device_id", r.device_id);
         return;
-      } else {
+      }
+
+      // Calculate next FUTURE occurrence date
+      let date: string = r.next_date;
+      let notifyAt = new Date(r.next_notify_at);
+      for (let i = 0; notifyAt.getTime() <= now.getTime() && i < 500; i += 1) {
+        date = nextDate(date, r.interval, r.day_of_month, r.schedule_id);
+        notifyAt = zonedTimeToUtc(date, r.reminder_time, r.timezone);
+      }
+
+      // Skip sending if reminder is stale (>12h old), but advance schedule forward
+      if (now.getTime() - new Date(r.next_notify_at).getTime() > STALE_MS) {
+        let staleUpdate = supabase
+          .from("push_reminders")
+          .update({
+            next_date: date,
+            next_notify_at: notifyAt.toISOString(),
+            claim_until: null,
+            pending_notification: false,
+          })
+          .eq("user_id", r.user_id)
+          .eq("device_id", r.device_id)
+          .eq("schedule_id", r.schedule_id);
+        if (r.claim_until) {
+          staleUpdate = staleUpdate.eq("claim_until", r.claim_until);
+        }
+        await staleUpdate;
+        return;
+      }
+
+      const payload = buildPushPayload(r);
+      let pushSucceeded = false;
+      try {
+        await webpush.sendNotification(
+          device.subscription as webpush.PushSubscription,
+          JSON.stringify(payload),
+          { TTL: 6 * 60 * 60 },
+        );
+        totalSent += 1;
+        pushSucceeded = true;
+      } catch (err) {
+        const status = (err as { statusCode?: number }).statusCode;
+        if (status === 404 || status === 410) {
+          deadDevices.add(deviceKey);
+          byDevice.delete(deviceKey);
+          await supabase
+            .from("push_reminders")
+            .delete()
+            .eq("user_id", r.user_id)
+            .eq("device_id", r.device_id);
+          await supabase
+            .from("push_devices")
+            .delete()
+            .eq("user_id", r.user_id)
+            .eq("device_id", r.device_id);
+          return;
+        }
         console.error("push failed", status, (err as { body?: unknown }).body ?? err);
+      }
+
+      if (pushSucceeded) {
+        // Advance to next occurrence ONLY AFTER successful push dispatch (fenced on claim_until)
+        let advanceUpdate = supabase
+          .from("push_reminders")
+          .update({
+            next_date: date,
+            next_notify_at: notifyAt.toISOString(),
+            claim_until: null,
+            pending_notification: false,
+          })
+          .eq("user_id", r.user_id)
+          .eq("device_id", r.device_id)
+          .eq("schedule_id", r.schedule_id);
+        if (r.claim_until) {
+          advanceUpdate = advanceUpdate.eq("claim_until", r.claim_until);
+        }
+        await advanceUpdate;
+      } else {
+        await releaseClaimLease(r);
       }
     }
 
-    if (pushSucceeded) {
-      // Advance to next occurrence ONLY AFTER successful push dispatch
-      await supabase
-        .from("push_reminders")
-        .update({
-          next_date: date,
-          next_notify_at: notifyAt.toISOString(),
-          claim_until: null,
-          pending_notification: false,
-        })
-        .eq("user_id", r.user_id)
-        .eq("device_id", r.device_id)
-        .eq("schedule_id", r.schedule_id);
-    } else {
-      // Release claim lease on transient error so next cron execution can retry
-      await supabase
-        .from("push_reminders")
-        .update({
-          claim_until: null,
-          pending_notification: false,
-        })
-        .eq("user_id", r.user_id)
-        .eq("device_id", r.device_id)
-        .eq("schedule_id", r.schedule_id);
+    for (let i = 0; i < due.length; i += CONCURRENCY) {
+      const slice = due.slice(i, i + CONCURRENCY);
+      await Promise.allSettled(slice.map((r) => processReminder(r)));
+    }
+
+    if (due.length < BATCH_LIMIT) {
+      break;
     }
   }
 
-  for (let i = 0; i < due.length; i += CONCURRENCY) {
-    const batch = due.slice(i, i + CONCURRENCY);
-    await Promise.allSettled(batch.map((r) => processReminder(r)));
-  }
-
-  return Response.json({ due: due.length, sent });
+  return Response.json({ due: totalDue, sent: totalSent, batches: batchesRun });
 });

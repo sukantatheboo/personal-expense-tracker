@@ -232,6 +232,7 @@ export const CATEGORIES = [
   "Health",
   "Entertainment",
   "Education",
+  "Loan",
   "Savings",
   "Other",
 ];

@@ -4,7 +4,7 @@ import { getCategoryIcon } from "../categoryAssets.jsx";
 import { triggerHaptic } from "../haptics.js";
 import "./MonthEndBanner.css";
 
-/* ---------- distinct tints matching all 10 app categories ---------- */
+/* ---------- distinct tints matching all 11 app categories ---------- */
 export const CATEGORY_TINTS = {
   Food: "#fbe3da",
   Transport: "#dfe8f7",
@@ -14,6 +14,7 @@ export const CATEGORY_TINTS = {
   Health: "#fee2e2",
   Entertainment: "#cffafe",
   Education: "#e0e7ff",
+  Loan: "#ccfbf1",
   Savings: "#fce7f3",
   Other: "#e1e8dc",
 };
@@ -27,6 +28,7 @@ const TINTS = [
   "#fee2e2",
   "#cffafe",
   "#e0e7ff",
+  "#ccfbf1",
   "#e1e8dc",
 ];
 

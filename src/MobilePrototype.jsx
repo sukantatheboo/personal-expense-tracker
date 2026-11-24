@@ -35,6 +35,7 @@ import {
   healthSvg,
   entertainmentSvg,
   educationSvg,
+  loanSvg,
   savingsSvg,
   otherSvg,
 } from "./categoryAssets.jsx";
@@ -149,6 +150,7 @@ const CAT = {
   Health: [healthSvg, "#dc2626"],
   Entertainment: [entertainmentSvg, "#06b6d4"],
   Education: [educationSvg, "#4f46e5"],
+  Loan: [loanSvg, "#0d9488"],
   Savings: [savingsSvg, "#be185d"],
   Other: [otherSvg, "#64748b"],
 };
@@ -543,6 +545,10 @@ function suggestedCategory(description, expenses = [], excludeId = null) {
     .find((category) => category.toLocaleLowerCase() === title);
   if (exactCategory) return exactCategory;
   const rules = [
+    [
+      "Loan",
+      /\b(loans?|emis?|installments?|instalments?|mortgage|debt|repay(?:ment)?|bkash\s*loan|nagad\s*loan|rocket\s*loan|upay\s*loan|mfs\s*loan|nano\s*loan|bank\s*loan|personal\s*loan|home\s*loan|car\s*loan|auto\s*loan|bike\s*loan|education\s*loan|student\s*loan|business\s*loan|credit\s*emi|card\s*emi|pay\s*later|paylater|loan\s*interest|emi\s*payment|loan\s*payment)\b/,
+    ],
     [
       "Food",
       /\b(food|lunch|dinner|breakfast|snack|coffee|tea|restaurant|meal|grocery|groceries|takeaway|takeout|cafe|bakery|fruit|vegetables?)\b/,

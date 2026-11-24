@@ -4483,6 +4483,7 @@ export default function App() {
       "Health",
       "Entertainment",
       "Education",
+      "Loan",
       "Savings",
       "Other",
     ].includes(form.category ?? form.cat)
