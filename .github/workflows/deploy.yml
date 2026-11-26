@@ -27,10 +27,16 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Install dependencies
         run: npm ci
+      - name: Type-check Supabase Edge Functions
+        run: deno check supabase/functions/send-due-reminders/index.ts supabase/functions/send-activity-push/index.ts
       - name: Run QA tests
         run: npm test
       - name: Build app

@@ -106,6 +106,35 @@ export function readSupabaseAccessTokenFromStorage(nowMs = Date.now()) {
   return "";
 }
 
+export function readCachedSupabaseUserFromStorage() {
+  if (typeof window === "undefined") return null;
+  try {
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i);
+      if (!key || !key.startsWith("sb-") || !key.endsWith("-auth-token")) {
+        continue;
+      }
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+      const sessionObj =
+        parsed?.currentSession || parsed?.session || parsed || {};
+      const user = sessionObj?.user || parsed?.user || null;
+      if (
+        user &&
+        typeof user === "object" &&
+        typeof user.id === "string" &&
+        isValidUuid(user.id.trim())
+      ) {
+        return { ...user, id: user.id.trim() };
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 export function readCloudSyncOutbox(userId = null) {
   if (typeof window === "undefined") return null;
   try {
@@ -1146,10 +1175,16 @@ export function mergeAccountDataWithRawSnapshot(
     if (!tx?.id) return;
     const txType = tx.type === "adjust" ? "adjustment" : tx.type;
     if (!["income", "adjustment", "transfer"].includes(txType)) return;
-    const tombstone = deletedTxTombstones[tx.id];
-    if (tombstone?.deleted === true) return;
     const txTime =
       parseTimestampMs(tx.updatedAt) || parseTimestampMs(tx.createdAt);
+    const tombstone = deletedTxTombstones[tx.id];
+    const tombTime = parseTimestampMs(tombstone?.updatedAt);
+    if (
+      tombstone?.deleted === true &&
+      (tombTime === 0 || tombTime >= txTime)
+    ) {
+      return;
+    }
     const existing = txMap.get(tx.id);
     const exTime =
       parseTimestampMs(existing?.updatedAt) ||
@@ -1218,7 +1253,7 @@ async function loadLegacyCloudData(client, userId) {
       client
         .from("spend_account_transactions")
         .select(
-          "id, type, amount, transaction_date, description, category, recurring_id, account, direction, from_account, to_account, balance_before, balance_after, from_balance_after, to_balance_after, created_at, updated_at",
+          "id, type, amount, currency, transaction_date, description, category, recurring_id, account, direction, from_account, to_account, balance_before, balance_after, from_balance_after, to_balance_after, created_at, updated_at",
         )
         .eq("user_id", userId)
         .is("deleted_at", null)
@@ -1247,7 +1282,8 @@ async function loadLegacyCloudData(client, userId) {
     (transactionsResult.error.code === "PGRST204" ||
       transactionsResult.error.code === "42703" ||
       transactionsResult.error.message?.includes("balance_after") ||
-      transactionsResult.error.message?.includes("category"))
+      transactionsResult.error.message?.includes("category") ||
+      transactionsResult.error.message?.includes("currency"))
   ) {
     transactionsResult = await client
       .from("spend_account_transactions")
@@ -1393,6 +1429,9 @@ async function loadLegacyCloudData(client, userId) {
             updatedAt: Date.parse(transaction.updated_at) || 0,
             type: transaction.type,
             amount: transaction.amount,
+            ...(transaction.currency
+              ? { currency: String(transaction.currency).toUpperCase().slice(0, 8) }
+              : {}),
             date: transaction.transaction_date,
             description: transaction.description,
             ...(transaction.account ? { account: transaction.account } : {}),

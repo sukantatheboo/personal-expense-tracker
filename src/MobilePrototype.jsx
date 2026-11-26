@@ -9014,6 +9014,7 @@ function SettingsSheet({
       : "auto");
   const pinActive = hasAppPin();
   const isConnected = Boolean(profile?.connected);
+  const isOffline = Boolean(isConnected && profile?.offline);
 
   const handlePickTheme = (mode) => {
     if (mode === themeMode) return;
@@ -9058,10 +9059,10 @@ function SettingsSheet({
             <small>{profile?.email || "Data stays on this device"}</small>
           </span>
           <span
-            className={`mfs-profile-status-pill${isConnected ? " is-synced" : ""}`}
+            className={`mfs-profile-status-pill${isConnected ? (isOffline ? " is-offline" : " is-synced") : ""}`}
           >
             <span className="mfs-profile-status-dot" aria-hidden="true" />
-            {isConnected ? "Synced" : "Local"}
+            {isConnected ? (isOffline ? "Offline" : "Synced") : "Local"}
           </span>
           <span className="settings-chevron" aria-hidden="true">
             <Icon n="r" />
@@ -11520,7 +11521,9 @@ function ProfileSettingsPage({
   const [photoError, setPhotoError] = useState("");
 
   const isOffline =
-    cloudSyncActivity === "offline" || cloudRealtimeStatus === "offline";
+    Boolean(profile?.offline) ||
+    cloudSyncActivity === "offline" ||
+    cloudRealtimeStatus === "offline";
   const hasSyncError = cloudSyncActivity === "error";
   const needsSyncSetup = cloudSyncReady && !normalizedAccountSync;
   const isSyncing =
@@ -11647,10 +11650,14 @@ function ProfileSettingsPage({
                 {profile?.name || "Local profile"}
               </h2>
               <span
-                className={`mfs-profile-status-pill${profile?.connected ? " is-synced" : ""}`}
+                className={`mfs-profile-status-pill${profile?.connected ? (isOffline ? " is-offline" : " is-synced") : ""}`}
               >
                 <span className="mfs-profile-status-dot" aria-hidden="true" />
-                {profile?.connected ? "Synced" : "Local"}
+                {profile?.connected
+                  ? isOffline
+                    ? "Offline"
+                    : "Synced"
+                  : "Local"}
               </span>
             </div>
             <p className="mfs-profile-hero-sub">
@@ -11785,7 +11792,9 @@ function ProfileSettingsPage({
                 {profile?.connected
                   ? S?.outboxPending
                     ? "Offline outbox queued · Auto-flushes on reconnect"
-                    : "Expenses, cards, budgets & profile photo"
+                    : isOffline
+                      ? "Offline · Changes saved locally until reconnected"
+                      : "Expenses, cards, budgets & profile photo"
                   : "Sign in to back up & sync across devices"}
               </small>
             </span>
