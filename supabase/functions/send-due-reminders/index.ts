@@ -246,6 +246,19 @@ async function lookupDevicesChunked(due: DueReminder[]): Promise<Map<string, Dev
   return byDevice;
 }
 
+function isValidSubscription(sub: unknown): sub is webpush.PushSubscription {
+  if (!sub || typeof sub !== "object") return false;
+  const s = sub as { endpoint?: unknown; keys?: { p256dh?: unknown; auth?: unknown } };
+  return (
+    typeof s.endpoint === "string" &&
+    s.endpoint.startsWith("https://") &&
+    typeof s.keys?.p256dh === "string" &&
+    s.keys.p256dh.length > 0 &&
+    typeof s.keys?.auth === "string" &&
+    s.keys.auth.length > 0
+  );
+}
+
 async function releaseClaimLease(r: DueReminder) {
   let query = supabase
     .from("push_reminders")
@@ -333,13 +346,20 @@ Deno.serve(async (req) => {
         return;
       }
       const device = byDevice.get(deviceKey);
-      if (!device) {
+      if (!device || !isValidSubscription(device.subscription)) {
         deadDevices.add(deviceKey);
         await supabase
           .from("push_reminders")
           .delete()
           .eq("user_id", r.user_id)
           .eq("device_id", r.device_id);
+        if (device) {
+          await supabase
+            .from("push_devices")
+            .delete()
+            .eq("user_id", r.user_id)
+            .eq("device_id", r.device_id);
+        }
         return;
       }
 

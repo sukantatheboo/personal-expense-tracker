@@ -572,10 +572,12 @@ begin
     if jsonb_typeof(v_card) = 'object' and coalesce(btrim(v_card ->> 'id'), '') <> '' then
       v_card_id := btrim(v_card ->> 'id');
 
-      if jsonb_typeof(v_deleted_cards -> v_card_id) = 'object'
-         and (v_deleted_cards -> v_card_id ->> 'deleted') = 'true'
-         and public.spend_json_ms(v_deleted_cards -> v_card_id -> 'updatedAt')
-             >= greatest(public.spend_json_ms(v_card -> 'updatedAt'), public.spend_json_ms(v_card -> 'createdAt'))
+      if coalesce(v_deleted_cards #>> array[v_card_id, 'deleted'], '') = 'true'
+         and (
+           public.spend_json_ms(v_deleted_cards #> array[v_card_id, 'updatedAt']) = 0
+           or public.spend_json_ms(v_deleted_cards #> array[v_card_id, 'updatedAt'])
+              >= greatest(public.spend_json_ms(v_card -> 'updatedAt'), public.spend_json_ms(v_card -> 'createdAt'))
+         )
       then
         continue;
       end if;
@@ -666,10 +668,7 @@ begin
       if v_rec.key = 'cash' and v_cash_card_id <> 'cash' then
         continue;
       end if;
-      if not (
-        jsonb_typeof(v_deleted_cards -> v_rec.key) = 'object'
-        and (v_deleted_cards -> v_rec.key ->> 'deleted') = 'true'
-      ) then
+      if coalesce(v_deleted_cards #>> array[v_rec.key, 'deleted'], '') <> 'true' then
         v_bal_val := coalesce(public.spend_try_parse_numeric(v_rec.value), 0);
         if v_bal_val >= 0 then
           v_opening_balances := jsonb_set(v_opening_balances, array[v_rec.key], to_jsonb(round(v_bal_val, 2)), true);
@@ -806,11 +805,10 @@ begin
       or (tx_type = 'transfer' and from_account is not null and to_account is not null and from_account <> to_account)
     )
     and not (
-      jsonb_typeof(v_deleted_tx -> id) = 'object'
-      and (v_deleted_tx -> id ->> 'deleted') = 'true'
+      coalesce(v_deleted_tx #>> array[id, 'deleted'], '') = 'true'
       and (
-        public.spend_json_ms(v_deleted_tx -> id -> 'updatedAt') = 0
-        or public.spend_json_ms(v_deleted_tx -> id -> 'updatedAt') >= updated_ms
+        public.spend_json_ms(v_deleted_tx #> array[id, 'updatedAt']) = 0
+        or public.spend_json_ms(v_deleted_tx #> array[id, 'updatedAt']) >= updated_ms
       )
     )
   order by id, updated_ms desc;
@@ -881,17 +879,19 @@ begin
     and amount > 0
     and tx_date is not null
     and not (
-      jsonb_typeof(v_deleted_exp -> id) = 'object'
-      and (v_deleted_exp -> id ->> 'deleted') = 'true'
+      coalesce(v_deleted_exp #>> array[id, 'deleted'], '') = 'true'
       and (
-        public.spend_json_ms(v_deleted_exp -> id -> 'updatedAt') = 0
-        or public.spend_json_ms(v_deleted_exp -> id -> 'updatedAt') >= updated_ms
+        public.spend_json_ms(v_deleted_exp #> array[id, 'updatedAt']) = 0
+        or public.spend_json_ms(v_deleted_exp #> array[id, 'updatedAt']) >= updated_ms
       )
     )
     and not (
       recurring_id <> ''
-      and jsonb_typeof(v_deleted_exp -> ('recurring:' || recurring_id || ':' || tx_date::text)) = 'object'
-      and (v_deleted_exp -> ('recurring:' || recurring_id || ':' || tx_date::text) ->> 'deleted') = 'true'
+      and coalesce(v_deleted_exp #>> array['recurring:' || recurring_id || ':' || tx_date::text, 'deleted'], '') = 'true'
+      and (
+        public.spend_json_ms(v_deleted_exp #> array['recurring:' || recurring_id || ':' || tx_date::text, 'updatedAt']) = 0
+        or public.spend_json_ms(v_deleted_exp #> array['recurring:' || recurring_id || ':' || tx_date::text, 'updatedAt']) >= updated_ms
+      )
     )
   order by id, updated_ms desc
   on conflict (id) do nothing;
