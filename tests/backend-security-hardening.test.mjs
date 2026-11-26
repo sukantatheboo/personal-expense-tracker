@@ -306,7 +306,7 @@ test("Edge Functions, cron schedule SQL, and CI workflow include P0/P1 reliabili
   assert.match(cronSql, /drop trigger if exists preserve_push_reminder_progress_trigger on public\.push_reminders;/);
 
   const deployYml = readRepoFile(".github/workflows/deploy.yml");
-  assert.match(deployYml, /deno check supabase\/functions\/send-due-reminders\/index\.ts supabase\/functions\/send-activity-push\/index\.ts/);
+  assert.match(deployYml, /deno check --node-modules-dir=auto supabase\/functions\/send-due-reminders\/index\.ts supabase\/functions\/send-activity-push\/index\.ts/);
   const testIdx = deployYml.indexOf("npm test");
   const buildIdx = deployYml.indexOf("npm run build");
   assert.ok(testIdx !== -1, "CI workflow must execute npm test");
