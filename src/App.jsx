@@ -68,7 +68,6 @@ import {
   listBackupCheckpoints,
   loadCloudData,
   persistCloudSyncOutbox,
-  readCachedSupabaseUserFromStorage,
   readCloudSyncOutbox,
   restoreBackupCheckpoint,
   saveCloudData,
@@ -1349,20 +1348,13 @@ export default function App() {
   const [isHydrated, setIsHydrated] = useState(!hasAppPin());
   const isHydratedRef = useRef(!hasAppPin());
   const [ready, setReady] = useState(false);
-  const [initialCachedUser] = useState(() =>
-    supabaseConfigured ? readCachedSupabaseUserFromStorage() : null,
-  );
-  const [isOnline, setIsOnline] = useState(() =>
-    typeof navigator === "undefined" ? true : navigator.onLine !== false,
-  );
-  const [supabaseReady, setSupabaseReady] = useState(() => Boolean(supabase));
   const [sessionResolving, setSessionResolving] = useState(() =>
     Boolean(
       supabaseConfigured &&
       (hasPotentialCloudSession() || loadLocalDataOwner()),
     ),
   );
-  const [sessionUser, setSessionUser] = useState(initialCachedUser);
+  const [sessionUser, setSessionUser] = useState(null);
   const [welcomeSeen, setWelcomeSeen] = useState(readWelcomeSeen);
   const [welcomeExiting, setWelcomeExiting] = useState(false);
   const [devForceWelcome, setDevForceWelcome] = useState(isDevForcedWelcome);
@@ -1459,7 +1451,7 @@ export default function App() {
       : "unsupported",
   );
   const [notificationStatus, setNotificationStatus] = useState("");
-  const [pushUser, setPushUser] = useState(initialCachedUser);
+  const [pushUser, setPushUser] = useState(null);
   const [authMode, setAuthMode] = useState("sign-in");
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
@@ -1473,25 +1465,12 @@ export default function App() {
     close: hideAuthModal,
   } = usePopupPresence();
   const [backgroundPushEnabled, setBackgroundPushEnabled] = useState(false);
-  const [cloudSyncEnabled, setCloudSyncEnabled] = useState(() =>
-    Boolean(initialCachedUser),
-  );
+  const [cloudSyncEnabled, setCloudSyncEnabled] = useState(false);
   const [cloudSyncReady, setCloudSyncReady] = useState(false);
-  const [cloudSyncStatus, setCloudSyncStatus] = useState(() =>
-    initialCachedUser && !isOnline
-      ? "You are offline. Cloud sync will automatically resume when connected."
-      : "",
-  );
-  const [cloudRealtimeStatus, setCloudRealtimeStatus] = useState(() =>
-    initialCachedUser
-      ? isOnline
-        ? "connecting"
-        : "offline"
-      : "disconnected",
-  );
-  const [cloudSyncActivity, setCloudSyncActivity] = useState(() =>
-    initialCachedUser ? (isOnline ? "syncing" : "offline") : "idle",
-  );
+  const [cloudSyncStatus, setCloudSyncStatus] = useState("");
+  const [cloudRealtimeStatus, setCloudRealtimeStatus] =
+    useState("disconnected");
+  const [cloudSyncActivity, setCloudSyncActivity] = useState("idle");
   const [normalizedAccountSync, setNormalizedAccountSync] = useState(false);
   const [cloudSyncRetry, setCloudSyncRetry] = useState(0);
   const [backupStatus, setBackupStatus] = useState("");
@@ -1647,7 +1626,7 @@ export default function App() {
   const lastSyncedSnapshotRef = useRef(null);
   const cloudSaveQueueRef = useRef(Promise.resolve());
   const liveChangeTimerRef = useRef(null);
-  const authUserIdRef = useRef(initialCachedUser?.id ?? null);
+  const authUserIdRef = useRef(null);
   const localDataOwnerRef = useRef(loadLocalDataOwner());
   const localDataWasUnownedRef = useRef(!loadLocalDataOwner());
 
@@ -2477,41 +2456,12 @@ export default function App() {
         supabaseAuthInitRef.current = false;
         return;
       }
-      setSupabaseReady(true);
-      const isOfflineAuthError = (err) =>
-        (typeof navigator !== "undefined" && !navigator.onLine) ||
-        /failed to fetch|networkerror|network request failed|load failed|retryable/i.test(
-          `${err?.name || ""} ${err?.message || ""}`,
-        );
       client.auth.getSession().then(({ data, error }) => {
-        const deviceOffline =
-          typeof navigator !== "undefined" && !navigator.onLine;
         if (error) {
-          if (isOfflineAuthError(error)) {
-            const cachedUser = readCachedSupabaseUserFromStorage();
-            if (cachedUser) {
-              if (localDataOwnerRef.current !== cachedUser.id) {
-                selectLocalDataForUser(cachedUser.id);
-              }
-              authUserIdRef.current = cachedUser.id;
-              setSessionUser(cachedUser);
-              setPushUser(cachedUser);
-              setCloudSyncReady(false);
-              setCloudRealtimeStatus("offline");
-              setCloudSyncActivity("offline");
-              setCloudSyncEnabled(true);
-              setCloudSyncStatus(
-                "You are offline. Cloud sync will automatically resume when connected.",
-              );
-              return;
-            }
-          }
           setAuthStatus(`Could not restore sign-in: ${error.message}`);
           return;
         }
-        const liveUser = data.session?.user || null;
-        const user =
-          liveUser || (deviceOffline ? readCachedSupabaseUserFromStorage() : null);
+        const user = data.session?.user || null;
         if (user) {
           notifyNewUserSignedIn(user);
         }
@@ -2519,24 +2469,14 @@ export default function App() {
           selectLocalDataForUser(user.id);
         }
         authUserIdRef.current = user?.id ?? null;
-        setSessionUser(user);
         setPushUser(user);
         if (window.location.hash.includes("type=recovery")) {
           setAuthMode("update-password");
           showAuthDialog();
         }
         setCloudSyncReady(false);
-        setCloudRealtimeStatus(
-          user ? (deviceOffline ? "offline" : "connecting") : "disconnected",
-        );
-        setCloudSyncActivity(
-          user ? (deviceOffline ? "offline" : "syncing") : "idle",
-        );
-        if (user && deviceOffline) {
-          setCloudSyncStatus(
-            "You are offline. Cloud sync will automatically resume when connected.",
-          );
-        }
+        setCloudRealtimeStatus(user ? "connecting" : "disconnected");
+        setCloudSyncActivity(user ? "syncing" : "idle");
         setNormalizedAccountSync(false);
         lastSyncedSnapshotRef.current = null;
         setCloudSyncEnabled(Boolean(user));
@@ -2544,14 +2484,7 @@ export default function App() {
       const {
         data: { subscription },
       } = client.auth.onAuthStateChange((event, session) => {
-        const deviceOffline =
-          typeof navigator !== "undefined" && !navigator.onLine;
-        const liveUser = session?.user || null;
-        const preserveOfflineUser =
-          !liveUser && event !== "SIGNED_OUT" && deviceOffline;
-        const user =
-          liveUser ||
-          (preserveOfflineUser ? readCachedSupabaseUserFromStorage() : null);
+        const user = session?.user || null;
         const previousUserId =
           authUserIdRef.current || localDataOwnerRef.current;
         setPushUser(user);
@@ -2567,16 +2500,12 @@ export default function App() {
           authUserIdRef.current === user?.id &&
           (user || !localDataOwnerRef.current)
         ) {
-          if (user && deviceOffline) {
-            setCloudRealtimeStatus("offline");
-            setCloudSyncActivity("offline");
-          }
           return;
         }
         if (user && localDataOwnerRef.current !== user.id) {
           selectLocalDataForUser(user.id);
         }
-        if (!user && previousUserId && event === "SIGNED_OUT") {
+        if (!user && previousUserId) {
           saveLocalUserSnapshot(previousUserId, cloudSnapshotRef.current);
           clearCloudSyncOutbox(previousUserId);
           clearSharedFinancialData();
@@ -2590,16 +2519,12 @@ export default function App() {
         cloudVersionRef.current = null;
         cloudAccountSettingsRef.current = null;
         lastSyncedSnapshotRef.current = null;
-        setCloudRealtimeStatus(
-          user ? (deviceOffline ? "offline" : "connecting") : "disconnected",
-        );
-        setCloudSyncActivity(
-          user ? (deviceOffline ? "offline" : "syncing") : "idle",
-        );
+        setCloudRealtimeStatus(user ? "connecting" : "disconnected");
+        setCloudSyncActivity(user ? "syncing" : "idle");
         setNormalizedAccountSync(false);
         setCloudSyncEnabled(Boolean(user));
         setAuthStatus("");
-        if (!user && event === "SIGNED_OUT") {
+        if (!user) {
           try {
             localStorage.removeItem(CLOUD_SYNC_USER_KEY);
           } catch {
@@ -2659,17 +2584,12 @@ export default function App() {
           setSessionResolving(false);
           return;
         }
-        setSupabaseReady(true);
         client.auth
           .getSession()
           .then(({ data }) => {
             if (!active) return;
             window.clearTimeout(resolveTimeout);
-            const deviceOffline =
-              typeof navigator !== "undefined" && !navigator.onLine;
-            const user =
-              data?.session?.user ||
-              (deviceOffline ? readCachedSupabaseUserFromStorage() : null);
+            const user = data?.session?.user || null;
             setSessionUser(user);
             if (user) {
               markWelcomeSeen();
@@ -2681,27 +2601,14 @@ export default function App() {
           .catch(() => {
             if (!active) return;
             window.clearTimeout(resolveTimeout);
-            const cachedUser = readCachedSupabaseUserFromStorage();
-            if (cachedUser) {
-              setSessionUser(cachedUser);
-              markWelcomeSeen();
-              setWelcomeSeen(true);
-            }
             setSessionResolving(false);
           });
         const {
           data: { subscription },
-        } = client.auth.onAuthStateChange((event, session) => {
+        } = client.auth.onAuthStateChange((_event, session) => {
           if (!active) return;
           window.clearTimeout(resolveTimeout);
-          const deviceOffline =
-            typeof navigator !== "undefined" && !navigator.onLine;
-          const liveUser = session?.user || null;
-          const user =
-            liveUser ||
-            (event !== "SIGNED_OUT" && deviceOffline
-              ? readCachedSupabaseUserFromStorage()
-              : null);
+          const user = session?.user || null;
           setSessionUser(user);
           if (user) {
             markWelcomeSeen();
@@ -2731,15 +2638,6 @@ export default function App() {
     let active = true;
 
     async function initializeCloudSync() {
-      if (typeof navigator !== "undefined" && !navigator.onLine) {
-        setCloudSyncReady(false);
-        setCloudSyncActivity("offline");
-        setCloudRealtimeStatus("offline");
-        setCloudSyncStatus(
-          "You are offline. Cloud sync will automatically resume when connected.",
-        );
-        return;
-      }
       setCloudSyncStatus("Preparing your cloud data…");
       setCloudSyncActivity("syncing");
       try {
@@ -2933,18 +2831,12 @@ export default function App() {
     return () => {
       active = false;
     };
-  }, [cloudSyncEnabled, pushUser?.id, cloudSyncRetry, isHydrated, supabaseReady]);
+  }, [cloudSyncEnabled, pushUser?.id, cloudSyncRetry, isHydrated]);
 
   useEffect(() => {
     if (!supabase || !pushUser || !cloudSyncEnabled || !cloudSyncReady) {
-      const offlineNow =
-        !isOnline || (typeof navigator !== "undefined" && !navigator.onLine);
       setCloudRealtimeStatus(
-        pushUser && cloudSyncEnabled
-          ? offlineNow
-            ? "offline"
-            : "connecting"
-          : "disconnected",
+        pushUser && cloudSyncEnabled ? "connecting" : "disconnected",
       );
       return undefined;
     }
@@ -3130,14 +3022,7 @@ export default function App() {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       unsubscribe();
     };
-  }, [
-    cloudSyncEnabled,
-    cloudSyncReady,
-    normalizedAccountSync,
-    pushUser?.id,
-    isOnline,
-    supabaseReady,
-  ]);
+  }, [cloudSyncEnabled, cloudSyncReady, normalizedAccountSync, pushUser?.id]);
 
   useEffect(() => {
     if (!isHydratedRef.current) return undefined;
@@ -3148,7 +3033,7 @@ export default function App() {
       cloudSnapshotRef.current,
       cloudVersionRef.current,
     );
-    if (!pushUser || !cloudSyncEnabled) return undefined;
+    if (!supabase || !pushUser || !cloudSyncEnabled) return undefined;
     const isDirty =
       !lastSyncedSnapshotRef.current ||
       !areCloudSnapshotsEqual(
@@ -3164,7 +3049,7 @@ export default function App() {
         expectedUpdatedAt: cloudVersionRef.current,
       });
     }
-    if (!supabase || !cloudSyncReady) return undefined;
+    if (!cloudSyncReady) return undefined;
     const timeout = window.setTimeout(async () => {
       try {
         await queueCloudSnapshotSave(pushUser.id);
@@ -3195,44 +3080,9 @@ export default function App() {
   ]);
 
   useEffect(() => {
-    const handleOffline = () => {
-      setIsOnline(false);
-      if (authUserIdRef.current) {
-        setCloudRealtimeStatus("offline");
-        setCloudSyncActivity("offline");
-        setCloudSyncStatus(
-          "You are offline. Cloud sync will automatically resume when connected.",
-        );
-      }
-    };
-    const retryCloudSync = () => {
-      setIsOnline(true);
-      if (supabaseConfigured) {
-        void getSupabase()
-          .then(async (client) => {
-            if (client) {
-              setSupabaseReady(true);
-              try {
-                await client.auth.getSession();
-              } catch {
-                // Proceed to retry sync even if session refresh fails
-              }
-            }
-          })
-          .catch(() => {})
-          .finally(() => {
-            setCloudSyncRetry((retry) => retry + 1);
-          });
-        return;
-      }
-      setCloudSyncRetry((retry) => retry + 1);
-    };
-    window.addEventListener("offline", handleOffline);
+    const retryCloudSync = () => setCloudSyncRetry((retry) => retry + 1);
     window.addEventListener("online", retryCloudSync);
-    return () => {
-      window.removeEventListener("offline", handleOffline);
-      window.removeEventListener("online", retryCloudSync);
-    };
+    return () => window.removeEventListener("online", retryCloudSync);
   }, []);
 
   useEffect(() => {
@@ -5680,36 +5530,16 @@ export default function App() {
   async function signOutOfPush() {
     const client = supabase || (await getSupabase());
     if (!client || !pushUser) return;
-    const deviceOffline =
-      typeof navigator !== "undefined" && !navigator.onLine;
     setAuthBusy(true);
     try {
-      if (!deviceOffline && cloudSyncEnabled && cloudSyncReady) {
+      if (cloudSyncEnabled && cloudSyncReady) {
         await queueCloudSnapshotSave(pushUser.id);
       }
-      if (!deviceOffline && pushBackendConfigured) {
-        try {
-          await disableBackgroundPush(pushUser.id);
-        } catch {
-          // Don't block sign-out if push backend is unreachable
-        }
+      if (pushBackendConfigured) {
+        await disableBackgroundPush(pushUser.id);
       }
-      const { error } = await client.auth.signOut(
-        deviceOffline ? { scope: "local" } : undefined,
-      );
-      if (error) {
-        if (
-          deviceOffline ||
-          /failed to fetch|networkerror|network request failed|load failed/i.test(
-            `${error?.name || ""} ${error?.message || ""}`,
-          )
-        ) {
-          const localRes = await client.auth.signOut({ scope: "local" });
-          if (localRes.error) throw localRes.error;
-        } else {
-          throw error;
-        }
-      }
+      const { error } = await client.auth.signOut();
+      if (error) throw error;
       setBackgroundPushEnabled(false);
       setNotificationStatus(
         "Signed out. Background reminders are disabled on this device.",
@@ -6148,12 +5978,6 @@ export default function App() {
                 : profileInitial(localProfileName || "Local profile"),
               avatar: profileAvatar || userAvatarUrl(pushUser) || "",
               connected: Boolean(pushUser),
-              offline: Boolean(
-                pushUser &&
-                (!isOnline ||
-                  cloudSyncActivity === "offline" ||
-                  cloudRealtimeStatus === "offline"),
-              ),
               hasName: Boolean(pushUser || localProfileName),
             }}
             onEditProfile={openProfileEditor}

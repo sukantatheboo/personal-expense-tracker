@@ -57,19 +57,6 @@ export function recordUpdatedAt(record) {
   return parseTimestampMs(record?.updatedAt ?? record?.updated_at);
 }
 
-/**
- * Returns true when a deletion tombstone is active and at least as recent as the record.
- */
-export function isRecordTombstoned(tombstone, record) {
-  if (tombstone?.deleted !== true) return false;
-  const tombTime = parseTimestampMs(tombstone?.updatedAt);
-  if (tombTime === 0) return true;
-  const recordTime =
-    parseTimestampMs(record?.updatedAt ?? record?.updated_at) ||
-    parseTimestampMs(record?.createdAt ?? record?.created_at);
-  return tombTime >= recordTime;
-}
-
 export function clampDayOfMonth(dayOrYear, month, day) {
   if (month !== undefined && day !== undefined) {
     const y = Number(dayOrYear);
@@ -482,17 +469,14 @@ export function loadExpenses(
             return false;
           }
           const id = item.id.trim();
-          if (isRecordTombstoned(deletedExpenseTombstones[id], item)) {
+          if (deletedExpenseTombstones[id]?.deleted === true) {
             return false;
           }
           if (
             item.recurringId &&
-            isRecordTombstoned(
-              deletedExpenseTombstones[
-                `recurring:${item.recurringId}:${item.date}`
-              ],
-              item,
-            )
+            deletedExpenseTombstones[
+              `recurring:${item.recurringId}:${item.date}`
+            ]?.deleted === true
           ) {
             return false;
           }
@@ -1190,7 +1174,7 @@ export function loadAccountData(
       const updatedAt = parseTimestampMs(card.updatedAt) || createdAt;
 
       // Skip tombstoned cards unless card was explicitly updated after deletion
-      if (isRecordTombstoned(tombstone, { createdAt, updatedAt })) {
+      if (tombstone?.deleted && tombstone.updatedAt >= updatedAt) {
         continue;
       }
 
@@ -1369,7 +1353,7 @@ export function loadAccountData(
         .filter((item) => {
           if (!item || typeof item !== "object" || !item.id) return false;
           const tombstone = deletedTxTombstones[item.id];
-          return !isRecordTombstoned(tombstone, item);
+          return tombstone?.deleted !== true;
         })
         .map((item) => {
           if (!item || typeof item !== "object") return item;

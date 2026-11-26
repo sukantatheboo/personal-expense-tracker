@@ -5123,11 +5123,6 @@ a:active,
   background: rgba(16, 185, 129, 0.12);
   border-color: rgba(16, 185, 129, 0.26);
 }
-.mobile-prototype .mfs-profile-status-pill.is-offline {
-  color: #d97706;
-  background: rgba(245, 158, 11, 0.12);
-  border-color: rgba(245, 158, 11, 0.28);
-}
 .mobile-prototype .mfs-profile-status-dot {
   width: 6px;
   height: 6px;
@@ -5544,14 +5539,6 @@ a:active,
   color: #10b981;
   background: rgba(16, 185, 129, 0.12);
   border-color: rgba(16, 185, 129, 0.26);
-}
-.mobile-prototype .mfs-sync-badge.is-offline {
-  color: #d97706;
-  background: rgba(245, 158, 11, 0.12);
-  border-color: rgba(245, 158, 11, 0.28);
-}
-.mobile-prototype .mfs-sync-badge.is-offline .profile-sync-indicator {
-  background: #d97706;
 }
 
 .mobile-prototype .mfs-profile-sync-actions {
